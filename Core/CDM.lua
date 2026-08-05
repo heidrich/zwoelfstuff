@@ -1,0 +1,381 @@
+---------------------------------------------------------------------------
+-- CDM - the Cooldown Manager layer.
+--
+-- THE CHANGE OF APPROACH, and why.
+--
+-- Everything before this tried to track auras itself. On patch 12.0 that is
+-- impossible: aura fields are secret values, so an addon cannot identify a
+-- buff by ID, name or icon. The sanctioned replacement, Blizzard_AuraContainer,
+-- does not arrive until 12.1 - measured on this client, CreateFrame for it
+-- fails outright. So the entire aura-tracking stack could not work here, and
+-- did not.
+--
+-- Blizzard's Cooldown Manager already solved all of it. It knows every
+-- tracked cooldown and buff, it owns frames that display them with correct
+-- icons, swipes, charges, stacks and timing, and it does that inside the
+-- game where secret values are not a problem. Every addon that "does
+-- cooldowns" on this patch works the same way: it does not parse anything,
+-- it takes Blizzard's item frames, restyles them and lays them out.
+--
+-- EllesmereUI states it in one line at the top of its own CDM file:
+--   "Mirrors Blizzard CDM bars with custom styling... Does NOT parse secret
+--    values, works around restricted APIs."
+--
+-- This file is that layer: find the viewers, enumerate their live item
+-- frames, resolve what each one is, and hold on to them while Blizzard keeps
+-- trying to re-anchor them.
+--
+-- Verified against these implementations on this machine:
+--   EllesmereUICooldownManager/EllesmereUICdmHooks.lua
+--   EllesmereUICooldownManager/EllesmereUICdmBuffBars.lua
+--   EllesmereUIActionBars/EllesmereUIActionBars.lua  (category enumeration)
+---------------------------------------------------------------------------
+local _, ns = ...
+
+local CDM = {}
+ns.CDM = CDM
+
+---------------------------------------------------------------------------
+-- The four viewers
+--
+-- Global frames, created by Blizzard's own Cooldown Manager. Each holds a
+-- frame pool of item frames - one per cooldown or buff it currently shows.
+---------------------------------------------------------------------------
+CDM.VIEWERS = {
+    { key = "essential", global = "EssentialCooldownViewer", label = "Cooldowns", kind = "icon" },
+    { key = "utility",   global = "UtilityCooldownViewer",   label = "Utility",   kind = "icon" },
+    { key = "buffIcon",  global = "BuffIconCooldownViewer",  label = "Buffs",     kind = "icon" },
+    { key = "buffBar",   global = "BuffBarCooldownViewer",   label = "Buff bars", kind = "bar"  },
+}
+
+function CDM:GetViewer(key)
+    for _, viewer in ipairs(self.VIEWERS) do
+        if viewer.key == key then return _G[viewer.global], viewer end
+    end
+    return nil
+end
+
+-- The Cooldown Manager shipped well before the aura restrictions, so unlike
+-- the aura engine this is expected to be present. It can still be missing on
+-- an older client, so callers check.
+function CDM:IsAvailable()
+    if self.available ~= nil then return self.available end
+
+    self.available = false
+    self.unavailableReason = nil
+
+    if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo) then
+        self.unavailableReason = "this client has no C_CooldownViewer API"
+        return false
+    end
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        if _G[viewer.global] then
+            self.available = true
+            return true
+        end
+    end
+
+    self.unavailableReason = "the Cooldown Manager frames do not exist yet - "
+        .. "open Edit Mode once and enable the Cooldown Manager"
+    return false
+end
+
+function CDM:UnavailableReason()
+    self:IsAvailable()
+    return self.unavailableReason
+end
+
+---------------------------------------------------------------------------
+-- Live item frames
+--
+-- The frame pool is the ground truth for what is on screen. The static
+-- category API returns where a cooldown *belongs*, but Blizzard can display
+-- it in a different viewer - the user drags things between viewers in Edit
+-- Mode, and per-spec layouts move them too. So anything about what is
+-- actually shown must come from the pool.
+---------------------------------------------------------------------------
+
+-- Calls fn(itemFrame, viewerSpec) for every active item of one viewer.
+function CDM:ForEachItem(key, fn)
+    local frame, spec = self:GetViewer(key)
+    local pool = frame and frame.itemFramePool
+    if not (pool and pool.EnumerateActive) then return 0 end
+
+    local count = 0
+    for item in pool:EnumerateActive() do
+        count = count + 1
+        fn(item, spec)
+    end
+    return count
+end
+
+function CDM:ForEachItemEverywhere(fn)
+    local total = 0
+    for _, viewer in ipairs(self.VIEWERS) do
+        total = total + self:ForEachItem(viewer.key, fn)
+    end
+    return total
+end
+
+-- An item frame carries its cooldownID directly, or on the info table it was
+-- populated from; both spellings exist across builds.
+function CDM:ItemCooldownID(item)
+    if not item then return nil end
+    return item.cooldownID or (item.cooldownInfo and item.cooldownInfo.cooldownID)
+end
+
+function CDM:GetInfo(cooldownID)
+    if not cooldownID then return nil end
+    local fn = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo
+    if not fn then return nil end
+    local ok, info = pcall(fn, cooldownID)
+    if ok then return info end
+    return nil
+end
+
+-- The spell a given item frame stands for. overrideSpellID wins: a talent
+-- that replaces a spell reports the replacement there, and that is what the
+-- player actually casts and sees.
+function CDM:ItemSpellID(item)
+    local info = self:GetInfo(self:ItemCooldownID(item))
+    if not info then return nil end
+    return info.overrideSpellID or info.spellID
+end
+
+---------------------------------------------------------------------------
+-- The full catalogue of what the Cooldown Manager knows
+--
+-- Two sources, on purpose:
+--   the live pools  - what is displayed right now, including anything the
+--                     user moved between viewers
+--   the category API - the static set, which also contains entries Blizzard
+--                     only pools situationally (a spell hidden until it is
+--                     relevant would otherwise never be listed)
+---------------------------------------------------------------------------
+function CDM:Catalogue()
+    local out, seen = {}, {}
+
+    local function Add(cooldownID, viewerKey)
+        if not cooldownID or seen[cooldownID] then return end
+        local info = self:GetInfo(cooldownID)
+        if not info then return end
+
+        local spellID = info.overrideSpellID or info.spellID
+        if not spellID then return end
+
+        seen[cooldownID] = true
+        out[#out + 1] = {
+            cooldownID = cooldownID,
+            spellID    = spellID,
+            viewer     = viewerKey,
+            name       = ns.SpellName(spellID) or ("Spell " .. spellID),
+            icon       = ns.SpellTexture(spellID),
+        }
+    end
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        self:ForEachItem(viewer.key, function(item)
+            Add(self:ItemCooldownID(item), viewer.key)
+        end)
+    end
+
+    -- Enum.CooldownViewerCategory rather than hardcoded numbers: the values
+    -- are Blizzard's to change, and iterating the enum survives that.
+    local categories = Enum and Enum.CooldownViewerCategory
+    local getSet = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
+    if categories and getSet then
+        for _, category in pairs(categories) do
+            local ok, set = pcall(getSet, category)
+            if ok and type(set) == "table" then
+                for _, cooldownID in ipairs(set) do Add(cooldownID, nil) end
+            end
+        end
+    end
+
+    table.sort(out, function(a, b) return a.name < b.name end)
+    return out
+end
+
+---------------------------------------------------------------------------
+-- Diagnosis
+--
+-- Run before building anything on top: it answers whether the Cooldown
+-- Manager is actually reachable on this client, and what it currently holds.
+---------------------------------------------------------------------------
+function CDM:Dump()
+    ns.Print("|cffffd100----------------------------------------|r")
+
+    if not self:IsAvailable() then
+        ns.Print("|cffff4040Cooldown Manager unavailable|r - " ..
+            (self:UnavailableReason() or "reason unknown"))
+        return
+    end
+
+    ns.Print("|cff40ff40Cooldown Manager reachable.|r Live item frames:")
+
+    local grand = 0
+    for _, viewer in ipairs(self.VIEWERS) do
+        local frame = _G[viewer.global]
+        local lines = {}
+
+        local count = self:ForEachItem(viewer.key, function(item)
+            local spellID = self:ItemSpellID(item)
+            lines[#lines + 1] = string.format("      %s |cff888888%s|r%s",
+                spellID and (ns.SpellName(spellID) or "?") or "|cffff4040unresolved|r",
+                tostring(spellID or "-"),
+                item:IsShown() and "" or " |cff888888(hidden)|r")
+        end)
+        grand = grand + count
+
+        ns.Print(string.format("   %s |cffffd100%s|r: %s",
+            frame and "|cff40ff40o|r" or "|cffff4040x|r",
+            viewer.label,
+            frame and (count .. " items") or "frame does not exist"))
+        for _, line in ipairs(lines) do ns.Print(line) end
+    end
+
+    local catalogue = self:Catalogue()
+    ns.Print(string.format("Catalogue: |cffffd100%d|r entries, %d live frames.",
+        #catalogue, grand))
+    if grand == 0 then
+        ns.Print("|cffff8040No live frames.|r Open Edit Mode and make sure the")
+        ns.Print("Cooldown Manager is enabled, then try again.")
+    end
+end
+
+---------------------------------------------------------------------------
+-- Adoption
+--
+-- Blizzard re-anchors its item frames on every layout pass of its own, so a
+-- position set once does not survive. The fix the reference uses is to hook
+-- SetPoint on the frame and re-assert our own anchor from inside the hook -
+-- self-healing, and it needs no polling.
+--
+-- Guarded against recursion: our own SetPoint call re-enters the hook.
+---------------------------------------------------------------------------
+local adopted = setmetatable({}, { __mode = "k" })
+
+local function Reassert(state, frame)
+    if state.applying then return end
+    state.applying = true
+    if state.anchor then
+        local a = state.anchor
+        frame:ClearAllPoints()
+        frame:SetPoint(a[1], a[2], a[3], a[4], a[5])
+    end
+    if state.width then
+        frame:SetSize(state.width, state.height)
+    end
+    state.applying = false
+end
+
+-- Pins an item frame to a point and a size of ours, and keeps it there.
+--   anchor = { point, relativeTo, relativePoint, x, y }
+--
+-- Both are hooked, because Blizzard's layout pass rewrites both. The guard
+-- flag matters: our own SetPoint and SetSize re-enter these hooks.
+function CDM:Pin(item, anchor, width, height)
+    if not item then return end
+
+    local state = adopted[item]
+    if not state then
+        state = {}
+        adopted[item] = state
+
+        hooksecurefunc(item, "SetPoint", function(frame)
+            local pin = adopted[frame]
+            if pin and pin.anchor then Reassert(pin, frame) end
+        end)
+        hooksecurefunc(item, "SetSize", function(frame)
+            local pin = adopted[frame]
+            if pin and pin.width then Reassert(pin, frame) end
+        end)
+    end
+
+    state.anchor = anchor
+    state.width, state.height = width, height
+    Reassert(state, item)
+end
+
+-- Hands an item frame back to Blizzard: the hook stays (hooks cannot be
+-- removed) but with no anchor recorded it does nothing.
+function CDM:Release(item)
+    local state = adopted[item]
+    if state then state.anchor = nil end
+end
+
+function CDM:IsPinned(item)
+    local state = adopted[item]
+    return state ~= nil and state.anchor ~= nil
+end
+
+---------------------------------------------------------------------------
+-- Change notification
+--
+-- The pools churn: talents, spec changes, entering combat, and Blizzard's
+-- own situational show/hide all add and remove item frames. Anything built
+-- on top has to rebuild when that happens, so it is centralised here rather
+-- than every consumer registering its own events.
+---------------------------------------------------------------------------
+local listeners = {}
+
+function CDM:OnChanged(fn)
+    listeners[#listeners + 1] = fn
+end
+
+function CDM:NotifyChanged()
+    for _, fn in ipairs(listeners) do
+        local ok, err = pcall(fn)
+        if not ok then geterrorhandler()(err) end
+    end
+end
+
+local watcher = CreateFrame("Frame")
+
+-- Registering an event name the client does not know is a hard error, and
+-- the cooldown-viewer events are newer than the rest, so each one is tried
+-- on its own. A missing event costs one less rebuild trigger, not a broken
+-- addon.
+for _, event in ipairs({
+    "PLAYER_ENTERING_WORLD",
+    "PLAYER_SPECIALIZATION_CHANGED",
+    "TRAIT_CONFIG_UPDATED",
+    "SPELLS_CHANGED",
+    "COOLDOWN_VIEWER_TABLE_HOTFIXED",
+}) do
+    pcall(watcher.RegisterEvent, watcher, event)
+end
+
+watcher:SetScript("OnEvent", function()
+    -- Coalesced: several of these fire together on a spec change, and a
+    -- rebuild per event would mean four full relayouts for one action.
+    if CDM.pending then return end
+    CDM.pending = true
+    C_Timer.After(0.2, function()
+        CDM.pending = false
+        CDM:NotifyChanged()
+    end)
+end)
+
+-- Newly pooled frames appear without any event: Blizzard acquires them from
+-- the pool directly. Hooking Acquire is how the reference catches them.
+function CDM:HookPools()
+    if self.poolsHooked then return end
+    self.poolsHooked = true
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        local frame = _G[viewer.global]
+        local pool = frame and frame.itemFramePool
+        if pool and pool.Acquire then
+            hooksecurefunc(pool, "Acquire", function()
+                if CDM.pending then return end
+                CDM.pending = true
+                C_Timer.After(0.05, function()
+                    CDM.pending = false
+                    CDM:NotifyChanged()
+                end)
+            end)
+        end
+    end
+end
