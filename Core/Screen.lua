@@ -382,6 +382,7 @@ function Screen:Render()
         C_Timer.After(1, function()
             Screen.rivalCheckQueued = false
             ns.CDM:CheckForRivals()
+            Screen:WarnIfInvisible()
         end)
     end
 
@@ -462,6 +463,33 @@ function Screen:ApplyTakeover(claimedNow)
             held[item] = nil
         end
     end)
+end
+
+-- "My bar is empty" and "the Cooldown Manager is off" look identical from the
+-- outside. An adopted icon is still Blizzard's child, so a viewer switched
+-- off in Blizzard's own Edit Mode takes our icons with it - everything on our
+-- side is correct and nothing is on screen. Said once, and only when a cell
+-- actually wanted one of those frames.
+function Screen:WarnIfInvisible()
+    if self.invisibleReported then return end
+
+    local hidden = ns.CDM:HiddenViewers()
+    if not hidden then return end
+
+    local wanted = false
+    for _, cfg in ipairs(ns.db.bars) do
+        for _, spellID in pairs(cfg.cells) do
+            if itemBySpell[spellID] then wanted = true break end
+        end
+        if wanted then break end
+    end
+    if not wanted then return end
+
+    self.invisibleReported = true
+    ns.Print("|cffff4040These Cooldown Manager viewers are switched off:|r " .. hidden)
+    ns.Print("Your icons ARE on the bar - they are Blizzard's frames, and a "
+        .. "switched-off viewer hides its own children. Turn it back on in "
+        .. "Blizzard's Edit Mode (Escape, Edit Mode, Cooldown Manager).")
 end
 
 -- Hands every frame back and lets Blizzard have its display again. Used when

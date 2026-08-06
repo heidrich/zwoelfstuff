@@ -86,6 +86,24 @@ function CDM:UnavailableReason()
     return self.unavailableReason
 end
 
+-- An adopted icon stays Blizzard's child, so a viewer that is switched off in
+-- Blizzard's Edit Mode takes our icons down with it - the frames exist, they
+-- are pooled, they are pinned to the right cell, and nothing is on screen.
+-- Worth its own answer, because "my bar is empty" and "the Cooldown Manager
+-- is missing" look identical from the outside and are not the same problem.
+function CDM:HiddenViewers()
+    local hidden
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        local frame = _G[viewer.global]
+        if frame and not frame:IsShown() then
+            hidden = hidden and (hidden .. ", " .. viewer.label) or viewer.label
+        end
+    end
+
+    return hidden
+end
+
 ---------------------------------------------------------------------------
 -- Live item frames
 --
