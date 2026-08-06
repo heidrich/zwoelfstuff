@@ -375,6 +375,14 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Open, in order
 
+**The schedule, from the owner on 2026-08-06:** heavy work over the weekend of
+8-9 Aug, and **every basic finished by Wednesday 12 Aug** — because patch 12.1
+lands on **11 Aug** and the 12.1 features go in after that, not instead of the
+basics. The parked stack (`Engine`, `Catalog`, `Probe`, `Groups`, `CoTanks`,
+`OptionsGroups`) is what waits for it, plus the owner's tank ideas, which they
+deliberately held back until the basics stand.
+
+
 1. **The icons on screen are still wrong, and the next step is measurement,
    not another guess.** `/zs skin` now prints every pinned icon as *asked for
    vs actually there* — size and anchor, with the mismatch spelled out. Run it
