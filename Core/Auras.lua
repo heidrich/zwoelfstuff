@@ -381,7 +381,14 @@ function Auras:Procs()
         if not hidden[spellID] then
             merged[spellID] = {
                 display = entry.display, auraID = entry.auraID,
-                duration = entry.duration, bundled = true,
+                duration = entry.duration,
+                -- A shipped duration is a FLOOR, not a confirmed fact: it was
+                -- measured the same way, by somebody else. Without this, one
+                -- short natural expiry underneath it - Boiling Point ending
+                -- after 2s because it was consumed - marked the shipped 15s
+                -- as confirmed, which is the opposite of what was seen.
+                floor = entry.duration,
+                bundled = true,
             }
         end
     end
