@@ -169,10 +169,26 @@ local function BarConfig(index)
     return ns.db.bars[index]
 end
 
+-- The pair of numbers a drag or a nudge edits. For a bar that hangs on
+-- another one that is its OFFSET from the parent, not its place on screen -
+-- editing the screen position of an attached bar would do nothing at all.
+local function Origin(cfg)
+    if cfg.anchor then return cfg.anchor.x or 0, cfg.anchor.y or 0 end
+    return cfg.x or 0, cfg.y or 0
+end
+
 local function UpdateReadout(mover)
     local cfg = BarConfig(mover.index)
     if not cfg then return end
-    mover.coords:SetText(string.format("%d, %d", cfg.x or 0, cfg.y or 0))
+
+    local x, y = Origin(cfg)
+    if cfg.anchor then
+        local parent = ns.Bars:ByID(cfg.anchor.to)
+        mover.coords:SetText(string.format("|cffff7a3d>|r %s  %d, %d",
+            parent and parent.name or "?", x, y))
+    else
+        mover.coords:SetText(string.format("%d, %d", x, y))
+    end
 end
 
 local function SetSelected(mover)
@@ -194,10 +210,50 @@ local function ApplyMove(mover, x, y)
     local cfg = BarConfig(mover.index)
     if not cfg then return end
 
-    cfg.point, cfg.relPoint = "CENTER", "CENTER"
-    cfg.x, cfg.y = math.floor(x + 0.5), math.floor(y + 0.5)
+    x, y = math.floor(x + 0.5), math.floor(y + 0.5)
+
+    if cfg.anchor then
+        cfg.anchor.x, cfg.anchor.y = x, y
+    else
+        cfg.point, cfg.relPoint = "CENTER", "CENTER"
+        cfg.x, cfg.y = x, y
+    end
+
     ns.Screen:ApplyPosition(mover.index)
     UpdateReadout(mover)
+end
+
+-- Which bar to attach to. Its own menu rather than a submenu, because the
+-- shared menu has one level and a flat list of every bar times every side
+-- would be a wall of entries.
+local function OpenAttachMenu(mover)
+    local index = mover.index
+    local cfg = BarConfig(index)
+    if not cfg then return end
+
+    local items = {}
+    for otherIndex, other in ipairs(ns.db.bars) do
+        if otherIndex ~= index and not ns.Bars:WouldLoop(cfg.id, other.id) then
+            items[#items + 1] = {
+                text = other.name or ("Bar " .. otherIndex),
+                onClick = function()
+                    -- Below is the default because a stack of bars is what
+                    -- people build; the side is one click away afterwards.
+                    ns.Bars:Anchor(index, other.id, "below")
+                end,
+            }
+        end
+    end
+
+    if #items == 0 then
+        items[1] = { text = "|cff888888Nothing to attach to|r", onClick = function() end }
+    end
+
+    UI.ShowMenu(mover.cog, {
+        width = 190,
+        anchor = { "TOPRIGHT", "BOTTOMRIGHT", 0, -2 },
+        items = items,
+    })
 end
 
 local function OpenMenu(mover)
@@ -205,34 +261,64 @@ local function OpenMenu(mover)
     local cfg = BarConfig(index)
     if not cfg then return end
 
+    local items = {}
+
+    -- An attached bar gets the four sides instead of the screen-centring
+    -- entries: those would move a bar whose position is not its own to
+    -- decide, and doing nothing visible is worse than not offering it.
+    if cfg.anchor then
+        local parent = ns.Bars:ByID(cfg.anchor.to)
+        for _, side in ipairs(ns.ANCHOR_SIDES) do
+            items[#items + 1] = {
+                text = side.text .. " " .. (parent and parent.name or "?"),
+                value = side.key,
+                onClick = function()
+                    ns.Bars:Anchor(index, cfg.anchor.to, side.key)
+                end,
+            }
+        end
+    else
+        items[#items + 1] = { text = "Attach to another bar", onClick = function()
+            OpenAttachMenu(mover)
+        end }
+        items[#items + 1] = { text = "Centre on screen", onClick = function()
+            ApplyMove(mover, 0, 0)
+        end }
+        items[#items + 1] = { text = "Centre horizontally", onClick = function()
+            ApplyMove(mover, 0, cfg.y or 0)
+        end }
+        items[#items + 1] = { text = "Centre vertically", onClick = function()
+            ApplyMove(mover, cfg.x or 0, 0)
+        end }
+    end
+
+    local actions = {
+        { text = "Bar options", onClick = function()
+            EditMode:SetUnlocked(false)
+            ns.OptionsBars:ShowOptions(index)
+            -- Open, not Toggle: this wants the window shown, and Toggle
+            -- would close it if it happened to be open already.
+            ns.Options:Open("cooldowns")
+        end },
+        { text = cfg.enabled == false and "Switch on" or "Switch off",
+          onClick = function()
+              cfg.enabled = (cfg.enabled == false)
+              ns.Bars:Changed(index)
+          end },
+    }
+
+    if cfg.anchor then
+        table.insert(actions, 1, { text = "Detach", onClick = function()
+            ns.Bars:Release(cfg)
+        end })
+    end
+
     UI.ShowMenu(mover.cog, {
         width = 190,
         anchor = { "TOPRIGHT", "BOTTOMRIGHT", 0, -2 },
-        items = {
-            { text = "Bar options", onClick = function()
-                EditMode:SetUnlocked(false)
-                ns.OptionsBars:ShowOptions(index)
-                -- Open, not Toggle: this wants the window shown, and Toggle
-                -- would close it if it happened to be open already.
-                ns.Options:Open("cooldowns")
-            end },
-            { text = "Centre on screen", onClick = function()
-                ApplyMove(mover, 0, 0)
-            end },
-            { text = "Centre horizontally", onClick = function()
-                ApplyMove(mover, 0, cfg.y or 0)
-            end },
-            { text = "Centre vertically", onClick = function()
-                ApplyMove(mover, cfg.x or 0, 0)
-            end },
-        },
-        actions = {
-            { text = cfg.enabled == false and "Switch on" or "Switch off",
-              onClick = function()
-                  cfg.enabled = (cfg.enabled == false)
-                  ns.Bars:Changed(index)
-              end },
-        },
+        current = cfg.anchor and cfg.anchor.side or nil,
+        items = items,
+        actions = actions,
     })
 end
 
@@ -291,10 +377,14 @@ local function CreateMover(index)
         if not cfg then return end
 
         local cursorX, cursorY = CursorPosition()
+        local originX, originY = Origin(cfg)
         dragging = {
             mover = self,
             cursorX = cursorX, cursorY = cursorY,
-            originX = cfg.x or 0, originY = cfg.y or 0,
+            originX = originX, originY = originY,
+            -- An attached bar is dragged in its parent's terms, so screen
+            -- snapping does not apply: the anchor already put it flush.
+            anchored = cfg.anchor ~= nil,
         }
     end)
 
@@ -347,7 +437,7 @@ local function OnUpdate()
     -- Free movement with Alt held: snapping is right almost always, and
     -- "almost" is why there has to be a way to switch it off in the moment.
     local lineX, lineY
-    if not IsAltKeyDown() then
+    if not (dragging.anchored or IsAltKeyDown()) then
         x, lineX = Snap(x, mover.index, bar:GetWidth() / 2, "x")
         y, lineY = Snap(y, mover.index, bar:GetHeight() / 2, "y")
     end
@@ -395,8 +485,8 @@ local function BuildKeyCatcher()
         if not cfg then return end
 
         local step = IsShiftKeyDown() and NUDGE_FAST or NUDGE
-        ApplyMove(selected, (cfg.x or 0) + direction[1] * step,
-                            (cfg.y or 0) + direction[2] * step)
+        local x, y = Origin(cfg)
+        ApplyMove(selected, x + direction[1] * step, y + direction[2] * step)
     end)
 
     keyCatcher:SetScript("OnKeyUp", function(self)
@@ -412,7 +502,7 @@ end
 ---------------------------------------------------------------------------
 local function BuildToolbar()
     toolbar = CreateFrame("Frame", nil, overlay)
-    toolbar:SetSize(330, 132)
+    toolbar:SetSize(330, 146)
     toolbar:SetPoint("TOP", UIParent, "TOP", 0, -120)
     toolbar:SetFrameLevel(overlay:GetFrameLevel() + 40)
     toolbar:EnableMouse(true)
@@ -436,6 +526,7 @@ local function BuildToolbar()
     local hint = UI.Label(toolbar, table.concat({
         "Drag a bar, or select it and use the arrow keys - Shift for 10.",
         "Alt while dragging switches snapping off.",
+        "The cog attaches a bar to another one, so it moves along.",
         "Shift + Right Click hides the overlay.",
     }, "\n"), 11, C.textDim)
     hint:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 14, -46)

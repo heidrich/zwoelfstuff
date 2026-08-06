@@ -236,23 +236,41 @@ function Screen:ApplyPosition(index)
     if not (cfg and bar) then return end
 
     bar:ClearAllPoints()
+
+    -- Attached to another bar: the parent's FRAME is the anchor, so moving or
+    -- resizing the parent carries this one along without a single line of
+    -- follow-up code. Falls through to the screen if the parent has no frame
+    -- yet, which happens while the list is still being built.
+    if cfg.anchor then
+        local _, parentIndex = ns.Bars:ByID(cfg.anchor.to)
+        local parent = parentIndex and barFrames[parentIndex]
+        if parent then
+            bar:SetPoint(cfg.anchor.point, parent, cfg.anchor.relPoint,
+                cfg.anchor.x or 0, cfg.anchor.y or 0)
+            return
+        end
+    end
+
     bar:SetPoint(cfg.point or "CENTER", UIParent, cfg.relPoint or "CENTER",
         cfg.x or 0, cfg.y or 0)
 end
 
--- Reads the frame's own anchor back into the config. Called after a drag, so
--- what is saved is where it actually ended up rather than where we asked it
--- to go - SetClampedToScreen can differ from both.
-function Screen:SavePosition(index)
+-- Writes where the bar ACTUALLY is back into the config, as a centre offset
+-- from the screen centre. Used when a bar is detached: its stored x/y are
+-- from before it was attached, and dropping it somewhere it has not been for
+-- an hour is the kind of surprise that makes people stop using a feature.
+function Screen:CapturePosition(index)
     local cfg = ns.db.bars[index]
     local bar = barFrames[index]
     if not (cfg and bar) then return end
 
-    local point, _, relPoint, x, y = bar:GetPoint(1)
-    if not point then return end
+    local centreX, centreY = bar:GetCenter()
+    local screenX, screenY = UIParent:GetCenter()
+    if not (centreX and screenX) then return end
 
-    cfg.point, cfg.relPoint = point, relPoint
-    cfg.x, cfg.y = math.floor(x + 0.5), math.floor(y + 0.5)
+    cfg.point, cfg.relPoint = "CENTER", "CENTER"
+    cfg.x = math.floor(centreX - screenX + 0.5)
+    cfg.y = math.floor(centreY - screenY + 0.5)
 end
 
 ---------------------------------------------------------------------------
@@ -341,6 +359,14 @@ function Screen:Render()
             end
             bar:Hide()
         end
+    end
+
+    -- A second pass for attached bars. The first one runs in list order, so a
+    -- bar anchored to one BELOW it in the list found no frame to hang on yet
+    -- and fell back to the screen. Cheap, and it removes an ordering rule
+    -- nobody would remember.
+    for index, cfg in ipairs(ns.db.bars) do
+        if cfg.anchor then self:ApplyPosition(index) end
     end
 
     self:ApplyTakeover(claimedNow)

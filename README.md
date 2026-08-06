@@ -240,6 +240,12 @@ hold **Alt** while dragging to switch snapping off. The cog opens that bar's
 menu. **Shift + Right Click** hides the overlay so you can see what is
 underneath, and Escape leaves.
 
+**Bars can be attached to each other.** Snapping puts a bar next to another
+one once; attaching keeps it there — move the one it hangs on and it comes
+along, resize it and the other stays flush. The cog offers it, and afterwards
+the same menu switches which side. Dragging an attached bar adjusts its
+offset rather than a screen position it no longer owns.
+
 ### It takes Blizzard's display over
 
 Every icon on your bars *is* one of Blizzard's Cooldown Manager frames, moved

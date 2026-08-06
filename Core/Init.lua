@@ -100,6 +100,11 @@ ns.DEFAULTS = {
     -- spacing and colours - never the spells or the grid shape.
     barPresets = {},
 
+    -- Highest bar id handed out so far. Ids are never reused, because an
+    -- anchor points at one and a recycled id would silently re-attach a bar
+    -- to whatever took the old one's place.
+    lastBarID  = 0,
+
     -- Procs seen on this account, per class and spec:
     --   ["DEATHKNIGHT:250"] = { [glowingSpellID] = {
     --       display  = <spellID>,   what icon to draw

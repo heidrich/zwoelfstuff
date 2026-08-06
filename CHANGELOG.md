@@ -79,6 +79,20 @@ Positions are always the bar's centre offset from the screen centre — one
 anchor for everything, which is what makes the readout mean something and
 snapping arithmetic instead of a case analysis.
 
+**Bars can be attached to each other.** Snapping puts a bar next to another
+one *once*; attaching keeps it there — move the one it hangs on and it comes
+along, resize the one it hangs on and it stays flush. That is the difference
+between arranging a layout and rearranging it every time you change your mind.
+The cog offers it, and afterwards the same menu switches the side. An attached
+bar's readout shows what it hangs on, and dragging it adjusts the *offset*
+rather than a screen position it no longer owns.
+
+Bars have a real id now, because an attachment has to survive a delete
+reshuffling every index below it. Ids are never reused. Deleting a bar sets
+whatever hung on it free where it stands, a loop is refused before it can be
+made, and both are checked again at login — the menu cannot produce a broken
+state, but saved variables are a file on disk and files get edited.
+
 ### Added — the proc database is a file now
 
 `Core/KnownProcs.lua`. It is data that grows with every export, and having it
