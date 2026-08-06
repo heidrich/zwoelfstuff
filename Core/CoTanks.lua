@@ -250,7 +250,7 @@ end
 function CoTanks:Create()
     if self.panel then return end
 
-    local panel = CreateFrame("Frame", "DKstuffCoTanks", UIParent)
+    local panel = CreateFrame("Frame", "ZwoelfStuffCoTanks", UIParent)
     panel:SetFrameStrata("MEDIUM")
     panel:SetClampedToScreen(true)
     panel:SetMovable(true)
@@ -269,7 +269,7 @@ function CoTanks:Create()
     local hint = panel:CreateFontString(nil, "OVERLAY")
     hint:SetPoint("BOTTOM", panel, "TOP", 0, 4)
     ns.StyleFont(hint, 11)
-    hint:SetText("DKstuff co-tanks - drag me")
+    hint:SetText("ZwoelfStuff co-tanks - drag me")
     hint:Hide()
     self.moveHint = hint
 

@@ -1,13 +1,21 @@
 ---------------------------------------------------------------------------
--- OptionsBars - the bar workspace.
+-- OptionsBars - the cooldown workspace.
 --
--- Shaped like an app, not a settings page: the bar is the thing you are
--- working on, so it sits in the middle at its real size. What you select is
--- what the inspector on the right edits - a cell if you clicked one,
--- otherwise the bar itself.
+-- Three columns, and each one has exactly one job:
 --
--- The canvas IS the bar: same rows, same columns, same order, same sizes.
--- Nothing has to be translated from a list of numbers into a shape.
+--   left     what you are working on at all (handled in Options.lua)
+--   middle   ALL your bars, under each other, each one a card that IS the
+--            bar: the same grid, the same order, plus the two sliders that
+--            shape it. Nothing is hidden behind a selection - you see every
+--            bar you own at once, and "Add new bar" sits at the bottom of
+--            the stack where the next one will appear.
+--   right    the spells, listed in full. Click a cell, click a spell, done.
+--            The same column doubles as the settings for one bar when you
+--            press Options on its header, and comes back afterwards.
+--
+-- What the middle deliberately does NOT contain: sizes, colours, opacity.
+-- Those are per-bar settings, they are set rarely, and putting them here
+-- would bury the two numbers that are actually the shape of the bar.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -18,9 +26,21 @@ local Bars = ns.Bars
 ns.OptionsBars = {}
 local Workspace = ns.OptionsBars
 
+local CARD_PAD  = 14
+local HEADER_H  = 34
+local SLIDER_H  = 20
+local CARD_GAP  = 12
+local ADD_H     = 34
+
 ---------------------------------------------------------------------------
 -- Selection
+--
+-- One bar is current and, inside it, at most one cell. The right column
+-- always acts on that pair, which is what makes "click a cell, click a
+-- spell" work without any drag, dialog or confirmation.
 ---------------------------------------------------------------------------
+Workspace.mode = "spells"          -- "spells" | "options"
+
 function Workspace:Current()
     local index = self.index or 1
     if index > Bars:Count() then index = Bars:Count() end
@@ -30,14 +50,51 @@ function Workspace:Current()
 end
 
 function Workspace:Select(index)
-    self.index = index
-    self.cell = nil          -- a different bar means the old cell is gone
+    if self.index ~= index then
+        self.index = index
+        self.cell = nil            -- a different bar means the old cell is gone
+    end
     ns.Options:Refresh()
 end
 
-function Workspace:SelectCell(cell)
+function Workspace:SelectCell(index, cell)
+    self.index = index
     self.cell = cell
+    -- Picking a cell means you are about to fill it, so the spells come back
+    -- by themselves rather than leaving you on a settings pane wondering why
+    -- clicking did nothing.
+    if cell then self.mode = "spells" end
     ns.Options:Refresh()
+end
+
+function Workspace:ShowOptions(index)
+    self.index = index
+    self.cell = nil
+    self.mode = "options"
+    ns.Options:Refresh()
+end
+
+function Workspace:ShowSpells()
+    self.mode = "spells"
+    ns.Options:Refresh()
+end
+
+-- The next cell worth filling, so filling a bar is click, click, click
+-- instead of click, click, re-aim, click.
+function Workspace:AdvanceCell()
+    local _, cfg = self:Current()
+    if not cfg then return end
+
+    for cell = (self.cell or 0) + 1, Bars:CellCount(cfg) do
+        if not cfg.cells[cell] then
+            self.cell = cell
+            return
+        end
+    end
+
+    self.cell = nil
+    ns.Print(string.format("\"%s\" is full - pull Rows or Columns up to fit more.",
+        cfg.name))
 end
 
 local function Apply()
@@ -46,391 +103,603 @@ local function Apply()
 end
 
 ---------------------------------------------------------------------------
--- Spell picker
---
--- Sourced from Blizzard's Cooldown Manager: anything in this list is already
--- tracked by the game, so its timing is guaranteed to work.
+-- Assigning a spell
 ---------------------------------------------------------------------------
-local Picker = {}
-ns.BarSpellPicker = Picker
+function Workspace:Assign(spellID)
+    local index, cfg = self:Current()
+    if not cfg then
+        ns.Print("Add a bar first.")
+        return
+    end
 
-local PICK_ROW_H = 26
+    if self.cell then
+        Bars:SetCell(index, self.cell, spellID)
+        self:AdvanceCell()
+    else
+        -- No cell aimed at: the first free one is what the user means.
+        Bars:AddSpell(index, spellID)
+    end
 
-local function PickerRow(parent)
-    local row = CreateFrame("Button", nil, parent)
-    row:SetHeight(PICK_ROW_H)
-
-    row.hl = row:CreateTexture(nil, "HIGHLIGHT")
-    row.hl:SetAllPoints(row)
-    row.hl:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.15)
-
-    row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(20, 20)
-    row.icon:SetPoint("LEFT", row, "LEFT", 8, 0)
-    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-    row.name = UI.Label(row, "", 12, C.text)
-    row.name:SetPoint("LEFT", row.icon, "RIGHT", 10, 0)
-    row.name:SetWordWrap(false)
-
-    row.meta = UI.Label(row, "", 11, C.textFaint)
-    row.meta:SetPoint("RIGHT", row, "RIGHT", -10, 0)
-    row.meta:SetJustifyH("RIGHT")
-    row.meta:SetWidth(140)
-    row.name:SetPoint("RIGHT", row.meta, "LEFT", -8, 0)
-
-    return row
-end
-
-function Picker:Create()
-    if self.frame then return end
-
-    local frame = CreateFrame("Frame", "DKstuffSpellPicker", UIParent)
-    frame:SetSize(430, 500)
-    frame:SetFrameStrata("DIALOG")
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-    frame:Hide()
-
-    UI.Fill(frame, "BACKGROUND", C.windowBg, 0.98)
-    local edge = ns.CreateBorder(frame, 1, "BORDER")
-    edge:SetColor(0.22, 0.24, 0.29, 1)
-
-    local title = UI.Label(frame, "Add a cooldown", 16, C.text)
-    title:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -14)
-
-    frame.target = UI.Label(frame, "", 11, C.accent)
-    frame.target:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-    frame.target:SetWordWrap(false)
-
-    local close = CreateFrame("Button", nil, frame)
-    close:SetSize(26, 26)
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
-    local closeLabel = UI.Label(close, "X", 13, C.textDim)
-    closeLabel:SetPoint("CENTER", close, "CENTER", 0, 0)
-    close:SetScript("OnClick", function() frame:Hide() end)
-
-    local search = UI.Input(frame, 398, function() Picker:Fill() end, false)
-    search:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -62)
-    search.input:SetScript("OnTextChanged", function() Picker:Fill() end)
-    frame.search = search
-
-    local list = CreateFrame("Frame", nil, frame)
-    list:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -94)
-    list:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -16, 74)
-    UI.Fill(list, "BACKGROUND", C.sidebarBg)
-
-    local scroll, content = UI.ScrollArea(list, 370)
-    frame.content = content
-    frame.scroll = scroll
-
-    local manual = UI.Input(frame, 100, function(text)
-        local spellID = tonumber(text)
-        if spellID and spellID > 0 then
-            Picker:Assign(spellID)
-        else
-            ns.Print("Enter a numeric spell ID.")
-        end
-    end, true)
-    manual:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 40)
-
-    local manualHint = UI.Hint(frame, "or a spell ID, then Enter")
-    manualHint:SetPoint("LEFT", manual, "RIGHT", 10, 0)
-
-    frame.footer = UI.Label(frame, "", 11, C.textFaint)
-    frame.footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 16)
-    frame.footer:SetWordWrap(false)
-
-    frame.rows = {}
-    self.frame = frame
-
-    table.insert(UISpecialFrames, "DKstuffSpellPicker")
-end
-
-function Picker:Assign(spellID)
-    if not self.barIndex or not self.cell then return end
-    Bars:SetCell(self.barIndex, self.cell, spellID)
-    self.frame:Hide()
     ns.Options:Refresh()
 end
 
-function Picker:Fill()
-    local frame = self.frame
-    if not frame then return end
-
-    local query = (frame.search.input:GetText() or ""):lower()
-    local catalogue = ns.CDM:Catalogue()
-
-    local labels = {}
-    for _, viewer in ipairs(ns.CDM.VIEWERS) do labels[viewer.key] = viewer.label end
-
-    local y, shown = 0, 0
-    for _, entry in ipairs(catalogue) do
-        local hit = query == ""
-            or entry.name:lower():find(query, 1, true)
-            or tostring(entry.spellID):find(query, 1, true)
-
-        if hit then
-            shown = shown + 1
-            local row = frame.rows[shown]
-            if not row then
-                row = PickerRow(frame.content)
-                frame.rows[shown] = row
-            end
-
-            row:SetPoint("TOPLEFT", frame.content, "TOPLEFT", 0, y)
-            row:SetPoint("TOPRIGHT", frame.content, "TOPRIGHT", 0, y)
-
-            row.icon:SetTexture(entry.icon or ns.WHITE)
-            row.icon:SetDesaturated(entry.icon == nil)
-            row.name:SetText(entry.name)
-            row.meta:SetText(string.format("%s  |cff666666%d|r",
-                labels[entry.viewer] or "", entry.spellID))
-            row:SetScript("OnClick", function() Picker:Assign(entry.spellID) end)
-            row:Show()
-
-            y = y - PICK_ROW_H
-        end
-    end
-
-    for index = shown + 1, #frame.rows do frame.rows[index]:Hide() end
-    frame.content:SetHeight(math.max(1, -y))
-    if frame.scroll.Update then frame.scroll.Update() end
-
-    frame.footer:SetText(string.format("%d of %d from your Cooldown Manager",
-        shown, #catalogue))
-end
-
-function Picker:Open(barIndex, cell)
-    self:Create()
-    self.barIndex, self.cell = barIndex, cell
-
-    local cfg = Bars:Get(barIndex)
-    self.frame.target:SetText(string.format("into cell %d of \"%s\"",
-        cell, cfg and cfg.name or "?"))
-
-    self.frame.search.input:SetText("")
-    self:Fill()
-    self.frame:ClearAllPoints()
-    self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    self.frame:Show()
-    self.frame.search.input:SetFocus()
-end
-
 ---------------------------------------------------------------------------
--- Canvas - the bar, at its real size
+-- The middle: every bar, under each other
 ---------------------------------------------------------------------------
-function Workspace:BuildCanvas(parent)
-    local canvas = CreateFrame("Frame", nil, parent)
-    canvas:SetAllPoints(parent)
+local function BuildCard(parent, width)
+    local card = UI.Card(parent, width)
 
-    -- Title row
-    local title = UI.Label(canvas, "", 17, C.text)
-    title:SetPoint("TOPLEFT", canvas, "TOPLEFT", 0, 0)
+    -- Header ---------------------------------------------------------------
+    local number = UI.Label(card, "", 11, C.textFaint)
+    number:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -12)
 
-    local rename = UI.Input(canvas, 150, function(text)
-        local _, cfg = Workspace:Current()
-        if cfg and text ~= "" then
-            cfg.name = text
-            ns.Options:Refresh()
+    local title = UI.Label(card, "", 13.5, C.text)
+    title:SetPoint("LEFT", number, "RIGHT", 8, 0)
+    title:SetWidth(width - 180)      -- never under the header's two actions
+    title:SetWordWrap(false)
+
+    -- Two-step, because one stray click would otherwise throw away a bar the
+    -- user spent time filling, and there is no undo.
+    local remove
+    remove = UI.GhostButton(card, "Delete", function()
+        if not card.dkIndex then return end
+
+        if not card.armed then
+            card.armed = true
+            remove:SetText("Sure?")
+            remove:SetBaseColor(C.danger)
+            C_Timer.After(4, function()
+                if not card.armed then return end
+                card.armed = false
+                remove:SetText("Delete")
+                remove:SetBaseColor(C.textFaint)
+            end)
+            return
         end
-    end, false)
-    rename:SetPoint("TOPRIGHT", canvas, "TOPRIGHT", -100, 2)
 
-    local unlock = UI.Button(canvas, "Unlock", 90, function()
-        ns.Print("Moving the bar comes with the on-screen display.")
+        card.armed = false
+        remove:SetText("Delete")
+        remove:SetBaseColor(C.textFaint)
+        Bars:Remove(card.dkIndex)
+        Workspace.cell = nil
+        ns.Options:Refresh()
+    end, C.textFaint)
+    remove:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD + 6, -10)
+
+    local options = UI.GhostButton(card, "Options", function()
+        if card.dkIndex then Workspace:ShowOptions(card.dkIndex) end
     end)
-    unlock:SetPoint("TOPRIGHT", canvas, "TOPRIGHT", 0, 2)
+    options:SetPoint("RIGHT", remove, "LEFT", -2, 0)
 
-    -- The bar itself, centred in the space below the title.
-    local stage = CreateFrame("Frame", nil, canvas)
-    stage:SetPoint("TOPLEFT", canvas, "TOPLEFT", 0, -44)
-    stage:SetPoint("TOPRIGHT", canvas, "TOPRIGHT", 0, -44)
-    stage:SetHeight(230)
-    UI.Fill(stage, "BACKGROUND", C.sidebarBg, 0.5)
+    local headerLine = UI.Separator(card)
+    headerLine:SetPoint("TOPLEFT", card, "TOPLEFT", 0, -HEADER_H)
+    headerLine:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, -HEADER_H)
+
+    -- The bar itself -------------------------------------------------------
+    local stage = CreateFrame("Frame", nil, card)
+    stage:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -(HEADER_H + 12))
+    stage:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -(HEADER_H + 12))
+    stage:SetHeight(1)
+
+    local function Cfg()
+        return card.dkIndex and Bars:Get(card.dkIndex)
+    end
 
     local grid = UI.CellGrid(stage, {
         cellSize = function()
-            local _, cfg = Workspace:Current()
+            local cfg = Cfg()
             if not cfg then return 40, 40 end
             if cfg.kind == "bar" then return cfg.barWidth, cfg.barHeight end
             return cfg.iconSize, cfg.iconSize
         end,
         gaps = function()
-            local _, cfg = Workspace:Current()
+            local cfg = Cfg()
             if not cfg then return 4, 4 end
             return cfg.spacing, cfg.lineSpacing
         end,
-        rows    = function() local _, cfg = Workspace:Current() return cfg and cfg.rows or 1 end,
-        columns = function() local _, cfg = Workspace:Current() return cfg and cfg.columns or 1 end,
-        content = function(cell)
-            local _, cfg = Workspace:Current()
-            return cfg and cfg.cells[cell]
+        rows    = function() local cfg = Cfg() return cfg and cfg.rows or 1 end,
+        columns = function() local cfg = Cfg() return cfg and cfg.columns or 1 end,
+        content = function(cell) local cfg = Cfg() return cfg and cfg.cells[cell] end,
+        selected = function()
+            if Workspace.index ~= card.dkIndex then return nil end
+            return Workspace.cell
         end,
-        selected = function() return Workspace.cell end,
-        -- Clicking a cell selects it; the inspector on the right is where it
-        -- is then filled or cleared. One click, one meaning.
-        onPick  = function(cell) Workspace:SelectCell(cell) end,
+        onPick = function(cell) Workspace:SelectCell(card.dkIndex, cell) end,
         onClear = function(cell)
-            Bars:ClearCell((Workspace:Current()), cell)
+            Bars:ClearCell(card.dkIndex, cell)
             ns.Options:Refresh()
         end,
-        onMove  = function(from, to)
-            Bars:MoveCell((Workspace:Current()), from, to)
-            Workspace.cell = to
-            ns.Options:Refresh()
+        onMove = function(from, to)
+            Bars:MoveCell(card.dkIndex, from, to)
+            Workspace:SelectCell(card.dkIndex, to)
         end,
     })
-    grid:SetPoint("CENTER", stage, "CENTER", 0, 0)
+    grid:SetPoint("TOPLEFT", stage, "TOPLEFT", 0, 0)
 
-    local hint = UI.Hint(canvas, "")
-    hint:SetPoint("TOPLEFT", stage, "BOTTOMLEFT", 0, -10)
-    hint:SetWidth(420)
+    -- Shape ----------------------------------------------------------------
+    local shape = CreateFrame("Frame", nil, card)
+    shape:SetHeight(SLIDER_H)
+    shape:SetPoint("LEFT", card, "LEFT", CARD_PAD, 0)
+    shape:SetPoint("RIGHT", card, "RIGHT", -CARD_PAD, 0)
 
-    -- Shape, right under the bar it shapes.
-    local shape = CreateFrame("Frame", nil, canvas)
-    shape:SetPoint("TOPLEFT", stage, "BOTTOMLEFT", 0, -34)
-    shape:SetSize(420, 30)
+    local sliderW = math.floor((width - CARD_PAD * 2 - 24) / 2)
 
-    local rowsLabel = UI.Label(shape, "Rows", 12, C.textDim)
-    rowsLabel:SetPoint("LEFT", shape, "LEFT", 0, 0)
+    local rows = UI.MiniSlider(shape, {
+        label = "Rows", min = 1, max = 12, step = 1,
+        get = function() local cfg = Cfg() return cfg and cfg.rows or 1 end,
+        set = function(value)
+            local cfg = Cfg()
+            if cfg then Bars:SetGrid(card.dkIndex, value, cfg.columns) end
+        end,
+        -- Shaping a bar is also a way of pointing at it, so the right column
+        -- follows rather than staying on whatever was picked before.
+        apply = function() Workspace:Select(card.dkIndex) end,
+    })
+    rows:SetPoint("LEFT", shape, "LEFT", 0, 0)
+    rows:SetWidth(sliderW)
 
-    local function Counter(anchorTo, offset, get, set)
-        local holder = CreateFrame("Frame", nil, shape)
-        holder:SetSize(90, 24)
-        holder:SetPoint("LEFT", anchorTo, "RIGHT", offset, 0)
+    local columns = UI.MiniSlider(shape, {
+        label = "Columns", labelWidth = 62, min = 1, max = 12, step = 1,
+        get = function() local cfg = Cfg() return cfg and cfg.columns or 1 end,
+        set = function(value)
+            local cfg = Cfg()
+            if cfg then Bars:SetGrid(card.dkIndex, cfg.rows, value) end
+        end,
+        -- Shaping a bar is also a way of pointing at it, so the right column
+        -- follows rather than staying on whatever was picked before.
+        apply = function() Workspace:Select(card.dkIndex) end,
+    })
+    columns:SetPoint("RIGHT", shape, "RIGHT", 0, 0)
+    columns:SetWidth(sliderW)
 
-        local value = UI.Label(holder, "", 13, C.text)
-        value:SetPoint("CENTER", holder, "CENTER", 0, 0)
-        value:SetWidth(34)
-        value:SetJustifyH("CENTER")
+    -- Clicking anywhere on the card makes it the one the spells go into.
+    card:EnableMouse(true)
+    card:SetScript("OnMouseDown", function()
+        if card.dkIndex then Workspace:Select(card.dkIndex) end
+    end)
 
-        local function Step(delta)
-            set(math.max(1, math.min(12, get() + delta)))
-            ns.Options:Refresh()
+    -- Height depends on the grid, which depends on the user's numbers, so the
+    -- card measures itself and reports back.
+    card.Refresh = function()
+        local cfg = Cfg()
+        if not cfg then return 0 end
+
+        -- Any other action disarms a half-pressed Delete. Cards are reused for
+        -- whatever bar sits at their position, so an armed one must never be
+        -- handed on to a different bar.
+        if card.armed then
+            card.armed = false
+            remove:SetText("Delete")
+            remove:SetBaseColor(C.textFaint)
         end
 
-        local minus = UI.Button(holder, "-", 24, function() Step(-1) end)
-        minus:SetHeight(22)
-        minus:SetPoint("LEFT", holder, "LEFT", 0, 0)
-
-        local plus = UI.Button(holder, "+", 24, function() Step(1) end)
-        plus:SetHeight(22)
-        plus:SetPoint("RIGHT", holder, "RIGHT", 0, 0)
-
-        holder.Refresh = function()
-            value:SetText(tostring(get()))
-            minus:SetEnabled(get() > 1)
-            plus:SetEnabled(get() < 12)
-        end
-        return holder
-    end
-
-    local rowsCounter = Counter(rowsLabel, 8,
-        function() local _, cfg = Workspace:Current() return cfg and cfg.rows or 1 end,
-        function(value)
-            local index, cfg = Workspace:Current()
-            if cfg then Bars:SetGrid(index, value, cfg.columns) end
-        end)
-
-    local colsLabel = UI.Label(shape, "Columns", 12, C.textDim)
-    colsLabel:SetPoint("LEFT", rowsCounter, "RIGHT", 24, 0)
-
-    local colsCounter = Counter(colsLabel, 8,
-        function() local _, cfg = Workspace:Current() return cfg and cfg.columns or 1 end,
-        function(value)
-            local index, cfg = Workspace:Current()
-            if cfg then Bars:SetGrid(index, cfg.rows, value) end
-        end)
-
-    canvas.Refresh = function()
-        local _, cfg = Workspace:Current()
-        if not cfg then return end
-
+        number:SetText(tostring(card.dkIndex) .. ".")
         title:SetText(cfg.name)
-        rename:SetEnabled(true)
-        rowsCounter.Refresh()
-        colsCounter.Refresh()
-        grid.Refresh()
 
-        local filled = 0
-        for cell = 1, Bars:CellCount(cfg) do
-            if cfg.cells[cell] then filled = filled + 1 end
-        end
-        if filled == 0 then
-            hint:SetText("Click a cell, then choose a cooldown on the right.")
-        else
-            hint:SetText(string.format(
-                "%d of %d cells filled. Drag a cell onto another to swap them.",
-                filled, Bars:CellCount(cfg)))
-        end
+        local gridHeight = grid.Refresh()
+
+        -- A wide grid must not run out of the card. Scaling the preview keeps
+        -- the arrangement honest - it is still the real shape, just not at
+        -- real size - and the drag maths follows the scale on its own.
+        local available = width - CARD_PAD * 2
+        local natural = math.max(1, grid:GetWidth())
+        local fit = math.min(1, available / natural)
+        grid:SetScale(fit)
+        gridHeight = gridHeight * fit
+
+        stage:SetHeight(math.max(1, gridHeight))
+        shape:ClearAllPoints()
+        shape:SetPoint("TOPLEFT", stage, "BOTTOMLEFT", 0, -14)
+        shape:SetPoint("TOPRIGHT", stage, "BOTTOMRIGHT", 0, -14)
+
+        rows.Refresh()
+        columns.Refresh()
+
+        local active = Workspace.index == card.dkIndex
+        card:SetActive(active)
+        title:SetTextColor(
+            active and C.text[1] or C.textDim[1],
+            active and C.text[2] or C.textDim[2],
+            active and C.text[3] or C.textDim[3])
+        options:SetBaseColor((active and Workspace.mode == "options")
+            and C.accent or C.textDim)
+
+        local height = HEADER_H + 12 + gridHeight + 14 + SLIDER_H + CARD_PAD
+        card:SetHeight(height)
+        return height
     end
 
-    return canvas
+    return card
+end
+
+function Workspace:BuildList(parent, width)
+    local list = CreateFrame("Frame", nil, parent)
+    list:SetAllPoints(parent)
+
+    local scroll, content = UI.ScrollArea(list, width - 12)
+    local cardWidth = width - 12
+
+    local cards = {}
+
+    -- Two buttons, because the two kinds are a different thing to build, not a
+    -- setting you change afterwards: a row of icons and a stack of timer bars
+    -- want different sizes, a different default grid and a different place on
+    -- screen. Choosing up front means the first one is already right.
+    local function Add(kind)
+        local index = Bars:Add(nil, kind)
+        Workspace:SelectCell(index, 1)
+
+        -- The new bar lands at the bottom of the stack. On a list that already
+        -- fills the column, not going there looks like nothing happened. Next
+        -- frame, because the scroll range only knows about the new card once
+        -- the layout above has run.
+        C_Timer.After(0, function()
+            scroll:SetVerticalScroll(scroll:GetVerticalScrollRange() or 0)
+            if scroll.Update then scroll.Update() end
+        end)
+    end
+
+    local addWidth = math.floor((cardWidth - 10) / 2)
+
+    local addIcons = UI.Button(content, "+   Icon bar", addWidth,
+        function() Add("icon") end, "soft")
+    addIcons:SetHeight(ADD_H)
+
+    local addBars = UI.Button(content, "+   Tracking bar", addWidth,
+        function() Add("bar") end, "soft")
+    addBars:SetHeight(ADD_H)
+
+    local empty = UI.Label(content, "", 12, C.textDim)
+    empty:SetWidth(cardWidth)
+    empty:SetJustifyH("LEFT")
+
+    list.Refresh = function()
+        local y = 0
+
+        for index = 1, math.max(#cards, Bars:Count()) do
+            local cfg = Bars:Get(index)
+            local card = cards[index]
+
+            if cfg and not card then
+                card = BuildCard(content, cardWidth)
+                cards[index] = card
+            end
+
+            if cfg then
+                card.dkIndex = index
+                card:ClearAllPoints()
+                card:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+                card:Show()
+                y = y - card.Refresh() - CARD_GAP
+            elseif card then
+                card:Hide()
+            end
+        end
+
+        if Bars:Count() == 0 then
+            empty:SetText("No bars yet. Add one, then click a cell and pick a "
+                .. "cooldown from the list on the right.")
+            empty:ClearAllPoints()
+            empty:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+            empty:Show()
+            y = y - empty:GetStringHeight() - 12
+        else
+            empty:Hide()
+        end
+
+        addIcons:ClearAllPoints()
+        addIcons:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+        addBars:ClearAllPoints()
+        addBars:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, y)
+        y = y - ADD_H
+
+        content:SetHeight(math.max(1, -y + 10))
+        if scroll.Update then scroll.Update() end
+    end
+
+    return list
 end
 
 ---------------------------------------------------------------------------
--- Inspector - what is selected
+-- The right column, pane one: every spell the Cooldown Manager knows
+--
+-- Sourced from Blizzard's Cooldown Manager on purpose: anything in this list
+-- is already tracked by the game, so its icon, its charges and its timing are
+-- guaranteed to work. A spell that is not in here cannot be made to work by
+-- any addon on this patch - see the About page for why.
 ---------------------------------------------------------------------------
-function Workspace:BuildInspector(parent, width)
-    local inspector = CreateFrame("Frame", nil, parent)
-    inspector:SetAllPoints(parent)
+local SPELL_ROW_H = 32
+local HEADING_H   = 26
 
-    -- Cell half -----------------------------------------------------------
-    local cellPane = CreateFrame("Frame", nil, inspector)
-    cellPane:SetAllPoints(inspector)
+-- The order the groups appear in, and what they are called. "other" is the
+-- catch-all for anything the client hands back under a category this build
+-- does not know - it exists so a renamed enum member costs one heading rather
+-- than a spell vanishing from the list.
+local GROUPS = {
+    { key = "essential", label = "Cooldowns" },
+    { key = "utility",   label = "Utility" },
+    { key = "buffIcon",  label = "Buffs" },
+    { key = "buffBar",   label = "Buff bars" },
+    -- Not from the Cooldown Manager: procs this character has been seen to
+    -- raise. What is shown is the aura; what drives it is the glow underneath.
+    { key = "aura",      label = "Auras" },
+    { key = "other",     label = "Other" },
+}
 
-    local cellTitle = UI.Label(cellPane, "", 13, C.accent)
-    cellTitle:SetPoint("TOPLEFT", cellPane, "TOPLEFT", 0, 0)
+function Workspace:BuildSpellPane(parent, width)
+    local pane = CreateFrame("Frame", nil, parent)
+    pane:SetAllPoints(parent)
 
-    local preview = CreateFrame("Frame", nil, cellPane)
-    preview:SetSize(48, 48)
-    preview:SetPoint("TOPLEFT", cellPane, "TOPLEFT", 0, -26)
-    UI.Fill(preview, "BACKGROUND", C.control)
-    local previewEdge = ns.CreateBorder(preview, 1, "OVERLAY")
-    previewEdge:SetColor(0, 0, 0, 1)
-    local previewIcon = preview:CreateTexture(nil, "ARTWORK")
-    previewIcon:SetPoint("TOPLEFT", preview, "TOPLEFT", 1, -1)
-    previewIcon:SetPoint("BOTTOMRIGHT", preview, "BOTTOMRIGHT", -1, 1)
-    previewIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local filter = "all"
 
-    local spellName = UI.Label(cellPane, "", 13, C.text)
-    spellName:SetPoint("TOPLEFT", preview, "TOPRIGHT", 10, -4)
-    spellName:SetWidth(width - 70)
+    local target = UI.Label(pane, "", 11, C.accent)
+    target:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
+    target:SetWidth(width)
+    target:SetWordWrap(false)
 
-    local spellMeta = UI.Label(cellPane, "", 11, C.textFaint)
-    spellMeta:SetPoint("TOPLEFT", spellName, "BOTTOMLEFT", 0, -4)
+    local search = UI.Input(pane, width, function() end, false, "Search")
+    search:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, -18)
+    search:SetHeight(24)
 
-    local chooseBtn = UI.Button(cellPane, "Choose cooldown", width, function()
-        if Workspace.cell then Picker:Open((Workspace:Current()), Workspace.cell) end
-    end, "primary")
-    chooseBtn:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 0, -14)
+    local chips
+    chips = UI.ChipRow(pane, width, {
+        chips = {
+            { key = "all",       text = "All" },
+            { key = "essential", text = "Cooldowns" },
+            { key = "utility",   text = "Utility" },
+            { key = "buffIcon",  text = "Buffs" },
+            { key = "buffBar",   text = "Buff bars" },
+            { key = "aura",      text = "Auras" },
+        },
+        current = function() return filter end,
+        onSelect = function(key)
+            filter = key
+            chips.Refresh()
+            pane.Fill()
+        end,
+    })
+    chips:SetPoint("TOPLEFT", search, "BOTTOMLEFT", 0, -10)
 
-    local clearBtn = UI.Button(cellPane, "Clear this cell", width, function()
-        if Workspace.cell then
-            Bars:ClearCell((Workspace:Current()), Workspace.cell)
-            ns.Options:Refresh()
+    local listHost = CreateFrame("Frame", nil, pane)
+    listHost:SetPoint("TOPLEFT", chips, "BOTTOMLEFT", 0, -10)
+    listHost:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 52)
+
+    local scroll, content = UI.ScrollArea(listHost, width - 8)
+
+    local manual = UI.Input(pane, 92, function(text)
+        local spellID = tonumber(text)
+        if spellID and spellID > 0 then
+            Workspace:Assign(spellID)
+        else
+            ns.Print("Enter a numeric spell ID.")
         end
+    end, true, "ID")
+    manual:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 0, 22)
+
+    local manualHint = UI.Hint(pane, "add by spell ID")
+    manualHint:SetPoint("LEFT", manual, "RIGHT", 8, 0)
+
+    local footer = UI.Label(pane, "", 10.5, C.textFaint)
+    footer:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 0, 4)
+    footer:SetWordWrap(false)
+
+    local rows, headings = {}, {}
+    local rowWidth = width - 8
+
+    local function Fill()
+        local query = (search.input:GetText() or ""):lower()
+
+        -- Two sources, one list. The Cooldown Manager's entries and the procs
+        -- this character has raised carry the same fields, so the row below
+        -- does not care which it got.
+        local catalogue = {}
+        for _, entry in ipairs(ns.CDM:Catalogue()) do catalogue[#catalogue + 1] = entry end
+        for _, entry in ipairs(ns.Auras:Catalogue()) do catalogue[#catalogue + 1] = entry end
+
+        -- Which spells are already on the bar being worked on. Only that bar:
+        -- the same spell may sit on three others, and marking it here would
+        -- say something the user did not ask about.
+        local _, cfg = Workspace:Current()
+        local used = {}
+        if cfg then
+            for cell = 1, Bars:CellCount(cfg) do
+                local spellID = cfg.cells[cell]
+                if spellID and not used[spellID] then used[spellID] = cell end
+            end
+        end
+
+        local buckets = {}
+        for _, group in ipairs(GROUPS) do buckets[group.key] = {} end
+
+        local matched = 0
+        for _, entry in ipairs(catalogue) do
+            local hit = query == ""
+                or entry.name:lower():find(query, 1, true)
+                or tostring(entry.spellID):find(query, 1, true)
+
+            local key = entry.viewer or "other"
+            if not buckets[key] then key = "other" end
+
+            if hit and (filter == "all" or filter == key) then
+                matched = matched + 1
+                local bucket = buckets[key]
+                bucket[#bucket + 1] = entry
+            end
+        end
+
+        -- Within a group: what you can cast first, what you cannot after.
+        -- Greyed entries are worth listing but not worth scrolling past.
+        for _, group in ipairs(GROUPS) do
+            table.sort(buckets[group.key], function(a, b)
+                local aKnown, bKnown = a.known ~= false, b.known ~= false
+                if aKnown ~= bKnown then return aKnown end
+                if a.name == b.name then return a.spellID < b.spellID end
+                return a.name < b.name
+            end)
+        end
+
+        local y, rowCount, headCount = 0, 0, 0
+
+        for _, group in ipairs(GROUPS) do
+            local bucket = buckets[group.key]
+            if #bucket > 0 then
+                -- Headings only when everything is shown. Filtered to one
+                -- group, a heading repeats what the chip above already says.
+                if filter == "all" then
+                    headCount = headCount + 1
+                    local heading = headings[headCount]
+                    if not heading then
+                        heading = UI.ListHeading(content, rowWidth, HEADING_H)
+                        headings[headCount] = heading
+                    end
+                    heading:SetText(group.label .. "   " .. #bucket)
+                    heading:ClearAllPoints()
+                    heading:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+                    heading:Show()
+                    y = y - HEADING_H
+                end
+
+                for _, entry in ipairs(bucket) do
+                    rowCount = rowCount + 1
+                    local row = rows[rowCount]
+                    if not row then
+                        row = UI.SpellRow(content, rowWidth, SPELL_ROW_H)
+                        rows[rowCount] = row
+                    end
+
+                    row:ClearAllPoints()
+                    row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+
+                    row.icon:SetTexture(entry.icon or ns.WHITE)
+                    row.name:SetText(entry.name)
+
+                    local cell = used[entry.spellID]
+                    local known = entry.known ~= false
+                    row:SetUsed(cell, known)
+
+                    if not known then
+                        row.meta:SetText(string.format("not talented   %d",
+                            entry.spellID))
+                    elseif cell then
+                        row.meta:SetText(string.format("on this bar, cell %d   %d",
+                            cell, entry.spellID))
+                    elseif entry.parent then
+                        -- An aura: say what actually drives it, because that
+                        -- is the surprising part and the thing to correct if
+                        -- the name above it is wrong. Unless the name IS the
+                        -- glowing ability, in which case there is nothing to
+                        -- name and "Defile on Defile" only reads as a fault.
+                        local driver = entry.route == "engine" and "aura" or "proc"
+                        row.meta:SetText(entry.spellID ~= entry.parent
+                            and string.format("%s on %s   %s", driver,
+                                ns.SpellName(entry.parent) or entry.parent,
+                                entry.duration and (entry.duration .. "s") or "?s")
+                            or string.format("%s   %s", driver,
+                                entry.duration and (entry.duration .. "s") or "?s"))
+                    else
+                        row.meta:SetText(tostring(entry.spellID))
+                    end
+
+                    -- What the game's own tooltip cannot know: where this
+                    -- spell already sits, what actually drives it, and what a
+                    -- click here would do.
+                    row.dkSpellID = entry.spellID
+                    wipe(row.dkLines)
+
+                    if not known then
+                        row.dkLines[#row.dkLines + 1] = {
+                            text = "Not talented right now. It can still go on a "
+                                .. "bar - useful when you are about to switch "
+                                .. "into the build that has it.",
+                            r = 0.62, g = 0.64, b = 0.68,
+                        }
+                    end
+
+                    if entry.parent and entry.spellID ~= entry.parent then
+                        row.dkLines[#row.dkLines + 1] = {
+                            text = string.format(
+                                "Shown while %s lights up%s. The Cooldown Manager "
+                                .. "does not carry this one, so the proc is what "
+                                .. "drives it.",
+                                ns.SpellName(entry.parent) or entry.parent,
+                                entry.duration and (", about " .. entry.duration .. "s") or ""),
+                            r = 1.00, g = 0.478, b = 0.239,
+                        }
+                    end
+
+                    if cell then
+                        row.dkLines[#row.dkLines + 1] = {
+                            text = string.format("Already on %s, in cell %d.",
+                                cfg and cfg.name or "this bar", cell),
+                            r = 0.404, g = 0.788, b = 0.443,
+                        }
+                    elseif cfg then
+                        row.dkLines[#row.dkLines + 1] = {
+                            text = Workspace.cell
+                                and string.format("Click to put it in cell %d of %s.",
+                                    Workspace.cell, cfg.name)
+                                or string.format("Click to add it to %s.", cfg.name),
+                            r = 0.62, g = 0.64, b = 0.68,
+                        }
+                    end
+
+                    row:SetScript("OnClick", function() Workspace:Assign(entry.spellID) end)
+                    row:Show()
+
+                    y = y - SPELL_ROW_H
+                end
+            end
+        end
+
+        for index = rowCount + 1, #rows do rows[index]:Hide() end
+        for index = headCount + 1, #headings do headings[index]:Hide() end
+
+        content:SetHeight(math.max(1, -y))
+        if scroll.Update then scroll.Update() end
+
+        footer:SetText(string.format("%d of %d cooldowns", matched, #catalogue))
+    end
+
+    -- Typing filters as you type; there is nothing to submit.
+    search.input:SetScript("OnTextChanged", function()
+        search.UpdateGhost()
+        Fill()
     end)
-    clearBtn:SetPoint("TOPLEFT", chooseBtn, "BOTTOMLEFT", 0, -6)
 
-    local deselect = UI.Button(cellPane, "Done", width, function()
-        Workspace:SelectCell(nil)
-    end)
-    deselect:SetPoint("TOPLEFT", clearBtn, "BOTTOMLEFT", 0, -6)
+    pane.Fill = Fill
+    pane.Refresh = function()
+        local _, cfg = Workspace:Current()
+        if not cfg then
+            target:SetText("Add a bar first")
+        elseif Workspace.cell then
+            target:SetText(string.format("Click a spell to fill cell %d of %s",
+                Workspace.cell, cfg.name))
+        else
+            target:SetText(string.format("Click a spell to add it to %s", cfg.name))
+        end
+        chips.Refresh()
+        Fill()
+    end
 
-    -- Bar half -------------------------------------------------------------
-    local barPane = CreateFrame("Frame", nil, inspector)
-    barPane:SetAllPoints(inspector)
+    return pane
+end
 
-    -- Full-width rows throughout: the inspector is a single narrow column, so
-    -- the two-column grid the wide pages use would put a 118px control into a
-    -- 103px slot and push the label off its own row.
-    local grid = UI.Page(barPane, width)
+---------------------------------------------------------------------------
+-- The right column, pane two: everything about one bar
+--
+-- Reached from the Options button on that bar's card, and it comes back to
+-- the spells when you are done. Nothing here changes what a bar contains -
+-- only how it looks.
+---------------------------------------------------------------------------
+function Workspace:BuildOptionsPane(parent, width)
+    local pane = CreateFrame("Frame", nil, parent)
+    pane:SetAllPoints(parent)
+
+    local body = CreateFrame("Frame", nil, pane)
+    body:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
+    body:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 0)
+
+    local grid = UI.Page(body, width)
 
     local function Get(key)
         return function()
@@ -445,35 +714,66 @@ function Workspace:BuildInspector(parent, width)
         end
     end
     local function Slide(label, key, min, max, step, format)
-        return UI.Slider(grid:FullRow(label, { controlWidth = 118 }), {
+        return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
             get = Get(key), set = Set(key),
             min = min, max = max, step = step, format = format, apply = Apply,
         })
     end
 
-    grid:Section("Bar")
-    UI.Toggle(grid:FullRow("Shown", { controlWidth = 118 }), Get("enabled"), function(value)
-        Set("enabled")(value)
-        Apply()
-    end)
+    -- Identity ------------------------------------------------------------
+    grid:Section("This bar")
+
+    local nameRow = grid:FullRow("Name", { controlWidth = 130 })
+    local nameInput = UI.Input(nameRow.slot, 130, function(text)
+        local _, cfg = Workspace:Current()
+        text = (text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+        if cfg and text ~= "" then
+            cfg.name = text
+            ns.Options:Refresh()
+        end
+    end, false, "name it")
+    nameInput:SetPoint("RIGHT", nameRow.slot, "RIGHT", 0, 0)
+    nameRow.Refresh = function()
+        -- Never while it is being typed in: a refresh from anywhere else
+        -- would wipe half-entered text out from under the cursor.
+        if nameInput.input:HasFocus() then return end
+        local _, cfg = Workspace:Current()
+        nameInput:SetText(cfg and cfg.name or "")
+    end
+
+    UI.Dropdown(grid:FullRow("Kind", { controlWidth = 124 }), {
+        { value = "icon", text = "Icon bar" },
+        { value = "bar",  text = "Tracking bar" },
+    }, Get("kind"), Set("kind"), { apply = Apply })
+
+    UI.Toggle(grid:FullRow("Shown", { controlWidth = 124 }), Get("enabled"),
+        function(value)
+            Set("enabled")(value)
+            Apply()
+        end)
+
+    -- Size ----------------------------------------------------------------
+    grid:Section("Size")
 
     local iconRow = Slide("Icon size", "iconSize", 16, 100, 2)
     local barWRow = Slide("Width", "barWidth", 60, 400, 5)
     local barHRow = Slide("Height", "barHeight", 10, 60, 2)
     Slide("Spacing", "spacing", 0, 24, 1)
     Slide("Row gap", "lineSpacing", 0, 24, 1)
-
-    grid:Section("Look", "look")
     Slide("Scale", "scale", 0.4, 2.5, 0.05,
         function(v) return string.format("%.2f", v) end)
+
+    -- Looks ---------------------------------------------------------------
+    grid:Section("Looks")
+
     Slide("Opacity", "alpha", 0.1, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end)
     Slide("Border", "borderSize", 0, 4, 1)
-    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 118 }),
+    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
         function()
             local _, cfg = Workspace:Current()
-            local c = cfg and cfg.borderColor or { 0, 0, 0 }
-            return c[1], c[2], c[3]
+            local colour = cfg and cfg.borderColor or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
         end,
         function(r, g, b)
             local _, cfg = Workspace:Current()
@@ -481,49 +781,161 @@ function Workspace:BuildInspector(parent, width)
         end,
         Apply)
 
+    -- Reuse ---------------------------------------------------------------
+    grid:Section("Reuse")
+    grid:Note("Sizes, spacing and colours only. Which spells a bar holds and "
+        .. "how many rows it has always stay with that bar.")
+
+    local copyRow = grid:FullRow("Copy from", { controlWidth = 130 })
+    local copyPicker = UI.Picker(copyRow.slot, {
+        width = 130, height = 22, emptyText = "another bar",
+        current = function() return nil end,
+        items = function()
+            local items = {}
+            local current = Workspace:Current()
+            for index, cfg in ipairs(Bars:All()) do
+                if index ~= current then
+                    items[#items + 1] = {
+                        text = cfg.name, value = index,
+                        onClick = nil,
+                    }
+                end
+            end
+            return items
+        end,
+        onSelect = function(index)
+            local target = Workspace:Current()
+            if Bars:CopyStyleFrom(index, target) then
+                ns.Print("Took the look of", Bars:Get(index).name)
+            end
+            ns.Options:Refresh()
+        end,
+    })
+    copyPicker:SetPoint("RIGHT", copyRow.slot, "RIGHT", 0, 0)
+    copyRow.Refresh = function()
+        copyPicker.label:SetText("another bar")
+    end
+
+    local presetRow = grid:FullRow("Preset", { controlWidth = 130 })
+    local presetPicker = UI.Picker(presetRow.slot, {
+        width = 130, height = 22, emptyText = "apply a preset",
+        current = function() return nil end,
+        items = function()
+            local items = {}
+            for _, name in ipairs(Bars:PresetNames()) do
+                items[#items + 1] = {
+                    text = name, value = name,
+                    onDelete = function()
+                        Bars:DeletePreset(name)
+                        ns.Print("Deleted the preset", name)
+                        ns.Options:Refresh()
+                    end,
+                }
+            end
+            if #items == 0 then
+                items[1] = { text = "no presets saved yet", value = nil,
+                    onClick = function() end }
+            end
+            return items
+        end,
+        onSelect = function(name)
+            if name and Bars:ApplyPreset(name, (Workspace:Current())) then
+                ns.Print("Applied the preset", name)
+            end
+            ns.Options:Refresh()
+        end,
+    })
+    presetPicker:SetPoint("RIGHT", presetRow.slot, "RIGHT", 0, 0)
+    presetRow.Refresh = function()
+        presetPicker.label:SetText("apply a preset")
+    end
+
+    local saveRow = grid:FullRow("Save as", { controlWidth = 130 })
+    local saveInput
+    saveInput = UI.Input(saveRow.slot, 130, function(text)
+        if Bars:SavePreset(text, (Workspace:Current())) then
+            -- Cleared here rather than in Refresh: a Refresh-time clear would
+            -- also fire for every unrelated redraw and eat what is being typed.
+            saveInput:SetText("")
+            ns.Print("Saved the preset", text)
+            ns.Options:Refresh()
+        else
+            ns.Print("Give the preset a name first.")
+        end
+    end, false, "preset name")
+    saveInput:SetPoint("RIGHT", saveRow.slot, "RIGHT", 0, 0)
+
     grid:Layout()
 
-    inspector.Refresh = function()
+    pane.Refresh = function()
         local _, cfg = Workspace:Current()
-        if not cfg then
-            cellPane:Hide()
-            barPane:Hide()
-            return
-        end
-
-        local cell = Workspace.cell
-        cellPane:SetShown(cell ~= nil)
-        barPane:SetShown(cell == nil)
-
-        if cell then
-            local spellID = cfg.cells[cell]
-            cellTitle:SetText(string.format("CELL %d", cell))
-
-            if spellID then
-                local texture = ns.SpellTexture(spellID)
-                previewIcon:SetTexture(texture or ns.WHITE)
-                previewIcon:SetDesaturated(not texture)
-                previewIcon:Show()
-                spellName:SetText(ns.SpellName(spellID) or "unknown to this client")
-                spellMeta:SetText(tostring(spellID))
-                chooseBtn:SetText("Replace")
-                clearBtn:SetEnabled(true)
-            else
-                previewIcon:Hide()
-                spellName:SetText("|cff888888empty|r")
-                spellMeta:SetText("")
-                chooseBtn:SetText("Choose cooldown")
-                clearBtn:SetEnabled(false)
-            end
-            return
-        end
+        if not cfg then return end
 
         local isBar = cfg.kind == "bar"
         iconRow:SetRelevant(not isBar)
         barWRow:SetRelevant(isBar)
         barHRow:SetRelevant(isBar)
+
         grid:Refresh()
     end
 
-    return inspector
+    return pane
+end
+
+---------------------------------------------------------------------------
+-- The right column itself: a header, and whichever pane belongs there
+---------------------------------------------------------------------------
+-- parent is the whole column, not an inset frame: the heading has to sit in
+-- the window's header band so its rule lands on the same line as the ones in
+-- the other two columns.
+function Workspace:BuildSide(parent, pad)
+    local side = CreateFrame("Frame", nil, parent)
+    side:SetAllPoints(parent)
+
+    local width = parent:GetWidth() - pad * 2
+
+    local title = UI.Label(side, "", 15, C.text)
+    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -18)
+    title:SetWidth(width - 56)       -- never under the Done button
+    title:SetWordWrap(false)
+
+    local subtitle = UI.Label(side, "", 11, C.textDim)
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    subtitle:SetWidth(width - 56)
+    subtitle:SetWordWrap(false)
+
+    -- Below the close button, not beside it: both want the top right corner
+    -- and the close button owns it.
+    local back = UI.GhostButton(side, "Done", function()
+        Workspace:ShowSpells()
+    end)
+    back:SetPoint("TOPRIGHT", side, "TOPRIGHT", -pad + 6, -40)
+
+    local host = CreateFrame("Frame", nil, side)
+    host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
+    host:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
+
+    local spells = self:BuildSpellPane(host, width)
+    local options = self:BuildOptionsPane(host, width)
+
+    side.Refresh = function()
+        local onOptions = Workspace.mode == "options" and Bars:Count() > 0
+        local _, cfg = Workspace:Current()
+
+        spells:SetShown(not onOptions)
+        options:SetShown(onOptions)
+        back:SetShown(onOptions)
+
+        if onOptions then
+            title:SetText(cfg and cfg.name or "Bar")
+            subtitle:SetText("How this bar looks")
+            options.Refresh()
+        else
+            title:SetText("Spells")
+            subtitle:SetText("From your Cooldown Manager")
+            spells.Refresh()
+        end
+    end
+
+    return side
 end

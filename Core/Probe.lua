@@ -60,7 +60,7 @@ local function Finish(session)
         ns.Print(string.format("|cffff4040%d (%s) never bound|r on %s in %ds.",
             session.spellID, session.name, session.unit, session.seconds))
         ns.Print("Either the aura was not up, or this ID is the CAST spell and the")
-        ns.Print("applied aura carries a different one. |cffffd100/dks dump|r while it is up.")
+        ns.Print("applied aura carries a different one. |cffffd100/zs dump|r while it is up.")
     end
 end
 
@@ -69,7 +69,7 @@ end
 ---------------------------------------------------------------------------
 function Probe:Start(spellID, seconds, unit)
     if not spellID then
-        ns.Print("Usage: |cffffd100/dks probe <spellID> [seconds]|r")
+        ns.Print("Usage: |cffffd100/zs probe <spellID> [seconds]|r")
         return
     end
 

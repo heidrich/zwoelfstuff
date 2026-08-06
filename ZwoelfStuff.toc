@@ -1,0 +1,47 @@
+## Interface: 120100, 120007, 120005
+## Title: |cff7ec6d4Zwoelf|r|cffff7a3dStuff|r
+## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
+## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
+## Author: Zwoelf - EU Destromath
+## Version: 4.4.0
+## SavedVariables: ZwoelfStuffDB
+## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
+## IconTexture: 1380870
+## X-License: MIT
+## X-Category: Buffs & Debuffs
+
+Core\Init.lua
+Core\Secrets.lua
+Core\CDM.lua
+# The shipped proc database. Data, and it grows with every export, so it loads
+# before the logic that reads it and stays a file you can paste into.
+Core\KnownProcs.lua
+Core\Auras.lua
+Core\Bars.lua
+Core\Glow.lua
+Core\Minimap.lua
+# Widgets defines ns.UI, and EditMode reads it while it loads. Anything that
+# takes a reference to the design system at file scope belongs BELOW this line.
+Core\Widgets.lua
+Core\Screen.lua
+Core\EditMode.lua
+Core\Changelog.lua
+Core\OptionsBars.lua
+Core\Options.lua
+
+# Deleted in 4.4.0, and not coming back: Core\Display.lua and Core\Watcher.lua,
+# the single-aura window and the aura hunt behind it. An aura is a cell on a
+# bar now, so a second window showing one buff on its own was two answers to
+# the same question. They are in the git history if anything is ever wanted
+# back out of them.
+
+# Parked until patch 12.1. Blizzard_AuraContainer does not exist before then,
+# so every one of these is inert on a 12.0 client - verified in game, the
+# engine probe fails outright. They are kept, not deleted, because the code
+# is correct and 12.1 is days away.
+#   Core\Engine.lua        the AuraContainer layer
+#   Core\Catalog.lua       spell catalogue from talents and the spellbook
+#   Core\Probe.lua         "does this spell ID bind?" diagnostic
+#   Core\Groups.lua        engine-backed tracking groups
+#   Core\CoTanks.lua       co-tank panel with engine aura strips
+#   Core\OptionsGroups.lua the options page for the above

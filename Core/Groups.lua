@@ -741,7 +741,7 @@ function Groups:Refresh(index)
         return
     end
 
-    -- Runtime objects outlive their config: a removed group, or a /dks reset
+    -- Runtime objects outlive their config: a removed group, or a /zs reset
     -- that swaps the whole saved-variables table, leaves anchors on screen
     -- with nothing behind them. Park those before refreshing the rest.
     for runtimeIndex, rt in pairs(self.runtime) do
@@ -850,7 +850,7 @@ end
 ---------------------------------------------------------------------------
 function Groups:Status()
     if #ns.db.groups == 0 then
-        ns.Print("No tracking groups. |cffffd100/dks group add <name>|r")
+        ns.Print("No tracking groups. |cffffd100/zs group add <name>|r")
         return
     end
 
@@ -890,7 +890,7 @@ function Groups:Status()
     end
 
     ns.Print("|cff888888\"registered, never seen\" means the slot works and the aura|r")
-    ns.Print("|cff888888has not been up. Confirm the ID with /dks probe <id>.|r")
+    ns.Print("|cff888888has not been up. Confirm the ID with /zs probe <id>.|r")
 end
 
 ---------------------------------------------------------------------------

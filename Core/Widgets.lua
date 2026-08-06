@@ -17,31 +17,74 @@ ns.UI = UI
 
 ---------------------------------------------------------------------------
 -- Tokens
+--
+-- Every colour here is OPAQUE. Nothing in this window is see-through: a
+-- translucent panel over a moving 3D world is unreadable, and the layering
+-- that a glass effect is meant to suggest is done properly instead, with
+-- distinct surface levels.
+--
+-- The levels, darkest to lightest:
+--   canvasBg   the work area - the darkest thing on screen, so what sits on
+--              it reads as raised
+--   windowBg   the window itself
+--   sidebarBg  the two side columns, one step lighter than the work area
+--   surface    a card, the thing you actually work on
+--   surfaceHi  that card under the cursor
+--   control    an interactive part inside a card
+--
+-- Anything that needs to look like a hairline is an opaque colour one step
+-- off its background, never white at 6%.
 ---------------------------------------------------------------------------
 local C = {
-    windowBg   = { 0.055, 0.060, 0.075 },
-    sidebarBg  = { 0.040, 0.044, 0.056 },
-    headerBg   = { 0.075, 0.082, 0.100 },
-    rowBg      = { 0.098, 0.106, 0.130 },
-    rowHover   = { 0.130, 0.140, 0.170 },
-    control    = { 0.145, 0.158, 0.190 },
-    controlHi  = { 0.190, 0.205, 0.245 },
-    line       = { 1, 1, 1, 0.06 },
+    canvasBg   = { 0.063, 0.067, 0.075 },
+    windowBg   = { 0.082, 0.086, 0.098 },
+    sidebarBg  = { 0.106, 0.110, 0.125 },
+    well       = { 0.090, 0.094, 0.106 },  -- a recessed slot: empty cells, inputs
+    surface    = { 0.137, 0.145, 0.165 },
+    surfaceHi  = { 0.173, 0.182, 0.204 },
+    control    = { 0.204, 0.216, 0.243 },
+    controlHi  = { 0.251, 0.263, 0.294 },
+    separator  = { 0.169, 0.176, 0.196 },
+    edge       = { 0.196, 0.204, 0.227 },  -- a card's own outline
 
-    accent     = { 1.00, 0.478, 0.239 },  -- DKstuff orange
+    accent     = { 1.000, 0.478, 0.239 },  -- ZwoelfStuff orange
+    accentDim  = { 0.694, 0.337, 0.169 },
+    accentSoft = { 0.286, 0.192, 0.161 },  -- accent laid over a surface, opaque
     accentCool = { 0.494, 0.776, 0.831 },  -- the "DK" cyan
 
-    text       = { 0.90, 0.91, 0.93 },
-    textDim    = { 0.55, 0.57, 0.62 },
-    textFaint  = { 0.38, 0.40, 0.45 },
-    danger     = { 0.85, 0.28, 0.28 },
+    -- Green means "this one is already on the bar you have selected". Only
+    -- ever used for that, so it stays readable as a state rather than decoration.
+    inUse      = { 0.404, 0.788, 0.443 },
+    inUseSoft  = { 0.145, 0.235, 0.180 },
+
+    text       = { 0.949, 0.953, 0.965 },
+    textDim    = { 0.616, 0.635, 0.678 },
+    textFaint  = { 0.408, 0.424, 0.467 },
+    danger     = { 0.898, 0.353, 0.318 },
 }
+
+-- One height for the whole window's header band, so the rule under every
+-- heading lands on the same line no matter which column it is in.
+UI.HEADER_H = 62
+
+-- Kept so the panels that are parked until 12.1 still resolve their colours.
+C.headerBg = C.surface
+C.rowBg    = C.surface
+C.rowHover = C.surfaceHi
+C.line     = { C.separator[1], C.separator[2], C.separator[3], 1 }
+
 UI.C = C
 
-UI.ROW_H      = 40
+UI.ROW_H      = 38
 UI.ROW_GAP    = 4
-UI.SECTION_H  = 34
+UI.SECTION_H  = 32
 UI.COL_GAP    = 16
+
+-- The one spacing rhythm. Everything in the window is a multiple of it, which
+-- is most of what makes a layout look considered rather than assembled.
+UI.PAD    = 16
+UI.GAP    = 10
+UI.RADIUS = 0
 
 local function Tex(parent, layer, r, g, b, a)
     local t = parent:CreateTexture(nil, layer or "BACKGROUND")
@@ -84,25 +127,36 @@ function UI.Button(parent, text, width, onClick, style)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(width or 100, 26)
 
-    local bg = Fill(btn, "BACKGROUND", style == "primary" and C.accent or C.control,
-        style == "primary" and 0.22 or 1)
-    local edge = ns.CreateBorder(btn, 1, "BORDER")
-    edge:SetColor(1, 1, 1, 0.08)
+    -- Three weights, and they are not interchangeable:
+    --   nil        an ordinary action
+    --   "primary"  the one action a page is for
+    --   "soft"     an action that belongs to the surface it sits on and must
+    --              not shout - the accent is in the text, not the fill
+    local accented = style == "primary" or style == "soft"
+    local base = style == "primary" and C.accentSoft or C.control
+    local hover = style == "primary" and C.accentDim or C.controlHi
+    if style == "soft" then base, hover = C.surface, C.accentSoft end
 
-    local label = UI.Label(btn, text, 12, style == "primary" and C.accent or C.text)
+    local bg = Fill(btn, "BACKGROUND", base)
+    local edge = ns.CreateBorder(btn, 1, "BORDER")
+    local rest = style == "soft" and C.edge or C.separator
+    edge:SetColor(rest[1], rest[2], rest[3], 1)
+
+    local label = UI.Label(btn, text, 12, accented and C.accent or C.text)
     label:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.label = label
 
     btn:SetScript("OnEnter", function()
         if btn:IsEnabled() then
-            bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
-            edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 0.5)
+            bg:SetColorTexture(hover[1], hover[2], hover[3], 1)
+            edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+            if style == "primary" then label:SetTextColor(1, 1, 1) end
         end
     end)
     btn:SetScript("OnLeave", function()
-        local base = style == "primary" and C.accent or C.control
-        bg:SetColorTexture(base[1], base[2], base[3], style == "primary" and 0.22 or 1)
-        edge:SetColor(1, 1, 1, 0.08)
+        bg:SetColorTexture(base[1], base[2], base[3], 1)
+        edge:SetColor(rest[1], rest[2], rest[3], 1)
+        if accented then label:SetTextColor(C.accent[1], C.accent[2], C.accent[3]) end
     end)
     if onClick then btn:SetScript("OnClick", onClick) end
 
@@ -212,7 +266,7 @@ function UI.Toggle(row, get, set)
 
     local track = Fill(toggle, "BACKGROUND", C.control)
     local edge = ns.CreateBorder(toggle, 1, "BORDER")
-    edge:SetColor(1, 1, 1, 0.10)
+    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     local knob = Tex(toggle, "ARTWORK", 1, 1, 1, 1)
     knob:SetSize(16, 16)
@@ -223,7 +277,7 @@ function UI.Toggle(row, get, set)
         if on then
             knob:SetPoint("RIGHT", toggle, "RIGHT", -2, 0)
             knob:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
-            track:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.22)
+            track:SetColorTexture(C.accentSoft[1], C.accentSoft[2], C.accentSoft[3], 1)
         else
             knob:SetPoint("LEFT", toggle, "LEFT", 2, 0)
             knob:SetColorTexture(0.45, 0.47, 0.52, 1)
@@ -303,9 +357,9 @@ function UI.Slider(row, cfg)
     local box = CreateFrame("Frame", nil, slider)
     box:SetSize(BOX, 18)
     box:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
-    Fill(box, "BACKGROUND", C.windowBg)
+    Fill(box, "BACKGROUND", C.canvasBg)
     local boxEdge = ns.CreateBorder(box, 1, "BORDER")
-    boxEdge:SetColor(1, 1, 1, 0.08)
+    boxEdge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     local value = UI.Label(box, "", 11, C.text)
     value:SetPoint("CENTER", box, "CENTER", 0, 0)
@@ -317,14 +371,14 @@ function UI.Slider(row, cfg)
     bar:SetHeight(18)
     bar:EnableMouse(true)
 
-    local track = Tex(bar, "BACKGROUND", 1, 1, 1, 0.10)
+    local track = Tex(bar, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
     track:SetPoint("LEFT", bar, "LEFT", 0, 0)
     track:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-    track:SetHeight(2)
+    track:SetHeight(3)
 
-    local fill = Tex(bar, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 0.9)
+    local fill = Tex(bar, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
     fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
-    fill:SetHeight(2)
+    fill:SetHeight(3)
 
     local thumb = Tex(bar, "OVERLAY", 1, 1, 1, 1)
     thumb:SetSize(10, 10)
@@ -402,11 +456,11 @@ local function GetPopup()
     popup:SetFrameStrata("FULLSCREEN_DIALOG")
     popup:SetClampedToScreen(true)
     popup:Hide()
-    Fill(popup, "BACKGROUND", C.headerBg)
+    Fill(popup, "BACKGROUND", C.surface)
     local edge = ns.CreateBorder(popup, 1, "BORDER")
-    edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 0.35)
+    edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
     popup.rows = {}
-    popup.divider = Tex(popup, "ARTWORK", 1, 1, 1, 0.10)
+    popup.divider = Tex(popup, "ARTWORK", C.separator[1], C.separator[2], C.separator[3], 1)
     popup.divider:SetHeight(1)
     popup.divider:Hide()
 
@@ -436,9 +490,11 @@ local function MenuEntry(menu, index)
     entry = CreateFrame("Button", nil, menu)
     entry:SetHeight(ENTRY_H)
 
+    -- Opaque: a HIGHLIGHT texture draws below the OVERLAY font string, so the
+    -- label stays readable and nothing has to be see-through to work.
     entry.hl = entry:CreateTexture(nil, "HIGHLIGHT")
     entry.hl:SetAllPoints(entry)
-    entry.hl:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.16)
+    entry.hl:SetColorTexture(C.accentSoft[1], C.accentSoft[2], C.accentSoft[3], 1)
 
     entry.label = UI.Label(entry, "", 12, C.text)
     entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
@@ -529,6 +585,11 @@ local function ShowMenu(owner, spec)
     menu:Show()
 end
 
+-- Exported so the unlock overlay uses the SAME menu as the options window.
+-- A second menu implementation is a second set of paddings, colours and
+-- click-away rules to keep in step, and they never stay in step.
+UI.ShowMenu = ShowMenu
+
 ---------------------------------------------------------------------------
 -- The button half of a dropdown, without the row wrapper
 ---------------------------------------------------------------------------
@@ -538,7 +599,7 @@ function UI.MenuButton(parent, width, height)
 
     local bg = Fill(button, "BACKGROUND", C.control)
     local edge = ns.CreateBorder(button, 1, "BORDER")
-    edge:SetColor(1, 1, 1, 0.10)
+    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     button.label = UI.Label(button, "", 12, C.text)
     button.label:SetPoint("LEFT", button, "LEFT", 10, 0)
@@ -550,11 +611,11 @@ function UI.MenuButton(parent, width, height)
 
     button:SetScript("OnEnter", function()
         bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
-        edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 0.45)
+        edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
     end)
     button:SetScript("OnLeave", function()
         bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
-        edge:SetColor(1, 1, 1, 0.10)
+        edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
     end)
 
     return button
@@ -900,12 +961,12 @@ end
 ---------------------------------------------------------------------------
 -- Text input
 ---------------------------------------------------------------------------
-function UI.Input(parent, width, onSubmit, numeric)
+function UI.Input(parent, width, onSubmit, numeric, placeholder)
     local holder = CreateFrame("Frame", nil, parent)
     holder:SetSize(width, 22)
-    Fill(holder, "BACKGROUND", C.windowBg)
+    Fill(holder, "BACKGROUND", C.canvasBg)
     local edge = ns.CreateBorder(holder, 1, "BORDER")
-    edge:SetColor(1, 1, 1, 0.10)
+    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     local input = CreateFrame("EditBox", nil, holder)
     input:SetPoint("TOPLEFT", holder, "TOPLEFT", 6, 0)
@@ -913,8 +974,19 @@ function UI.Input(parent, width, onSubmit, numeric)
     input:SetAutoFocus(false)
     input:SetMaxLetters(numeric and 10 or 40)
     if numeric then input:SetNumeric(true) end
-    ns.StyleFont(input, 12, "")
+    ns.StyleUIFont(input, 12, "")
     input:SetTextColor(C.text[1], C.text[2], C.text[3])
+
+    -- An empty box with no caption reads as broken rather than optional, so
+    -- every input can say what it is for.
+    local ghost = UI.Label(holder, placeholder or "", 12, C.textFaint)
+    ghost:SetPoint("LEFT", holder, "LEFT", 7, 0)
+    ghost:SetWordWrap(false)
+    local function UpdateGhost()
+        ghost:SetShown((placeholder or "") ~= ""
+            and (input:GetText() or "") == "" and not input:HasFocus())
+    end
+    holder.UpdateGhost = UpdateGhost
 
     input:SetScript("OnEnterPressed", function(self)
         onSubmit(self:GetText())
@@ -922,13 +994,21 @@ function UI.Input(parent, width, onSubmit, numeric)
     end)
     input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     input:SetScript("OnEditFocusGained", function()
-        edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 0.6)
+        edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        UpdateGhost()
     end)
     input:SetScript("OnEditFocusLost", function()
-        edge:SetColor(1, 1, 1, 0.10)
+        edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+        UpdateGhost()
     end)
+    input:SetScript("OnTextChanged", UpdateGhost)
+    UpdateGhost()
 
     holder.input = input
+    holder.SetText = function(_, text)
+        input:SetText(text or "")
+        UpdateGhost()
+    end
     holder.SetEnabled = function(_, enabled)
         input:SetEnabled(enabled)
         input:SetTextColor(enabled and C.text[1] or C.textFaint[1],
@@ -958,7 +1038,12 @@ function UI.CellGrid(parent, cfg)
     local grid = CreateFrame("Frame", nil, parent)
     grid.cells = {}
 
-    local marker = Tex(grid, "OVERLAY", C.accent[1], C.accent[2], C.accent[3], 1)
+    -- Where a dragged cell would land: an accent outline rather than a wash
+    -- over the icon, so it can be fully opaque and still show what is under it.
+    local marker = CreateFrame("Frame", nil, grid)
+    marker:SetFrameLevel(grid:GetFrameLevel() + 10)
+    local markerEdge = ns.CreateBorder(marker, 2, "OVERLAY")
+    markerEdge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
     marker:Hide()
 
     local function Geometry()
@@ -999,14 +1084,16 @@ function UI.CellGrid(parent, cfg)
         cell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         cell:RegisterForDrag("LeftButton")
 
-        cell.bg = Fill(cell, "BACKGROUND", C.control)
+        -- Recessed, not raised: an empty cell is a slot waiting to be filled,
+        -- and a well reads that way where a raised tile reads as a button.
+        cell.bg = Fill(cell, "BACKGROUND", C.well)
 
         cell.icon = cell:CreateTexture(nil, "ARTWORK")
         cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
         cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
         cell.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-        cell.plus = UI.Label(cell, "+", 18, C.textFaint)
+        cell.plus = UI.Label(cell, "+", 16, C.textFaint)
         cell.plus:SetPoint("CENTER", cell, "CENTER", 0, -1)
 
         cell.edge = ns.CreateBorder(cell, 1, "OVERLAY")
@@ -1020,9 +1107,15 @@ function UI.CellGrid(parent, cfg)
         cell.ring:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
         cell.ring:Hide()
 
-        cell.hl = cell:CreateTexture(nil, "HIGHLIGHT")
-        cell.hl:SetAllPoints(cell)
-        cell.hl:SetColorTexture(1, 1, 1, 0.14)
+        -- Hover is a ring, not a white wash: a wash over a spell icon dulls
+        -- the very thing it is meant to point at, and it would have to be
+        -- see-through to work at all.
+        cell.hoverHost = CreateFrame("Frame", nil, cell)
+        cell.hoverHost:SetPoint("TOPLEFT", cell, "TOPLEFT", -2, 2)
+        cell.hoverHost:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 2, -2)
+        cell.hover = ns.CreateBorder(cell.hoverHost, 2, "OVERLAY")
+        cell.hover:SetColor(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+        cell.hover:Hide()
 
         cell.number = cell:CreateFontString(nil, "OVERLAY")
         ns.StyleFont(cell.number, 10, "OUTLINE")
@@ -1030,20 +1123,35 @@ function UI.CellGrid(parent, cfg)
         cell.number:SetTextColor(1, 1, 1, 0.6)
 
         cell:SetScript("OnEnter", function(self)
+            if not (cfg.selected and cfg.selected() == self.dkIndex) then
+                self.hover:Show()
+            end
             if not GameTooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+
             if self.dkSpellID then
-                GameTooltip:AddLine(ns.SpellName(self.dkSpellID) or "?")
-                GameTooltip:AddLine(tostring(self.dkSpellID), 0.5, 0.5, 0.5)
-                GameTooltip:AddLine("Click to change", 0.6, 0.6, 0.6)
-                GameTooltip:AddLine("Drag to move, right click to clear", 0.6, 0.6, 0.6)
+                -- The game's own tooltip. An ID the client does not know
+                -- throws rather than returning empty, hence the fallback.
+                if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.dkSpellID) then
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:AddLine(ns.SpellName(self.dkSpellID) or "?")
+                    GameTooltip:AddLine(tostring(self.dkSpellID), 0.5, 0.5, 0.5)
+                end
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Click to change it", 0.62, 0.64, 0.68)
+                GameTooltip:AddLine("Drag onto another cell to swap", 0.62, 0.64, 0.68)
+                GameTooltip:AddLine("Right click to clear", 0.62, 0.64, 0.68)
             else
-                GameTooltip:AddLine("Empty")
-                GameTooltip:AddLine("Click to put a spell here", 0.6, 0.6, 0.6)
+                GameTooltip:AddLine(string.format("Cell %d", self.dkIndex or 0))
+                GameTooltip:AddLine("Empty", 0.62, 0.64, 0.68)
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Click it, then pick a spell on the right",
+                    1.00, 0.478, 0.239)
             end
             GameTooltip:Show()
         end)
-        cell:SetScript("OnLeave", function()
+        cell:SetScript("OnLeave", function(self)
+            self.hover:Hide()
             if GameTooltip then GameTooltip:Hide() end
         end)
 
@@ -1065,9 +1173,8 @@ function UI.CellGrid(parent, cfg)
                     local x, y = CellPosition(target)
                     local w, h = Geometry()
                     marker:ClearAllPoints()
-                    marker:SetPoint("TOPLEFT", grid, "TOPLEFT", x - 1, y + 1)
-                    marker:SetSize(w + 2, h + 2)
-                    marker:SetAlpha(0.28)
+                    marker:SetPoint("TOPLEFT", grid, "TOPLEFT", x - 2, y + 2)
+                    marker:SetSize(w + 4, h + 4)
                     marker:Show()
                 else
                     marker:Hide()
@@ -1124,14 +1231,15 @@ function UI.CellGrid(parent, cfg)
                 cell.icon:Hide()
                 cell.plus:Show()
                 cell.number:SetText("")
-                cell.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 0.35)
+                cell.edge:SetColor(C.control[1], C.control[2], C.control[3], 1)
             end
 
-            -- The selected cell is what the inspector is editing, so it has
+            -- The selected cell is what the right column is editing, so it has
             -- to be obvious which one that is.
             local isSelected = cfg.selected and cfg.selected() == index
             cell.ring:SetShown(isSelected)
             if isSelected then
+                cell.hover:Hide()
                 cell.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
             end
 
@@ -1177,12 +1285,12 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     content:SetSize(contentWidth, 1)
     scroll:SetScrollChild(content)
 
+    -- No track, only a thumb, and only while there is something to scroll.
+    -- A permanent groove down the side of every panel is noise.
     local rail = CreateFrame("Frame", nil, parent)
     rail:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
     rail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
     rail:SetWidth(5)
-    local track = Tex(rail, "BACKGROUND", 1, 1, 1, 0.05)
-    track:SetAllPoints(rail)
 
     local thumb = CreateFrame("Frame", nil, rail)
     thumb:SetWidth(5)
@@ -1229,7 +1337,7 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     scroll:SetScript("OnSizeChanged", UpdateThumb)
 
     thumb:SetScript("OnEnter", function()
-        thumbFill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.8)
+        thumbFill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
     end)
     thumb:SetScript("OnLeave", function()
         if not thumb.dragging then
@@ -1416,4 +1524,479 @@ function Grid:Refresh()
         if widget.Refresh then widget.Refresh() end
     end
     self:Layout()
+end
+
+---------------------------------------------------------------------------
+-- Separator - one opaque hairline
+---------------------------------------------------------------------------
+function UI.Separator(parent, horizontal)
+    local line = Tex(parent, "ARTWORK", C.separator[1], C.separator[2], C.separator[3], 1)
+    if horizontal == false then line:SetWidth(1) else line:SetHeight(1) end
+    return line
+end
+
+---------------------------------------------------------------------------
+-- Card - the panel one thing lives in
+--
+-- A raised opaque surface with a hairline edge and a header strip. Everything
+-- the user works on sits in one, so the window reads as a set of objects
+-- rather than a wall of controls.
+---------------------------------------------------------------------------
+function UI.Card(parent, width)
+    local card = CreateFrame("Frame", nil, parent)
+    card:SetWidth(width)
+
+    Fill(card, "BACKGROUND", C.surface)
+    card.edge = ns.CreateBorder(card, 1, "BORDER")
+    card.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    card.SetActive = function(self, active)
+        self.edge:SetColor(
+            active and C.accent[1] or C.edge[1],
+            active and C.accent[2] or C.edge[2],
+            active and C.accent[3] or C.edge[3], 1)
+    end
+
+    return card
+end
+
+---------------------------------------------------------------------------
+-- Glyph - a small mark drawn from colour textures
+--
+-- No icon files. Every one of these is a handful of rectangles, so nothing
+-- can 404 on a client that renamed an art path, and they all share one
+-- weight and one colour instead of six different Blizzard icon styles.
+---------------------------------------------------------------------------
+local GLYPHS = {
+    -- x, y, w, h in a 12x12 box, measured from the top left
+    grid    = { {0,0,5,5}, {7,0,5,5}, {0,7,5,5}, {7,7,5,5} },
+    bars    = { {0,0,12,3}, {0,5,8,3}, {0,10,12,3} },
+    aura    = { {4,0,4,4}, {0,5,12,3}, {4,10,4,3} },
+    sliders = { {0,2,12,2}, {8,0,2,6}, {0,8,12,2}, {2,6,2,6} },
+    pulse   = { {0,8,2,4}, {3,4,2,8}, {6,0,2,12}, {9,6,2,6} },
+    info    = { {5,0,3,3}, {5,5,3,7} },
+    log     = { {0,0,12,2}, {0,5,9,2}, {0,10,6,2} },
+}
+
+function UI.Glyph(parent, kind, size, colour)
+    size = size or 12
+    local glyph = CreateFrame("Frame", nil, parent)
+    glyph:SetSize(size, size)
+
+    local scale = size / 12
+    local parts = {}
+    for _, rect in ipairs(GLYPHS[kind] or GLYPHS.grid) do
+        local part = Tex(glyph, "ARTWORK", 1, 1, 1, 1)
+        part:SetSize(rect[3] * scale, rect[4] * scale)
+        part:SetPoint("TOPLEFT", glyph, "TOPLEFT", rect[1] * scale, -rect[2] * scale)
+        parts[#parts + 1] = part
+    end
+
+    glyph.SetColor = function(_, r, g, b)
+        for _, part in ipairs(parts) do part:SetColorTexture(r, g, b, 1) end
+    end
+
+    local c = colour or C.textDim
+    glyph:SetColor(c[1], c[2], c[3])
+    return glyph
+end
+
+---------------------------------------------------------------------------
+-- NavItem - one entry in the left column
+---------------------------------------------------------------------------
+function UI.NavItem(parent, text, glyphKind, onClick)
+    local item = CreateFrame("Button", nil, parent)
+    item:SetHeight(32)
+
+    -- A neutral raised fill plus an accent marker, rather than a block of
+    -- tinted orange: the tint muddies the label sitting on it, and the marker
+    -- says "you are here" more plainly than a colour ever does.
+    item.bg = Fill(item, "BACKGROUND", C.surfaceHi)
+    item.bg:Hide()
+
+    item.marker = Tex(item, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+    item.marker:SetPoint("TOPLEFT", item, "TOPLEFT", 0, 0)
+    item.marker:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", 0, 0)
+    item.marker:SetWidth(3)
+    item.marker:Hide()
+
+    item.glyph = UI.Glyph(item, glyphKind, 12)
+    item.glyph:SetPoint("LEFT", item, "LEFT", 16, 0)
+
+    item.label = UI.Label(item, text, 12.5, C.textDim)
+    item.label:SetPoint("LEFT", item.glyph, "RIGHT", 11, 0)
+    item.label:SetWordWrap(false)
+
+    item.SetActive = function(self, active)
+        self.bg:SetShown(active)
+        self.marker:SetShown(active)
+        local c = active and C.text or C.textDim
+        self.label:SetTextColor(c[1], c[2], c[3])
+        local g = active and C.accent or C.textFaint
+        self.glyph:SetColor(g[1], g[2], g[3])
+    end
+
+    item:SetScript("OnEnter", function(self)
+        if self.bg:IsShown() then return end
+        self.label:SetTextColor(C.text[1], C.text[2], C.text[3])
+    end)
+    item:SetScript("OnLeave", function(self)
+        if self.bg:IsShown() then return end
+        self.label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+    end)
+    if onClick then item:SetScript("OnClick", onClick) end
+
+    item:SetActive(false)
+    return item
+end
+
+---------------------------------------------------------------------------
+-- GhostButton - a label that acts, with no box around it
+--
+-- For the second-rank actions on a card header, where a filled button would
+-- shout louder than the thing it belongs to.
+---------------------------------------------------------------------------
+function UI.GhostButton(parent, text, onClick, colour)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetHeight(20)
+
+    local base = colour or C.textDim
+    btn.label = UI.Label(btn, text, 11.5, base)
+    btn.label:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    btn:SetWidth(math.max(24, btn.label:GetStringWidth() + 14))
+
+    btn:SetScript("OnEnter", function()
+        btn.label:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
+    end)
+    btn:SetScript("OnLeave", function()
+        btn.label:SetTextColor(base[1], base[2], base[3])
+    end)
+    if onClick then btn:SetScript("OnClick", onClick) end
+
+    btn.SetText = function(self, value)
+        self.label:SetText(value)
+        self:SetWidth(math.max(24, self.label:GetStringWidth() + 14))
+    end
+
+    -- The resting colour, not just the current one: colouring the label
+    -- directly would be undone by the next OnLeave.
+    btn.SetBaseColor = function(self, next_)
+        base = next_ or C.textDim
+        if not self:IsMouseOver() then
+            self.label:SetTextColor(base[1], base[2], base[3])
+        end
+    end
+    return btn
+end
+
+---------------------------------------------------------------------------
+-- MiniSlider - a labelled slider on one compact line
+--
+--   Rows   -----o--------   3
+--
+-- The control the bar cards use. It is the whole point of the middle column:
+-- the shape of a bar is two numbers, so they sit right under the bar and are
+-- dragged, not typed.
+--
+-- cfg = { label, get, set, min, max, step, format, apply, labelWidth }
+---------------------------------------------------------------------------
+function UI.MiniSlider(parent, cfg)
+    local VALUE_W = 30
+    local labelWidth = cfg.labelWidth or 56
+
+    local slider = CreateFrame("Frame", nil, parent)
+    slider:SetHeight(20)
+
+    local label = UI.Label(slider, cfg.label or "", 11.5, C.textDim)
+    label:SetPoint("LEFT", slider, "LEFT", 0, 0)
+    label:SetWidth(labelWidth)
+    label:SetWordWrap(false)
+
+    local value = UI.Label(slider, "", 12, C.text)
+    value:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+    value:SetWidth(VALUE_W)
+    value:SetJustifyH("RIGHT")
+
+    local bar = CreateFrame("Frame", nil, slider)
+    bar:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    bar:SetPoint("RIGHT", value, "LEFT", -8, 0)
+    bar:SetHeight(18)
+    bar:EnableMouse(true)
+    bar:EnableMouseWheel(true)
+
+    local track = Tex(bar, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
+    track:SetPoint("LEFT", bar, "LEFT", 0, 0)
+    track:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+    track:SetHeight(3)
+
+    local fill = Tex(bar, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+    fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
+    fill:SetHeight(3)
+
+    local knob = CreateFrame("Frame", nil, bar)
+    knob:SetSize(11, 11)
+    knob:SetFrameLevel(bar:GetFrameLevel() + 2)
+    -- Round, via the same circular alpha mask the minimap button uses - that
+    -- path is verified in use on this client. A square handle on a track
+    -- reads as a rendering fault rather than a control.
+    local knobFill = Fill(knob, "BACKGROUND", C.text)
+    knobFill:SetMask("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+
+    local function Clamp(v)
+        if v < cfg.min then v = cfg.min end
+        if v > cfg.max then v = cfg.max end
+        v = cfg.min + math.floor((v - cfg.min) / cfg.step + 0.5) * cfg.step
+        return math.floor(v * 1000 + 0.5) / 1000
+    end
+
+    local function Commit(v)
+        local wanted = Clamp(v)
+        if wanted ~= cfg.get() then
+            cfg.set(wanted)
+            if cfg.apply then cfg.apply() end
+        end
+        slider.Refresh()
+    end
+
+    local function FromCursor()
+        local scale = bar:GetEffectiveScale()
+        local x = select(1, GetCursorPosition()) / scale
+        local left, width = bar:GetLeft(), bar:GetWidth()
+        if not left or width <= 0 then return end
+        local pct = math.max(0, math.min(1, (x - left) / width))
+        Commit(cfg.min + pct * (cfg.max - cfg.min))
+    end
+
+    bar:SetScript("OnMouseDown", function(self)
+        self.dragging = true
+        FromCursor()
+    end)
+    bar:SetScript("OnMouseUp", function(self) self.dragging = false end)
+    bar:SetScript("OnUpdate", function(self)
+        if self.dragging then FromCursor() end
+    end)
+    bar:SetScript("OnMouseWheel", function(_, delta)
+        Commit((cfg.get() or cfg.min) + delta * cfg.step)
+    end)
+    bar:SetScript("OnEnter", function()
+        knob:SetScale(1.15)
+        fill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
+    end)
+    bar:SetScript("OnLeave", function() knob:SetScale(1) end)
+
+    slider.Refresh = function()
+        local current = cfg.get()
+        if type(current) ~= "number" then current = cfg.min end
+        value:SetText(cfg.format and cfg.format(current) or tostring(current))
+
+        local span = cfg.max - cfg.min
+        local pct = span > 0 and ((current - cfg.min) / span) or 0
+        local width = math.max(1, bar:GetWidth())
+        fill:SetWidth(math.max(1, width * pct))
+        knob:ClearAllPoints()
+        knob:SetPoint("CENTER", bar, "LEFT", width * pct, 0)
+    end
+
+    return slider
+end
+
+---------------------------------------------------------------------------
+-- SpellRow - one entry in the right column's spell list
+---------------------------------------------------------------------------
+function UI.SpellRow(parent, width, height)
+    local row = CreateFrame("Button", nil, parent)
+    row:SetSize(width, height or 32)
+
+    row.bg = Fill(row, "BACKGROUND", C.surface)
+    row.bg:Hide()
+
+    -- Green stripe: this spell is already on the bar you have selected. On the
+    -- left edge, where the eye scans down a list, so "have I got that one" is
+    -- answered without reading a word.
+    row.mark = Tex(row, "ARTWORK", C.inUse[1], C.inUse[2], C.inUse[3], 1)
+    row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
+    row.mark:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
+    row.mark:SetWidth(3)
+    row.mark:Hide()
+
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(22, 22)
+    row.icon:SetPoint("LEFT", row, "LEFT", 9, 0)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    -- Widths rather than a second anchor: a font string given both TOPLEFT
+    -- and RIGHT is told two different vertical positions, and what comes out
+    -- is not what was meant.
+    local textWidth = width - 44
+
+    row.name = UI.Label(row, "", 12, C.text)
+    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 9, 1)
+    row.name:SetWidth(textWidth)
+    row.name:SetWordWrap(false)
+
+    row.meta = UI.Label(row, "", 10, C.textFaint)
+    row.meta:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
+    row.meta:SetWidth(textWidth)
+    row.meta:SetWordWrap(false)
+
+    -- cell is the cell number it sits in, or nil when it is not on the bar.
+    -- known is false for a spell the current talent build does not have: it
+    -- stays pickable, because a bar is often built for the build you are
+    -- about to switch into, but it must not look available.
+    row.SetUsed = function(self, cell, known)
+        self.mark:SetShown(cell ~= nil)
+        self.dkUsedIn = cell
+
+        local colour = C.text
+        if not known then
+            colour = C.textFaint
+        elseif cell then
+            colour = C.inUse
+        end
+        self.name:SetTextColor(colour[1], colour[2], colour[3])
+
+        self.icon:SetDesaturated(not known)
+        self.icon:SetVertexColor(known and 1 or 0.55, known and 1 or 0.55,
+            known and 1 or 0.55)
+    end
+
+    -- The game's own tooltip, not a copy of it. What a spell does is Blizzard's
+    -- text to keep current, and it changes every patch; anything written here
+    -- would be a second version of it going quietly out of date.
+    --
+    -- Anchored LEFT because this list lives against the right edge of the
+    -- screen, where a tooltip growing rightwards would run off it.
+    row.dkLines = {}
+
+    row:SetScript("OnEnter", function(self)
+        self.bg:SetColorTexture(
+            self.dkUsedIn and C.inUseSoft[1] or C.surface[1],
+            self.dkUsedIn and C.inUseSoft[2] or C.surface[2],
+            self.dkUsedIn and C.inUseSoft[3] or C.surface[3], 1)
+        self.bg:Show()
+
+        if not (GameTooltip and self.dkSpellID) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+
+        -- An ID the client does not know throws rather than returning empty.
+        if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.dkSpellID) then
+            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+            GameTooltip:AddLine(self.name:GetText() or "")
+            GameTooltip:AddLine(tostring(self.dkSpellID), 0.5, 0.5, 0.5)
+        end
+
+        for _, line in ipairs(self.dkLines) do
+            GameTooltip:AddLine(line.text, line.r or 0.65, line.g or 0.67,
+                line.b or 0.71, true)
+        end
+        GameTooltip:Show()
+    end)
+
+    row:SetScript("OnLeave", function(self)
+        self.bg:Hide()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+
+    return row
+end
+
+---------------------------------------------------------------------------
+-- ListHeading - a small caption inside a scrolling list
+---------------------------------------------------------------------------
+function UI.ListHeading(parent, width, height)
+    local heading = CreateFrame("Frame", nil, parent)
+    heading:SetSize(width, height or 24)
+
+    heading.label = UI.Label(heading, "", 10, C.textFaint)
+    heading.label:SetPoint("BOTTOMLEFT", heading, "BOTTOMLEFT", 0, 5)
+    heading.label:SetWordWrap(false)
+
+    -- Both ends resolve to the same height: the label's bottom sits 5 above
+    -- the heading's, so +5 there and +10 here are the same line. Two anchors
+    -- that disagree vertically do not make a slanted rule, they make a wrong one.
+    heading.line = UI.Separator(heading)
+    heading.line:SetPoint("BOTTOMLEFT", heading.label, "BOTTOMRIGHT", 8, 5)
+    heading.line:SetPoint("BOTTOMRIGHT", heading, "BOTTOMRIGHT", 0, 10)
+
+    heading.SetText = function(self, text)
+        self.label:SetText((text or ""):upper())
+    end
+    return heading
+end
+
+---------------------------------------------------------------------------
+-- ChipRow - small filter buttons that flow onto as many lines as they need
+--
+-- cfg = { chips = {{key, text}}, current() -> key, onSelect(key), gap }
+-- Returns the frame; call Refresh() to re-colour, Layout() for its height.
+---------------------------------------------------------------------------
+function UI.ChipRow(parent, width, cfg)
+    local GAP = cfg.gap or 5
+    local ROW = 21
+
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetWidth(width)
+
+    local chips = {}
+    for index, spec in ipairs(cfg.chips) do
+        local chip = CreateFrame("Button", nil, row)
+        chip:SetHeight(ROW)
+
+        chip.bg = Fill(chip, "BACKGROUND", C.control)
+        chip.edge = ns.CreateBorder(chip, 1, "BORDER")
+        chip.edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+        chip.label = UI.Label(chip, spec.text, 11, C.textDim)
+        chip.label:SetPoint("CENTER", chip, "CENTER", 0, 0)
+        chip:SetWidth(chip.label:GetStringWidth() + 18)
+
+        chip:SetScript("OnClick", function() cfg.onSelect(spec.key) end)
+        chip:SetScript("OnEnter", function(self)
+            if cfg.current() == spec.key then return end
+            self.bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+        end)
+        chip:SetScript("OnLeave", function(self)
+            if cfg.current() == spec.key then return end
+            self.bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
+        end)
+
+        chips[index] = chip
+    end
+
+    -- Flowed, not fixed: the labels are words, and a fixed grid would either
+    -- clip "Cooldowns" or leave "All" swimming in its own cell.
+    row.Layout = function()
+        local x, y, height = 0, 0, ROW
+        for _, chip in ipairs(chips) do
+            local chipWidth = chip:GetWidth()
+            if x > 0 and x + chipWidth > width then
+                x, y = 0, y - (ROW + GAP)
+                height = height + ROW + GAP
+            end
+            chip:ClearAllPoints()
+            chip:SetPoint("TOPLEFT", row, "TOPLEFT", x, y)
+            x = x + chipWidth + GAP
+        end
+        row:SetHeight(height)
+        return height
+    end
+
+    row.Refresh = function()
+        local current = cfg.current()
+        for index, chip in ipairs(chips) do
+            local active = cfg.chips[index].key == current
+            local bg = active and C.accentSoft or C.control
+            chip.bg:SetColorTexture(bg[1], bg[2], bg[3], 1)
+            chip.edge:SetColor(
+                active and C.accentDim[1] or C.separator[1],
+                active and C.accentDim[2] or C.separator[2],
+                active and C.accentDim[3] or C.separator[3], 1)
+            local text = active and C.accent or C.textDim
+            chip.label:SetTextColor(text[1], text[2], text[3])
+        end
+    end
+
+    row.Layout()
+    row.Refresh()
+    return row
 end

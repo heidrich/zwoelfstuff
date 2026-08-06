@@ -87,7 +87,7 @@ end
 function Browser:Create()
     if self.frame then return end
 
-    local frame = CreateFrame("Frame", "DKstuffSpellBrowser", UIParent)
+    local frame = CreateFrame("Frame", "ZwoelfStuffSpellBrowser", UIParent)
     frame:SetSize(460, 560)
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
@@ -174,7 +174,7 @@ function Browser:Create()
     frame.rows = {}
     self.frame = frame
 
-    table.insert(UISpecialFrames, "DKstuffSpellBrowser")
+    table.insert(UISpecialFrames, "ZwoelfStuffSpellBrowser")
 end
 
 function Browser:BuildSections()

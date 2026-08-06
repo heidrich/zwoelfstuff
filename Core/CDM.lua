@@ -153,47 +153,96 @@ end
 --                     only pools situationally (a spell hidden until it is
 --                     relevant would otherwise never be listed)
 ---------------------------------------------------------------------------
-function CDM:Catalogue()
-    local out, seen = {}, {}
 
-    local function Add(cooldownID, viewerKey)
-        if not cooldownID or seen[cooldownID] then return end
+-- Which of our four viewers a static category belongs to. The member names
+-- are read off working code on this machine (EllesmereUICdmSpellPicker.lua
+-- uses Essential, Utility, TrackedBuff and TrackedBar by name), never guessed,
+-- and every lookup is nil-safe so a renamed member costs one group heading
+-- rather than the whole list.
+function CDM:CategoryViewer(category)
+    local categories = Enum and Enum.CooldownViewerCategory
+    if not categories then return nil end
+
+    if category == categories.Essential then return "essential" end
+    if category == categories.Utility then return "utility" end
+    if category == categories.TrackedBuff then return "buffIcon" end
+    if category == categories.TrackedBar then return "buffBar" end
+    return nil
+end
+
+function CDM:Catalogue()
+    -- Keyed by SPELL, not by cooldown. Several cooldownIDs can point at one
+    -- spell - the live frame and the static entry both do - and a picker that
+    -- lists the same spell three times is noise: the user picks a spell, and
+    -- that is what a cell stores.
+    local bySpell = {}
+
+    local function Add(cooldownID, viewerKey, live)
+        if not cooldownID then return end
         local info = self:GetInfo(cooldownID)
         if not info then return end
 
         local spellID = info.overrideSpellID or info.spellID
         if not spellID then return end
 
-        seen[cooldownID] = true
-        out[#out + 1] = {
+        local existing = bySpell[spellID]
+        if existing then
+            -- The live pool wins: it knows which viewer actually shows it,
+            -- which is what the user sees on screen.
+            if viewerKey and not existing.viewer then
+                existing.viewer = viewerKey
+                existing.cooldownID = cooldownID
+            end
+            if live then existing.known = true end
+            return
+        end
+
+        bySpell[spellID] = {
             cooldownID = cooldownID,
             spellID    = spellID,
             viewer     = viewerKey,
             name       = ns.SpellName(spellID) or ("Spell " .. spellID),
             icon       = ns.SpellTexture(spellID),
+            -- A frame in a live pool is on screen, so it is talented by
+            -- definition; anything else has to be asked about.
+            known      = live or ns.IsSpellKnown(spellID),
         }
     end
 
     for _, viewer in ipairs(self.VIEWERS) do
         self:ForEachItem(viewer.key, function(item)
-            Add(self:ItemCooldownID(item), viewer.key)
+            Add(self:ItemCooldownID(item), viewer.key, true)
         end)
     end
 
     -- Enum.CooldownViewerCategory rather than hardcoded numbers: the values
     -- are Blizzard's to change, and iterating the enum survives that.
+    --
+    -- The second argument true means "including what is not talented". Those
+    -- are wanted: they are listed and greyed, so a bar can be built for a
+    -- build you are about to switch into instead of the list silently missing
+    -- half the class.
     local categories = Enum and Enum.CooldownViewerCategory
     local getSet = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
     if categories and getSet then
         for _, category in pairs(categories) do
-            local ok, set = pcall(getSet, category)
+            local viewerKey = self:CategoryViewer(category)
+            local ok, set = pcall(getSet, category, true)
             if ok and type(set) == "table" then
-                for _, cooldownID in ipairs(set) do Add(cooldownID, nil) end
+                for _, cooldownID in ipairs(set) do Add(cooldownID, viewerKey) end
             end
         end
     end
 
-    table.sort(out, function(a, b) return a.name < b.name end)
+    local out = {}
+    for _, entry in pairs(bySpell) do out[#out + 1] = entry end
+
+    -- pairs() has no order, so the spell ID is the tiebreaker: without one the
+    -- list would reshuffle two same-named spells every time it is built.
+    table.sort(out, function(a, b)
+        if a.name == b.name then return a.spellID < b.spellID end
+        return a.name < b.name
+    end)
     return out
 end
 
@@ -254,6 +303,8 @@ end
 --
 -- Guarded against recursion: our own SetPoint call re-enters the hook.
 ---------------------------------------------------------------------------
+-- Weak keys, and every field lives HERE rather than on the frame: writing a
+-- custom key onto a Blizzard frame table is one of the named ways to taint it.
 local adopted = setmetatable({}, { __mode = "k" })
 
 local function Reassert(state, frame)
@@ -267,42 +318,74 @@ local function Reassert(state, frame)
     if state.width then
         frame:SetSize(state.width, state.height)
     end
+    if state.alpha then
+        frame:SetAlpha(state.alpha)
+    end
     state.applying = false
+end
+
+-- Installs the self-healing hooks once per frame and returns its record.
+--
+-- Three hooks, because Blizzard's layout pass rewrites all three. The guard
+-- flag matters: our own SetPoint, SetSize and SetAlpha re-enter these.
+local function Hold(item)
+    local state = adopted[item]
+    if state then return state end
+
+    state = {}
+    adopted[item] = state
+
+    hooksecurefunc(item, "SetPoint", function(frame)
+        local pin = adopted[frame]
+        if pin and pin.anchor then Reassert(pin, frame) end
+    end)
+    hooksecurefunc(item, "SetSize", function(frame)
+        local pin = adopted[frame]
+        if pin and pin.width then Reassert(pin, frame) end
+    end)
+    hooksecurefunc(item, "SetAlpha", function(frame)
+        local pin = adopted[frame]
+        if pin and pin.alpha then Reassert(pin, frame) end
+    end)
+
+    return state
 end
 
 -- Pins an item frame to a point and a size of ours, and keeps it there.
 --   anchor = { point, relativeTo, relativePoint, x, y }
---
--- Both are hooked, because Blizzard's layout pass rewrites both. The guard
--- flag matters: our own SetPoint and SetSize re-enter these hooks.
 function CDM:Pin(item, anchor, width, height)
     if not item then return end
-
-    local state = adopted[item]
-    if not state then
-        state = {}
-        adopted[item] = state
-
-        hooksecurefunc(item, "SetPoint", function(frame)
-            local pin = adopted[frame]
-            if pin and pin.anchor then Reassert(pin, frame) end
-        end)
-        hooksecurefunc(item, "SetSize", function(frame)
-            local pin = adopted[frame]
-            if pin and pin.width then Reassert(pin, frame) end
-        end)
-    end
-
+    local state = Hold(item)
     state.anchor = anchor
     state.width, state.height = width, height
     Reassert(state, item)
 end
 
--- Hands an item frame back to Blizzard: the hook stays (hooks cannot be
--- removed) but with no anchor recorded it does nothing.
+-- How visible an item is, and it STAYS that way.
+--
+-- This is how a cooldown the user did not place disappears: alpha 0, never
+-- Hide(). Hiding a Blizzard frame taints it, and Blizzard also turns its own
+-- frames back on whenever the viewer relayouts - hence the hook rather than a
+-- single call.
+function CDM:SetAlpha(item, alpha)
+    if not item then return end
+    local state = Hold(item)
+    state.alpha = alpha
+    Reassert(state, item)
+end
+
+-- Hands an item frame back to Blizzard: the hooks stay (hooks cannot be
+-- removed) but with nothing recorded they do nothing. Alpha is restored
+-- explicitly, or a released frame would keep whatever we last forced on it.
 function CDM:Release(item)
     local state = adopted[item]
-    if state then state.anchor = nil end
+    if not state then return end
+    state.anchor = nil
+    state.width, state.height = nil, nil
+    if state.alpha then
+        state.alpha = nil
+        item:SetAlpha(1)
+    end
 end
 
 function CDM:IsPinned(item)

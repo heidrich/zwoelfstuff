@@ -171,6 +171,105 @@ function Bars:SetGrid(index, rows, columns)
 end
 
 ---------------------------------------------------------------------------
+-- Look and feel, as a transferable thing
+--
+-- Every bar has its own settings - that is the point of having several. But
+-- setting eight sliders twice is work nobody should have to do, so a look can
+-- be taken from another bar in one click, or saved once and applied to any
+-- bar later.
+--
+-- Only the LOOK travels. Which spells are in the bar, how many rows it has
+-- and where it sits on screen are what makes it that bar, and copying those
+-- would overwrite the work rather than the styling.
+---------------------------------------------------------------------------
+ns.BAR_STYLE_KEYS = {
+    "kind",
+    "iconSize", "barWidth", "barHeight",
+    "spacing", "lineSpacing",
+    "scale", "alpha",
+    "borderSize", "borderColor",
+}
+
+function Bars:CaptureStyle(index)
+    local cfg = self:Get(index)
+    if not cfg then return nil end
+
+    local style = {}
+    for _, key in ipairs(ns.BAR_STYLE_KEYS) do
+        local value = cfg[key]
+        if type(value) == "table" then
+            -- Copied, not referenced: a shared colour table would mean editing
+            -- one bar's border silently repainted every bar made from it.
+            local copy = {}
+            for i, component in ipairs(value) do copy[i] = component end
+            style[key] = copy
+        else
+            style[key] = value
+        end
+    end
+    return style
+end
+
+function Bars:ApplyStyle(index, style)
+    local cfg = self:Get(index)
+    if not (cfg and style) then return false end
+
+    for _, key in ipairs(ns.BAR_STYLE_KEYS) do
+        local value = style[key]
+        if value ~= nil then
+            if type(value) == "table" then
+                local copy = {}
+                for i, component in ipairs(value) do copy[i] = component end
+                cfg[key] = copy
+            else
+                cfg[key] = value
+            end
+        end
+    end
+
+    self:Changed(index)
+    return true
+end
+
+function Bars:CopyStyleFrom(source, target)
+    if source == target then return false end
+    return self:ApplyStyle(target, self:CaptureStyle(source))
+end
+
+---------------------------------------------------------------------------
+-- Presets
+---------------------------------------------------------------------------
+function Bars:SavePreset(name, index)
+    name = (name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if name == "" then return false end
+
+    local style = self:CaptureStyle(index)
+    if not style then return false end
+
+    ns.db.barPresets[name] = style
+    return true
+end
+
+function Bars:DeletePreset(name)
+    if not ns.db.barPresets[name] then return false end
+    ns.db.barPresets[name] = nil
+    return true
+end
+
+-- Sorted, so the list does not reshuffle itself between openings - pairs()
+-- over a string-keyed table has no order to speak of.
+function Bars:PresetNames()
+    local names = {}
+    for name in pairs(ns.db.barPresets) do names[#names + 1] = name end
+    table.sort(names)
+    return names
+end
+
+function Bars:ApplyPreset(name, index)
+    return self:ApplyStyle(index, ns.db.barPresets[name])
+end
+
+---------------------------------------------------------------------------
 -- Change notification
 --
 -- One place for "something about a bar changed", so the editor and the

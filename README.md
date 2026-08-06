@@ -1,4 +1,4 @@
-# DKstuff
+# ZwoelfStuff
 
 A cooldown manager for a Death Knight, built on the one thing that actually
 works on this patch: **Blizzard's own Cooldown Manager does the hard part, and
@@ -27,34 +27,59 @@ charges, stacks and timing, and does that inside the game where secret values
 are not a problem. Every addon that "does cooldowns" on this patch works the
 same way — it parses nothing and restyles Blizzard's item frames.
 
-DKstuff reads the Cooldown Manager's live item frames
+ZwoelfStuff reads the Cooldown Manager's live item frames
 (`viewer.itemFramePool:EnumerateActive()`), resolves what each one is, and pins
 them into bars of your own shape. The aura-tracking code written before this is
 kept but parked until 12.1.
 
 ## Bars
 
-`/dks` → **Bars**.
+`/zs` → **Cooldowns**. The window has three columns and each has one job:
 
-Pick a bar from the dropdown — which is also where you create and delete them —
-set rows and columns, and the grid below changes with them. **That grid is the
-bar**: same rows, same columns, same order, nothing to translate.
+| Column | What is in it |
+| --- | --- |
+| left | what the addon does — Cooldowns, Aura Display, Settings, Diagnostics, About, Changelog |
+| middle | **every bar you own**, under each other, scrollable, with *Add new bar* at the bottom |
+| right | **every cooldown** your Cooldown Manager knows — or the settings for one bar |
 
-- Click an empty cell to choose a spell. The list is your own Cooldown Manager,
-  so anything in it is guaranteed to have working timing. Manual spell IDs are
-  accepted too.
+Each bar in the middle is a card that **is** the bar: same rows, same columns,
+same order, nothing to translate. **Rows** and **Columns** sit right underneath
+it as two sliders, so the shape changes under your hand. At the bottom of the
+stack, **Icon bar** and **Tracking bar** add the next one.
+
+- Click a cell, then click a spell on the right. The selection moves on to the
+  next empty cell by itself, so filling a bar is click, click, click.
 - Drag one cell onto another to swap them.
 - Right click a cell to clear it.
+- Manual spell IDs are accepted, bottom right.
+
+The spell list is grouped into **Cooldowns, Utility, Buffs and Buff bars**,
+with filter buttons above to jump to one of them. Spells already on the bar
+you have selected are **green**, with the cell they sit in; spells your
+current talent build does not have are **greyed out** and sorted to the end of
+their group — still pickable, because a bar is often built for the build you
+are about to switch into.
 
 Changing rows or columns **re-flows** what is already there rather than
 scrambling it: 6×1 becomes 3×2 with the same spells in the same order.
 
-`/dks cdm` prints what the Cooldown Manager currently holds, per viewer — the
-same data the picker draws from.
+### Per-bar settings
+
+**Options** on a bar's header turns the right column into that bar's settings —
+name, icons or bars, sizes, spacing, scale, opacity, border and border colour.
+**Done** brings the spells back.
+
+A look does not have to be set twice. **Copy from** takes it from another bar
+in one click, and **Save as** stores it as a named preset you can apply to any
+bar later. Only sizes, spacing and colours travel; the spells and the grid stay
+with their own bar, because those are what make it that bar.
+
+`/zs cdm` prints what the Cooldown Manager currently holds, per viewer — the
+same data the spell list draws from.
 
 ## Co-tank panel (parked until 12.1)
 
-`/dks tanks` toggles it, `/dks tanks unlock` moves it, and the **Co-Tanks**
+`/zs tanks` toggles it, `/zs tanks unlock` moves it, and the **Co-Tanks**
 options tab has the rest.
 
 One row per tank, the player first so rows never reorder mid-pull. The auras are
@@ -80,7 +105,7 @@ spell pickers enumerate the exact same list. (Checked against
 `EllesmereUICooldownManager`, whose `AddSpellToBar` sources its candidates from
 `EnumerateCDMViewerSpells`.)
 
-DKstuff sidesteps this: it queries the aura straight off the player by spell ID
+ZwoelfStuff sidesteps this: it queries the aura straight off the player by spell ID
 and draws it on its own frame. Anything in your buff bar can be isolated this
 way, regardless of who cast it.
 
@@ -108,7 +133,7 @@ The rules this addon follows instead:
 
 ### Can the buff be displayed at all? — the measurement
 
-`/dks dump`, run in combat with the buff up, reported **0 readable, 18 secret**.
+`/zs dump`, run in combat with the buff up, reported **0 readable, 18 secret**.
 Every buff on the player was secret, not just this one. The cooldown viewers did
 hand out plain spell IDs and readable `auraInstanceID`s — but only for the buffs
 the Cooldown Manager tracks, and Boiling Point is not among them.
@@ -116,7 +141,7 @@ the Cooldown Manager tracks, and Boiling Point is not among them.
 So: **the buff itself cannot be read by an addon.** That is by design, not a bug
 to route around. What *can* be read is the **proc**: Boiling Point empowers Blood
 Boil, and `C_SpellActivationOverlay.IsSpellOverlayed(50842)` is a plain boolean
-that never touches aura data. DKstuff displays that, and times the 15 seconds
+that never touches aura data. ZwoelfStuff displays that, and times the 15 seconds
 itself.
 
 The same technique is used by `EllesmereUIAuraBuffReminders` for beacons it
@@ -125,7 +150,7 @@ combat-safe, independent from the main aura/buff system".
 
 **Limitation, stated plainly:** several procs can light up the same button. The
 glow is the signal, not the aura, so a different proc glowing Blood Boil looks
-identical. `/dks glowlog` prints every glow event with its spell ID, so a more
+identical. `/zs glowlog` prints every glow event with its spell ID, so a more
 specific source can be chosen if one exists.
 
 ### The five lookup routes
@@ -180,8 +205,8 @@ query itself raise.
 The repo is linked into the WoW AddOns folder:
 
 ```text
-C:\Games\World of Warcraft\_retail_\Interface\AddOns\DKstuff
-    -> C:\Users\Christian\Documents\GitHub\DKstuff
+C:\Games\World of Warcraft\_retail_\Interface\AddOns\ZwoelfStuff
+    -> C:\Users\Christian\Documents\GitHub\ZwoelfStuff
 ```
 
 Edit here, `/reload` in game. After adding a **new file** to the TOC, restart the
@@ -189,49 +214,58 @@ client fully rather than relying on `/reload`.
 
 ## Usage
 
-`/dks` opens the settings window (Options / About / Changelog).
+`/zs` opens the window. `/zs unlock` puts the bars where you want them.
 
 | Command | Effect |
 | --- | --- |
-| `/dks` | open the settings window |
-| `/dks unlock` / `lock` | drag the display into place |
-| `/dks test` | 15 second preview, for positioning |
-| `/dks icon` / `bar` | switch display mode |
-| `/dks size <n>` | icon size |
-| `/dks width <n>` / `height <n>` | bar size |
-| `/dks scale <n>` | overall scale |
-| `/dks add <spellID>` | track another aura |
-| `/dks remove <spellID>` | stop tracking one |
-| `/dks list` | list tracked auras |
-| `/dks check <spellID>` | is that aura findable right now, and by which route |
-| `/dks status` | what is tracked, what is active, current settings |
-| `/dks dump` | full diagnosis — run it **while the buff is up** |
-| `/dks glowlog` | log every proc glow, to find the right spell ID |
-| `/dks glow <id or name>` | drive the display off that proc glow (`off` to disable) |
-| `/dks glowduration <s>` | how long the proc lasts, default 15 |
-| `/dks reset` | restore defaults |
+| `/zs` | open the window |
+| `/zs unlock` / `lock` | move the bars around the screen |
+| `/zs bars` | list your bars (`add <name>` / `remove <n>`) |
+| `/zs cdm` | what Blizzard's Cooldown Manager currently holds |
+| `/zs auras` | the procs seen on this spec, and what drives each one |
+| `/zs auras export` | print this spec's set, ready to paste into the database |
+| `/zs auras icon <glowID> <spellID>` | which icon a proc shows |
+| `/zs auras bind <glowID> <auraID>` | name the buff itself (12.1 route) |
+| `/zs auras forget <glowID>` | drop one, shipped entries included |
+| `/zs auras remember` | put every forgotten one back |
+| `/zs minimap` | show or hide the minimap button |
+| `/zs reset` | restore defaults, keeping recorded procs |
 
-### Wrong spell ID?
+### Unlock mode
 
-With the buff up, run `/dks check`. It reports `FOUND` or `not found` separately
-for the ID route and the name route. If both miss, the ID is wrong — hover the
-buff in your buff bar, **idTip** shows the real one, then:
+Every bar gets a panel with its live coordinates. Drag it, or select it and
+nudge with the arrow keys — Shift for 10. It snaps to the screen centre and to
+the other bars' centres and edges, with a guide line showing what it caught;
+hold **Alt** while dragging to switch snapping off. The cog opens that bar's
+menu. **Shift + Right Click** hides the overlay so you can see what is
+underneath, and Escape leaves.
 
-```text
-/dks add <realID>
-/dks remove 1265968
+### It takes Blizzard's display over
+
+Every icon on your bars *is* one of Blizzard's Cooldown Manager frames, moved
+onto your cell — it owns the timing, the charges and the stacks, and on this
+patch no addon may read those for itself. Blizzard lays its own row out
+without knowing an icon left, so it would show a hole where that one used to
+be. Because of that, cooldowns you have not placed are hidden as well.
+
+Settings → *Take the display over* switches that off and gives Blizzard's row
+back, holes included.
+
+### The proc database
+
+`Core/KnownProcs.lua` ships with the addon, keyed by class and spec:
+
+```lua
+["DEATHKNIGHT:250"] = {
+    [50842] = { display = 1265968, auraID = 1265968, duration = 15 },
+},
 ```
 
-### Display modes
-
-- **Icon** — square icon, cooldown swipe, engine countdown, stack count.
-- **Bar** — icon plus a status bar with spell name and countdown.
-
-### Options
-
-Always show (greyed out while the aura is down), remaining time, stacks, spell
-name, proc glow, proc sound. The tracked spell list doubles as a priority list —
-the first entry present on the player wins.
+A glow set belongs to a class and a spec, not to a player, so one person
+playing one spec once is enough for everybody who plays it. Nothing in that
+file is written from memory: play the spec, let each proc run out on its own
+at least once so the duration is measured rather than guessed, then
+`/zs auras export` and paste the block in.
 
 ## Architecture
 
@@ -239,10 +273,22 @@ the first entry present on the player wins.
 | --- | --- |
 | `Core/Init.lua` | namespace, defaults, saved variables, helpers, slash commands |
 | `Core/Secrets.lua` | secret-value guards |
+| `Core/CDM.lua` | Blizzard's Cooldown Manager: find the viewers, adopt their item frames, hold them |
+| `Core/KnownProcs.lua` | the shipped proc database, by class and spec |
+| `Core/Auras.lua` | records procs while you play, measures their duration, exports them |
+| `Core/Bars.lua` | the data model: a bar is a grid of cells |
 | `Core/Glow.lua` | proc glow — expanding ring plus flash, no external library |
-| `Core/Display.lua` | both display modes, layout, preview, inactive and test rendering |
-| `Core/Watcher.lua` | aura lookup by ID with name fallback, diagnostics |
-| `Core/Options.lua` | tabbed settings window |
+| `Core/Widgets.lua` | the design system: every control is built here |
+| `Core/Screen.lua` | the bars on screen — adopted frames and drawn aura cells |
+| `Core/EditMode.lua` | unlock mode: movers, snapping, guides, the cog menu |
+| `Core/Minimap.lua` | minimap button |
+| `Core/OptionsBars.lua` | the middle and right columns of the window |
+| `Core/Options.lua` | the window shell and the secondary pages |
+
+Deleted in 4.4.0: `Core/Display.lua` and `Core/Watcher.lua`, the old
+single-aura window, superseded by `Core/Screen.lua`. Parked until patch 12.1:
+`Engine`, `Catalog`, `Probe`, `Groups`, `CoTanks`, `OptionsGroups` — they need
+`Blizzard_AuraContainer`, which does not exist on a 12.0 client.
 
 ### Further implementation notes
 
@@ -263,7 +309,7 @@ Static analysis via the Lua language server:
 
 ```powershell
 & "$env:USERPROFILE\.vscode\extensions\sumneko.lua-3.18.2-win32-x64\server\bin\lua-language-server.exe" `
-    --check "C:\Users\Christian\Documents\GitHub\DKstuff" --checklevel=Warning --logpath="$env:TEMP\llscheck"
+    --check "C:\Users\Christian\Documents\GitHub\ZwoelfStuff" --checklevel=Warning --logpath="$env:TEMP\llscheck"
 ```
 
 ## Credits

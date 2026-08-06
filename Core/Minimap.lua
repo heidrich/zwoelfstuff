@@ -56,7 +56,7 @@ function MinimapButton:Create()
     if self.button then return end
     if not Minimap then return end
 
-    local button = CreateFrame("Button", "DKstuffMinimapButton", Minimap)
+    local button = CreateFrame("Button", "ZwoelfStuffMinimapButton", Minimap)
     button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     button:SetFrameStrata("MEDIUM")
     button:SetFrameLevel(Minimap:GetFrameLevel() + 8)
@@ -64,8 +64,10 @@ function MinimapButton:Create()
     button:RegisterForDrag("LeftButton")
     button:SetMovable(true)
 
-    -- Accent rim, dark plate, icon - all masked to a circle.
-    local accent = ns.db.accent
+    -- Accent rim, dark plate, icon - all masked to a circle. The colour comes
+    -- from the design system rather than a saved setting: it is the addon's
+    -- own mark, and one accent everywhere is the point of having one.
+    local accent = ns.UI.C.accent
 
     local rim = button:CreateTexture(nil, "BACKGROUND")
     rim:SetAllPoints(button)
@@ -109,9 +111,8 @@ function MinimapButton:Create()
 
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:AddLine("|cff7ec6d4DK|r|cffff7a3dstuff|r")
-        GameTooltip:AddLine("|cffffffffLeft click|r  settings", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("|cffffffffRight click|r  toggle co-tank panel", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r")
+        GameTooltip:AddLine("|cffffffffClick|r  open the window", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("|cffffffffDrag|r  move around the minimap", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
@@ -128,10 +129,12 @@ function MinimapButton:Refresh()
     if not self.button then return end
     local db = ns.db.minimap
 
-    local texture = ns.db.spellIDs[1] and ns.SpellTexture(ns.db.spellIDs[1])
-    self.button.icon:SetTexture(texture or ns.WHITE)
+    -- The addon's own icon, not a spell's. It used to show whatever aura was
+    -- being tracked, which changed under the user and made the button hard to
+    -- find again on a busy minimap.
+    self.button.icon:SetTexture(ns.ICON_TEXTURE)
 
-    local accent = ns.db.accent
+    local accent = ns.UI.C.accent
     self.button.rim:SetColorTexture(accent[1], accent[2], accent[3], 1)
 
     self:UpdatePosition()

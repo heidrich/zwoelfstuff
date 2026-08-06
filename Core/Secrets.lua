@@ -3,7 +3,7 @@
 --
 -- Since 12.0.0 aura fields arrive as "secret values". Tainted code - which
 -- every addon is - may NOT:
---   * use them as table keys        (this is what broke DKstuff 1.0.0)
+--   * use them as table keys        (this is what broke ZwoelfStuff 1.0.0)
 --   * compare them or boolean-test them
 --   * do arithmetic on them, or take their length
 --

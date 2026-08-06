@@ -1,8 +1,367 @@
 # Changelog
 
-All notable changes to DKstuff are documented here.
+All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [4.4.0] - 2026-08-06
+
+The bars are on screen, and there is an unlock mode to put them where you
+want them. Also: the addon is called **ZwoelfStuff** now.
+
+### The name
+
+`DKstuff` was never right — the addon is not about Death Knights, it is about
+cooldowns. It is named after the character it was written on: **Zwölf**, EU
+Destromath. Spelled `Zwoelf` everywhere, because a folder name, a slash
+command and a saved-variables key are all worse places for an umlaut than a
+signature is.
+
+Your settings come with it. The saved variables were migrated on disk; if you
+ever see an empty addon, the old file is still sitting next to the new one.
+
+### Added — the display
+
+Everything you arranged in the window now actually renders, and a cell holds
+one of exactly two things:
+
+- **A Cooldown Manager cooldown.** It is not drawn — Blizzard's own frame is
+  *adopted* and moved onto your cell. That frame has the correct icon, swipe,
+  charges, stacks and timing, all computed inside the game where secret values
+  are not a problem. Drawing our own would mean reading aura data, which patch
+  12.0 forbids outright.
+- **An aura proc.** No frame exists to adopt — that is why `Core/Auras.lua`
+  exists at all — so the icon is drawn and the clock is ours, started by the
+  glow on the ability the aura empowers and running for the duration that was
+  *measured* rather than assumed.
+
+The rules for touching Blizzard's frames are not style advice, and they are
+taken verbatim from the reference implementation on this machine:
+
+> Never SetParent/SetScale/Hide/Show on Blizzard frames · Never move Blizzard
+> frames offscreen · Never write custom keys to Blizzard frame tables · All
+> per-frame data in external weak-keyed tables · Unclaimed frames: SetAlpha(0)
+
+Two things follow, and both are visible in the code:
+
+- An adopted frame is still Blizzard's child, so it does **not** inherit our
+  scale or our alpha. Per-bar *Scale* is therefore a size multiplier, not a
+  `SetScale`, and per-bar opacity is pushed into the frame itself. Anything
+  else would have applied to half a bar and silently skipped the other half.
+- A cooldown you did not place vanishes with **alpha**, never with `Hide()`.
+
+**It takes the display over, and Settings says what that costs.** Blizzard
+lays its viewer out by walking its active frames and placing them in a row; it
+has no idea one of them now lives on your bar, so it leaves a hole where that
+one used to be. There is no version of this where the original bar still looks
+right — so by default the cooldowns you did not place are hidden too. Switch
+*Take the display over* off and you get Blizzard's row back, holes included.
+
+### Added — Unlock Mode
+
+Built to work the way EllesmereUI's does, because that is what this addon is
+used next to and a second set of rules for "how do I move a thing" is a tax on
+the user, not a feature.
+
+- Every bar gets a labelled panel with its **live coordinates**.
+- **Drag** it, or select it and **nudge with the arrow keys** — Shift for 10.
+- It **snaps** to the screen centre and to the other bars' centres and edges,
+  with a guide line showing what it snapped to. **Alt** switches snapping off
+  while you drag, because "almost always right" is why there has to be a way
+  out in the moment.
+- A **cog** on each panel: bar options, centre on screen, centre on one axis,
+  switch the bar off.
+- **Shift + Right Click** hides the overlay so you can see what is underneath.
+  The panel stays, or that would be a one-way door.
+- A **grid**, and Escape leaves.
+
+Positions are always the bar's centre offset from the screen centre — one
+anchor for everything, which is what makes the readout mean something and
+snapping arithmetic instead of a case analysis.
+
+### Added — the proc database is a file now
+
+`Core/KnownProcs.lua`. It is data that grows with every export, and having it
+in the middle of six hundred lines of logic made "paste your export here" mean
+"edit around the machinery". It ships with the addon, so a fresh install
+already knows what the spec's procs are.
+
+- **`/zs auras forget` now works on shipped entries too.** Deleting one that
+  the addon carries could only ever last until the file loaded again, so a
+  thrown-away entry is remembered as thrown away.
+- **`/zs auras remember`** puts every one of them back — the way out of
+  forgetting the wrong one that does not involve editing saved variables.
+
+### Removed
+
+**The Aura Display page, and the single-buff window behind it.** An aura is a
+cell on a bar now, so a second window showing one buff on its own was two
+answers to the same question. `Core/Display.lua` and `Core/Watcher.lua` are
+out of the load order, and every setting and command that only fed them is
+gone rather than left to rot: `test`, `icon`, `bar`, `size`, `width`,
+`height`, `scale`, `add`, `remove`, `list`, `check`, `status`, `scan`, `dump`,
+`source`, `glow`, `glowlog`, `glowduration`.
+
+`/zs unlock` and `/zs lock` now mean the bars.
+
+### Fixed
+
+- **A load-order crash, found by reading rather than by running.**
+  `EditMode.lua` takes a reference to the design system while it loads, and it
+  was listed *above* the file that defines it. The TOC now says so in a
+  comment at the line it matters on.
+- **Dragging could stick to the cursor.** `OnMouseUp` only fires on the frame
+  the button went down on, and you can let go anywhere — including over
+  another window or off the edge of the screen.
+- **The aura catalogue was rebuilt once per cell.** A talent scan, forty times
+  over, for one spec change. Built once per render pass now.
+- **A hidden cell still answered the glow that drives it**, so shrinking a
+  grid left a clock running on something nobody could see.
+- The minimap button shows the addon's own icon instead of whichever aura was
+  being tracked — that changed under the user and made the button hard to find
+  again on a busy minimap.
+
+## [4.3.0] - 2026-08-06
+
+Auras — the ones Blizzard's Cooldown Manager does not carry.
+
+### The shape of it
+
+What is **shown** is the aura's own icon. What **drives** it underneath is the
+action button that lights up while the aura is active. You see Boiling Point;
+the addon watches Blood Boil.
+
+That split matters, because an entry carries three things that are not
+interchangeable:
+
+| | what it is | what it is for |
+| --- | --- | --- |
+| `parent` | the ability whose button lights up | drives it on 12.0 |
+| `display` | the icon and name to show | a choice, either route |
+| `auraID` | the aura itself | drives it on **12.1** |
+
+The aura's real ID is not needed for the glow route at all — we never query
+the aura, we draw an icon and run our own clock — so what is displayed is a
+*choice*, not a lookup.
+
+### Added
+
+- **An Auras group** in the spell list, with its own filter button.
+- **It fills itself.** Every proc this character raises is recorded, per class
+  and spec, while you play. No learn mode, no button, no timing. A proc nobody
+  knew about announces itself once in chat and is in the list from then on.
+- **The duration is measured, and it knows when it is guessing.** The time
+  between `GLOW_SHOW` and `GLOW_HIDE` is the duration — but only if the glow
+  ran out *on its own*. `UNIT_SPELLCAST_SUCCEEDED` says whether you cast the
+  ability just before it went out, and that reading is a floor rather than a
+  fact. Confirmed durations are green, floors are orange with a `>`.
+  - This also answers a question neither of us could otherwise: **a proc that
+    never runs out by itself is a "cast me" hint, not an aura.** No game
+    knowledge required, and nothing to look up.
+- **`/zs auras export`** prints this spec's set as a block that pastes
+  straight into `KNOWN_PROCS`. A glow set belongs to a class and a spec, not to
+  a player, so one person playing one spec once is enough for everybody who
+  plays it. That is the whole distribution model for this data.
+- **Ready for 12.1** (11 Aug 2026). `Auras:Route()` picks the engine when
+  `Blizzard_AuraContainer` exists and an aura ID is known, the glow otherwise,
+  and switches by itself. Availability is probed by *building* a container —
+  the previous version gated on `LoadAddOn("Blizzard_AuraContainer")`, there is
+  no such addon, and that gate could never open. Set the aura ID with
+  `/zs auras bind <glowID> <auraID>`.
+- `/zs auras`, `/zs auras icon <glowID> <spellID>`,
+  `/zs auras forget <glowID>`.
+- **Tooltips on every spell**, in the list and on the cells. The game's own
+  tooltip, via `GameTooltip:SetSpellByID` — what a spell does is Blizzard's
+  text to keep current, and anything written here would be a second version of
+  it going quietly out of date. Underneath it, only what the game cannot know:
+  where the spell already sits on your bar, what actually drives an aura, and
+  what a click would do.
+
+### Tried and rejected
+
+**Reading the link out of talent descriptions.** The idea was sound — the text
+does name abilities, and matching it against the client's own spell names is
+locale-independent, since both sides come from the same client in the same
+language.
+
+It answers the wrong question. The description names the ability a talent
+**modifies**, not the one that lights up: *Foul Bulwark → Bone Shield* means
+"makes Bone Shield stronger". On the one case that could be checked it returned
+**Heart Strike** where the confirmed answer is **Blood Boil**. And of the 48
+candidates it produced, nearly all were passives that grant no trackable aura
+at all.
+
+The scan is kept, demoted: it now runs in the useful direction — *which talent
+mentions this ability* — purely to suggest a caption, where being wrong costs a
+label and nothing else. Its one real bug is fixed along the way: it kept only
+the longest name match per talent, which hid Blood Boil behind Heart Strike.
+
+### Fixed in the first live test
+
+Three bugs the static check could not see, all found by running `/zs auras`
+on a real character rather than trusting the code:
+
+- **Every aura reported "no route"** — so nothing could ever have been
+  displayed. `Route()` read `entry.parent`, but in the proc store the glowing
+  spell is the *key*, not a field. It is passed in explicitly now.
+- **The export would have shipped wrong data.** It read the raw recording
+  instead of the merged view, so the bundled display was invisible to it and
+  the caption fell back to a guess: Blood Boil came out as *Hemostasis*
+  instead of *Boiling Point*, and pasting that in would have overwritten the
+  one correct entry. It uses the merged view now.
+- **A measured duration overwrote the shipped one** — Boiling Point dropped
+  from 15s to 4s. Every measurement is a *floor*, because casting the
+  empowered ability ends the glow early. Longest wins, including against the
+  shipped value.
+- `Defile on Defile` — when nothing better is known the icon simply *is* the
+  glowing ability, and saying it twice reads as a fault.
+- **An error on every login.** `ADDON_LOADED` called `ns.Auras:Seed()`, and
+  that function never existed. Nothing was lost — it was the last line of the
+  block — but it threw each time. There is no seeding step *by design*: the
+  recorder registers itself when the file loads, and the shipped set is merged
+  when the list is read, so an addon update brings new data instead of being
+  shadowed by a stale copy in saved variables. Every other cross-module call in
+  the addon was checked against its definition at the same time; this was the
+  only one missing.
+- **`/zs reset` no longer erases recorded procs.** They are measurements that
+  take hours of playing to collect and cannot be typed back in, so they are not
+  settings. `/zs auras forget <glowID>` is how those go away.
+
+### Not done, deliberately
+
+**A hardcoded table of aura-to-ability links.** There is no API for that
+relationship, and writing one from memory is exactly what already produced two
+wrong spell IDs in this project. `KNOWN_PROCS` ships with **one** entry, and it
+was observed. It grows only from an export.
+
+## [4.2.0] - 2026-08-06
+
+Owner review of 4.1.0 — *"schon viel besser!"* — with five things to fix.
+
+### Added
+
+- **Two add buttons instead of one**: *Icon bar* and *Tracking bar*. The two
+  are a different thing to build, not a setting you change afterwards — they
+  want different sizes, a different default grid and a different place on
+  screen — so choosing up front means the first one is already right.
+- **The spell list is grouped**: Cooldowns, Utility, Buffs, Buff bars, each
+  under its own heading with a count, with filter buttons above to jump
+  straight to one. The category comes from
+  `Enum.CooldownViewerCategory.Essential / .Utility / .TrackedBuff /
+  .TrackedBar`, read off working code on this machine rather than guessed, and
+  every lookup is nil-safe: a renamed member costs one heading, not the list.
+- **Green for what is already on the selected bar** — a stripe down the left
+  edge, the name in green, and the cell it sits in. Only the selected bar: the
+  same spell may sit on three others, and marking it here would answer a
+  question nobody asked.
+- **Greyed out for what the current talent build does not have**, sorted to
+  the end of its group. Still pickable, because a bar is often built for the
+  build you are about to switch into. Uses
+  `C_SpellBook.IsSpellKnownOrInSpellBook` — the reference CDM picker still
+  calls the deprecated `IsPlayerSpell`; BigWigs on this client already uses
+  the current form. A missing API means "assume known": greying out everything
+  would be far worse than greying out nothing.
+
+### Changed
+
+- **One rule under every heading**, spanning the whole window at the same
+  height in all three columns — including under ZwoelfStuff itself. Three separate
+  lines with three sets of padding never quite agree, and the eye reads the
+  disagreement as sloppiness even when the heights match. It lives on a chrome
+  frame above the columns, because a texture on the window itself is painted
+  *under* its own child frames no matter which layer it claims.
+- **A more modern surface set**: a graphite palette with wider steps between
+  the levels, a dedicated `well` for anything recessed, and `edge` for a
+  card's own outline.
+- Empty cells are **recessed wells** rather than raised tiles — a slot waiting
+  to be filled reads differently from a button.
+- The selected function in the left column is marked with **an accent bar and
+  a neutral fill**, not a block of tinted orange that muddied its own label.
+- New **soft** button weight: the accent is in the text, not the fill. The two
+  add buttons use it, so the bars stay the thing you look at.
+- The `Shape` setting is now **Kind**, with *Icon bar* and *Tracking bar*, the
+  same words as the buttons that create them.
+- The right column is headed **Spells**, not "Cooldowns" — it sat next to a
+  middle column with the same title.
+
+### Fixed
+
+- **The spell list showed duplicates** — Anti-Magic Shell twice, Blood Boil
+  twice. Several cooldown IDs can point at one spell; the catalogue is keyed
+  by spell now, and the live pool wins because it knows which viewer actually
+  shows it.
+- Two font strings were given both `TOPLEFT` and `RIGHT`, which tells them two
+  different vertical positions. Widths instead.
+
+## [4.1.0] - 2026-08-06
+
+The window rebuilt as an app, and made to look like one.
+
+### The shape
+
+Three fixed columns, each with one job:
+
+| Column | What is in it |
+| --- | --- |
+| left | **the functions** — Cooldowns, Aura Display, Settings, Diagnostics, About, Changelog |
+| middle | **every bar you own**, under each other, scrollable, plus *Add new bar* at the bottom of the stack |
+| right | **every cooldown**, listed in full — or the settings for one bar while its Options are open |
+
+The left column no longer lists your bars. Listing them there meant picking
+one before you could see any of them, which is exactly backwards for a thing
+whose whole point is having several.
+
+### Added
+
+- **The middle is the overview.** Each bar is a card that *is* the bar — same
+  grid, same order, same sizes — with **Rows** and **Columns** as two sliders
+  directly underneath it. Change one and the card changes shape under your
+  hand. A grid too wide for the card is scaled to fit rather than clipped, so
+  the arrangement stays honest.
+- **Add new bar** sits at the bottom of the stack, where the next bar appears.
+- **The spell list is always there.** Everything your Cooldown Manager knows,
+  searchable, with a manual spell-ID box. Click a cell, click a spell — and
+  the selection moves on to the next empty cell by itself, so filling a bar is
+  click, click, click rather than click, aim, click, aim.
+- **Options per bar**, reached from the card header and shown in the right
+  column: name, shape, icon size or bar size, spacing, row gap, scale,
+  opacity, border and border colour. *Done* goes back to the spells.
+- **A look can be reused** — copy it from another bar in one click, or save it
+  as a named preset and apply it to any bar later, deleting presets from the
+  same menu. Only sizes, spacing and colours travel; the spells and the grid
+  stay with their own bar, because those are what make it that bar.
+
+### Changed
+
+- **Nothing in the window is see-through.** A translucent panel over a moving
+  3D world is unreadable, and the depth a glass effect only suggests is now
+  done properly with distinct opaque surfaces — work area, window, side
+  columns, cards, controls — each one step apart. Hairlines are opaque
+  colours, not white at six percent.
+- Hover on a spell cell is an outline rather than a white wash, which used to
+  dull the very icon it was pointing at.
+- The scrollbar shows a thumb and no track, and only when there is something
+  to scroll.
+- Sliders got a round handle, a thicker track and a live readout; the compact
+  variant on the bar cards fits a label, a track and a value on one line.
+- Text inputs can carry a placeholder, so an empty box says what it is for
+  instead of looking broken.
+- Panel text uses the client's UI font everywhere, including inside inputs.
+
+### Fixed
+
+- The command list offered `/zs groups`, `/zs catalog` and `/zs tanks`,
+  none of which exist while that stack is parked. A usage list that names a
+  missing command is worse than no list.
+- The minimap tooltip advertised a right-click that toggled the co-tank panel,
+  parked since 4.0.0.
+- The About and Changelog pages used Blizzard's scroll template, whose pale
+  bar cannot be styled to match anything around it.
+
+### Not yet
+
+Bars still render nothing on screen. That is deliberate and unchanged: the
+operation gets signed off first, then the display.
 
 ## [4.0.0] - 2026-08-06
 
@@ -52,8 +411,8 @@ values, works around restricted APIs."*
   cell onto another to swap, right click to clear.
 - **Spell picker** sourced from the Cooldown Manager, so anything in the list
   is guaranteed to have working timing. Manual IDs still accepted.
-- `/dks cdm` — what the Cooldown Manager currently holds, per viewer.
-- `/dks bars` — list, add, remove.
+- `/zs cdm` — what the Cooldown Manager currently holds, per viewer.
+- `/zs bars` — list, add, remove.
 
 ### Parked until 12.1
 
@@ -94,7 +453,7 @@ already.
 
 ### Added
 
-- **`/dks group status`** — per spell, one of three answers: *slot refused*
+- **`/zs group status`** — per spell, one of three answers: *slot refused*
   (a bug here, printed with the engine's error), *registered but never seen*
   (the slot is fine, the ID is wrong or the aura has not been up), or
   *bound*. This is what turns "only one icon shows" into something
@@ -107,7 +466,7 @@ already.
 
 ### Added
 
-- **`/dks probe <spellID> [seconds]`** — the decisive test for "can this be
+- **`/zs probe <spellID> [seconds]`** — the decisive test for "can this be
   tracked at all". A hidden one-slot container is bound to the candidate ID,
   and the engine shows its button exactly while that aura sits on the unit.
   Every bind and unbind is printed with a timestamp.
@@ -263,7 +622,7 @@ Both are documented as rules 1–5 at the top of `Core/Engine.lua`.
 - **Bars that actually drain.** `button:SetDurationBar(bar, opts)` hands a
   StatusBar to the engine, which drains it from the aura's own duration, GPU
   side. It works for auras no addon may read.
-- `/dks groups`, `/dks group add|remove|list`, `/dks catalog`.
+- `/zs groups`, `/zs group add|remove|list`, `/zs catalog`.
 - `Core/Widgets.lua` — the option controls, shared between pages: steppers,
   segmented choices, colour swatches, scroll areas. Still no external library.
 
@@ -309,8 +668,8 @@ neither had ever bound an aura in game:
   addons on this client rather than guessed.
 - Addon icon in the AddOn list and the addon compartment
   (`## IconTexture: 1380870`, the Boiling Point FileDataID read off the live
-  client in `/dks dump`).
-- `/dks minimap` plus two options checkboxes to show/hide and lock it.
+  client in `/zs dump`).
+- `/zs minimap` plus two options checkboxes to show/hide and lock it.
 
 ## [2.0.0] - 2026-08-05
 
@@ -326,11 +685,11 @@ instead.
   Auras on other players are secret exactly like your own — a co-tank's boss
   debuff stacks cannot be read by an addon at all — so each row owns two
   `AuraContainer`s (HARMFUL and HELPFUL) and the engine binds, shows and times
-  them. `/dks tanks`, `/dks tanks unlock`, plus a **Co-Tanks** options tab.
+  them. `/zs tanks`, `/zs tanks unlock`, plus a **Co-Tanks** options tab.
 - **Engine aura slot for the tracked buff.** `AddAuraFilter` with
   `candidateFilters.includeSpellIDs` binds the real Boiling Point aura — real
   icon, real duration, real stacks — instead of proxying it through the proc
-  glow. `/dks source engine` / `/dks source glow` switches; the glow route
+  glow. `/zs source engine` / `/zs source glow` switches; the glow route
   remains and still drives the proc flash.
 - `Core/Engine.lua` — the shared engine layer, with a cached availability probe
   and a combat-lock guard, so both features degrade instead of erroring.
@@ -360,7 +719,7 @@ The measurement that settled it, and the workaround that follows from it.
 
 ### The finding
 
-`/dks dump` run in combat with the buff up reported **0 readable, 18 secret**.
+`/zs dump` run in combat with the buff up reported **0 readable, 18 secret**.
 Not just Boiling Point — *every* buff on the player was secret. The four
 cooldown viewers meanwhile handed out plain spell IDs and readable
 `auraInstanceID`s (Death and Decay, Bone Shield, Blood Shield, Hemostasis,
@@ -381,17 +740,17 @@ this spell. That is exactly the gap this addon exists to fill.
   This is the same combat-safe technique `EllesmereUIAuraBuffReminders` uses for
   beacons it cannot read either ("Standalone Beacon Reminders —
   IsSpellOverlayed-based, combat-safe").
-- `/dks glowlog` — logs every `SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE` with
+- `/zs glowlog` — logs every `SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE` with
   spell ID and name, so the right ID is read off the client rather than guessed.
-- `/dks glow <spellID or name>` — sets the proc source; a name is resolved via
-  `C_Spell.GetSpellInfo`, so no ID is ever hardcoded. `/dks glow off` disables.
-- `/dks glowduration <seconds>` — proc length, default 15.
+- `/zs glow <spellID or name>` — sets the proc source; a name is resolved via
+  `C_Spell.GetSpellInfo`, so no ID is ever hardcoded. `/zs glow off` disables.
+- `/zs glowduration <seconds>` — proc length, default 15.
 - Proc glow section in the options window, with a live status readout.
 
 ### Changed
 
 - Default `glowSpellID` is 50842 (Blood Boil), confirmed from the live client.
-- `/dks dump` now also reports: combat state, which APIs actually exist, whether
+- `/zs dump` now also reports: combat state, which APIs actually exist, whether
   the target spell is in the Cooldown Manager data set at all
   (`GetCooldownViewerCategorySet` over all four categories), the current overlay
   state, and the override-spell state.
@@ -405,7 +764,7 @@ this spell. That is exactly the gap this addon exists to fill.
 
 Several procs can light up the same button. If Blood Boil glows for another
 reason, route 5 cannot tell them apart — the glow is the signal, not the aura.
-`/dks glowlog` shows exactly which spell IDs fire, so a more specific source can
+`/zs glowlog` shows exactly which spell IDs fire, so a more specific source can
 be chosen when one exists.
 
 ## [1.3.0] - 2026-08-05
@@ -426,11 +785,11 @@ actually exists instead of testing one hypothesis at a time.
 - **Fourth route: icon match.** The icon of *our* spell ID is always plain, so
   comparing it against a readable aura icon is legal. Catches secret auras that
   keep a readable icon. Last in priority, because two buffs can share an icon.
-- `/dks dump` — dumps every entry of all four cooldown viewers (spell ID, name,
+- `/zs dump` — dumps every entry of all four cooldown viewers (spell ID, name,
   shown state, whether timing is available) and every player buff (readable ones
   with ID and name, secret ones counted with their aura instance), marking any
   icon match. Must be run **while the buff is up**.
-- `/dks check` reports all four routes.
+- `/zs check` reports all four routes.
 
 ## [1.2.0] - 2026-08-05
 
@@ -441,7 +800,7 @@ silence — because a secret rotational proc is invisible to *both* aura reads.
 
 - **The tracked aura was never detected.** `GetPlayerAuraBySpellID` and
   `GetAuraDataBySpellName` both return nothing for secret-flagged rotational
-  procs, no matter how correct the spell ID is. Confirmed in game: `/dks check`
+  procs, no matter how correct the spell ID is. Confirmed in game: `/zs check`
   reported `not found` on both routes while the buff was up.
 
 ### Added
@@ -454,12 +813,12 @@ silence — because a secret rotational proc is invisible to *both* aura reads.
   `overrideSpellID`, `linkedSpellIDs` and finally the spell name.
   The irony: the Cooldown Manager refuses to let you *add* this buff, yet it
   knows exactly when it is up.
-- `/dks scan` — lists the buffs an addon is allowed to read and counts the
+- `/zs scan` — lists the buffs an addon is allowed to read and counts the
   secret ones, so "wrong ID" and "secret aura" can be told apart.
 
 ### Changed
 
-- `/dks check` now reports all three routes separately, and states whether a
+- `/zs check` now reports all three routes separately, and states whether a
   hit carries timing or presence only.
 - The watcher polls at 10 Hz, because secret procs give no readable event and
   the cooldown viewer binds its frames a moment after the aura lands.
@@ -499,10 +858,10 @@ Rewritten for patch 12.x secret values. 1.0.0 threw on every aura change.
 
 ### Added
 
-- `/dks check <spellID>` — reports whether that aura is findable right now, and
+- `/zs check <spellID>` — reports whether that aura is findable right now, and
   by which route (ID or name). Distinguishes a wrong spell ID from a broken
   display.
-- `/dks status` — what is tracked, what is currently active, and the current
+- `/zs status` — what is tracked, what is currently active, and the current
   display settings.
 - **Diagnose** button in the options window, running both of the above.
 
@@ -527,9 +886,9 @@ Rewritten for patch 12.x secret values. 1.0.0 threw on every aura change.
   plus a reset-position action.
 - Additional spell IDs can be tracked; the list doubles as a priority order —
   the first entry present on the player wins.
-- Tabbed settings window (Options / About / Changelog), reachable via `/dks`
+- Tabbed settings window (Options / About / Changelog), reachable via `/zs`
   or the addon compartment.
-- Full slash command set under `/dks`, `/dkstuff`.
+- Full slash command set under `/zs`, `/zwoelfstuff`.
 
-[1.1.0]: https://github.com/zwoelf/DKstuff/releases/tag/v1.1.0
-[1.0.0]: https://github.com/zwoelf/DKstuff/releases/tag/v1.0.0
+[1.1.0]: https://github.com/zwoelf/ZwoelfStuff/releases/tag/v1.1.0
+[1.0.0]: https://github.com/zwoelf/ZwoelfStuff/releases/tag/v1.0.0
