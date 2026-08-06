@@ -490,11 +490,17 @@ local function MenuEntry(menu, index)
     entry = CreateFrame("Button", nil, menu)
     entry:SetHeight(ENTRY_H)
 
-    -- Opaque: a HIGHLIGHT texture draws below the OVERLAY font string, so the
-    -- label stays readable and nothing has to be see-through to work.
-    entry.hl = entry:CreateTexture(nil, "HIGHLIGHT")
+    -- ARTWORK and switched by hand, NOT the HIGHLIGHT layer. HIGHLIGHT draws
+    -- above every other layer including OVERLAY, so an opaque highlight there
+    -- painted straight over the label and the hovered entry was the one you
+    -- could not read.
+    entry.hl = entry:CreateTexture(nil, "ARTWORK")
     entry.hl:SetAllPoints(entry)
     entry.hl:SetColorTexture(C.accentSoft[1], C.accentSoft[2], C.accentSoft[3], 1)
+    entry.hl:Hide()
+
+    entry:SetScript("OnEnter", function(self) self.hl:Show() end)
+    entry:SetScript("OnLeave", function(self) self.hl:Hide() end)
 
     entry.label = UI.Label(entry, "", 12, C.text)
     entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
@@ -1454,6 +1460,13 @@ end
 
 -- A full-width block: section headers, notes, button strips.
 function Grid:Wide(region, height)
+    -- The width, here, once. A block placed by Layout is only ever given a
+    -- POINT, so anything that does not set its own width is zero pixels wide:
+    -- section headings were laid out correctly and invisible, and their rule
+    -- line could not draw at all. Notes set their own, which is exactly why
+    -- they showed and the headings did not.
+    if region.SetWidth then region:SetWidth(self.width) end
+
     self.items[#self.items + 1] = {
         region = region, height = height, wide = true, group = self.group,
     }

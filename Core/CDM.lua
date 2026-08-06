@@ -541,6 +541,80 @@ function CDM:IsPinned(item)
 end
 
 ---------------------------------------------------------------------------
+-- What is actually ON one of Blizzard's item frames
+--
+-- The decoration list in StripDecorations was read off a working addon, and
+-- a working addon on a DIFFERENT build. When icons still do not match after
+-- stripping, the answer is not to guess another region name - it is to look
+-- at what this client actually put there.
+--
+-- Prints every region of the first adopted frame: type, layer, atlas or
+-- texture, alpha, and whether it is one of the named fields we already know
+-- about. Anything that turns up unnamed and visible is the thing still
+-- making that icon look different.
+---------------------------------------------------------------------------
+function CDM:DumpSkin()
+    local target, targetSpell
+    for item in pairs(adopted) do
+        if self:IsPinned(item) then
+            target = item
+            targetSpell = self:ItemSpellID(item)
+            break
+        end
+    end
+
+    if not target then
+        ns.Print("No adopted icon to look at - put a Cooldown Manager spell "
+            .. "on a bar first.")
+        return
+    end
+
+    -- Named fields first, so anything found in the region walk that is NOT
+    -- one of these stands out as something we do not handle.
+    local named = {}
+    for _, key in ipairs({ "Icon", "Border", "Shadow", "IconShadow",
+        "DebuffBorder", "CooldownFlash", "SpellActivationAlert", "Cooldown",
+        "ChargeCount", "Applications" }) do
+        local widget = target[key]
+        if widget then named[widget] = key end
+    end
+
+    ns.Print("|cffffd100--- skin report:", ns.SpellName(targetSpell) or "?",
+        "(" .. tostring(targetSpell) .. ") ---|r")
+    ns.Print(string.format("frame %.0fx%.0f, alpha %.2f, shown %s",
+        target:GetWidth() or 0, target:GetHeight() or 0, target:GetAlpha(),
+        tostring(target:IsShown())))
+
+    for _, region in ipairs({ target:GetRegions() }) do
+        local kind = region.GetObjectType and region:GetObjectType() or "?"
+        local layer = region.GetDrawLayer and region:GetDrawLayer() or "-"
+        local atlas = region.GetAtlas and region:GetAtlas()
+        local texture = region.GetTexture and region:GetTexture()
+        local alpha = region.GetAlpha and region:GetAlpha() or 1
+
+        local label = named[region] or "|cff888888(unnamed)|r"
+        local what = atlas and ("atlas " .. atlas)
+            or (texture and ("texture " .. tostring(texture)))
+            or "-"
+
+        -- Only what is still VISIBLE can be what you are looking at.
+        local mark = (alpha > 0 and region:IsShown()) and "|cff40ff40*|r" or " "
+
+        ns.Print(string.format("%s %s |cff888888%s %s|r a=%.2f  %s",
+            mark, label, kind, layer, alpha, what))
+    end
+
+    if target.Icon and target.Icon.GetTexCoord then
+        local left, _, _, _, right, _, _, bottom = target.Icon:GetTexCoord()
+        ns.Print(string.format("Icon texcoord %.3f %.3f %.3f", left or 0,
+            right or 0, bottom or 0))
+    end
+
+    ns.Print("|cffffd100A green * is still drawn. Anything unnamed with a "
+        .. "green * is what we are not stripping.|r")
+end
+
+---------------------------------------------------------------------------
 -- Is another addon holding the same frames?
 --
 -- There is ONE set of Cooldown Manager item frames, and every addon that

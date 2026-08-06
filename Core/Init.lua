@@ -430,6 +430,7 @@ local usage = {
     "  Bars",
     "  |cffffd100/zs bars|r - list them (|cffffd100add <name>|r / |cffffd100remove <n>|r)",
     "  |cffffd100/zs cdm|r - what Blizzard's Cooldown Manager currently holds",
+    "  |cffffd100/zs skin|r - what is actually drawn on one adopted icon",
     "",
     "  Auras",
     "  |cffffd100/zs auras|r - the procs seen on this spec, and what drives them",
@@ -474,6 +475,9 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
 
     elseif cmd == "cdm" then
         ns.CDM:Dump()
+
+    elseif cmd == "skin" then
+        ns.CDM:DumpSkin()
 
     elseif cmd == "auras" then
         local sub, arg = rest:match("^(%S*)%s*(.-)$")
