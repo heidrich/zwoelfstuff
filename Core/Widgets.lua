@@ -639,7 +639,11 @@ end
 -- addon that loads after this one registers its textures when it is ready,
 -- and a list built once at login is a list missing half of them.
 ---------------------------------------------------------------------------
-function UI.MediaPicker(row, kind, get, set, apply)
+-- inheritLabel, when given, puts an entry at the top of the list whose value
+-- is the empty string: "use whatever the global setting says". The global
+-- itself is the one picker that does NOT offer it, or it would point at
+-- itself.
+function UI.MediaPicker(row, kind, get, set, apply, inheritLabel)
     local button = UI.MenuButton(row.slot, row.slot:GetWidth())
     button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
 
@@ -651,8 +655,17 @@ function UI.MediaPicker(row, kind, get, set, apply)
 
     local function Paint()
         local key = get()
-        button.label:SetText(key or "-")
         preview:Hide()
+
+        if inheritLabel and (not key or key == "") then
+            button.label:SetText(inheritLabel)
+            ns.StyleUIFont(button.label, 12)
+            button.label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            return
+        end
+
+        button.label:SetText(key or "-")
+        button.label:SetTextColor(C.text[1], C.text[2], C.text[3])
 
         if kind == "font" then
             -- Its own typeface, at the panel's size. If the file will not
@@ -668,6 +681,18 @@ function UI.MediaPicker(row, kind, get, set, apply)
 
     button:SetScript("OnClick", function()
         local items = {}
+
+        if inheritLabel then
+            items[1] = {
+                text = inheritLabel, value = "",
+                onClick = function()
+                    set("")
+                    if apply then apply() end
+                    ns.Options:Refresh()
+                end,
+            }
+        end
+
         for _, name in ipairs(ns.Media.List(kind)) do
             items[#items + 1] = {
                 text = name, value = name,

@@ -82,7 +82,7 @@ ns.BAR_DEFAULTS = {
     -- 24px cell and a 64px cell looking like one design.
     countdown = {
         show    = true,
-        font    = "Friz Quadrata TT",
+        font    = "",   -- empty means "whatever Settings says"
         size    = 0,
         color   = { 1.00, 1.00, 1.00 },
         outline = "OUTLINE",
@@ -93,7 +93,7 @@ ns.BAR_DEFAULTS = {
 
     stacks = {
         show    = true,
-        font    = "Friz Quadrata TT",
+        font    = "",   -- empty means "whatever Settings says"
         size    = 0,
         color   = { 1.00, 1.00, 1.00 },
         outline = "OUTLINE",
@@ -107,7 +107,7 @@ ns.BAR_DEFAULTS = {
     -- collision a flat settings table invites.
     spellName = {
         show    = true,
-        font    = "Friz Quadrata TT",
+        font    = "",   -- empty means "whatever Settings says"
         size    = 0,
         color   = { 1.00, 1.00, 1.00 },
         outline = "",
@@ -328,9 +328,14 @@ local function TextStyle(element, height, autoScale, floor, ceiling)
         size = math.max(floor, math.min(ceiling, height * autoScale))
     end
 
+    -- An empty font means "whatever Settings says", resolved HERE so no
+    -- renderer has to know the rule and the two cannot disagree about it.
+    local font = element.font
+    if not font or font == "" then font = ns.db.font end
+
     return {
         show    = element.show ~= false,
-        font    = element.font,
+        font    = font,
         size    = size,
         color   = element.color or { 1, 1, 1 },
         outline = element.outline or "",
@@ -656,6 +661,15 @@ function Bars:Prepare()
     for _, cfg in ipairs(ns.db.bars) do
         ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
         if not cfg.id or cfg.id == 0 then cfg.id = self:NextID() end
+
+        -- Bars written before there was a global font carry the old default
+        -- spelled out on every text element, which would quietly ignore the
+        -- new Settings choice. Same typeface either way, so nothing changes
+        -- on screen - it just starts following.
+        for _, element in ipairs(ns.TEXT_ELEMENTS) do
+            local text = cfg[element.key]
+            if text and text.font == "Friz Quadrata TT" then text.font = "" end
+        end
     end
 
     -- Two ways a saved anchor can be unusable, and both have to be caught

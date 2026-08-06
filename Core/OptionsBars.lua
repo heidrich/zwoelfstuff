@@ -873,7 +873,8 @@ function Workspace:BuildOptionsPane(parent, width)
 
         rows[#rows + 1] = UI.MediaPicker(
             grid:FullRow("Font", { controlWidth = 190 }), "font",
-            GetIn(group, "font"), SetIn(group, "font"), Apply)
+            GetIn(group, "font"), SetIn(group, "font"), Apply,
+            "Same as everywhere")
 
         rows[#rows + 1] = UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
             get = GetIn(group, "size"), set = SetIn(group, "size"),

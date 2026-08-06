@@ -124,6 +124,11 @@ ns.DEFAULTS = {
     -- which is why it is a list of what NOT to show rather than a deletion.
     procsHidden = {},
 
+    -- The font every piece of text on every bar uses unless that one piece
+    -- has been given its own. One place to change it, and no need to visit
+    -- three sections on four bars to change a typeface.
+    font       = "Friz Quadrata TT",
+
     -- Whether the bars REPLACE Blizzard's Cooldown Manager display or sit
     -- next to it. On by default, and the setting says what off costs: taking
     -- a cooldown onto our bar leaves a hole in Blizzard's row, because its

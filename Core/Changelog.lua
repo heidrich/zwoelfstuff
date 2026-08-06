@@ -18,7 +18,10 @@ ns.CHANGELOG = {
             "Same seven for all three on purpose. 'The countdown can be moved but the stack count cannot' is the kind of arbitrary limit that sends people looking for another addon.",
             "Four ready-made looks to start from - Clean, Blizzard, Heavy, Bare. Thirty-odd settings is what people ask for and nobody wants to build a look out of thirty-odd settings from nothing. They carry only what they are about: your grid, sizes and spacing are never touched.",
             "The whole styling block is folded away by default. The grid, the spells and the sizes are what you come back to; the knobs are set once and are one click from being out of the way.",
+            "One font for everything, in Settings. Every piece of text on every bar follows it, and any single one of them can still be given its own - its font picker just offers 'Same as everywhere' at the top, which is what it starts on.",
             "Fonts and textures registered by a slower addon after login now reach your bars by themselves instead of waiting for a reload.",
+            "Fixed, all found by looking at it running: the seven styling sections were laid out correctly and invisible, because a block placed by the grid gets a position and no width - notes set their own, which is why the note showed and the headings did not. The hovered menu entry was the one you could not read, because its highlight sat on a layer that draws above the text. And the window gave its width to the column with nothing to say: the rail is narrower, the settings column wider, so labels stop being clipped to 'T...'.",
+            "Fixed: adopted icons came out at six sizes sitting at six offsets while the cells behind them were an even grid. Sizing the FRAME was never enough - each of Blizzard's four viewers anchors its own icon texture its own way, so the art has to be told to fill the frame too. Measured with /zs skin rather than guessed.",
         },
     },
     {

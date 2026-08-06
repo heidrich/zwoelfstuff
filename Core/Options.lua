@@ -66,6 +66,18 @@ end
 local function BuildGeneralPage(page, width)
     local grid = UI.Page(page, width)
 
+    grid:Section("Text")
+
+    UI.MediaPicker(grid:FullRow("Font", { controlWidth = 220 }), "font",
+        function() return ns.db.font end,
+        function(value) ns.db.font = value end,
+        function() ns.Screen:Render() end)
+
+    grid:Note("Every piece of text on every bar, unless that one piece has "
+        .. "been given its own font in the bar's own settings. The list is "
+        .. "whatever your other addons have registered - so a font you "
+        .. "installed for ElvUI or WeakAuras is already in it.")
+
     grid:Section("Blizzard's Cooldown Manager")
 
     UI.Toggle(grid:Row("Take the display over",
