@@ -448,13 +448,23 @@ local function Dim(region, alsoHide)
     hushing = false
 end
 
--- Blizzard rounds its icons with a mask texture. Replacing the mask with a
--- plain white square is what squares them off - the corners cannot be set
--- any other way, because they are not a border.
-local function SquareMasks(frame)
+-- Blizzard rounds its icons with a mask texture, and the corners cannot be
+-- set any other way because they are not a border.
+--
+-- Measured with /zs skin: replacing the mask's own texture with a white
+-- square does NOT work - the region still reported Blizzard's 130871 after
+-- every attempt. The mask belongs to the TEXTURE it masks, so the thing to
+-- do is take it off the texture rather than try to redefine it. The white
+-- square is kept as a second attempt, because a mask that cannot be removed
+-- can still sometimes be flattened.
+local function Unmask(frame, masked)
     if not frame then return end
+
     for _, region in ipairs({ frame:GetRegions() }) do
         if region.IsObjectType and region:IsObjectType("MaskTexture") then
+            if masked and masked.RemoveMaskTexture then
+                pcall(masked.RemoveMaskTexture, masked, region)
+            end
             pcall(region.SetTexture, region, SQUARE_MASK)
         end
     end
@@ -475,8 +485,11 @@ local function StripDecorations(item)
     Dim(item.CooldownFlash)
     Dim(item.SpellActivationAlert, true)
 
-    SquareMasks(item)
-    SquareMasks(item.Cooldown)
+    -- The masks on the item belong to its icon; the ones on the Cooldown
+    -- belong to its swipe, which is not reachable from here - so that one
+    -- still gets the flattening attempt only.
+    Unmask(item, item.Icon)
+    Unmask(item.Cooldown, nil)
 
     -- Everything the Cooldown Manager paints on top of its own icons, matched
     -- by atlas PREFIX rather than by a list of names.
@@ -693,6 +706,18 @@ function CDM:DumpSkin()
         local left, _, _, _, right, _, _, bottom = target.Icon:GetTexCoord()
         ns.Print(string.format("Icon texcoord %.3f %.3f %.3f", left or 0,
             right or 0, bottom or 0))
+    end
+
+    -- The number that actually decides whether the corners are round. A mask
+    -- region can still be listed above while no longer being APPLIED to the
+    -- icon, which is the whole point of removing it rather than redefining
+    -- it - so this is the line to read, not the mask's texture id.
+    if target.Icon and target.Icon.GetNumMaskTextures then
+        local ok, masks = pcall(target.Icon.GetNumMaskTextures, target.Icon)
+        if ok then
+            ns.Print(string.format("masks still on the icon: %s%d|r",
+                (masks or 0) > 0 and "|cffff4040" or "|cff40ff40", masks or 0))
+        end
     end
 
     ns.Print("|cffffd100A green * is still drawn. Anything unnamed with a "
