@@ -318,6 +318,23 @@ Static analysis via the Lua language server:
     --check "C:\Users\Christian\Documents\GitHub\ZwoelfStuff" --checklevel=Warning --logpath="$env:TEMP\llscheck"
 ```
 
+## Embedded libraries
+
+| Library | Licence | Why |
+| --- | --- | --- |
+| LibStub | Public domain | Loader the other two need |
+| CallbackHandler-1.0 | BSD | LibSharedMedia dependency |
+| LibSharedMedia-3.0 | LGPL v2.1 | Fonts, bar textures, border textures |
+
+The rest of this addon is built from scratch on purpose — the window, the
+widgets, the look. LibSharedMedia is the exception, and not to save effort:
+it is a **registry**, not a design. Every UI addon on a machine registers what
+it ships into it, so asking it for the list shows you the media you already
+have, under the names you already know. Shipping our own instead would give
+you a second, smaller, unfamiliar set with the one you wanted missing.
+
+Their licences stay with them; our own code is MIT.
+
 ## Credits
 
 Addon Author: **Zwölf** — EU Destromath

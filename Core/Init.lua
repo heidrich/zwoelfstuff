@@ -1,17 +1,17 @@
 ---------------------------------------------------------------------------
--- ZwoelfStuff - isolates single auras into their own display.
+-- ZwoelfStuff - your own cooldown bars, built on Blizzard's Cooldown Manager.
 --
--- Blizzard's Cooldown Manager only offers spells that exist in the
--- C_CooldownViewer data set. Auras outside that set - Boiling Point
--- (spell 1265968) among them - can never be added there, not even through
--- CDM addons, because their spell pickers enumerate the very same data set.
+-- Spells go in a grid you arrange, and every bar is styled on its own. What
+-- the Cooldown Manager carries is adopted rather than redrawn; what it does
+-- NOT carry - auras like Boiling Point, which is not in the C_CooldownViewer
+-- data set and can never be added to it - is recorded and drawn by us.
 --
 -- This file: namespace, defaults, saved variables, shared helpers, commands.
 ---------------------------------------------------------------------------
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.4.0"
+ns.version = "4.5.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -182,7 +182,7 @@ function ns.ApplyDefaults(target, defaults)
 end
 
 function ns.Print(...)
-    print("|cff7ec6d4DK|r|cffff7a3dstuff|r:", ...)
+    print("|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r:", ...)
 end
 
 function ns.SpellName(spellID)
@@ -254,23 +254,25 @@ end
 -- for the countdown, so ours is applied on top rather than instead - which
 -- also means an anchor of CENTER is left alone, because that is already
 -- where the engine puts it and re-anchoring it can only go wrong.
-function ns.StyleNumbers(widget, size, colour, anchor)
-    if not widget then return end
+function ns.StyleNumbers(widget, text)
+    if not (widget and text) then return end
 
     for _, region in ipairs({ widget:GetRegions() }) do
         if region.GetObjectType and region:GetObjectType() == "FontString" then
-            ns.StyleFont(region, size)
-            if colour then
-                region:SetTextColor(colour[1], colour[2], colour[3])
-            end
-            if anchor and anchor ~= "CENTER" then
+            ns.Media.ApplyFont(region, text.font, text.size, text.outline,
+                text.color)
+
+            -- Left alone at CENTER with no offset: that is already where
+            -- Blizzard's engine puts its countdown, and re-anchoring it can
+            -- only go wrong. Anywhere else we have to say so ourselves.
+            if text.anchor ~= "CENTER" or text.x ~= 0 or text.y ~= 0 then
                 local inset = 2
-                local x = anchor:find("LEFT") and inset
-                    or anchor:find("RIGHT") and -inset or 0
-                local y = anchor:find("TOP") and -inset
-                    or anchor:find("BOTTOM") and inset or 0
+                local x = (text.anchor:find("LEFT") and inset
+                    or text.anchor:find("RIGHT") and -inset or 0) + text.x
+                local y = (text.anchor:find("TOP") and -inset
+                    or text.anchor:find("BOTTOM") and inset or 0) + text.y
                 region:ClearAllPoints()
-                region:SetPoint(anchor, widget, anchor, x, y)
+                region:SetPoint(text.anchor, widget, text.anchor, x, y)
             end
         end
     end

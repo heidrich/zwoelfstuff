@@ -622,6 +622,66 @@ function UI.MenuButton(parent, width, height)
 end
 
 ---------------------------------------------------------------------------
+-- MediaPicker - fonts, bar textures and border textures
+--
+-- A list of names is useless here. "Empyrean" says nothing about a texture,
+-- and the whole reason to offer a font is that it looks different - so each
+-- entry shows itself: a font renders its own name in itself, a texture draws
+-- a swatch behind it.
+--
+-- The list is asked for at OPEN time, never cached. Media arrives late: an
+-- addon that loads after this one registers its textures when it is ready,
+-- and a list built once at login is a list missing half of them.
+---------------------------------------------------------------------------
+function UI.MediaPicker(row, kind, get, set, apply)
+    local button = UI.MenuButton(row.slot, row.slot:GetWidth())
+    button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+
+    -- A swatch behind the label, so the button itself previews the choice.
+    local preview = button:CreateTexture(nil, "BORDER")
+    preview:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+    preview:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    preview:Hide()
+
+    local function Paint()
+        local key = get()
+        button.label:SetText(key or "-")
+        preview:Hide()
+
+        if kind == "font" then
+            -- Its own typeface, at the panel's size. If the file will not
+            -- load the label simply stays in the panel font, which is the
+            -- honest answer to "this font does not work here".
+            ns.Media.ApplyFont(button.label, key, 12, "")
+        elseif kind == "statusbar" and ns.Media.IsKnown(kind, key) then
+            preview:SetTexture(ns.Media.Statusbar(key))
+            preview:SetVertexColor(C.accent[1], C.accent[2], C.accent[3], 0.55)
+            preview:Show()
+        end
+    end
+
+    button:SetScript("OnClick", function()
+        local items = {}
+        for _, name in ipairs(ns.Media.List(kind)) do
+            items[#items + 1] = {
+                text = name, value = name,
+                onClick = function()
+                    set(name)
+                    if apply then apply() end
+                    ns.Options:Refresh()
+                end,
+            }
+        end
+        UI.ShowMenu(button, { items = items, current = get(), width = 190 })
+    end)
+
+    button.Refresh = Paint
+    row.control = button
+    row.Refresh = Paint
+    return row
+end
+
+---------------------------------------------------------------------------
 -- Dropdown - a plain value picker inside a settings row
 ---------------------------------------------------------------------------
 function UI.Dropdown(row, options, get, set, cfg)

@@ -482,26 +482,16 @@ function CDM:Skin(item, style)
         state.plate = item:CreateTexture(nil, "BACKGROUND")
         state.plate:SetAllPoints(item)
     end
-    local plate = style.backdropColor
-    state.plate:SetColorTexture(plate[1], plate[2], plate[3], style.backdropAlpha)
-    state.plate:SetShown(style.backdrop)
+    ns.PaintSurface(state.plate, style)
 
     -- The border lives on a frame of ITS OWN, above the cooldown swipe. A
     -- texture on the item would be painted under the item's own child frames
     -- whatever layer it claims, and the swipe is one of them - the border
     -- would darken along with the icon as the cooldown ran.
     if not state.chrome then
-        local chrome = CreateFrame("Frame", nil, item)
-        chrome:SetAllPoints(item)
-        chrome:SetFrameLevel(item:GetFrameLevel() + 5)
-        state.chrome = chrome
-        state.border = ns.CreateBorder(chrome, 1, "OVERLAY")
+        state.chrome = ns.CreateChrome(item)
     end
-
-    local edge = style.borderColor
-    state.border:SetThickness(style.borderSize)
-    state.border:SetColor(edge[1], edge[2], edge[3], 1)
-    state.border:SetShown(style.borderSize > 0)
+    ns.PaintBorder(state.chrome, style)
 
     local cooldown = item.Cooldown
     if cooldown then
@@ -509,11 +499,10 @@ function CDM:Skin(item, style)
         pcall(cooldown.SetSwipeColor, cooldown, swipe[1], swipe[2], swipe[3],
             style.swipeAlpha)
         pcall(cooldown.SetDrawEdge, cooldown, style.showEdge)
-        pcall(cooldown.SetHideCountdownNumbers, cooldown, not style.showCountdown)
+        pcall(cooldown.SetHideCountdownNumbers, cooldown, not style.countdown.show)
 
-        if style.showCountdown then
-            ns.StyleNumbers(cooldown, style.countdownSize, style.countdownColor,
-                style.countdownAnchor)
+        if style.countdown.show then
+            ns.StyleNumbers(cooldown, style.countdown)
         end
     end
 
@@ -521,8 +510,8 @@ function CDM:Skin(item, style)
     -- the same rule that applies to the item itself.
     for _, widget in ipairs({ item.ChargeCount, item.Applications }) do
         if widget then
-            pcall(widget.SetAlpha, widget, style.showStacks and 1 or 0)
-            ns.StyleNumbers(widget, style.stackSize, style.stackColor)
+            pcall(widget.SetAlpha, widget, style.stacks.show and 1 or 0)
+            ns.StyleNumbers(widget, style.stacks)
         end
     end
 end

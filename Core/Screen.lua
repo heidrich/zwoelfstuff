@@ -107,11 +107,12 @@ local function BuildAuraVisual(cell)
     aura.textLayer:SetAllPoints(aura)
     aura.textLayer:SetFrameLevel(aura.cd:GetFrameLevel() + 2)
 
-    -- On the text layer, not on the cell. A texture on a frame is painted
-    -- under that frame's own child frames whatever layer it claims, and the
-    -- cooldown swipe is one of them - the border would darken along with the
-    -- icon as the cooldown ran, while the adopted icons next to it did not.
-    aura.border = ns.CreateBorder(aura.textLayer, 1, "OVERLAY")
+    -- Its own frame above the swipe, exactly like an adopted icon's. A
+    -- texture on the cell would be painted under the cell's own child frames
+    -- whatever layer it claims, and the cooldown swipe is one of them - the
+    -- border would darken as the cooldown ran while the adopted icons next
+    -- to it did not.
+    aura.chrome = ns.CreateChrome(aura)
 
     aura.label = aura.textLayer:CreateFontString(nil, "OVERLAY")
     aura.label:SetJustifyH("LEFT")
@@ -119,7 +120,7 @@ local function BuildAuraVisual(cell)
     -- A font HERE, not only where the size is chosen. Icon cells hide the
     -- label and never reach that branch, and SetText on a font string with no
     -- font raises rather than doing nothing.
-    ns.StyleUIFont(aura.label, 11)
+    ns.Media.ApplyFont(aura.label, nil, 11)
 
     cell.aura = aura
     return aura
@@ -129,30 +130,22 @@ end
 -- ourselves. Kept next to each other on purpose: these two are the ones that
 -- must never disagree, because they sit on the same bar.
 local function StyleAuraVisual(aura, style)
-    local plate = style.backdropColor
-    aura.bg:SetColorTexture(plate[1], plate[2], plate[3], style.backdropAlpha)
-    aura.bg:SetShown(style.backdrop)
+    ns.PaintSurface(aura.bg, style)
+    ns.PaintBorder(aura.chrome, style)
 
     local zoom = style.iconZoom
     aura.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
 
-    local edge = style.borderColor
-    aura.border:SetThickness(style.borderSize)
-    aura.border:SetColor(edge[1], edge[2], edge[3], 1)
-    aura.border:SetShown(style.borderSize > 0)
-
     local swipe = style.swipeColor
     aura.cd:SetSwipeColor(swipe[1], swipe[2], swipe[3], style.swipeAlpha)
     aura.cd:SetDrawEdge(style.showEdge)
-    aura.cd:SetHideCountdownNumbers(not style.showCountdown)
-    if style.showCountdown then
-        ns.StyleNumbers(aura.cd, style.countdownSize, style.countdownColor,
-            style.countdownAnchor)
+    aura.cd:SetHideCountdownNumbers(not style.countdown.show)
+    if style.countdown.show then
+        ns.StyleNumbers(aura.cd, style.countdown)
     end
 
-    ns.StyleUIFont(aura.label, style.nameSize)
-    aura.label:SetTextColor(style.nameColor[1], style.nameColor[2],
-        style.nameColor[3])
+    local name = style.spellName
+    ns.Media.ApplyFont(aura.label, name.font, name.size, name.outline, name.color)
 end
 
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
@@ -182,7 +175,7 @@ local function LayoutAuraVisual(aura, cfg, width, height)
             aura.label:SetPoint("LEFT", aura, "LEFT", inset, 0)
         end
         aura.label:SetWidth(math.max(10, width - inset - 5))
-        aura.label:SetShown(cfg.showName ~= false)
+        aura.label:SetShown((cfg.spellName or {}).show ~= false)
 
         aura.cd:ClearAllPoints()
         if shown then
@@ -483,7 +476,7 @@ end
 -- frame carries - and a bar cell holding nothing but a square icon in one
 -- corner reads as broken rather than as deliberate.
 function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth, style)
-    if cfg.kind ~= "bar" or not style.showName then
+    if cfg.kind ~= "bar" or not style.spellName.show then
         if cell.caption then cell.caption:Hide() end
         return
     end
@@ -509,9 +502,8 @@ function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth, style
         cell.caption:SetWidth(math.max(10, width - inset - 5))
     end
 
-    ns.StyleUIFont(cell.caption, style.nameSize)
-    cell.caption:SetTextColor(style.nameColor[1], style.nameColor[2],
-        style.nameColor[3])
+    local name = style.spellName
+    ns.Media.ApplyFont(cell.caption, name.font, name.size, name.outline, name.color)
     cell.caption:SetText(ns.SpellName(spellID) or "")
     cell.caption:Show()
 end
@@ -743,6 +735,12 @@ end)
 function Screen:Start()
     ns.Bars:OnChanged(function() Screen:Render() end)
     ns.CDM:OnChanged(function() Screen:Render() end)
+
+    -- Media arrives late: an addon loading after this one registers its fonts
+    -- and textures when IT is ready. Without this, a bar set to a texture
+    -- from a slower addon would sit on the fallback until the next reload.
+    ns.Media.OnChanged(function() Screen:Render() end)
+
     self:Render()
     self:ResyncAuras()
 end

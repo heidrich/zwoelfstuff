@@ -8,6 +8,20 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.5.0",
+        date = "2026-08-06",
+        lines = {
+            "Every icon on a bar now looks the way YOU want it, not four different ways. Blizzard's item frames are not one design - each of its four viewers decorates its own, with different masks, a shared overlay that lightens some and not others, a border here and a shadow there. All of that is stripped, and one set of settings is applied instead.",
+            "NEW: fonts and textures from LibSharedMedia. That is not a design decision reversed - it is a registry, not a look. Every UI addon on your machine registers what it ships into it, so the fonts and bar textures you already have from ElvUI, WeakAuras or EllesmereUI turn up in our pickers under the names you already know. Ship our own instead and you would get a second, smaller, unfamiliar set with the one you wanted missing.",
+            "The pickers show what they offer: a font renders its own name in itself, a texture draws a swatch behind it. A list of names would tell you nothing about either.",
+            "Full styling per bar. Icon: crop and opacity. Border: thickness, colour, and a texture. Backdrop: on, colour, opacity, texture. Cooldown sweep: colour, opacity, leading edge. And each of the three text elements - countdown, stacks and charges, spell name - gets the same seven: on, font, size, colour, outline, one of nine positions, and a nudge in each direction.",
+            "Same seven for all three on purpose. 'The countdown can be moved but the stack count cannot' is the kind of arbitrary limit that sends people looking for another addon.",
+            "Four ready-made looks to start from - Clean, Blizzard, Heavy, Bare. Thirty-odd settings is what people ask for and nobody wants to build a look out of thirty-odd settings from nothing. They carry only what they are about: your grid, sizes and spacing are never touched.",
+            "The whole styling block is folded away by default. The grid, the spells and the sizes are what you come back to; the knobs are set once and are one click from being out of the way.",
+            "Fonts and textures registered by a slower addon after login now reach your bars by themselves instead of waiting for a reload.",
+        },
+    },
+    {
         version = "4.4.0",
         date = "2026-08-06",
         lines = {

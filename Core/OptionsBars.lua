@@ -713,6 +713,23 @@ function Workspace:BuildOptionsPane(parent, width)
             if cfg then cfg[key] = value end
         end
     end
+    -- The text settings live in sub-tables (cfg.countdown.size), so they need
+    -- their own accessors. Kept beside the flat ones rather than made clever:
+    -- one extra pair of four-line functions beats a key parser.
+    local function GetIn(group, key)
+        return function()
+            local _, cfg = Workspace:Current()
+            local inner = cfg and cfg[group]
+            return inner and inner[key]
+        end
+    end
+    local function SetIn(group, key)
+        return function(value)
+            local _, cfg = Workspace:Current()
+            if cfg and cfg[group] then cfg[group][key] = value end
+        end
+    end
+
     local function Slide(label, key, min, max, step, format)
         return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
             get = Get(key), set = Set(key),
@@ -794,53 +811,134 @@ function Workspace:BuildOptionsPane(parent, width)
         { value = "hidden", text = "Hidden" },
     }, Get("iconPlacement"), Set("iconPlacement"), { apply = Apply })
 
-    local nameShowRow = Switch("Spell name", "showName")
-    local nameSizeRow = Slide("Name size", "nameSize", 0, 24, 1, AutoSize)
-    local nameColRow  = Colour("Name colour", "nameColor")
     Slide("Spacing", "spacing", 0, 24, 1)
     Slide("Row gap", "lineSpacing", 0, 24, 1)
     Slide("Scale", "scale", 0.4, 2.5, 0.05,
         function(v) return string.format("%.2f", v) end)
 
     -- Looks ---------------------------------------------------------------
-    grid:Section("Icon")
+    --
+    -- Every section from here down is FOLDED by default. There are thirty-odd
+    -- settings and they are set once; the grid, the spells and the sizes are
+    -- what you come back to. A page that shows all of it at once buries the
+    -- work under the knobs.
+    grid:Section("Icon", "look-icon")
 
     Slide("Opacity", "alpha", 0.1, 1, 0.05, Percent)
     Slide("Crop", "iconZoom", 0, 0.2, 0.01, Percent)
     grid:Note("Blizzard's icon art has a border baked into the file. Cropping "
         .. "cuts it off; at 0 you see the whole thing, frame and all.")
 
-    grid:Section("Edge")
+    grid:Section("Border", "look-border")
 
-    Slide("Border", "borderSize", 0, 4, 1)
-    Colour("Border colour", "borderColor")
-    Switch("Backdrop", "backdrop", "A plate behind the icon")
-    Colour("Backdrop colour", "backdropColor")
-    Slide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05, Percent)
+    Slide("Thickness", "borderSize", 0, 4, 1)
+    Colour("Colour", "borderColor")
+    UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "border",
+        Get("borderTexture"), Set("borderTexture"), Apply)
+    grid:Note("None is a crisp one-pixel line drawn from colour textures, and "
+        .. "it stays sharper than any edge file at small sizes. The rest come "
+        .. "from whatever your other addons registered.")
 
-    grid:Section("Cooldown sweep")
+    grid:Section("Backdrop", "look-backdrop")
 
-    Colour("Sweep colour", "swipeColor")
-    Slide("Sweep opacity", "swipeAlpha", 0, 1, 0.05, Percent)
+    Switch("Show", "backdrop", "A plate behind the icon")
+    Colour("Colour", "backdropColor")
+    Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent)
+    UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
+        Get("backdropTexture"), Set("backdropTexture"), Apply)
+
+    grid:Section("Cooldown sweep", "look-sweep")
+
+    Colour("Colour", "swipeColor")
+    Slide("Opacity", "swipeAlpha", 0, 1, 0.05, Percent)
     Switch("Leading edge", "showEdge", "The bright line the sweep drags")
 
-    grid:Section("Numbers")
+    -- Text ------------------------------------------------------------------
+    --
+    -- Generated, not written out three times. Every element gets the SAME
+    -- seven controls, because "the countdown can be moved but the stack count
+    -- cannot" is the kind of arbitrary limit that sends people looking for
+    -- another addon.
+    local textRows = {}
 
-    Switch("Countdown", "showCountdown")
-    Slide("Countdown size", "countdownSize", 0, 30, 1, AutoSize)
-    Colour("Countdown colour", "countdownColor")
-    UI.Dropdown(grid:FullRow("Countdown at", { controlWidth = 124 }),
-        ns.TEXT_ANCHORS, Get("countdownAnchor"), Set("countdownAnchor"),
-        { apply = Apply })
+    for _, element in ipairs(ns.TEXT_ELEMENTS) do
+        local group = element.key
+        local rows = {}
 
-    Switch("Stacks and charges", "showStacks")
-    Slide("Stack size", "stackSize", 0, 24, 1, AutoSize)
-    Colour("Stack colour", "stackColor")
+        rows[#rows + 1] = grid:Section(element.label, "text-" .. group)
+
+        rows[#rows + 1] = UI.Toggle(grid:FullRow("Show", { controlWidth = 124 }),
+            GetIn(group, "show"),
+            function(value) SetIn(group, "show")(value); Apply() end)
+
+        rows[#rows + 1] = UI.MediaPicker(
+            grid:FullRow("Font", { controlWidth = 190 }), "font",
+            GetIn(group, "font"), SetIn(group, "font"), Apply)
+
+        rows[#rows + 1] = UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
+            get = GetIn(group, "size"), set = SetIn(group, "size"),
+            min = 0, max = 32, step = 1, format = AutoSize, apply = Apply,
+        })
+
+        rows[#rows + 1] = UI.Swatch(grid:FullRow("Colour", { controlWidth = 124 }),
+            function()
+                local colour = GetIn(group, "color")() or { 1, 1, 1 }
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b) SetIn(group, "color")({ r, g, b }) end,
+            Apply)
+
+        rows[#rows + 1] = UI.Dropdown(grid:FullRow("Outline", { controlWidth = 124 }),
+            ns.Media.OUTLINES, GetIn(group, "outline"), SetIn(group, "outline"),
+            { apply = Apply })
+
+        rows[#rows + 1] = UI.Dropdown(grid:FullRow("Position", { controlWidth = 124 }),
+            ns.TEXT_ANCHORS, GetIn(group, "anchor"), SetIn(group, "anchor"),
+            { apply = Apply })
+
+        rows[#rows + 1] = UI.Slider(grid:FullRow("Nudge across", { controlWidth = 124 }), {
+            get = GetIn(group, "x"), set = SetIn(group, "x"),
+            min = -30, max = 30, step = 1, apply = Apply,
+        })
+        rows[#rows + 1] = UI.Slider(grid:FullRow("Nudge up", { controlWidth = 124 }), {
+            get = GetIn(group, "y"), set = SetIn(group, "y"),
+            min = -30, max = 30, step = 1, apply = Apply,
+        })
+
+        if element.barOnly then textRows[#textRows + 1] = rows end
+    end
 
     -- Reuse ---------------------------------------------------------------
     grid:Section("Reuse")
     grid:Note("Sizes, spacing and colours only. Which spells a bar holds and "
         .. "how many rows it has always stay with that bar.")
+
+    -- Somewhere to start. Thirty settings is what people ask for, and nobody
+    -- wants to build a look out of thirty settings from nothing.
+    local lookRow = grid:FullRow("Start from", { controlWidth = 130 })
+    local lookPicker = UI.Picker(lookRow.slot, {
+        width = 130, height = 22, emptyText = "a ready-made look",
+        current = function() return nil end,
+        items = function()
+            local items = {}
+            for _, look in ipairs(ns.BUILT_IN_LOOKS) do
+                items[#items + 1] = { text = look.name, value = look.name }
+            end
+            return items
+        end,
+        onSelect = function(name)
+            local index = Workspace:Current()
+            if Bars:ApplyLook(name, index) then
+                ns.Print("Applied the", name, "look.")
+            end
+            Apply()
+            ns.Options:Refresh()
+        end,
+    })
+    lookPicker:SetPoint("RIGHT", lookRow.slot, "RIGHT", 0, 0)
+    lookRow.Refresh = function()
+        lookPicker.label:SetText("a ready-made look")
+    end
 
     local copyRow = grid:FullRow("Copy from", { controlWidth = 130 })
     local copyPicker = UI.Picker(copyRow.slot, {
@@ -932,10 +1030,19 @@ function Workspace:BuildOptionsPane(parent, width)
         barWRow:SetRelevant(isBar)
         barHRow:SetRelevant(isBar)
         iconPlaceRow:SetRelevant(isBar)
-        nameShowRow:SetRelevant(isBar)
-        nameSizeRow:SetRelevant(isBar)
-        nameColRow:SetRelevant(isBar)
 
+        -- The spell name only exists on a bar-shaped cell, so its whole
+        -- section - heading included - goes away on an icon bar rather than
+        -- sitting there greyed out. Section headers are not rows and have no
+        -- SetRelevant, so the flag the layout actually reads is set directly.
+        for _, rows in ipairs(textRows) do
+            for _, region in ipairs(rows) do
+                region.dkSkip = not isBar
+                region:SetShown(isBar)
+            end
+        end
+
+        grid:Layout()
         grid:Refresh()
     end
 

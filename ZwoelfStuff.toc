@@ -3,14 +3,24 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.4.0
+## Version: 4.5.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: 1380870
 ## X-License: MIT
 ## X-Category: Buffs & Debuffs
 
+# Embedded libraries. Not a design decision reversed - LibSharedMedia is a
+# REGISTRY, not a look: it is how the fonts and textures the user already has
+# from their other addons show up in our pickers, under the names they know.
+# Licences stay with the libraries: LibStub is public domain, CallbackHandler
+# is BSD, LibSharedMedia is LGPL 2.1. Load order is dependency order.
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+
 Core\Init.lua
+Core\Media.lua
 Core\Secrets.lua
 Core\CDM.lua
 # The shipped proc database. Data, and it grows with every export, so it loads

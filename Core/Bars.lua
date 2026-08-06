@@ -55,9 +55,15 @@ ns.BAR_DEFAULTS = {
     -- A surface behind the icon. Visible through the icon's own transparency
     -- and, more usefully, everywhere the icon is not - a zoomed-out icon on a
     -- dark plate reads very differently from one floating on the world.
-    backdrop      = true,
-    backdropColor = { 0.00, 0.00, 0.00 },
-    backdropAlpha = 0.90,
+    backdrop        = true,
+    backdropColor   = { 0.00, 0.00, 0.00 },
+    backdropAlpha   = 0.90,
+    backdropTexture = "Blizzard",
+
+    -- "None" keeps the crisp one-pixel line drawn from colour textures.
+    -- Anything else is a real edge file out of LibSharedMedia, which is where
+    -- the beveled and glowing borders people already own come from.
+    borderTexture = "None",
 
     -- How much of the icon art is cut away. Blizzard's own icons carry a
     -- baked-in border that this crops off; 0 shows the whole file.
@@ -68,21 +74,47 @@ ns.BAR_DEFAULTS = {
     swipeAlpha = 0.70,
     showEdge   = false,        -- the bright line that follows the sweep
 
-    -- Numbers. A size of 0 means "work it out from the cell", which is what
-    -- keeps a 24px cell and a 64px cell looking like one design.
-    showCountdown   = true,
-    countdownSize   = 0,
-    countdownColor  = { 1.00, 1.00, 1.00 },
-    countdownAnchor = "CENTER",
+    -- Text. Three elements, one shape each, because "the countdown can be
+    -- moved but the stack count cannot" is the kind of arbitrary limit that
+    -- makes people go looking for another addon.
+    --
+    -- A size of 0 means "work it out from the cell", which is what keeps a
+    -- 24px cell and a 64px cell looking like one design.
+    countdown = {
+        show    = true,
+        font    = "Friz Quadrata TT",
+        size    = 0,
+        color   = { 1.00, 1.00, 1.00 },
+        outline = "OUTLINE",
+        anchor  = "CENTER",
+        x       = 0,
+        y       = 0,
+    },
 
-    showStacks  = true,
-    stackSize   = 0,
-    stackColor  = { 1.00, 1.00, 1.00 },
+    stacks = {
+        show    = true,
+        font    = "Friz Quadrata TT",
+        size    = 0,
+        color   = { 1.00, 1.00, 1.00 },
+        outline = "OUTLINE",
+        anchor  = "BOTTOMRIGHT",
+        x       = 0,
+        y       = 0,
+    },
 
-    -- Bar-shaped cells only.
-    showName = true,
-    nameSize = 0,
-    nameColor = { 1.00, 1.00, 1.00 },
+    -- The spell name on a bar-shaped cell. NOT cfg.name - that is the bar's
+    -- own name, and one of these overwriting the other is exactly the kind of
+    -- collision a flat settings table invites.
+    spellName = {
+        show    = true,
+        font    = "Friz Quadrata TT",
+        size    = 0,
+        color   = { 1.00, 1.00, 1.00 },
+        outline = "",
+        anchor  = "LEFT",
+        x       = 0,
+        y       = 0,
+    },
 
     -- Position, relative to the screen centre. Always the bar's own centre,
     -- so the readout in unlock mode means something and snapping is
@@ -250,13 +282,18 @@ ns.BAR_STYLE_KEYS = {
     "spacing", "lineSpacing",
     "iconPlacement",
     "scale", "alpha",
-    "borderSize", "borderColor",
-    "backdrop", "backdropColor", "backdropAlpha",
+    "borderSize", "borderColor", "borderTexture",
+    "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
     "iconZoom",
     "swipeColor", "swipeAlpha", "showEdge",
-    "showCountdown", "countdownSize", "countdownColor", "countdownAnchor",
-    "showStacks", "stackSize", "stackColor",
-    "showName", "nameSize", "nameColor",
+    "countdown", "stacks", "spellName",
+}
+
+-- The three text elements, in the order they appear in the options.
+ns.TEXT_ELEMENTS = {
+    { key = "countdown", label = "Countdown", barOnly = false },
+    { key = "stacks",    label = "Stacks and charges", barOnly = false },
+    { key = "spellName", label = "Spell name", barOnly = true },
 }
 
 -- The nine places a number can sit on an icon.
@@ -281,18 +318,42 @@ ns.TEXT_ANCHORS = {
 -- this whole styling pass exists to end.
 --
 -- Sizes of 0 are resolved HERE, so "auto" means the same thing on both.
+
+-- One text element, with its automatic size worked out. autoScale is the
+-- fraction of the cell height the element takes when its size is 0.
+local function TextStyle(element, height, autoScale, floor, ceiling)
+    element = element or {}
+    local size = element.size or 0
+    if size <= 0 then
+        size = math.max(floor, math.min(ceiling, height * autoScale))
+    end
+
+    return {
+        show    = element.show ~= false,
+        font    = element.font,
+        size    = size,
+        color   = element.color or { 1, 1, 1 },
+        outline = element.outline or "",
+        anchor  = element.anchor or "CENTER",
+        x       = element.x or 0,
+        y       = element.y or 0,
+    }
+end
+
 function Bars:Style(cfg, height)
     height = height or 40
 
     return {
         height = height,
 
-        borderSize  = math.max(0, cfg.borderSize or 1),
-        borderColor = cfg.borderColor or { 0, 0, 0 },
+        borderSize    = math.max(0, cfg.borderSize or 1),
+        borderColor   = cfg.borderColor or { 0, 0, 0 },
+        borderTexture = cfg.borderTexture or "None",
 
-        backdrop      = cfg.backdrop ~= false,
-        backdropColor = cfg.backdropColor or { 0, 0, 0 },
-        backdropAlpha = cfg.backdropAlpha or 0.9,
+        backdrop        = cfg.backdrop ~= false,
+        backdropColor   = cfg.backdropColor or { 0, 0, 0 },
+        backdropAlpha   = cfg.backdropAlpha or 0.9,
+        backdropTexture = cfg.backdropTexture,
 
         iconZoom = math.min(0.2, math.max(0, cfg.iconZoom or 0.08)),
 
@@ -300,22 +361,23 @@ function Bars:Style(cfg, height)
         swipeAlpha = cfg.swipeAlpha or 0.7,
         showEdge   = cfg.showEdge and true or false,
 
-        showCountdown   = cfg.showCountdown ~= false,
-        countdownSize   = (cfg.countdownSize or 0) > 0 and cfg.countdownSize
-                          or math.max(9, math.min(20, height * 0.42)),
-        countdownColor  = cfg.countdownColor or { 1, 1, 1 },
-        countdownAnchor = cfg.countdownAnchor or "CENTER",
-
-        showStacks = cfg.showStacks ~= false,
-        stackSize  = (cfg.stackSize or 0) > 0 and cfg.stackSize
-                     or math.max(8, math.min(16, height * 0.30)),
-        stackColor = cfg.stackColor or { 1, 1, 1 },
-
-        showName  = cfg.showName ~= false,
-        nameSize  = (cfg.nameSize or 0) > 0 and cfg.nameSize
-                    or math.max(9, math.min(14, height * 0.45)),
-        nameColor = cfg.nameColor or { 1, 1, 1 },
+        countdown = TextStyle(cfg.countdown, height, 0.42, 9, 20),
+        stacks    = TextStyle(cfg.stacks,    height, 0.30, 8, 16),
+        spellName = TextStyle(cfg.spellName, height, 0.45, 9, 14),
     }
+end
+
+-- Copied all the way down, not referenced: a shared table would mean editing
+-- one bar's border silently repainted every bar made from it. Recursive
+-- rather than an ipairs pass, because the text settings are hash tables and
+-- ipairs over one of those copies NOTHING - a preset that looked saved and
+-- restored an empty table.
+local function DeepCopy(value)
+    if type(value) ~= "table" then return value end
+
+    local copy = {}
+    for key, inner in pairs(value) do copy[key] = DeepCopy(inner) end
+    return copy
 end
 
 function Bars:CaptureStyle(index)
@@ -324,16 +386,7 @@ function Bars:CaptureStyle(index)
 
     local style = {}
     for _, key in ipairs(ns.BAR_STYLE_KEYS) do
-        local value = cfg[key]
-        if type(value) == "table" then
-            -- Copied, not referenced: a shared colour table would mean editing
-            -- one bar's border silently repainted every bar made from it.
-            local copy = {}
-            for i, component in ipairs(value) do copy[i] = component end
-            style[key] = copy
-        else
-            style[key] = value
-        end
+        style[key] = DeepCopy(cfg[key])
     end
     return style
 end
@@ -343,17 +396,12 @@ function Bars:ApplyStyle(index, style)
     if not (cfg and style) then return false end
 
     for _, key in ipairs(ns.BAR_STYLE_KEYS) do
-        local value = style[key]
-        if value ~= nil then
-            if type(value) == "table" then
-                local copy = {}
-                for i, component in ipairs(value) do copy[i] = component end
-                cfg[key] = copy
-            else
-                cfg[key] = value
-            end
-        end
+        if style[key] ~= nil then cfg[key] = DeepCopy(style[key]) end
     end
+
+    -- A preset saved before a setting existed simply does not carry it, and
+    -- the bar would be left with a hole where the renderer expects a value.
+    ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
 
     self:Changed(index)
     return true
@@ -362,6 +410,86 @@ end
 function Bars:CopyStyleFrom(source, target)
     if source == target then return false end
     return self:ApplyStyle(target, self:CaptureStyle(source))
+end
+
+---------------------------------------------------------------------------
+-- Looks that ship with the addon
+--
+-- Thirty-odd settings is what people ask for and none of them wants to build
+-- a look out of thirty-odd settings from scratch. These are starting points:
+-- pick one, then change the three things you disagree with.
+--
+-- They only carry what they are ABOUT. A look that also set sizes and spacing
+-- would silently rearrange a bar you had already laid out, so grid, sizes and
+-- spacing are left alone by every one of them.
+---------------------------------------------------------------------------
+local function Text(size, colour, outline, anchor)
+    return { size = size, color = colour, outline = outline, anchor = anchor }
+end
+
+ns.BUILT_IN_LOOKS = {
+    {
+        name = "Clean",
+        note = "One-pixel black edge, dark plate, white numbers. The default.",
+        style = {
+            borderSize = 1, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
+            iconZoom = 0.08,
+            swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
+            countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
+            stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
+        },
+    },
+    {
+        name = "Blizzard",
+        note = "The whole icon including its own frame, no plate, no edge.",
+        style = {
+            borderSize = 0, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            backdrop = false, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
+            iconZoom = 0,
+            swipeColor = { 0, 0, 0 }, swipeAlpha = 0.8, showEdge = true,
+            countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
+            stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
+        },
+    },
+    {
+        name = "Heavy",
+        note = "Thick dark edge, tight crop, big outlined numbers. Reads at "
+            .. "a glance in a fight.",
+        style = {
+            borderSize = 3, borderColor = { 0.02, 0.02, 0.03 }, borderTexture = "None",
+            backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 1,
+            iconZoom = 0.12,
+            swipeColor = { 0, 0, 0 }, swipeAlpha = 0.85, showEdge = false,
+            countdown = Text(0, { 1, 1, 1 }, "THICKOUTLINE", "CENTER"),
+            stacks    = Text(0, { 1, 0.9, 0.4 }, "THICKOUTLINE", "BOTTOMRIGHT"),
+            spellName = Text(0, { 1, 1, 1 }, "OUTLINE", "LEFT"),
+        },
+    },
+    {
+        name = "Bare",
+        note = "No edge, no plate, no numbers. Just the icons.",
+        style = {
+            borderSize = 0, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            backdrop = false, backdropColor = { 0, 0, 0 }, backdropAlpha = 0,
+            iconZoom = 0.08,
+            swipeColor = { 0, 0, 0 }, swipeAlpha = 0.6, showEdge = false,
+            countdown = { show = false },
+            stacks    = { show = false },
+            spellName = { show = false },
+        },
+    },
+}
+
+function Bars:ApplyLook(name, index)
+    for _, look in ipairs(ns.BUILT_IN_LOOKS) do
+        if look.name == name then
+            return self:ApplyStyle(index, look.style)
+        end
+    end
+    return false
 end
 
 ---------------------------------------------------------------------------
