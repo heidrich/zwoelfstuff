@@ -1,6 +1,6 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-06**, version **4.4.0**. Read this first.
+State as of **2026-08-06**, version **4.5.0**. Read this first.
 
 ## Where we are
 
@@ -375,39 +375,50 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Open, in order
 
-1. **Run it.** Nothing in 4.4.0 has been in the game — it was written while
-   the client was open. Static-green has never once meant "it works" in this
-   project.
-2. **Finish the rename on disk.** The client was running throughout, so it
-   holds the old folder and two things are still owed:
-   - `C:\Users\Christian\Documents\GitHub\DKstuff` is a leftover copy. Delete
-     it once WoW has been closed.
-   - **The saved variables must be copied again after WoW is closed.** The
-     running client still has the old addon in memory and will write this
-     session's recordings into
-     `WTF/Account/HEIDIEQ24/SavedVariables/DKstuff.lua` on exit. Re-run the
-     copy into `ZwoelfStuff.lua` (renaming `DKstuffDB` to `ZwoelfStuffDB`
-     inside) or those procs are lost.
-3. **Owner-side data**: confirm the remaining durations by letting a proc run
-   out *without* casting the ability, then `/zs auras export` for Blood and
-   paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
+1. **The icons on screen are still wrong, and the next step is measurement,
+   not another guess.** `/zs skin` now prints every pinned icon as *asked for
+   vs actually there* — size and anchor, with the mismatch spelled out. Run it
+   and read that first. What is already known from running it:
+   - `UI-CooldownManager-OORshadow` sat at alpha 0.5 on a self-cast spell.
+     Stripped by atlas prefix now, and the alpha is **hooked**, because it is
+     driven by range and Blizzard writes it back when you move.
+   - The mask was back to Blizzard's rounded `130871` after a one-time strip.
+     These frames come out of a pool and are re-decorated when handed out, so
+     stripping runs on **every** skin pass now.
+   - Sizing the item FRAME is not enough: each viewer anchors its own icon
+     texture its own way. `item.Icon` and `item.Cooldown` are told to fill the
+     frame on every pass. **This is the fix that has not been seen working
+     yet.** If the icons are still uneven after it, `/zs skin` will say
+     whether the frames themselves are wrong (somebody is overwriting us) or
+     only the art inside them (anchoring, again).
+2. **The owner's design notes on the window**, not yet done: it still reads
+   "altbacken", too much wasted space. The rail is 168 and the settings column
+   400 now, window 1360x760 — that was the width complaint, not the density
+   one. Row height, section spacing and the card padding are untouched.
+3. **Owner-side data**: confirm the remaining proc durations by letting one
+   run out *without* casting the ability, then `/zs auras export` for Blood
+   and paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
 4. **Tank ideas** — the owner has a list and asked to keep them until the
    basics are done. `Core/CoTanks.lua` is written and parked; it returns with
    12.1 on 11 Aug.
 5. **Logo** — SVG for the repo, TGA for the game. WoW cannot load SVG. PIL is
    installed, no rasteriser. Interim: `## IconTexture: 1380870`.
-6. **Push** — needs `gh auth login` and a decision on private vs public. Do
-   not create the GitHub repo unasked. Nothing has been committed since
-   `b39d210`; the whole rename and the display are uncommitted.
-7. After 12.1 lands: un-park the aura stack and re-test it.
+6. After 12.1 lands: un-park the aura stack and re-test it.
 
-Already done, do not redo: the UI font is wired everywhere including inputs,
-the scrollbar is ours, inputs carry placeholders, rows and columns are
-sliders on the card, the selected cell has a ring and hover is an outline,
-deleting a bar is two-step, a look can be copied or saved as a preset, the
-spell list is grouped and filterable with green marks and greyed-out
-untalented entries, the header rule is one line across all three columns, the
-bars render, and unlock mode exists.
+Everything is committed and pushed to `github.com/heidrich/zwoelfstuff`.
+
+### Known, decided, do not re-litigate
+
+- **EllesmereUICooldownManager must stay off.** There is one set of Cooldown
+  Manager item frames and both addons adopt them; they fight per frame. The
+  addon detects this itself and says so once, and Diagnostics shows it
+  standing.
+- **The bars take over Blizzard's display** by default, because its viewer
+  lays itself out without knowing an icon left and would show a hole.
+  Settings can switch it off and says what that costs.
+- **Libraries are allowed here** — the owner said so explicitly for WoW
+  addons. LibSharedMedia is a registry, not a look. The window and the
+  widgets stay self-built.
 
 ## Verification
 
