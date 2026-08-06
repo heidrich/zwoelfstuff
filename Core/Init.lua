@@ -246,6 +246,18 @@ function ns.StyleUIFont(fontString, size, flags)
     fontString:SetFont(path, size, flags or "")
 end
 
+-- Every font string inside a widget, styled with the number font. Used on
+-- Blizzard's cooldown countdown, which has no stable name - it is simply a
+-- region of the Cooldown widget, so it is found rather than looked up.
+function ns.StyleNumbers(widget, size)
+    if not widget then return end
+    for _, region in ipairs({ widget:GetRegions() }) do
+        if region.GetObjectType and region:GetObjectType() == "FontString" then
+            ns.StyleFont(region, size)
+        end
+    end
+end
+
 function ns.FormatTime(remaining)
     if remaining >= 60 then
         return string.format("%d:%02d", math.floor(remaining / 60), math.floor(remaining % 60))

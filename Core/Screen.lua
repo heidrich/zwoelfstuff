@@ -103,11 +103,15 @@ local function BuildAuraVisual(cell)
     -- is the usual cause of a doubled countdown.
     aura.cd.noCooldownCount = true
 
-    aura.border = ns.CreateBorder(aura, 1, "OVERLAY")
-
     aura.textLayer = CreateFrame("Frame", nil, aura)
     aura.textLayer:SetAllPoints(aura)
     aura.textLayer:SetFrameLevel(aura.cd:GetFrameLevel() + 2)
+
+    -- On the text layer, not on the cell. A texture on a frame is painted
+    -- under that frame's own child frames whatever layer it claims, and the
+    -- cooldown swipe is one of them - the border would darken along with the
+    -- icon as the cooldown ran, while the adopted icons next to it did not.
+    aura.border = ns.CreateBorder(aura.textLayer, 1, "OVERLAY")
 
     aura.label = aura.textLayer:CreateFontString(nil, "OVERLAY")
     aura.label:SetJustifyH("LEFT")
@@ -139,15 +143,20 @@ local function LayoutAuraVisual(aura, cfg, width, height)
         aura.cd:ClearAllPoints()
         aura.cd:SetAllPoints(aura.icon)
     else
+        -- Edge to edge, exactly like an adopted icon: Blizzard's fill the
+        -- whole frame and the border sits over them. A one-pixel inset here
+        -- and none there is the kind of difference nobody can name and
+        -- everybody sees.
         aura.icon:ClearAllPoints()
-        aura.icon:SetPoint("TOPLEFT", aura, "TOPLEFT", 1, -1)
-        aura.icon:SetPoint("BOTTOMRIGHT", aura, "BOTTOMRIGHT", -1, 1)
+        aura.icon:SetAllPoints(aura)
 
         aura.label:Hide()
 
         aura.cd:ClearAllPoints()
         aura.cd:SetAllPoints(aura.icon)
     end
+
+    ns.StyleNumbers(aura.cd, math.max(9, math.min(20, height * 0.42)))
 end
 
 -- Cooldown:Clear does not exist on every build this addon supports, so the
@@ -420,6 +429,11 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
 
         ns.CDM:Pin(item, { "TOPLEFT", cell, "TOPLEFT", 0, 0 }, width, height)
         ns.CDM:SetAlpha(item, cfg.alpha or 1)
+        ns.CDM:Skin(item, {
+            borderSize = cfg.borderSize,
+            borderColor = cfg.borderColor,
+            height = height,
+        })
         return
     end
 

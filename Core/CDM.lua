@@ -392,6 +392,113 @@ function CDM:SetAlpha(item, alpha)
     Reassert(state, item)
 end
 
+---------------------------------------------------------------------------
+-- Making four viewers' worth of icons look like one set
+--
+-- Blizzard's item frames are not one design. Each viewer decorates its own:
+-- different masks (so different corners), a shared overlay texture that
+-- lightens some and not others, a border here, a shadow there. Adopting them
+-- unchanged puts five different icons in a row, which is what a Cooldown
+-- Manager bar looks like before any addon touches it.
+--
+-- What has to go, and it is not guesswork - every name below was read off the
+-- reference implementation on this machine
+-- (EllesmereUICooldownManager/EllesmereUICdmHooks.lua, HideBlizzardDecorations):
+--
+--   Border, Shadow, IconShadow, DebuffBorder, CooldownFlash   alpha 0
+--   SpellActivationAlert                                      alpha 0, hidden
+--   every MaskTexture on the frame AND on its Cooldown        square mask
+--   the IconOverlay atlas region                              alpha 0, hidden
+--
+-- Regions, not frames. Hiding a Blizzard FRAME is the thing that taints; its
+-- textures are decoration, and the reference hides those too.
+---------------------------------------------------------------------------
+local OVERLAY_ATLAS = "UI-HUD-CoolDownManager-IconOverlay"
+local OVERLAY_FILE  = 6707800
+local SQUARE_MASK   = "Interface\\Buttons\\WHITE8X8"
+
+local function Dim(region, alsoHide)
+    if not region then return end
+    pcall(region.SetAlpha, region, 0)
+    if alsoHide then pcall(region.Hide, region) end
+end
+
+-- Blizzard rounds its icons with a mask texture. Replacing the mask with a
+-- plain white square is what squares them off - the corners cannot be set
+-- any other way, because they are not a border.
+local function SquareMasks(frame)
+    if not frame then return end
+    for _, region in ipairs({ frame:GetRegions() }) do
+        if region.IsObjectType and region:IsObjectType("MaskTexture") then
+            pcall(region.SetTexture, region, SQUARE_MASK)
+        end
+    end
+end
+
+local function StripDecorations(item, state)
+    if state.stripped then return end
+    state.stripped = true
+
+    Dim(item.Border)
+    Dim(item.Shadow)
+    Dim(item.IconShadow)
+    Dim(item.DebuffBorder)
+    Dim(item.CooldownFlash)
+    Dim(item.SpellActivationAlert, true)
+
+    SquareMasks(item)
+    SquareMasks(item.Cooldown)
+
+    -- One shared texture lightens some icons and not others. Matched by atlas
+    -- AND by file id, because the same art is reachable either way.
+    for _, region in ipairs({ item:GetRegions() }) do
+        if region ~= item.Icon and region.IsObjectType and region:IsObjectType("Texture") then
+            local atlas = region.GetAtlas and region:GetAtlas()
+            local texture = region.GetTexture and region:GetTexture()
+            if atlas == OVERLAY_ATLAS or texture == OVERLAY_FILE then
+                Dim(region, true)
+            end
+        end
+    end
+end
+
+-- style = { borderSize, borderColor = {r,g,b}, height }
+function CDM:Skin(item, style)
+    if not item then return end
+    local state = Hold(item)
+
+    StripDecorations(item, state)
+
+    if item.Icon then
+        pcall(item.Icon.SetTexCoord, item.Icon, 0.08, 0.92, 0.08, 0.92)
+    end
+
+    -- The border lives on a frame of ITS OWN, above the cooldown swipe. A
+    -- texture on the item would be painted under the item's own child frames
+    -- whatever layer it claims, and the swipe is one of them - the border
+    -- would darken along with the icon as the cooldown ran.
+    if not state.chrome then
+        local chrome = CreateFrame("Frame", nil, item)
+        chrome:SetAllPoints(item)
+        chrome:SetFrameLevel(item:GetFrameLevel() + 5)
+        state.chrome = chrome
+        state.border = ns.CreateBorder(chrome, 1, "OVERLAY")
+    end
+
+    local size = math.max(0, style.borderSize or 1)
+    local colour = style.borderColor or { 0, 0, 0 }
+    state.border:SetThickness(size)
+    state.border:SetColor(colour[1], colour[2], colour[3], 1)
+    state.border:SetShown(size > 0)
+
+    -- Numbers scale with the icon, or a 24px cell gets the same countdown as
+    -- a 64px one and reads as a different design again.
+    local height = style.height or 40
+    ns.StyleNumbers(item.Cooldown, math.max(9, math.min(20, height * 0.42)))
+    ns.StyleNumbers(item.ChargeCount, math.max(8, math.min(16, height * 0.30)))
+    ns.StyleNumbers(item.Applications, math.max(8, math.min(16, height * 0.30)))
+end
+
 -- Hands an item frame back to Blizzard: the hooks stay (hooks cannot be
 -- removed) but with nothing recorded they do nothing. Alpha is restored
 -- explicitly, or a released frame would keep whatever we last forced on it.
@@ -404,6 +511,11 @@ function CDM:Release(item)
         state.alpha = nil
         item:SetAlpha(1)
     end
+    -- The stripped decorations are NOT put back. They cannot be: an alpha of
+    -- zero is all we know, not what it was before. The border is ours though,
+    -- and leaving it on a frame Blizzard is drawing again would be a mark
+    -- from an addon that says it let go.
+    if state.chrome then state.chrome:Hide() end
 end
 
 function CDM:IsPinned(item)
