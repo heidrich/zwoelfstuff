@@ -758,6 +758,14 @@ function Workspace:BuildOptionsPane(parent, width)
     local iconRow = Slide("Icon size", "iconSize", 16, 100, 2)
     local barWRow = Slide("Width", "barWidth", 60, 400, 5)
     local barHRow = Slide("Height", "barHeight", 10, 60, 2)
+
+    -- Bar-shaped cells only. The icon stays square wherever it goes; this
+    -- decides which end of the bar it sits at, or whether it appears at all.
+    local iconPlaceRow = UI.Dropdown(grid:FullRow("Spell icon", { controlWidth = 124 }), {
+        { value = "left",   text = "Left of the bar" },
+        { value = "right",  text = "Right of the bar" },
+        { value = "hidden", text = "Hidden" },
+    }, Get("iconPlacement"), Set("iconPlacement"), { apply = Apply })
     Slide("Spacing", "spacing", 0, 24, 1)
     Slide("Row gap", "lineSpacing", 0, 24, 1)
     Slide("Scale", "scale", 0.4, 2.5, 0.05,
@@ -875,6 +883,7 @@ function Workspace:BuildOptionsPane(parent, width)
         iconRow:SetRelevant(not isBar)
         barWRow:SetRelevant(isBar)
         barHRow:SetRelevant(isBar)
+        iconPlaceRow:SetRelevant(isBar)
 
         grid:Refresh()
     end

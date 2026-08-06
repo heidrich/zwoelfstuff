@@ -40,6 +40,12 @@ ns.BAR_DEFAULTS = {
     spacing     = 4,
     lineSpacing = 4,
 
+    -- Bar-shaped cells only: where the spell icon sits, and it stays SQUARE
+    -- wherever that is. A spell icon stretched to the width of a bar is the
+    -- one thing a tracking bar must never look like.
+    --   "left" | "right" | "hidden"
+    iconPlacement = "left",
+
     -- Looks
     scale       = 1.0,
     alpha       = 1.0,
@@ -210,6 +216,7 @@ ns.BAR_STYLE_KEYS = {
     "kind",
     "iconSize", "barWidth", "barHeight",
     "spacing", "lineSpacing",
+    "iconPlacement",
     "scale", "alpha",
     "borderSize", "borderColor",
 }

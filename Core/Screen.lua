@@ -129,19 +129,38 @@ end
 -- icon-shaped ones are just the icon.
 local function LayoutAuraVisual(aura, cfg, width, height)
     if cfg.kind == "bar" then
-        aura.icon:ClearAllPoints()
-        aura.icon:SetPoint("TOPLEFT", aura, "TOPLEFT", 1, -1)
-        aura.icon:SetPoint("BOTTOMLEFT", aura, "BOTTOMLEFT", 1, 1)
-        aura.icon:SetWidth(height - 2)
+        -- Square, wherever it sits. Same rule as an adopted icon: a spell
+        -- icon stretched to the width of a bar is what a tracking bar must
+        -- never look like.
+        local placement = cfg.iconPlacement or "left"
+        local shown = placement ~= "hidden"
 
+        aura.icon:ClearAllPoints()
+        aura.icon:SetShown(shown)
+        if shown then
+            local side = placement == "right" and "RIGHT" or "LEFT"
+            aura.icon:SetPoint("TOP" .. side, aura, "TOP" .. side, 0, 0)
+            aura.icon:SetPoint("BOTTOM" .. side, aura, "BOTTOM" .. side, 0, 0)
+            aura.icon:SetWidth(height)
+        end
+
+        local inset = shown and (height + 5) or 5
         aura.label:ClearAllPoints()
-        aura.label:SetPoint("LEFT", aura.icon, "RIGHT", 5, 0)
-        aura.label:SetWidth(math.max(10, width - height - 10))
+        if shown and placement == "right" then
+            aura.label:SetPoint("LEFT", aura, "LEFT", 5, 0)
+        else
+            aura.label:SetPoint("LEFT", aura, "LEFT", inset, 0)
+        end
+        aura.label:SetWidth(math.max(10, width - inset - 5))
         aura.label:Show()
         ns.StyleUIFont(aura.label, math.max(9, math.min(14, height * 0.45)))
 
         aura.cd:ClearAllPoints()
-        aura.cd:SetAllPoints(aura.icon)
+        if shown then
+            aura.cd:SetAllPoints(aura.icon)
+        else
+            aura.cd:SetAllPoints(aura)
+        end
     else
         -- Edge to edge, exactly like an adopted icon: Blizzard's fill the
         -- whole frame and the border sits over them. A one-pixel inset here
@@ -196,16 +215,45 @@ end
 -- change, a talent change and entering combat all reshuffle them.
 ---------------------------------------------------------------------------
 local itemBySpell = {}
+local itemViewer  = {}   -- which viewer an item came from: it decides its shape
 local held = {}          -- every item we have touched, so it can be handed back
 
 local function RebuildItemIndex()
     wipe(itemBySpell)
-    ns.CDM:ForEachItemEverywhere(function(item)
-        local spellID = ns.CDM:ItemSpellID(item)
-        if spellID and not itemBySpell[spellID] then
-            itemBySpell[spellID] = item
-        end
-    end)
+    wipe(itemViewer)
+    for _, viewer in ipairs(ns.CDM.VIEWERS) do
+        ns.CDM:ForEachItem(viewer.key, function(item)
+            local spellID = ns.CDM:ItemSpellID(item)
+            if spellID and not itemBySpell[spellID] then
+                itemBySpell[spellID] = item
+                itemViewer[item] = viewer
+            end
+        end)
+    end
+end
+
+-- Where an adopted frame goes inside a cell, and how big it is.
+--
+-- A frame from the buff-BAR viewer is already bar shaped, so it fills a bar
+-- cell. Everything else is an icon and must stay SQUARE: stretching a spell
+-- icon across the width of a bar is the one thing a tracking bar must never
+-- look like, and it is what happens if a cell simply hands over its size.
+local function ItemGeometry(cfg, cell, item, width, height)
+    local viewer = itemViewer[item]
+    local isBarShaped = viewer ~= nil and viewer.kind == "bar"
+
+    if cfg.kind ~= "bar" or isBarShaped then
+        return { "TOPLEFT", cell, "TOPLEFT", 0, 0 }, width, height, true
+    end
+
+    local placement = cfg.iconPlacement or "left"
+    if placement == "hidden" then
+        return nil, height, height, false
+    end
+    if placement == "right" then
+        return { "TOPRIGHT", cell, "TOPRIGHT", 0, 0 }, height, height, true
+    end
+    return { "TOPLEFT", cell, "TOPLEFT", 0, 0 }, height, height, true
 end
 
 ---------------------------------------------------------------------------
@@ -398,6 +446,43 @@ function Screen:Render()
     if ns.EditMode and ns.EditMode.Refresh then ns.EditMode:Refresh() end
 end
 
+-- The spell's name next to an adopted icon in a bar-shaped cell.
+--
+-- Ours, on our own cell, because the name is not something Blizzard's icon
+-- frame carries - and a bar cell holding nothing but a square icon in one
+-- corner reads as broken rather than as deliberate.
+function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth)
+    if cfg.kind ~= "bar" then
+        if cell.caption then cell.caption:Hide() end
+        return
+    end
+
+    if not cell.caption then
+        local layer = CreateFrame("Frame", nil, cell)
+        layer:SetAllPoints(cell)
+        layer:SetFrameLevel(cell:GetFrameLevel() + 10)
+        cell.caption = layer:CreateFontString(nil, "OVERLAY")
+        cell.caption:SetJustifyH("LEFT")
+        cell.caption:SetWordWrap(false)
+    end
+
+    local placement = cfg.iconPlacement or "left"
+    local inset = iconWidth > 0 and (iconWidth + 5) or 5
+
+    cell.caption:ClearAllPoints()
+    if placement == "right" and iconWidth > 0 then
+        cell.caption:SetPoint("LEFT", cell, "LEFT", 5, 0)
+        cell.caption:SetWidth(math.max(10, width - inset - 5))
+    else
+        cell.caption:SetPoint("LEFT", cell, "LEFT", inset, 0)
+        cell.caption:SetWidth(math.max(10, width - inset - 5))
+    end
+
+    ns.StyleUIFont(cell.caption, math.max(9, math.min(14, height * 0.45)))
+    cell.caption:SetText(ns.SpellName(spellID) or "")
+    cell.caption:Show()
+end
+
 -- One cell: adopt, draw, or leave empty.
 function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell)
     local spellID = cfg.cells[cell.index]
@@ -411,6 +496,7 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
 
     if not spellID then
         if cell.aura then cell.aura:Hide() end
+        if cell.caption then cell.caption:Hide() end
         cell.spellID, cell.auraEntry, cell.conflict = nil, nil, nil
         return
     end
@@ -427,13 +513,20 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
         cell.auraEntry, cell.conflict = nil, nil
         if cell.aura then cell.aura:Hide() end
 
-        ns.CDM:Pin(item, { "TOPLEFT", cell, "TOPLEFT", 0, 0 }, width, height)
-        ns.CDM:SetAlpha(item, cfg.alpha or 1)
+        local anchor, itemWidth, itemHeight, visible =
+            ItemGeometry(cfg, cell, item, width, height)
+
+        if anchor then
+            ns.CDM:Pin(item, anchor, itemWidth, itemHeight)
+        end
+        ns.CDM:SetAlpha(item, visible and (cfg.alpha or 1) or 0)
         ns.CDM:Skin(item, {
             borderSize = cfg.borderSize,
             borderColor = cfg.borderColor,
-            height = height,
+            height = itemHeight,
         })
+
+        self:PaintCaption(cell, cfg, spellID, width, height, visible and itemWidth or 0)
         return
     end
 
@@ -443,7 +536,10 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
     cell.item = nil
     cell.conflict = item and claimedBy[spellID] or nil
 
-    -- An aura proc, or a cooldown whose frame is not pooled right now.
+    -- An aura proc, or a cooldown whose frame is not pooled right now. It
+    -- carries its own name, so the caption for adopted icons stands down.
+    if cell.caption then cell.caption:Hide() end
+
     local aura = BuildAuraVisual(cell)
     aura:Show()
     LayoutAuraVisual(aura, cfg, width, height)
