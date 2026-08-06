@@ -112,6 +112,10 @@ local function BuildAuraVisual(cell)
     aura.label = aura.textLayer:CreateFontString(nil, "OVERLAY")
     aura.label:SetJustifyH("LEFT")
     aura.label:SetWordWrap(false)
+    -- A font HERE, not only where the size is chosen. Icon cells hide the
+    -- label and never reach that branch, and SetText on a font string with no
+    -- font raises rather than doing nothing.
+    ns.StyleUIFont(aura.label, 11)
 
     cell.aura = aura
     return aura
