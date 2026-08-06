@@ -413,14 +413,39 @@ end
 -- Regions, not frames. Hiding a Blizzard FRAME is the thing that taints; its
 -- textures are decoration, and the reference hides those too.
 ---------------------------------------------------------------------------
-local OVERLAY_ATLAS = "UI-HUD-CoolDownManager-IconOverlay"
-local OVERLAY_FILE  = 6707800
-local SQUARE_MASK   = "Interface\\Buttons\\WHITE8X8"
+-- Reachable by file id as well as by atlas, so both are checked.
+local OVERLAY_FILE = 6707800
+local SQUARE_MASK  = "Interface\\Buttons\\WHITE8X8"
+
+-- Silenced regions, and it STAYS silenced.
+--
+-- Alpha is not a one-time setting on these: the out-of-range veil is driven
+-- by range, so Blizzard writes its alpha back whenever you move. A single
+-- SetAlpha(0) is a decoration that returns the moment you walk anywhere. The
+-- hook is the same self-healing trick the item frames use for their anchor.
+--
+-- Weak keys, and the record lives here rather than on the region: writing a
+-- custom key onto a Blizzard object is one of the named ways to taint it.
+local hushed = setmetatable({}, { __mode = "k" })
+local hushing = false
 
 local function Dim(region, alsoHide)
     if not region then return end
+
+    if not hushed[region] then
+        hushed[region] = true
+        pcall(hooksecurefunc, region, "SetAlpha", function(self)
+            if hushing or not hushed[self] then return end
+            hushing = true
+            self:SetAlpha(0)
+            hushing = false
+        end)
+    end
+
+    hushing = true
     pcall(region.SetAlpha, region, 0)
     if alsoHide then pcall(region.Hide, region) end
+    hushing = false
 end
 
 -- Blizzard rounds its icons with a mask texture. Replacing the mask with a
@@ -435,10 +460,14 @@ local function SquareMasks(frame)
     end
 end
 
-local function StripDecorations(item, state)
-    if state.stripped then return end
-    state.stripped = true
-
+-- Runs on EVERY skin pass, not once per frame.
+--
+-- Measured with /zs skin: after a one-time pass the mask was back to
+-- Blizzard's rounded one (130871) and the corners with it. Blizzard rebuilds
+-- these frames from a pool and re-decorates them, so a decoration removed
+-- once is a decoration removed until the next time it is handed out. The work
+-- is a handful of regions and only happens when something actually changed.
+local function StripDecorations(item)
     Dim(item.Border)
     Dim(item.Shadow)
     Dim(item.IconShadow)
@@ -449,15 +478,24 @@ local function StripDecorations(item, state)
     SquareMasks(item)
     SquareMasks(item.Cooldown)
 
-    -- One shared texture lightens some icons and not others. Matched by atlas
-    -- AND by file id, because the same art is reachable either way.
+    -- Everything the Cooldown Manager paints on top of its own icons, matched
+    -- by atlas PREFIX rather than by a list of names.
+    --
+    -- The list came from a working addon on a different build, and this
+    -- client had one it did not mention: UI-CooldownManager-OORshadow, a
+    -- half-transparent "out of range" veil that was sitting at 0.5 on a
+    -- self-cast spell that cannot be out of range. That was the reason some
+    -- icons looked dimmer than others for no visible reason.
     for _, region in ipairs({ item:GetRegions() }) do
         if region ~= item.Icon and region.IsObjectType and region:IsObjectType("Texture") then
             local atlas = region.GetAtlas and region:GetAtlas()
             local texture = region.GetTexture and region:GetTexture()
-            if atlas == OVERLAY_ATLAS or texture == OVERLAY_FILE then
-                Dim(region, true)
-            end
+
+            local isChrome = texture == OVERLAY_FILE
+                or (atlas ~= nil and (atlas:find("^UI%-HUD%-CoolDownManager")
+                    or atlas:find("^UI%-CooldownManager")))
+
+            if isChrome then Dim(region, true) end
         end
     end
 end
@@ -468,7 +506,7 @@ function CDM:Skin(item, style)
     if not item then return end
     local state = Hold(item)
 
-    StripDecorations(item, state)
+    StripDecorations(item)
 
     local zoom = style.iconZoom
     if item.Icon then
