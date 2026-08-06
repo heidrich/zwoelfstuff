@@ -155,6 +155,12 @@ local function BuildDiagnosticsPage(page, width)
 
     grid:Section("This client")
 
+    local rivalRow = grid:FullRow("Another addon holding the same frames",
+        { controlWidth = 300 })
+    local rivalState = UI.Label(rivalRow.slot, "", 12, C.text)
+    rivalState:SetPoint("RIGHT", rivalRow.slot, "RIGHT", 0, 0)
+    rivalState:SetJustifyH("RIGHT")
+
     local cdmRow = grid:FullRow("Cooldown Manager", { controlWidth = 260 })
     local cdmState = UI.Label(cdmRow.slot, "", 12, C.text)
     cdmState:SetPoint("RIGHT", cdmRow.slot, "RIGHT", 0, 0)
@@ -165,6 +171,12 @@ local function BuildDiagnosticsPage(page, width)
     engineState:SetPoint("RIGHT", engineRow.slot, "RIGHT", 0, 0)
     engineState:SetJustifyH("RIGHT")
 
+    grid:Note("There is ONE set of Cooldown Manager item frames, and every addon that "
+        .. "does cooldowns on this patch works by adopting them. Two addons adopting "
+        .. "the same frame both re-assert their own anchor, so the icons end up split "
+        .. "between two layouts - which looks like a bug in whichever one you are "
+        .. "looking at. Run one or the other.")
+
     grid:Note("Patch 12.0 made aura data secret, so an addon cannot identify a buff by "
         .. "ID, name or icon. The sanctioned replacement, Blizzard_AuraContainer, only "
         .. "arrives in 12.1 - until then the Cooldown Manager is the one usable source, "
@@ -173,6 +185,10 @@ local function BuildDiagnosticsPage(page, width)
     grid:Layout()
 
     page.Refresh = function()
+        local rival = ns.CDM:RivalName()
+        rivalState:SetText(rival and ("|cffff4040" .. rival .. "|r")
+            or "|cff40ff40none found|r")
+
         cdmState:SetText(ns.CDM:IsAvailable()
             and "|cff40ff40available|r"
             or ("|cffff4040" .. (ns.CDM:UnavailableReason() or "unavailable") .. "|r"))

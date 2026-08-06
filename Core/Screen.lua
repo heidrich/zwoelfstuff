@@ -375,6 +375,16 @@ function Screen:Render()
 
     self:ApplyTakeover(claimedNow)
 
+    -- A moment later, because a rival addon reacts to the same events we do
+    -- and asking straight away would only ever see our own anchor.
+    if not self.rivalCheckQueued then
+        self.rivalCheckQueued = true
+        C_Timer.After(1, function()
+            Screen.rivalCheckQueued = false
+            ns.CDM:CheckForRivals()
+        end)
+    end
+
     if ns.EditMode and ns.EditMode.Refresh then ns.EditMode:Refresh() end
 end
 

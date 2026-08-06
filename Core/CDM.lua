@@ -394,6 +394,75 @@ function CDM:IsPinned(item)
 end
 
 ---------------------------------------------------------------------------
+-- Is another addon holding the same frames?
+--
+-- There is ONE set of Cooldown Manager item frames, and every addon that
+-- "does cooldowns" on this patch works by adopting them. Two addons doing
+-- that to the same frame both hook SetPoint and both re-assert their own
+-- anchor, so whichever ran last wins - per frame, so the icons end up split
+-- between two layouts. It looks like a bug in whichever one you are looking
+-- at, and it is not one.
+--
+-- Detected rather than assumed: a short moment after pinning, an item whose
+-- anchor is no longer ours was taken by somebody else. That works against
+-- any addon, including ones that do not exist yet.
+---------------------------------------------------------------------------
+
+-- Only ones confirmed to adopt these frames, by reading their code on this
+-- machine. Used to NAME the culprit, never to decide there is one.
+local KNOWN_ADOPTERS = {
+    ["EllesmereUICooldownManager"] = "EllesmereUI's Cooldown Manager",
+}
+
+local function LoadedAdopters()
+    local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded
+    if not isLoaded then return nil end
+
+    local names
+    for addon, label in pairs(KNOWN_ADOPTERS) do
+        local ok, loaded = pcall(isLoaded, addon)
+        if ok and loaded then
+            names = names and (names .. ", " .. label) or label
+        end
+    end
+    return names
+end
+
+-- For the Diagnostics page, which has to answer before a single bar exists -
+-- so it asks who is LOADED rather than waiting for an icon to be taken.
+function CDM:RivalName()
+    return LoadedAdopters()
+end
+
+function CDM:CheckForRivals()
+    if self.rivalReported then return end
+
+    local stolen = 0
+    for item, state in pairs(adopted) do
+        if state.anchor then
+            local _, relativeTo = item:GetPoint(1)
+            if relativeTo ~= state.anchor[2] then stolen = stolen + 1 end
+        end
+    end
+
+    if stolen == 0 then return end
+    self.rivalReported = true
+
+    local who = LoadedAdopters()
+    ns.Print("|cffff4040" .. stolen .. " of your cooldown icons were taken back "
+        .. "by another addon.|r")
+    if who then
+        ns.Print("It is " .. who .. ". It adopts the same frames this addon "
+            .. "does, and there is only one set of them.")
+    else
+        ns.Print("Something else on this client adopts the same frames this "
+            .. "addon does, and there is only one set of them.")
+    end
+    ns.Print("Run one or the other, not both: disable that addon's cooldown "
+        .. "module, or leave these cooldowns off your bars.")
+end
+
+---------------------------------------------------------------------------
 -- Change notification
 --
 -- The pools churn: talents, spec changes, entering combat, and Blizzard's
