@@ -1,15 +1,14 @@
 ﻿---------------------------------------------------------------------------
--- Options - the settings window.
+-- Options - the app window.
 --
--- Layout follows what a modern addon panel looks like: a fixed sidebar of
--- modules on the left, a titled content area on the right, settings as
--- two-column cards, and a persistent footer. Every control comes from the
--- design system in Widgets.lua, so nothing is styled twice and nothing
--- drifts.
+-- Not a settings dialog. You have a set of cooldown bars, you pick one from
+-- the rail, and you work on it in the middle while the inspector on the
+-- right edits whatever is selected. The secondary pages borrow the middle
+-- and hide the inspector.
 --
--- Pages are built lazily, on first view. Building all of them at login would
--- cost frames nobody has asked to see - the Groups page alone is several
--- dozen rows plus a spell browser.
+-- Every control comes from the design system in Widgets.lua, so nothing is
+-- styled twice and nothing drifts. Pages are built on first view: building
+-- all of them at login would cost frames nobody asked to see.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -18,14 +17,12 @@ ns.Options = Options
 
 local UI = ns.UI
 local C = UI.C
+local Bars = ns.Bars
 
-local WINDOW_W, WINDOW_H = 980, 664
-local SIDEBAR_W = 216
-local PAD = 22
-local HEADER_H = 74
-local FOOTER_H = 52
-
-local CONTENT_W = WINDOW_W - SIDEBAR_W - PAD * 2
+local WINDOW_W, WINDOW_H = 1060, 640
+local RAIL_W = 196
+local INSPECTOR_W = 236
+local PAD = 20
 
 ---------------------------------------------------------------------------
 -- Shared page helpers
@@ -323,23 +320,41 @@ local function BuildDiagnosticsPage(page, width)
         { text = "Status", width = 100, onClick = function() ns.Watcher:Status() end },
     })
 
-    grid:Section("Engine")
+    grid:Section("This client")
 
-    local engineRow = grid:FullRow("Blizzard_AuraContainer", { controlWidth = 220 })
+    local cdmRow = grid:FullRow("Cooldown Manager", { controlWidth = 260 })
+    local cdmState = UI.Label(cdmRow.slot, "", 12, C.text)
+    cdmState:SetPoint("RIGHT", cdmRow.slot, "RIGHT", 0, 0)
+    cdmState:SetJustifyH("RIGHT")
+
+    local engineRow = grid:FullRow("Aura engine (12.1)", { controlWidth = 260 })
     local engineState = UI.Label(engineRow.slot, "", 12, C.text)
     engineState:SetPoint("RIGHT", engineRow.slot, "RIGHT", 0, 0)
     engineState:SetJustifyH("RIGHT")
 
-    grid:Note("Without the engine no aura can be shown at all on this patch: every aura "
-        .. "field is a secret value, so an addon cannot identify a buff by ID, name or "
-        .. "icon. The engine can, and renders the widgets we hand it.")
+    grid:Note("Patch 12.0 made aura data secret, so an addon cannot identify a buff by "
+        .. "ID, name or icon. The sanctioned replacement, Blizzard_AuraContainer, only "
+        .. "arrives in 12.1 - until then the Cooldown Manager is the one usable source, "
+        .. "which is what this addon is built on.")
 
     grid:Layout()
 
     page.Refresh = function()
-        engineState:SetText(ns.Engine:IsAvailable()
+        cdmState:SetText(ns.CDM:IsAvailable()
             and "|cff40ff40available|r"
-            or ("|cffff4040" .. (ns.Engine:UnavailableReason() or "unavailable") .. "|r"))
+            or ("|cffff4040" .. (ns.CDM:UnavailableReason() or "unavailable") .. "|r"))
+
+        -- Engine.lua is parked on a 12.0 client, so ns.Engine is nil here.
+        -- Reading it without the guard is a crash, not a missing feature.
+        if not ns.Engine then
+            engineState:SetText("|cff888888not on this client - parked until 12.1|r")
+        elseif ns.Engine:IsAvailable() then
+            engineState:SetText("|cff40ff40available|r")
+        else
+            engineState:SetText("|cffff4040"
+                .. (ns.Engine:UnavailableReason() or "unavailable") .. "|r")
+        end
+
         grid:Refresh()
     end
 end
@@ -444,23 +459,29 @@ local function BuildChangelogPage(page, width)
 end
 
 ---------------------------------------------------------------------------
--- Navigation
+-- The workspace shell
+--
+-- Shaped like an app rather than a settings dialog, because that is what it
+-- is: you have a set of bars, you pick one, and you work on it.
+--
+--   left rail    your bars, then everything else
+--   middle       the bar itself, at its real size
+--   inspector    whatever is selected - a cell, or the bar
+--
+-- The secondary pages reuse the middle area and hide the inspector. They are
+-- not the point of the addon and should not look like they are.
 ---------------------------------------------------------------------------
-local NAV = {
-    { key = "bars", title = "Bars",
-      subtitle = "Your own bars. Set the grid, then put spells in the cells.",
-      build = function(page, width) ns.OptionsBars:Build(page, width) end },
-
+local PAGES = {
     { key = "display", title = "Aura Display",
-      subtitle = "The single-buff frame, for auras the Cooldown Manager does not carry.",
+      subtitle = "One buff in its own frame, for auras the Cooldown Manager does not carry.",
       build = BuildDisplayPage },
 
-    { key = "general", title = "General",
-      subtitle = "Minimap button and everything that is not a display.",
+    { key = "settings", title = "Settings",
+      subtitle = "Minimap button and resetting.",
       build = BuildGeneralPage },
 
     { key = "diagnostics", title = "Diagnostics",
-      subtitle = "What the client actually exposes, and what it refuses to.",
+      subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
       build = BuildDiagnosticsPage },
 
     { key = "about", title = "About",
@@ -472,9 +493,6 @@ local NAV = {
       build = BuildChangelogPage },
 }
 
----------------------------------------------------------------------------
--- Window
----------------------------------------------------------------------------
 function Options:Create()
     if self.frame then return end
 
@@ -489,10 +507,12 @@ function Options:Create()
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:SetScript("OnHide", function()
-        -- The dropdown menu lives on UIParent so it can escape the window's
-        -- bounds; it must not outlive the window.
+        -- The menu and the picker live on UIParent so they can escape the
+        -- window bounds; neither may outlive it.
         UI.ClosePopup()
-        if ns.SpellBrowser.frame then ns.SpellBrowser.frame:Hide() end
+        if ns.BarSpellPicker and ns.BarSpellPicker.frame then
+            ns.BarSpellPicker.frame:Hide()
+        end
     end)
     frame:Hide()
 
@@ -500,49 +520,28 @@ function Options:Create()
     local outer = ns.CreateBorder(frame, 1, "BORDER")
     outer:SetColor(0.22, 0.24, 0.29, 1)
 
-    -- Sidebar -------------------------------------------------------------
-    local sidebar = CreateFrame("Frame", nil, frame)
-    sidebar:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
-    sidebar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 1, 1)
-    sidebar:SetWidth(SIDEBAR_W)
-    UI.Fill(sidebar, "BACKGROUND", C.sidebarBg)
+    -- Rail -----------------------------------------------------------------
+    local rail = CreateFrame("Frame", nil, frame)
+    rail:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    rail:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 1, 1)
+    rail:SetWidth(RAIL_W)
+    UI.Fill(rail, "BACKGROUND", C.sidebarBg)
 
-    local divider = sidebar:CreateTexture(nil, "ARTWORK")
-    divider:SetPoint("TOPRIGHT", sidebar, "TOPRIGHT", 0, 0)
-    divider:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", 0, 0)
-    divider:SetWidth(1)
-    divider:SetColorTexture(1, 1, 1, 0.06)
+    local railEdge = rail:CreateTexture(nil, "ARTWORK")
+    railEdge:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, 0)
+    railEdge:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", 0, 0)
+    railEdge:SetWidth(1)
+    railEdge:SetColorTexture(1, 1, 1, 0.06)
 
-    local brand = UI.Label(sidebar, "|cff7ec6d4DK|r|cffff7a3dstuff|r", 20, C.text)
-    brand:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 18, -22)
+    local brand = UI.Label(rail, "|cff7ec6d4DK|r|cffff7a3dstuff|r", 19, C.text)
+    brand:SetPoint("TOPLEFT", rail, "TOPLEFT", 16, -18)
 
-    local brandLine = sidebar:CreateTexture(nil, "ARTWORK")
-    brandLine:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -10)
-    brandLine:SetSize(40, 2)
-    brandLine:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
-
-    local byline = UI.Label(sidebar, "by ZwÃ¶lf", 11, C.textFaint)
-    byline:SetPoint("TOPLEFT", brandLine, "BOTTOMLEFT", 0, -8)
-
-    local versionLabel = UI.Label(sidebar, "v" .. ns.version, 11, C.textFaint)
-    versionLabel:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", 18, 16)
-
-    -- Content -------------------------------------------------------------
-    local title = UI.Label(frame, "", 21, C.text)
-    title:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDEBAR_W + PAD, -26)
-
-    local subtitle = UI.Label(frame, "", 12, C.textDim)
-    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-
-    local headerLine = frame:CreateTexture(nil, "ARTWORK")
-    headerLine:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDEBAR_W + PAD, -HEADER_H - 8)
-    headerLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -HEADER_H - 8)
-    headerLine:SetHeight(1)
-    headerLine:SetColorTexture(1, 1, 1, 0.07)
+    local versionLabel = UI.Label(rail, "v" .. ns.version, 11, C.textFaint)
+    versionLabel:SetPoint("BOTTOMLEFT", rail, "BOTTOMLEFT", 16, 14)
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(28, 28)
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -10)
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
     local closeLabel = UI.Label(close, "X", 13, C.textDim)
     closeLabel:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnEnter", function()
@@ -553,112 +552,232 @@ function Options:Create()
     end)
     close:SetScript("OnClick", function() frame:Hide() end)
 
-    -- Footer --------------------------------------------------------------
-    local footerLine = frame:CreateTexture(nil, "ARTWORK")
-    footerLine:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", SIDEBAR_W + PAD, FOOTER_H)
-    footerLine:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, FOOTER_H)
-    footerLine:SetHeight(1)
-    footerLine:SetColorTexture(1, 1, 1, 0.07)
+    -- Middle and inspector -------------------------------------------------
+    local main = CreateFrame("Frame", nil, frame)
+    main:SetPoint("TOPLEFT", rail, "TOPRIGHT", PAD, -PAD - 6)
+    main:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(INSPECTOR_W + PAD * 2), PAD)
 
-    local reloadBtn = UI.Button(frame, "Reload UI", 110, function() ReloadUI() end)
-    reloadBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", SIDEBAR_W + PAD, 14)
+    local inspectorHost = CreateFrame("Frame", nil, frame)
+    inspectorHost:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -PAD - 6)
+    inspectorHost:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, PAD)
+    inspectorHost:SetWidth(INSPECTOR_W)
 
-    local closeBtn = UI.Button(frame, "Close", 110, function() frame:Hide() end, "primary")
-    closeBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, 14)
+    local inspectorEdge = inspectorHost:CreateTexture(nil, "ARTWORK")
+    inspectorEdge:SetPoint("TOPLEFT", inspectorHost, "TOPLEFT", -PAD, 0)
+    inspectorEdge:SetPoint("BOTTOMLEFT", inspectorHost, "BOTTOMLEFT", -PAD, 0)
+    inspectorEdge:SetWidth(1)
+    inspectorEdge:SetColorTexture(1, 1, 1, 0.06)
 
-    -- Pages ---------------------------------------------------------------
-    local pages, navButtons = {}, {}
+    local canvas = ns.OptionsBars:BuildCanvas(main)
+    local inspector = ns.OptionsBars:BuildInspector(inspectorHost, INSPECTOR_W)
 
-    for index in ipairs(NAV) do
-        local page = CreateFrame("Frame", nil, frame)
-        page:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDEBAR_W + PAD, -HEADER_H - 20)
-        page:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, FOOTER_H + 12)
+    local pageFrames = {}
+    for index in ipairs(PAGES) do
+        local page = CreateFrame("Frame", nil, main)
+        page:SetPoint("TOPLEFT", main, "TOPLEFT", 0, -52)
+        page:SetPoint("BOTTOMRIGHT", main, "BOTTOMRIGHT", 0, 0)
         page:Hide()
-        pages[index] = page
+        pageFrames[index] = page
     end
 
-    local function SelectTab(index)
-        local entry = NAV[index]
-        if not entry then return end
-
-        title:SetText(entry.title)
-        subtitle:SetText(entry.subtitle)
-
-        for i, page in ipairs(pages) do
-            page:SetShown(i == index)
-        end
-        for i, nav in ipairs(navButtons) do
-            local active = (i == index)
-            nav.marker:SetShown(active)
-            nav.bg:SetShown(active)
-            local c = active and C.text or C.textDim
-            nav.label:SetTextColor(c[1], c[2], c[3])
-        end
-
-        -- Lazy build: a page costs its frames only once someone looks at it.
-        if not entry.built then
-            entry.built = true
-            entry.build(pages[index], CONTENT_W)
-        end
-        if pages[index].Refresh then pages[index].Refresh() end
-
-        self.activeTab = index
-    end
-
-    local navY = -110
-    for index, entry in ipairs(NAV) do
-        local nav = CreateFrame("Button", nil, sidebar)
-        nav:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 0, navY)
-        nav:SetPoint("TOPRIGHT", sidebar, "TOPRIGHT", 0, navY)
-        nav:SetHeight(34)
-
-        nav.bg = nav:CreateTexture(nil, "BACKGROUND")
-        nav.bg:SetAllPoints(nav)
-        nav.bg:SetColorTexture(1, 1, 1, 0.045)
-        nav.bg:Hide()
-
-        nav.marker = nav:CreateTexture(nil, "ARTWORK")
-        nav.marker:SetPoint("TOPLEFT", nav, "TOPLEFT", 0, 0)
-        nav.marker:SetPoint("BOTTOMLEFT", nav, "BOTTOMLEFT", 0, 0)
-        nav.marker:SetWidth(3)
-        nav.marker:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
-        nav.marker:Hide()
-
-        nav.highlight = nav:CreateTexture(nil, "HIGHLIGHT")
-        nav.highlight:SetAllPoints(nav)
-        nav.highlight:SetColorTexture(1, 1, 1, 0.03)
-
-        nav.label = UI.Label(nav, entry.title, 13, C.textDim)
-        nav.label:SetPoint("LEFT", nav, "LEFT", 18, 0)
-
-        nav:SetScript("OnClick", function() SelectTab(index) end)
-        navButtons[index] = nav
-        navY = navY - 36
-    end
+    local pageTitle = UI.Label(main, "", 19, C.text)
+    pageTitle:SetPoint("TOPLEFT", main, "TOPLEFT", 0, 0)
+    local pageSubtitle = UI.Label(main, "", 12, C.textDim)
+    pageSubtitle:SetPoint("TOPLEFT", pageTitle, "BOTTOMLEFT", 0, -5)
 
     self.frame = frame
-    self.pages = pages
-    self.SelectTab = function(_, index) SelectTab(index) end
-    SelectTab(1)
+    self.pageFrames = pageFrames
+
+    local barButtons, pageButtons = {}, {}
+
+    local function ShowBar(index)
+        self.view = "bar"
+        ns.OptionsBars:Select(index)
+    end
+
+    local function ShowPage(index)
+        self.view = "page"
+        self.pageIndex = index
+
+        local entry = PAGES[index]
+        if not entry.built then
+            entry.built = true
+            -- Pages get the middle at full width; they have no inspector.
+            entry.build(pageFrames[index], WINDOW_W - RAIL_W - PAD * 2)
+        end
+        self:Refresh()
+    end
+
+    ---------------------------------------------------------------------
+    -- Rail
+    ---------------------------------------------------------------------
+    local barsCaption = UI.Label(rail, "COOLDOWN BARS", 10, C.textFaint)
+    barsCaption:SetPoint("TOPLEFT", rail, "TOPLEFT", 16, -58)
+
+    local function RailButton(parent, height)
+        local button = CreateFrame("Button", nil, parent)
+        button:SetHeight(height)
+
+        button.bg = button:CreateTexture(nil, "BACKGROUND")
+        button.bg:SetAllPoints(button)
+        button.bg:SetColorTexture(1, 1, 1, 0.05)
+        button.bg:Hide()
+
+        button.marker = button:CreateTexture(nil, "ARTWORK")
+        button.marker:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+        button.marker:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+        button.marker:SetWidth(3)
+        button.marker:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
+        button.marker:Hide()
+
+        button.highlight = button:CreateTexture(nil, "HIGHLIGHT")
+        button.highlight:SetAllPoints(button)
+        button.highlight:SetColorTexture(1, 1, 1, 0.04)
+
+        button.label = UI.Label(button, "", 13, C.textDim)
+        button.label:SetPoint("LEFT", button, "LEFT", 16, 0)
+        button.label:SetWordWrap(false)
+
+        return button
+    end
+
+    local addIconBtn = UI.Button(rail, "+ Icons", 76, function()
+        ShowBar(Bars:Add(nil, "icon"))
+    end)
+    addIconBtn:SetHeight(22)
+
+    local addBarBtn = UI.Button(rail, "+ Bars", 76, function()
+        ShowBar(Bars:Add(nil, "bar"))
+    end)
+    addBarBtn:SetHeight(22)
+
+    local railDivider = rail:CreateTexture(nil, "ARTWORK")
+    railDivider:SetHeight(1)
+    railDivider:SetColorTexture(1, 1, 1, 0.07)
+
+    for index, entry in ipairs(PAGES) do
+        local button = RailButton(rail, 28)
+        button.label:SetText(entry.title)
+        button:SetScript("OnClick", function() ShowPage(index) end)
+        pageButtons[index] = button
+    end
+
+    -- The rail mirrors the model rather than a stale copy of it, so adding
+    -- or deleting a bar re-lays it out.
+    local function LayoutRail()
+        local y = -78
+
+        for index = 1, math.max(#barButtons, Bars:Count()) do
+            local button = barButtons[index]
+            local cfg = Bars:Get(index)
+
+            if cfg and not button then
+                button = RailButton(rail, 30)
+                button:SetScript("OnClick", function() ShowBar(index) end)
+                barButtons[index] = button
+            end
+
+            if cfg then
+                button:ClearAllPoints()
+                button:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, y)
+                button:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, y)
+                button.label:SetText(cfg.name)
+                button:Show()
+                y = y - 30
+            elseif button then
+                button:Hide()
+            end
+        end
+
+        y = y - 10
+        addIconBtn:ClearAllPoints()
+        addIconBtn:SetPoint("TOPLEFT", rail, "TOPLEFT", 16, y)
+        addBarBtn:ClearAllPoints()
+        addBarBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
+        y = y - 36
+
+        railDivider:ClearAllPoints()
+        railDivider:SetPoint("TOPLEFT", rail, "TOPLEFT", 16, y)
+        railDivider:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -16, y)
+        y = y - 14
+
+        for index, button in ipairs(pageButtons) do
+            button:ClearAllPoints()
+            button:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, y - (index - 1) * 28)
+            button:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, y - (index - 1) * 28)
+        end
+    end
+
+    ---------------------------------------------------------------------
+    -- Painting
+    ---------------------------------------------------------------------
+    local function PaintView()
+        local onBar = (self.view ~= "page") and Bars:Count() > 0
+
+        canvas:SetShown(onBar)
+        inspectorHost:SetShown(onBar)
+        pageTitle:SetShown(not onBar)
+        pageSubtitle:SetShown(not onBar)
+
+        for index, page in ipairs(pageFrames) do
+            page:SetShown((not onBar) and self.pageIndex == index)
+        end
+
+        if not onBar then
+            local entry = PAGES[self.pageIndex or 1]
+            if entry then
+                pageTitle:SetText(entry.title)
+                pageSubtitle:SetText(entry.subtitle)
+            end
+        end
+
+        -- Exactly one rail entry is current.
+        local currentBar = onBar and (ns.OptionsBars:Current()) or nil
+        for index, button in ipairs(barButtons) do
+            local active = (index == currentBar)
+            button.bg:SetShown(active)
+            button.marker:SetShown(active)
+            local colour = active and C.text or C.textDim
+            button.label:SetTextColor(colour[1], colour[2], colour[3])
+        end
+        for index, button in ipairs(pageButtons) do
+            local active = (not onBar) and self.pageIndex == index
+            button.bg:SetShown(active)
+            button.marker:SetShown(active)
+            local colour = active and C.text or C.textDim
+            button.label:SetTextColor(colour[1], colour[2], colour[3])
+        end
+
+        if onBar then
+            canvas.Refresh()
+            inspector.Refresh()
+        else
+            local page = pageFrames[self.pageIndex or 1]
+            if page and page.Refresh then page.Refresh() end
+        end
+    end
+
+    self.LayoutRail, self.PaintView = LayoutRail, PaintView
+    self.ShowBar, self.ShowPage = ShowBar, ShowPage
+
+    LayoutRail()
+    self.view = "bar"
+    self:Refresh()
 
     table.insert(UISpecialFrames, "DKstuffOptionsFrame")   -- close with ESC
 end
 
 function Options:Refresh()
     if not self.frame then return end
-    -- Only the visible page: the others rebuild their state on selection,
-    -- and refreshing an unbuilt page would mean building it unasked.
-    local page = self.pages[self.activeTab or 1]
-    if page and page.Refresh then page.Refresh() end
+    if self.LayoutRail then self.LayoutRail() end
+    if self.PaintView then self.PaintView() end
 end
 
--- Called by Catalog when the client's spell data changed - a respec, a spec
--- switch, a fresh spellbook.
+-- Called by CDM when the Cooldown Manager's contents change.
 function Options:OnCatalogChanged()
-    local browser = ns.SpellBrowser
-    if browser and browser.frame and browser.frame:IsShown() then
-        browser:BuildSections()
-        browser:Fill()
+    local picker = ns.BarSpellPicker
+    if picker and picker.frame and picker.frame:IsShown() then
+        picker:Fill()
     end
 end
 

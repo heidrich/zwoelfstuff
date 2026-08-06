@@ -8,9 +8,59 @@ The addon was rebuilt around Blizzard's Cooldown Manager. The previous
 approach — tracking auras directly — could not work on this client, and that
 took most of a session to establish. Do not restart it.
 
-**Next action: the owner tests the bar editor** (`/dks` → Bars) and says what
-is wrong with the *operation*. Nothing renders on screen yet, on purpose. The
-rendering is built only after the editor is signed off.
+The window was then reshaped into an app: a rail of the owner's bars, the bar
+itself in the middle, an inspector on the right for whatever is selected. The
+owner has seen it and it is **not accepted yet**.
+
+## THE ONE OPEN TASK: make the window look modern
+
+Owner verdict on the current window, with a side-by-side against EllesmereUI:
+
+> *"sieht so aus, sehr altbacken, viel wasted space, ggf denken leute das ist
+> nicht zugehörig. versuch es etwas moderner"*
+
+And the standing requirement behind it:
+
+> *"wir sollten das logisch mit sehr guten ui design angehen. wenn leute es
+> nicht nutzen können oder verstehen, verschwenden wir nur arbeit"*
+
+**Do not treat this as polish.** It is the current blocking task, ahead of
+rendering and ahead of spells. The agreed order is the owner's:
+**UI base → the on-screen display → the spells.**
+
+### What is concretely wrong, read off the screenshot
+
+1. **A vast empty black stage.** The cell grid floats in a ~1000x400 black
+   box and occupies maybe a fifth of it. This is the single worst offender.
+2. **No header treatment.** EllesmereUI gives every module a title, a
+   subtitle, an accent sweep and a tab strip. The bar workspace has a bare
+   "Cooldowns" and nothing else, so it reads as unfinished.
+3. **The inspector is a small floating card** pinned to the top right with a
+   large void beneath it, instead of a full-height column that belongs to the
+   window.
+4. **The rename box is an unlabelled empty rectangle** next to the title. It
+   looks broken rather than optional.
+5. **Everything is flat black.** No layered surfaces, no separation between
+   chrome and content, nothing that reads as depth.
+6. **The rail is text-only** and mostly empty; five entries in a 640px column.
+7. **The window is 1060x640 for roughly a quarter of that in content.** Either
+   fill it or shrink it.
+
+### The reference
+
+`EllesmereUICooldownManager` — the owner's own screenshots are the brief.
+Look at the real thing rather than guessing: distinct surface levels, a
+header band, tabs, two-column setting rows that fill the width, icons in the
+rail, and controls that sit on panels rather than on the window background.
+
+**Do not copy its colours** (teal/green is theirs). DKstuff is orange
+`#FF7A3D` with a cyan `#7EC6D4` accent, already in `UI.C`.
+
+## Next action after that
+
+The editor's *operation* still has not been signed off either — nothing
+renders on screen yet, on purpose. Rendering is built only once the owner
+accepts both the look and the operation.
 
 ## The one thing to not re-derive
 
@@ -43,8 +93,27 @@ client patch lands.
 | `Core/Minimap.lua` | self-built minimap button |
 | `Core/Widgets.lua` | the design system — every control, one look |
 | `Core/Changelog.lua` | changelog data |
-| `Core/OptionsBars.lua` | the bar editor + spell picker |
-| `Core/Options.lua` | the settings window |
+| `Core/OptionsBars.lua` | the bar workspace: canvas, inspector, spell picker |
+| `Core/Options.lua` | the app window: rail, middle, inspector host |
+
+### What `Core/Widgets.lua` already provides
+
+Do not hand-roll any of these again — they exist and are consistent:
+
+`UI.C` (colour tokens) · `UI.Label` / `UI.Hint` · `UI.Button` (with a
+`"primary"` style) · `UI.Row` (a card row with a right-aligned control slot)
+· `UI.SectionHeader` (optionally a disclosure) · `UI.Toggle` (switch) ·
+`UI.Slider` (track + numeric box + wheel) · `UI.Counter` (− n +) ·
+`UI.Dropdown` / `UI.Picker` / `UI.MenuButton` (one shared popup, with
+per-entry delete and trailing actions) · `UI.Swatch` (colour picker) ·
+`UI.Input` · `UI.ScrollArea` (**our own** thin scrollbar — never use
+`UIPanelScrollFrameTemplate`, its pale bar cannot be styled to match) ·
+`UI.CellGrid` (the editable bar grid: click, drag to swap, right click to
+clear, selection ring) · `UI.Page` → a `Grid` with `Section(title, key)`
+(collapsible), `Row`, `FullRow`, `Note`, `Wide`, `Layout`, `Refresh`.
+
+Two font helpers, and they are not interchangeable: `ns.StyleUIFont` for
+panel text, `ns.StyleFont` (the number font) only for digits drawn on icons.
 
 ### Parked until 12.1 (on disk, out of the TOC)
 
@@ -136,16 +205,18 @@ standing-in-it state, which is what the owner was hunting spell IDs for.
 
 ## Open, in order
 
-1. **Owner tests the editor.** Fix what is wrong with the operation.
-2. **Render the bars on screen** — adopt the CDM item frames into the cells,
+1. **Make the window look modern.** The blocking task — see the section near
+   the top for the owner's verdict and the seven concrete faults.
+2. **Owner signs off the operation** of the bar editor.
+3. **Render the bars on screen** — adopt the CDM item frames into the cells,
    skin them, position them, make the bar movable.
-3. **UI debts still outstanding**: Blizzard's scrollbars clash inside a custom
-   panel; `ns.StyleUIFont` exists but nothing uses it yet (panel text still
-   uses the *number* font, which is wrong for body text); no row hover; the
-   sliders are narrow; no icons in the sidebar.
 4. **Logo** — SVG for the repo, TGA for the game. WoW cannot load SVG. PIL is
    installed, no rasteriser. Interim: `## IconTexture: 1380870`.
 5. After 12.1 lands: un-park the aura stack and re-test it.
+
+Already done, do not redo: the UI font is wired, the scrollbar is ours,
+sections collapse, rows and columns use counters rather than sliders, and the
+selected cell has a ring.
 
 ## Verification
 

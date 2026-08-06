@@ -94,7 +94,10 @@ function MinimapButton:Create()
     end)
 
     button:SetScript("OnClick", function(_, mouseButton)
-        if mouseButton == "RightButton" then
+        -- Right click used to toggle the co-tank panel. That module is parked
+        -- until 12.1, so ns.CoTanks is nil and calling it is a crash. Guarded
+        -- rather than removed: the binding returns with the module.
+        if mouseButton == "RightButton" and ns.CoTanks then
             ns.db.coTanks.enabled = not ns.db.coTanks.enabled
             ns.CoTanks:Refresh()
             ns.Print("Co-tank panel",

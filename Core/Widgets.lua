@@ -61,7 +61,11 @@ UI.Fill = Fill
 ---------------------------------------------------------------------------
 function UI.Label(parent, text, size, colour, flags)
     local fs = parent:CreateFontString(nil, "OVERLAY")
-    ns.StyleFont(fs, size or 12, flags or "")
+    -- Panel text uses the client's UI font. The number font this used to
+    -- take is built for digits over a busy 3D scene and reads cramped and
+    -- slightly wrong at every size in a settings window. Numbers drawn ON
+    -- icons still use it, which is what it is for.
+    ns.StyleUIFont(fs, size or 12, flags or "")
     local c = colour or C.text
     fs:SetTextColor(c[1], c[2], c[3])
     fs:SetText(text or "")
@@ -157,17 +161,43 @@ function UI.Row(parent, text, opts)
     return row
 end
 
-function UI.SectionHeader(parent, text)
-    local header = CreateFrame("Frame", nil, parent)
+-- onToggle turns the header into a disclosure: the caption gains a marker
+-- and the whole strip becomes clickable. Used to fold away everything that
+-- is set once and then never touched again, so the page shows the work
+-- rather than the options.
+function UI.SectionHeader(parent, text, onToggle, isOpen)
+    local header = onToggle and CreateFrame("Button", nil, parent)
+        or CreateFrame("Frame", nil, parent)
     header:SetHeight(UI.SECTION_H)
 
-    local label = UI.Label(header, text:upper(), 11, C.textDim, "")
-    label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 2, 8)
+    local caption = text:upper()
+    local label = UI.Label(header, caption, 11, C.textDim, "")
+    label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 14 or 2, 8)
 
     local line = Tex(header, "ARTWORK", C.line[1], C.line[2], C.line[3], C.line[4])
     line:SetPoint("BOTTOMLEFT", label, "BOTTOMRIGHT", 10, 4)
     line:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -2, 8)
     line:SetHeight(1)
+
+    if onToggle then
+        local marker = UI.Label(header, "", 10, C.textDim)
+        marker:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 2, 8)
+
+        header:SetScript("OnClick", onToggle)
+        header:SetScript("OnEnter", function()
+            label:SetTextColor(C.text[1], C.text[2], C.text[3])
+        end)
+        header:SetScript("OnLeave", function()
+            label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        end)
+
+        header.Refresh = function()
+            local open = isOpen()
+            marker:SetText(open and "v" or ">")
+            label:SetText(caption)
+        end
+        header.Refresh()
+    end
 
     return header
 end
@@ -209,6 +239,52 @@ function UI.Toggle(row, get, set)
 
     row.control = toggle
     row.Refresh = toggle.Refresh
+    return row
+end
+
+---------------------------------------------------------------------------
+-- Counter - minus, number, plus
+--
+-- For whole numbers you count rather than tune: rows, columns, how many of
+-- something. A slider is the wrong control for those - it is imprecise for
+-- small ranges and it does not read as "add one".
+---------------------------------------------------------------------------
+function UI.Counter(row, cfg)
+    local holder = CreateFrame("Frame", nil, row.slot)
+    holder:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+    holder:SetSize(96, 24)
+
+    local value = UI.Label(holder, "", 13, C.text)
+    value:SetPoint("CENTER", holder, "CENTER", 0, 0)
+    value:SetJustifyH("CENTER")
+    value:SetWidth(40)
+
+    local function Step(delta)
+        local next_ = (cfg.get() or cfg.min) + delta
+        if next_ < cfg.min then next_ = cfg.min end
+        if next_ > cfg.max then next_ = cfg.max end
+        cfg.set(next_)
+        if cfg.apply then cfg.apply() end
+        ns.Options:Refresh()
+    end
+
+    local minus = UI.Button(holder, "-", 26, function() Step(-1) end)
+    minus:SetHeight(22)
+    minus:SetPoint("LEFT", holder, "LEFT", 0, 0)
+
+    local plus = UI.Button(holder, "+", 26, function() Step(1) end)
+    plus:SetHeight(22)
+    plus:SetPoint("RIGHT", holder, "RIGHT", 0, 0)
+
+    holder.Refresh = function()
+        local current = cfg.get()
+        value:SetText(tostring(current or cfg.min))
+        minus:SetEnabled((current or cfg.min) > cfg.min)
+        plus:SetEnabled((current or cfg.min) < cfg.max)
+    end
+
+    row.control = holder
+    row.Refresh = holder.Refresh
     return row
 end
 
@@ -935,6 +1011,15 @@ function UI.CellGrid(parent, cfg)
 
         cell.edge = ns.CreateBorder(cell, 1, "OVERLAY")
 
+        -- A second, outset border for the selection, so it reads clearly even
+        -- on a cell whose own border is already dark.
+        cell.ringHost = CreateFrame("Frame", nil, cell)
+        cell.ringHost:SetPoint("TOPLEFT", cell, "TOPLEFT", -2, 2)
+        cell.ringHost:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 2, -2)
+        cell.ring = ns.CreateBorder(cell.ringHost, 2, "OVERLAY")
+        cell.ring:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        cell.ring:Hide()
+
         cell.hl = cell:CreateTexture(nil, "HIGHLIGHT")
         cell.hl:SetAllPoints(cell)
         cell.hl:SetColorTexture(1, 1, 1, 0.14)
@@ -1042,6 +1127,14 @@ function UI.CellGrid(parent, cfg)
                 cell.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 0.35)
             end
 
+            -- The selected cell is what the inspector is editing, so it has
+            -- to be obvious which one that is.
+            local isSelected = cfg.selected and cfg.selected() == index
+            cell.ring:SetShown(isSelected)
+            if isSelected then
+                cell.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+            end
+
             cell:Show()
         end
 
@@ -1066,15 +1159,118 @@ end
 local Grid = {}
 Grid.__index = Grid
 
-function UI.Page(parent, width)
-    local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-    scroll:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -22, 0)
+-- A scroll area with our own scrollbar. Blizzard's UIPanelScrollFrameTemplate
+-- brings its pale, chunky bar with it, which reads as a foreign object inside
+-- a dark custom panel - and it cannot be restyled into one.
+--
+-- Returns scroll, content. Call scroll.Update() after changing the content
+-- height so the bar re-measures.
+function UI.ScrollArea(parent, contentWidth, gutter)
+    gutter = gutter or 10
 
-    local contentWidth = width - 22
+    local scroll = CreateFrame("ScrollFrame", nil, parent)
+    scroll:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    scroll:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -gutter, 0)
+    scroll:EnableMouseWheel(true)
+
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(contentWidth, 1)
     scroll:SetScrollChild(content)
+
+    local rail = CreateFrame("Frame", nil, parent)
+    rail:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    rail:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    rail:SetWidth(5)
+    local track = Tex(rail, "BACKGROUND", 1, 1, 1, 0.05)
+    track:SetAllPoints(rail)
+
+    local thumb = CreateFrame("Frame", nil, rail)
+    thumb:SetWidth(5)
+    thumb:EnableMouse(true)
+    local thumbFill = Fill(thumb, "ARTWORK", C.controlHi)
+
+    local function Range()
+        local range = scroll:GetVerticalScrollRange() or 0
+        return range > 1 and range or 0
+    end
+
+    local function UpdateThumb()
+        local range = Range()
+        local visible = scroll:GetHeight()
+        local total = visible + range
+
+        if range <= 0 or total <= 0 then
+            rail:Hide()
+            return
+        end
+        rail:Show()
+
+        local height = math.max(24, visible * (visible / total))
+        local travel = visible - height
+        local progress = range > 0 and (scroll:GetVerticalScroll() / range) or 0
+
+        thumb:SetHeight(height)
+        thumb:ClearAllPoints()
+        thumb:SetPoint("TOP", rail, "TOP", 0, -travel * progress)
+    end
+
+    local function ScrollBy(delta)
+        local range = Range()
+        if range <= 0 then return end
+        local next_ = scroll:GetVerticalScroll() - delta * 40
+        if next_ < 0 then next_ = 0 end
+        if next_ > range then next_ = range end
+        scroll:SetVerticalScroll(next_)
+    end
+
+    scroll:SetScript("OnMouseWheel", function(_, delta) ScrollBy(delta) end)
+    scroll:SetScript("OnVerticalScroll", UpdateThumb)
+    scroll:SetScript("OnScrollRangeChanged", UpdateThumb)
+    scroll:SetScript("OnSizeChanged", UpdateThumb)
+
+    thumb:SetScript("OnEnter", function()
+        thumbFill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.8)
+    end)
+    thumb:SetScript("OnLeave", function()
+        if not thumb.dragging then
+            thumbFill:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+        end
+    end)
+    thumb:SetScript("OnMouseDown", function(self)
+        self.dragging = true
+        local _, cursorY = GetCursorPosition()
+        self.grabAt = cursorY / self:GetEffectiveScale()
+        self.grabScroll = scroll:GetVerticalScroll()
+    end)
+    thumb:SetScript("OnMouseUp", function(self)
+        self.dragging = false
+        thumbFill:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+    end)
+    thumb:SetScript("OnUpdate", function(self)
+        if not self.dragging then return end
+        local range = Range()
+        local travel = scroll:GetHeight() - self:GetHeight()
+        if range <= 0 or travel <= 0 then return end
+
+        local _, cursorY = GetCursorPosition()
+        cursorY = cursorY / self:GetEffectiveScale()
+        local moved = (self.grabAt - cursorY) / travel * range
+
+        local next_ = self.grabScroll + moved
+        if next_ < 0 then next_ = 0 end
+        if next_ > range then next_ = range end
+        scroll:SetVerticalScroll(next_)
+    end)
+
+    scroll.Update = UpdateThumb
+    UpdateThumb()
+
+    return scroll, content
+end
+
+function UI.Page(parent, width)
+    local contentWidth = width - 14
+    local scroll, content = UI.ScrollArea(parent, contentWidth)
 
     local grid = setmetatable({
         content  = content,
@@ -1090,13 +1286,44 @@ end
 
 -- A full-width block: section headers, notes, button strips.
 function Grid:Wide(region, height)
-    self.items[#self.items + 1] = { region = region, height = height, wide = true }
+    self.items[#self.items + 1] = {
+        region = region, height = height, wide = true, group = self.group,
+    }
     if region.Refresh then self.widgets[#self.widgets + 1] = region end
     return region
 end
 
-function Grid:Section(title)
-    return self:Wide(UI.SectionHeader(self.content, title), UI.SECTION_H)
+-- Passing a key makes the section a disclosure, folded shut by default.
+-- Everything added after it belongs to it until the next section.
+--
+-- This is what keeps the page honest: the things you do while working stay
+-- visible, and the dozen knobs you set once are one click away instead of
+-- filling the screen and hiding the work.
+function Grid:Section(title, key)
+    self.group = key
+
+    if not key then
+        return self:Wide(UI.SectionHeader(self.content, title), UI.SECTION_H)
+    end
+
+    self.collapsed = self.collapsed or {}
+    if self.collapsed[key] == nil then self.collapsed[key] = true end
+
+    local header
+    header = UI.SectionHeader(self.content, title,
+        function()
+            self.collapsed[key] = not self.collapsed[key]
+            header.Refresh()
+            self:Layout()
+        end,
+        function() return not self.collapsed[key] end)
+
+    -- Recorded with no group of its own: a section header must stay visible
+    -- when its own contents are folded away.
+    self.group = nil
+    self:Wide(header, UI.SECTION_H)
+    self.group = key
+    return header
 end
 
 -- height is only needed for a note whose text is set LATER: the measured
@@ -1115,7 +1342,9 @@ function Grid:Row(label, opts)
     opts.controlWidth = opts.controlWidth or 150
     local row = UI.Row(self.content, label, opts)
     row:SetWidth(self.colWidth)
-    self.items[#self.items + 1] = { region = row, height = row:GetHeight() }
+    self.items[#self.items + 1] = {
+        region = row, height = row:GetHeight(), group = self.group,
+    }
     self.widgets[#self.widgets + 1] = row
     return row
 end
@@ -1126,7 +1355,9 @@ function Grid:FullRow(label, opts)
     opts.controlWidth = opts.controlWidth or 300
     local row = UI.Row(self.content, label, opts)
     row:SetWidth(self.width)
-    self.items[#self.items + 1] = { region = row, height = row:GetHeight(), wide = true }
+    self.items[#self.items + 1] = {
+        region = row, height = row:GetHeight(), wide = true, group = self.group,
+    }
     self.widgets[#self.widgets + 1] = row
     return row
 end
@@ -1142,24 +1373,32 @@ function Grid:Layout()
         end
     end
 
+    local collapsed = self.collapsed or {}
+
     for _, item in ipairs(self.items) do
         local region = item.region
-        if region and region.dkSkip then
+        local folded = item.group ~= nil and collapsed[item.group]
+
+        if folded then
+            if region then region:Hide() end
+        elseif region and region.dkSkip then
             -- skipped entirely: no gap left behind
         elseif item.wide then
             EndLine()
             if region then
                 region:ClearAllPoints()
                 region:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, y)
+                region:Show()
             end
-            -- dkHeight lets a block that grows with its content - an icon
-            -- strip gaining a second line - report its real height instead of
-            -- the one it happened to have when it was recorded.
+            -- dkHeight lets a block that grows with its content - a grid
+            -- gaining a row - report its real height instead of the one it
+            -- happened to have when it was recorded.
             y = y - ((region and region.dkHeight) or item.height)
         else
             region:ClearAllPoints()
             region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
                 column * (self.colWidth + UI.COL_GAP), y)
+            region:Show()
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
             if column >= 2 then EndLine() end
@@ -1168,6 +1407,7 @@ function Grid:Layout()
     EndLine()
 
     self.content:SetHeight(math.max(1, -y + 10))
+    if self.scroll.Update then self.scroll.Update() end
     return y
 end
 
