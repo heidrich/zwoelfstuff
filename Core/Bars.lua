@@ -52,6 +52,38 @@ ns.BAR_DEFAULTS = {
     borderSize  = 1,
     borderColor = { 0.00, 0.00, 0.00 },
 
+    -- A surface behind the icon. Visible through the icon's own transparency
+    -- and, more usefully, everywhere the icon is not - a zoomed-out icon on a
+    -- dark plate reads very differently from one floating on the world.
+    backdrop      = true,
+    backdropColor = { 0.00, 0.00, 0.00 },
+    backdropAlpha = 0.90,
+
+    -- How much of the icon art is cut away. Blizzard's own icons carry a
+    -- baked-in border that this crops off; 0 shows the whole file.
+    iconZoom = 0.08,
+
+    -- The cooldown sweep.
+    swipeColor = { 0.00, 0.00, 0.00 },
+    swipeAlpha = 0.70,
+    showEdge   = false,        -- the bright line that follows the sweep
+
+    -- Numbers. A size of 0 means "work it out from the cell", which is what
+    -- keeps a 24px cell and a 64px cell looking like one design.
+    showCountdown   = true,
+    countdownSize   = 0,
+    countdownColor  = { 1.00, 1.00, 1.00 },
+    countdownAnchor = "CENTER",
+
+    showStacks  = true,
+    stackSize   = 0,
+    stackColor  = { 1.00, 1.00, 1.00 },
+
+    -- Bar-shaped cells only.
+    showName = true,
+    nameSize = 0,
+    nameColor = { 1.00, 1.00, 1.00 },
+
     -- Position, relative to the screen centre. Always the bar's own centre,
     -- so the readout in unlock mode means something and snapping is
     -- arithmetic rather than a case analysis.
@@ -219,7 +251,72 @@ ns.BAR_STYLE_KEYS = {
     "iconPlacement",
     "scale", "alpha",
     "borderSize", "borderColor",
+    "backdrop", "backdropColor", "backdropAlpha",
+    "iconZoom",
+    "swipeColor", "swipeAlpha", "showEdge",
+    "showCountdown", "countdownSize", "countdownColor", "countdownAnchor",
+    "showStacks", "stackSize", "stackColor",
+    "showName", "nameSize", "nameColor",
 }
+
+-- The nine places a number can sit on an icon.
+ns.TEXT_ANCHORS = {
+    { value = "TOPLEFT",     text = "Top left" },
+    { value = "TOP",         text = "Top" },
+    { value = "TOPRIGHT",    text = "Top right" },
+    { value = "LEFT",        text = "Left" },
+    { value = "CENTER",      text = "Centre" },
+    { value = "RIGHT",       text = "Right" },
+    { value = "BOTTOMLEFT",  text = "Bottom left" },
+    { value = "BOTTOM",      text = "Bottom" },
+    { value = "BOTTOMRIGHT", text = "Bottom right" },
+}
+
+-- Everything the two renderers need, resolved once and in one place.
+--
+-- There are two of them - Blizzard's adopted frames and our own drawn aura
+-- cells - and they sit next to each other on the same bar. Any setting read
+-- separately by each is a setting they will eventually disagree about, and
+-- "these two icons look different and I cannot say why" is the exact bug
+-- this whole styling pass exists to end.
+--
+-- Sizes of 0 are resolved HERE, so "auto" means the same thing on both.
+function Bars:Style(cfg, height)
+    height = height or 40
+
+    return {
+        height = height,
+
+        borderSize  = math.max(0, cfg.borderSize or 1),
+        borderColor = cfg.borderColor or { 0, 0, 0 },
+
+        backdrop      = cfg.backdrop ~= false,
+        backdropColor = cfg.backdropColor or { 0, 0, 0 },
+        backdropAlpha = cfg.backdropAlpha or 0.9,
+
+        iconZoom = math.min(0.2, math.max(0, cfg.iconZoom or 0.08)),
+
+        swipeColor = cfg.swipeColor or { 0, 0, 0 },
+        swipeAlpha = cfg.swipeAlpha or 0.7,
+        showEdge   = cfg.showEdge and true or false,
+
+        showCountdown   = cfg.showCountdown ~= false,
+        countdownSize   = (cfg.countdownSize or 0) > 0 and cfg.countdownSize
+                          or math.max(9, math.min(20, height * 0.42)),
+        countdownColor  = cfg.countdownColor or { 1, 1, 1 },
+        countdownAnchor = cfg.countdownAnchor or "CENTER",
+
+        showStacks = cfg.showStacks ~= false,
+        stackSize  = (cfg.stackSize or 0) > 0 and cfg.stackSize
+                     or math.max(8, math.min(16, height * 0.30)),
+        stackColor = cfg.stackColor or { 1, 1, 1 },
+
+        showName  = cfg.showName ~= false,
+        nameSize  = (cfg.nameSize or 0) > 0 and cfg.nameSize
+                    or math.max(9, math.min(14, height * 0.45)),
+        nameColor = cfg.nameColor or { 1, 1, 1 },
+    }
+end
 
 function Bars:CaptureStyle(index)
     local cfg = self:Get(index)

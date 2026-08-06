@@ -125,6 +125,36 @@ local function BuildAuraVisual(cell)
     return aura
 end
 
+-- The same style table the adopted frames get, applied to the parts we drew
+-- ourselves. Kept next to each other on purpose: these two are the ones that
+-- must never disagree, because they sit on the same bar.
+local function StyleAuraVisual(aura, style)
+    local plate = style.backdropColor
+    aura.bg:SetColorTexture(plate[1], plate[2], plate[3], style.backdropAlpha)
+    aura.bg:SetShown(style.backdrop)
+
+    local zoom = style.iconZoom
+    aura.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+
+    local edge = style.borderColor
+    aura.border:SetThickness(style.borderSize)
+    aura.border:SetColor(edge[1], edge[2], edge[3], 1)
+    aura.border:SetShown(style.borderSize > 0)
+
+    local swipe = style.swipeColor
+    aura.cd:SetSwipeColor(swipe[1], swipe[2], swipe[3], style.swipeAlpha)
+    aura.cd:SetDrawEdge(style.showEdge)
+    aura.cd:SetHideCountdownNumbers(not style.showCountdown)
+    if style.showCountdown then
+        ns.StyleNumbers(aura.cd, style.countdownSize, style.countdownColor,
+            style.countdownAnchor)
+    end
+
+    ns.StyleUIFont(aura.label, style.nameSize)
+    aura.label:SetTextColor(style.nameColor[1], style.nameColor[2],
+        style.nameColor[3])
+end
+
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
 -- icon-shaped ones are just the icon.
 local function LayoutAuraVisual(aura, cfg, width, height)
@@ -152,8 +182,7 @@ local function LayoutAuraVisual(aura, cfg, width, height)
             aura.label:SetPoint("LEFT", aura, "LEFT", inset, 0)
         end
         aura.label:SetWidth(math.max(10, width - inset - 5))
-        aura.label:Show()
-        ns.StyleUIFont(aura.label, math.max(9, math.min(14, height * 0.45)))
+        aura.label:SetShown(cfg.showName ~= false)
 
         aura.cd:ClearAllPoints()
         if shown then
@@ -174,8 +203,6 @@ local function LayoutAuraVisual(aura, cfg, width, height)
         aura.cd:ClearAllPoints()
         aura.cd:SetAllPoints(aura.icon)
     end
-
-    ns.StyleNumbers(aura.cd, math.max(9, math.min(20, height * 0.42)))
 end
 
 -- Cooldown:Clear does not exist on every build this addon supports, so the
@@ -369,6 +396,9 @@ function Screen:Render()
         end
 
         local width, height, spacing, lineSpacing = Metrics(cfg)
+        -- Resolved once per bar and handed to BOTH renderers. Read separately
+        -- by each, "auto" would eventually mean two different sizes.
+        local style = ns.Bars:Style(cfg, height)
         local columns = math.max(1, cfg.columns or 1)
         local rows    = math.max(1, cfg.rows or 1)
         local count   = columns * rows
@@ -392,7 +422,8 @@ function Screen:Render()
             cell:SetPoint("TOPLEFT", bar, "TOPLEFT", offsetX, offsetY)
             cell:Show()
 
-            self:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell)
+            self:PaintCell(bar, cell, cfg, width, height, claimedNow,
+                auraBySpell, style)
         end
 
         -- Cells left over from a smaller grid. The aura record has to go with
@@ -451,8 +482,8 @@ end
 -- Ours, on our own cell, because the name is not something Blizzard's icon
 -- frame carries - and a bar cell holding nothing but a square icon in one
 -- corner reads as broken rather than as deliberate.
-function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth)
-    if cfg.kind ~= "bar" then
+function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth, style)
+    if cfg.kind ~= "bar" or not style.showName then
         if cell.caption then cell.caption:Hide() end
         return
     end
@@ -478,13 +509,15 @@ function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth)
         cell.caption:SetWidth(math.max(10, width - inset - 5))
     end
 
-    ns.StyleUIFont(cell.caption, math.max(9, math.min(14, height * 0.45)))
+    ns.StyleUIFont(cell.caption, style.nameSize)
+    cell.caption:SetTextColor(style.nameColor[1], style.nameColor[2],
+        style.nameColor[3])
     cell.caption:SetText(ns.SpellName(spellID) or "")
     cell.caption:Show()
 end
 
 -- One cell: adopt, draw, or leave empty.
-function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell)
+function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell, style)
     local spellID = cfg.cells[cell.index]
 
     -- Whatever this cell held last time is handed back before anything else,
@@ -520,13 +553,10 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
             ns.CDM:Pin(item, anchor, itemWidth, itemHeight)
         end
         ns.CDM:SetAlpha(item, visible and (cfg.alpha or 1) or 0)
-        ns.CDM:Skin(item, {
-            borderSize = cfg.borderSize,
-            borderColor = cfg.borderColor,
-            height = itemHeight,
-        })
+        ns.CDM:Skin(item, style)
 
-        self:PaintCaption(cell, cfg, spellID, width, height, visible and itemWidth or 0)
+        self:PaintCaption(cell, cfg, spellID, width, height,
+            visible and itemWidth or 0, style)
         return
     end
 
@@ -543,13 +573,10 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
     local aura = BuildAuraVisual(cell)
     aura:Show()
     LayoutAuraVisual(aura, cfg, width, height)
+    StyleAuraVisual(aura, style)
 
     aura.icon:SetTexture(ns.SpellTexture(spellID))
     aura.label:SetText(ns.SpellName(spellID) or "")
-
-    local border = cfg.borderColor or { 0, 0, 0 }
-    aura.border:SetThickness(math.max(0, cfg.borderSize or 1))
-    aura.border:SetColor(border[1], border[2], border[3], 1)
 
     -- Looked up per render rather than cached on the cell: a respec changes
     -- which procs exist, and a stale record would drive a clock off a glow

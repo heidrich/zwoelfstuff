@@ -249,11 +249,29 @@ end
 -- Every font string inside a widget, styled with the number font. Used on
 -- Blizzard's cooldown countdown, which has no stable name - it is simply a
 -- region of the Cooldown widget, so it is found rather than looked up.
-function ns.StyleNumbers(widget, size)
+--
+-- anchor moves the text off centre. Blizzard's engine sets its own baseline
+-- for the countdown, so ours is applied on top rather than instead - which
+-- also means an anchor of CENTER is left alone, because that is already
+-- where the engine puts it and re-anchoring it can only go wrong.
+function ns.StyleNumbers(widget, size, colour, anchor)
     if not widget then return end
+
     for _, region in ipairs({ widget:GetRegions() }) do
         if region.GetObjectType and region:GetObjectType() == "FontString" then
             ns.StyleFont(region, size)
+            if colour then
+                region:SetTextColor(colour[1], colour[2], colour[3])
+            end
+            if anchor and anchor ~= "CENTER" then
+                local inset = 2
+                local x = anchor:find("LEFT") and inset
+                    or anchor:find("RIGHT") and -inset or 0
+                local y = anchor:find("TOP") and -inset
+                    or anchor:find("BOTTOM") and inset or 0
+                region:ClearAllPoints()
+                region:SetPoint(anchor, widget, anchor, x, y)
+            end
         end
     end
 end

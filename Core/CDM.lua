@@ -462,16 +462,29 @@ local function StripDecorations(item, state)
     end
 end
 
--- style = { borderSize, borderColor = {r,g,b}, height }
+-- style comes from ns.Bars:Style, so every number here has already been
+-- resolved the same way it will be for our own drawn cells.
 function CDM:Skin(item, style)
     if not item then return end
     local state = Hold(item)
 
     StripDecorations(item, state)
 
+    local zoom = style.iconZoom
     if item.Icon then
-        pcall(item.Icon.SetTexCoord, item.Icon, 0.08, 0.92, 0.08, 0.92)
+        pcall(item.Icon.SetTexCoord, item.Icon, zoom, 1 - zoom, zoom, 1 - zoom)
     end
+
+    -- The plate goes on the item at BACKGROUND, under its own icon texture.
+    -- Ours would have to guess whether Blizzard's frame draws above or below
+    -- our cell, and the answer depends on frame levels we do not own.
+    if not state.plate then
+        state.plate = item:CreateTexture(nil, "BACKGROUND")
+        state.plate:SetAllPoints(item)
+    end
+    local plate = style.backdropColor
+    state.plate:SetColorTexture(plate[1], plate[2], plate[3], style.backdropAlpha)
+    state.plate:SetShown(style.backdrop)
 
     -- The border lives on a frame of ITS OWN, above the cooldown swipe. A
     -- texture on the item would be painted under the item's own child frames
@@ -485,18 +498,33 @@ function CDM:Skin(item, style)
         state.border = ns.CreateBorder(chrome, 1, "OVERLAY")
     end
 
-    local size = math.max(0, style.borderSize or 1)
-    local colour = style.borderColor or { 0, 0, 0 }
-    state.border:SetThickness(size)
-    state.border:SetColor(colour[1], colour[2], colour[3], 1)
-    state.border:SetShown(size > 0)
+    local edge = style.borderColor
+    state.border:SetThickness(style.borderSize)
+    state.border:SetColor(edge[1], edge[2], edge[3], 1)
+    state.border:SetShown(style.borderSize > 0)
 
-    -- Numbers scale with the icon, or a 24px cell gets the same countdown as
-    -- a 64px one and reads as a different design again.
-    local height = style.height or 40
-    ns.StyleNumbers(item.Cooldown, math.max(9, math.min(20, height * 0.42)))
-    ns.StyleNumbers(item.ChargeCount, math.max(8, math.min(16, height * 0.30)))
-    ns.StyleNumbers(item.Applications, math.max(8, math.min(16, height * 0.30)))
+    local cooldown = item.Cooldown
+    if cooldown then
+        local swipe = style.swipeColor
+        pcall(cooldown.SetSwipeColor, cooldown, swipe[1], swipe[2], swipe[3],
+            style.swipeAlpha)
+        pcall(cooldown.SetDrawEdge, cooldown, style.showEdge)
+        pcall(cooldown.SetHideCountdownNumbers, cooldown, not style.showCountdown)
+
+        if style.showCountdown then
+            ns.StyleNumbers(cooldown, style.countdownSize, style.countdownColor,
+                style.countdownAnchor)
+        end
+    end
+
+    -- Stacks and charges are Blizzard's own child FRAMES. Alpha, never Hide -
+    -- the same rule that applies to the item itself.
+    for _, widget in ipairs({ item.ChargeCount, item.Applications }) do
+        if widget then
+            pcall(widget.SetAlpha, widget, style.showStacks and 1 or 0)
+            ns.StyleNumbers(widget, style.stackSize, style.stackColor)
+        end
+    end
 end
 
 -- Hands an item frame back to Blizzard: the hooks stay (hooks cannot be

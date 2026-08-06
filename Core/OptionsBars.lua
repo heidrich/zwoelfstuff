@@ -719,6 +719,33 @@ function Workspace:BuildOptionsPane(parent, width)
             min = min, max = max, step = step, format = format, apply = Apply,
         })
     end
+    local function Switch(label, key, sublabel)
+        return UI.Toggle(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }),
+            Get(key), function(value) Set(key)(value); Apply() end)
+    end
+    local function Colour(label, key)
+        return UI.Swatch(grid:FullRow(label, { controlWidth = 124 }),
+            function()
+                local _, cfg = Workspace:Current()
+                local colour = cfg and cfg[key] or { 0, 0, 0 }
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b)
+                local _, cfg = Workspace:Current()
+                if cfg then cfg[key] = { r, g, b } end
+            end,
+            Apply)
+    end
+
+    -- A size of 0 means "work it out from the cell", so the slider says that
+    -- rather than showing a zero nobody would read as automatic.
+    local function AutoSize(v)
+        if v <= 0 then return "auto" end
+        return string.format("%d", v)
+    end
+    local function Percent(v)
+        return string.format("%d%%", math.floor(v * 100 + 0.5))
+    end
 
     -- Identity ------------------------------------------------------------
     grid:Section("This bar")
@@ -766,28 +793,49 @@ function Workspace:BuildOptionsPane(parent, width)
         { value = "right",  text = "Right of the bar" },
         { value = "hidden", text = "Hidden" },
     }, Get("iconPlacement"), Set("iconPlacement"), { apply = Apply })
+
+    local nameShowRow = Switch("Spell name", "showName")
+    local nameSizeRow = Slide("Name size", "nameSize", 0, 24, 1, AutoSize)
+    local nameColRow  = Colour("Name colour", "nameColor")
     Slide("Spacing", "spacing", 0, 24, 1)
     Slide("Row gap", "lineSpacing", 0, 24, 1)
     Slide("Scale", "scale", 0.4, 2.5, 0.05,
         function(v) return string.format("%.2f", v) end)
 
     -- Looks ---------------------------------------------------------------
-    grid:Section("Looks")
+    grid:Section("Icon")
 
-    Slide("Opacity", "alpha", 0.1, 1, 0.05,
-        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end)
+    Slide("Opacity", "alpha", 0.1, 1, 0.05, Percent)
+    Slide("Crop", "iconZoom", 0, 0.2, 0.01, Percent)
+    grid:Note("Blizzard's icon art has a border baked into the file. Cropping "
+        .. "cuts it off; at 0 you see the whole thing, frame and all.")
+
+    grid:Section("Edge")
+
     Slide("Border", "borderSize", 0, 4, 1)
-    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
-        function()
-            local _, cfg = Workspace:Current()
-            local colour = cfg and cfg.borderColor or { 0, 0, 0 }
-            return colour[1], colour[2], colour[3]
-        end,
-        function(r, g, b)
-            local _, cfg = Workspace:Current()
-            if cfg then cfg.borderColor = { r, g, b } end
-        end,
-        Apply)
+    Colour("Border colour", "borderColor")
+    Switch("Backdrop", "backdrop", "A plate behind the icon")
+    Colour("Backdrop colour", "backdropColor")
+    Slide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05, Percent)
+
+    grid:Section("Cooldown sweep")
+
+    Colour("Sweep colour", "swipeColor")
+    Slide("Sweep opacity", "swipeAlpha", 0, 1, 0.05, Percent)
+    Switch("Leading edge", "showEdge", "The bright line the sweep drags")
+
+    grid:Section("Numbers")
+
+    Switch("Countdown", "showCountdown")
+    Slide("Countdown size", "countdownSize", 0, 30, 1, AutoSize)
+    Colour("Countdown colour", "countdownColor")
+    UI.Dropdown(grid:FullRow("Countdown at", { controlWidth = 124 }),
+        ns.TEXT_ANCHORS, Get("countdownAnchor"), Set("countdownAnchor"),
+        { apply = Apply })
+
+    Switch("Stacks and charges", "showStacks")
+    Slide("Stack size", "stackSize", 0, 24, 1, AutoSize)
+    Colour("Stack colour", "stackColor")
 
     -- Reuse ---------------------------------------------------------------
     grid:Section("Reuse")
@@ -884,6 +932,9 @@ function Workspace:BuildOptionsPane(parent, width)
         barWRow:SetRelevant(isBar)
         barHRow:SetRelevant(isBar)
         iconPlaceRow:SetRelevant(isBar)
+        nameShowRow:SetRelevant(isBar)
+        nameSizeRow:SetRelevant(isBar)
+        nameColRow:SetRelevant(isBar)
 
         grid:Refresh()
     end
