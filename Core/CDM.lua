@@ -508,9 +508,26 @@ function CDM:Skin(item, style)
 
     StripDecorations(item)
 
+    -- The art has to be told to fill the frame. Sizing the FRAME is not
+    -- enough: each viewer's template anchors its own icon texture its own way
+    -- - a fixed size here, an inset there - so six adopted icons in one row
+    -- came out at six sizes, sitting at six different offsets, while the
+    -- cells behind them were a perfectly even grid.
+    --
+    -- Re-anchored on every pass, because these frames are re-decorated when
+    -- the pool hands them out again.
     local zoom = style.iconZoom
     if item.Icon then
+        item.Icon:ClearAllPoints()
+        item.Icon:SetAllPoints(item)
         pcall(item.Icon.SetTexCoord, item.Icon, zoom, 1 - zoom, zoom, 1 - zoom)
+    end
+
+    -- Same for the sweep, or the cooldown would darken a rectangle that is
+    -- not the icon it belongs to.
+    if item.Cooldown then
+        item.Cooldown:ClearAllPoints()
+        item.Cooldown:SetAllPoints(item)
     end
 
     -- The plate goes on the item at BACKGROUND, under its own icon texture.
@@ -593,15 +610,45 @@ end
 ---------------------------------------------------------------------------
 function CDM:DumpSkin()
     local target, targetSpell
-    for item in pairs(adopted) do
-        if self:IsPinned(item) then
-            target = item
-            targetSpell = self:ItemSpellID(item)
-            break
+
+    -- Every pinned frame first: what we ASKED for against what is actually
+    -- there. A size or an anchor that does not match is not a styling
+    -- problem, it is somebody overwriting us - and the two have completely
+    -- different fixes.
+    ns.Print("|cffffd100--- pinned icons: asked for / actually ---|r")
+    local count = 0
+
+    for item, state in pairs(adopted) do
+        if state.anchor then
+            count = count + 1
+            local spellID = self:ItemSpellID(item)
+            local point, relativeTo, relativePoint = item:GetPoint(1)
+
+            local wantW, wantH = state.width or 0, state.height or 0
+            local gotW, gotH = item:GetWidth() or 0, item:GetHeight() or 0
+            local sizeOK = math.abs(gotW - wantW) < 0.5 and math.abs(gotH - wantH) < 0.5
+            local anchorOK = relativeTo == state.anchor[2]
+                and point == state.anchor[1] and relativePoint == state.anchor[3]
+
+            ns.Print(string.format("%s %s |cff888888%d|r  size %.0fx%.0f%s  "
+                .. "anchor %s%s",
+                (sizeOK and anchorOK) and "|cff40ff40ok|r" or "|cffff4040NO|r",
+                ns.SpellName(spellID) or "?", spellID or 0,
+                gotW, gotH,
+                sizeOK and "" or string.format(" |cffff4040(asked %.0fx%.0f)|r",
+                    wantW, wantH),
+                tostring(point) .. "/" .. tostring(relativePoint),
+                anchorOK and "" or string.format(" |cffff4040(asked %s/%s, and it "
+                    .. "is on a different frame)|r", state.anchor[1], state.anchor[3])))
+
+            if not target then
+                target = item
+                targetSpell = spellID
+            end
         end
     end
 
-    if not target then
+    if count == 0 then
         ns.Print("No adopted icon to look at - put a Cooldown Manager spell "
             .. "on a bar first.")
         return

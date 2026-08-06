@@ -1289,6 +1289,20 @@ function UI.CellGrid(parent, cfg)
                 cell.icon:SetTexture(texture or ns.WHITE)
                 cell.icon:SetDesaturated(not texture)
                 cell.icon:SetAlpha(1)
+
+                -- Square, even in a bar-shaped cell. Stretched across the
+                -- width of a bar a spell icon is an unreadable smear, and the
+                -- editor is supposed to show what the bar will look like -
+                -- where the icon is a square at one end.
+                cell.icon:ClearAllPoints()
+                cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
+                if w > h then
+                    cell.icon:SetPoint("BOTTOMLEFT", cell, "BOTTOMLEFT", 1, 1)
+                    cell.icon:SetWidth(h - 2)
+                else
+                    cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
+                end
+
                 cell.icon:Show()
                 cell.plus:Hide()
                 cell.number:SetText(tostring(index))

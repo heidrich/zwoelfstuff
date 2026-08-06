@@ -25,9 +25,14 @@ ns.Options = Options
 local UI = ns.UI
 local C = UI.C
 
-local WINDOW_W, WINDOW_H = 1120, 700
-local SIDEBAR_W = 208
-local SIDE_W    = 292
+-- The left column holds six words and a button; it does not need to be as
+-- wide as the thing you are working on. The right one holds a settings label
+-- AND its control on the same line, and it was clipping labels to "T..." to
+-- fit. So: take the width from the one that has nothing to say and give it to
+-- the one that ran out.
+local WINDOW_W, WINDOW_H = 1360, 760
+local SIDEBAR_W = 168
+local SIDE_W    = 400
 local PAD       = 20
 
 -- Shared with Widgets, so the rule under the brand, the rule under the page
