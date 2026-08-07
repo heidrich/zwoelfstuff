@@ -196,7 +196,9 @@ local CONTROL_W = 150
 function UI.Row(parent, text, opts)
     opts = opts or {}
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(opts.tall and 42 or UI.ROW_H)
+    -- A row with a second line needs room for it. 28 fits one 12pt label; two
+    -- lines in the same 28 put the smaller one on the hairline underneath.
+    row:SetHeight(opts.tall and 46 or (opts.sublabel and 38 or UI.ROW_H))
 
     -- Flat until you point at it. The surface is the CURSOR's, not the row's,
     -- which is what turns forty boxes into one list. Hidden rather than
@@ -215,12 +217,12 @@ function UI.Row(parent, text, opts)
     row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 0)
 
     row.label = UI.Label(row, text, 12, C.text)
-    row.label:SetPoint("LEFT", row, "LEFT", 8, opts.sublabel and 7 or 0)
+    row.label:SetPoint("LEFT", row, "LEFT", 8, opts.sublabel and 8 or 0)
     row.label:SetWordWrap(false)
 
     if opts.sublabel then
         row.sub = UI.Label(row, opts.sublabel, 10, C.textFaint)
-        row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -1)
+        row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -3)
         row.sub:SetWordWrap(false)
     end
 
@@ -1573,16 +1575,27 @@ function UI.Page(parent, width)
 end
 
 -- A full-width block: section headers, notes, button strips.
-function Grid:Wide(region, height)
+--
+-- padTop and padBottom are the air around it, and they are NOT decoration.
+-- Only the half-width rows used to get a gap; every wide block was stacked
+-- against the one above it with nothing in between, which is invisible while
+-- each row is a filled card and turns into text touching text the moment they
+-- are flat. Every block says how much room it wants around itself, in one
+-- place, so a page cannot be spaced one way here and another way there.
+function Grid:Wide(region, height, padTop, padBottom, indent)
+    indent = indent or 0
+
     -- The width, here, once. A block placed by Layout is only ever given a
     -- POINT, so anything that does not set its own width is zero pixels wide:
     -- section headings were laid out correctly and invisible, and their rule
     -- line could not draw at all. Notes set their own, which is exactly why
     -- they showed and the headings did not.
-    if region.SetWidth then region:SetWidth(self.width) end
+    if region.SetWidth then region:SetWidth(self.width - indent) end
 
     self.items[#self.items + 1] = {
         region = region, height = height, wide = true, group = self.group,
+        padTop = padTop or 0, padBottom = padBottom or UI.ROW_GAP,
+        indent = indent,
     }
     if region.Refresh then self.widgets[#self.widgets + 1] = region end
     return region
@@ -1594,11 +1607,22 @@ end
 -- This is what keeps the page honest: the things you do while working stay
 -- visible, and the dozen knobs you set once are one click away instead of
 -- filling the screen and hiding the work.
+-- The air above a heading is what separates two groups of settings. It is
+-- deliberately much larger than the gap below it: a heading belongs to what
+-- FOLLOWS it, and spacing it evenly makes a long page read as one column.
+--
+-- The very first heading on a page gets none of it - there is nothing above
+-- it to be separated from, and a page that starts with a hole looks unloaded.
+local SECTION_PAD_TOP = 16
+local SECTION_PAD_BOTTOM = 3
+
 function Grid:Section(title, key)
     self.group = key
+    local padTop = (#self.items == 0) and 0 or SECTION_PAD_TOP
 
     if not key then
-        return self:Wide(UI.SectionHeader(self.content, title), UI.SECTION_H)
+        return self:Wide(UI.SectionHeader(self.content, title), UI.SECTION_H,
+            padTop, SECTION_PAD_BOTTOM)
     end
 
     self.collapsed = self.collapsed or {}
@@ -1616,19 +1640,27 @@ function Grid:Section(title, key)
     -- Recorded with no group of its own: a section header must stay visible
     -- when its own contents are folded away.
     self.group = nil
-    self:Wide(header, UI.SECTION_H)
+    self:Wide(header, UI.SECTION_H, padTop, SECTION_PAD_BOTTOM)
     self.group = key
     return header
 end
 
 -- height is only needed for a note whose text is set LATER: the measured
 -- height would be the empty string's, and the rows below would overlap it.
+--
+-- A note explains the row ABOVE it, so it sits close to that one and keeps
+-- its distance from whatever comes next - and it is indented to the same
+-- place a row's label starts, or the page has two left edges.
+local NOTE_INDENT = 8
+
 function Grid:Note(text, height)
     local note = UI.Hint(self.content, text)
-    note:SetWidth(self.width)
+    note:SetWidth(self.width - NOTE_INDENT)
     note:SetJustifyV("TOP")
-    -- Width is set, so GetStringHeight reports the wrapped height.
-    return self:Wide(note, height or (note:GetStringHeight() + 7))
+    -- Width is set, so GetStringHeight reports the WRAPPED height. Measured
+    -- after the width, never before: the unwrapped height is one line, and
+    -- everything below would be laid out on top of the other two.
+    return self:Wide(note, height or note:GetStringHeight(), 3, 11, NOTE_INDENT)
 end
 
 -- A half-width row. Two consecutive calls share a line.
@@ -1639,6 +1671,7 @@ function Grid:Row(label, opts)
     row:SetWidth(self.colWidth)
     self.items[#self.items + 1] = {
         region = row, height = row:GetHeight(), group = self.group,
+        padTop = 0, padBottom = UI.ROW_GAP, indent = 0,
     }
     self.widgets[#self.widgets + 1] = row
     return row
@@ -1652,20 +1685,36 @@ function Grid:FullRow(label, opts)
     row:SetWidth(self.width)
     self.items[#self.items + 1] = {
         region = row, height = row:GetHeight(), wide = true, group = self.group,
+        padTop = 0, padBottom = UI.ROW_GAP, indent = 0,
     }
     self.widgets[#self.widgets + 1] = row
     return row
 end
 
 -- Places everything and returns the y the next free line would start at.
+--
+-- Every block carries its own padTop and padBottom, and the pads of two
+-- neighbours COLLAPSE into one - the larger of them - the way margins do in
+-- any layout engine worth the name. Adding them would make the gap under a
+-- heading depend on what happened to come next, which is how a page ends up
+-- with six different spacings nobody can account for.
 function Grid:Layout()
     local y, column, lineHeight = 0, 0, 0
+    local pending = 0        -- the bottom pad the previous block asked for
 
     local function EndLine()
         if column > 0 then
-            y = y - lineHeight - UI.ROW_GAP
+            y = y - lineHeight
+            pending = math.max(pending, UI.ROW_GAP)
             column, lineHeight = 0, 0
         end
+    end
+
+    -- Opens the gap before a block: the larger of what the last one wanted
+    -- below it and what this one wants above it, never the sum.
+    local function OpenGap(padTop)
+        y = y - math.max(pending, padTop or 0)
+        pending = 0
     end
 
     local collapsed = self.collapsed or {}
@@ -1677,22 +1726,27 @@ function Grid:Layout()
         if folded then
             if region then region:Hide() end
         elseif region and region.dkSkip then
-            -- skipped entirely: no gap left behind
+            -- Skipped entirely, and its padding goes with it: a hidden row
+            -- that still contributed a gap is a hole nobody can explain.
         elseif item.wide then
             EndLine()
+            OpenGap(item.padTop)
             if region then
                 region:ClearAllPoints()
-                region:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, y)
+                region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
+                    item.indent or 0, y)
                 region:Show()
             end
             -- dkHeight lets a block that grows with its content - a grid
             -- gaining a row - report its real height instead of the one it
             -- happened to have when it was recorded.
             y = y - ((region and region.dkHeight) or item.height)
+            pending = item.padBottom or UI.ROW_GAP
         else
+            if column == 0 then OpenGap(item.padTop) end
             region:ClearAllPoints()
             region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
-                column * (self.colWidth + UI.COL_GAP), y)
+                (item.indent or 0) + column * (self.colWidth + UI.COL_GAP), y)
             region:Show()
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
@@ -1701,7 +1755,7 @@ function Grid:Layout()
     end
     EndLine()
 
-    self.content:SetHeight(math.max(1, -y + 10))
+    self.content:SetHeight(math.max(1, -y + 12))
     if self.scroll.Update then self.scroll.Update() end
     return y
 end

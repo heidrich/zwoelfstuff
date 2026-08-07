@@ -159,12 +159,31 @@ function ns.CreateChrome(parent)
     return chrome
 end
 
-function ns.PaintBorder(chrome, style)
+-- outside moves the edge OFF the thing it frames.
+--
+-- On an icon the border belongs on top: the art fills the frame edge to edge,
+-- and a line drawn just inside it is what reads as a crisp icon. On a BAR it
+-- does not - the last pixel of the fill and the leading spark are the parts
+-- you actually read, and a border sitting on them looks like a mistake. So a
+-- bar-shaped cell frames itself from just outside instead.
+--
+-- Both renderers - Blizzard's adopted frames and our own drawn cells - pass
+-- the same flag from the same place. A rule either of them decided for itself
+-- is a rule they would eventually disagree about.
+function ns.PaintBorder(chrome, style, outside)
     if not chrome then return end
 
     local size = style.borderSize
     local colour = style.borderColor
     local key = style.borderTexture
+
+    local parent = chrome:GetParent()
+    if parent then
+        local pad = outside and size or 0
+        chrome:ClearAllPoints()
+        chrome:SetPoint("TOPLEFT", parent, "TOPLEFT", -pad, pad)
+        chrome:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", pad, -pad)
+    end
 
     if size <= 0 then
         chrome.pixel:Hide()

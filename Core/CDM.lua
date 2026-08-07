@@ -614,7 +614,10 @@ function CDM:Skin(item, style, shape)
     if not state.chrome then
         state.chrome = ns.CreateChrome(item)
     end
-    ns.PaintBorder(state.chrome, style)
+    -- On a bar the edge goes OUTSIDE. The last pixel of the fill and the
+    -- leading spark are the parts you read, and a border sitting on them is
+    -- what the owner meant by "the border is in front of the background".
+    ns.PaintBorder(state.chrome, style, shape == "bar")
 
     local cooldown = item.Cooldown
     if cooldown then

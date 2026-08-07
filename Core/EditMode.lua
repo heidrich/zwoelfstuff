@@ -740,21 +740,45 @@ local function NudgeCell(where, direction, step)
     RefreshInspector()
 end
 
+-- SetPropagateKeyboardInput IS PROTECTED IN COMBAT.
+--
+-- Calling it from addon code while the player is in combat raises
+-- ADDON_ACTION_BLOCKED - reported from a training dummy, closing unlock mode
+-- mid-fight. It is not a taint problem and there is no way around it: the
+-- call simply may not happen in combat.
+--
+-- So it does not. The cost is that the arrow keys do not nudge while you are
+-- fighting, which is the right thing to give up: propagation defaults to ON,
+-- so every key reaches the game as usual and nothing is swallowed.
+local function Propagate(frame, state)
+    if InCombatLockdown() then return false end
+    frame:SetPropagateKeyboardInput(state)
+    return true
+end
+
 local function BuildKeyCatcher()
     keyCatcher = CreateFrame("Frame", nil, UIParent)
     keyCatcher:EnableKeyboard(true)
-    keyCatcher:SetPropagateKeyboardInput(true)
+    Propagate(keyCatcher, true)
     keyCatcher:Hide()
+
+    -- Combat can start between a key going down and coming back up, which
+    -- would leave propagation switched off for the whole fight with no way to
+    -- switch it back. This puts it right the moment the fight ends.
+    keyCatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+    keyCatcher:SetScript("OnEvent", function(self)
+        Propagate(self, true)
+    end)
 
     keyCatcher:SetScript("OnKeyDown", function(self, key)
         if key == "ESCAPE" then
-            self:SetPropagateKeyboardInput(false)
+            Propagate(self, false)
             EditMode:SetUnlocked(false)
             return
         end
 
         if key == "TAB" and mode == "build" and picked then
-            self:SetPropagateKeyboardInput(false)
+            Propagate(self, false)
             local cfg = ns.db.bars[picked.bar]
             if cfg then
                 local count = ns.Bars:CellCount(cfg)
@@ -764,31 +788,31 @@ local function BuildKeyCatcher()
         end
 
         if (key == "DELETE" or key == "BACKSPACE") and mode == "build" and picked then
-            self:SetPropagateKeyboardInput(false)
+            Propagate(self, false)
             ns.Bars:ClearCell(picked.bar, picked.cell)
             return
         end
 
         local direction = ARROWS[key]
         if not direction then
-            self:SetPropagateKeyboardInput(true)
+            Propagate(self, true)
             return
         end
 
         local step = IsShiftKeyDown() and NUDGE_FAST or NUDGE
 
         if mode == "build" and picked then
-            self:SetPropagateKeyboardInput(false)
+            Propagate(self, false)
             NudgeCell(picked, direction, step)
             return
         end
 
         if not selected then
-            self:SetPropagateKeyboardInput(true)
+            Propagate(self, true)
             return
         end
 
-        self:SetPropagateKeyboardInput(false)
+        Propagate(self, false)
         local cfg = BarConfig(selected.index)
         if not cfg then return end
 
@@ -797,7 +821,7 @@ local function BuildKeyCatcher()
     end)
 
     keyCatcher:SetScript("OnKeyUp", function(self)
-        self:SetPropagateKeyboardInput(true)
+        Propagate(self, true)
     end)
 end
 
@@ -1250,7 +1274,7 @@ function EditMode:SetUnlocked(state)
         UI.ClosePopup()
         overlay:Hide()
         keyCatcher:Hide()
-        keyCatcher:SetPropagateKeyboardInput(true)
+        Propagate(keyCatcher, true)
         if gridLines then gridLines:Hide() end
         if palette then palette:Hide() end
     end

@@ -137,9 +137,12 @@ end
 -- The same style table the adopted frames get, applied to the parts we drew
 -- ourselves. Kept next to each other on purpose: these two are the ones that
 -- must never disagree, because they sit on the same bar.
-local function StyleAuraVisual(aura, style)
+local function StyleAuraVisual(aura, style, isBar)
     ns.PaintSurface(aura.bg, style)
-    ns.PaintBorder(aura.chrome, style)
+    -- Same rule as an adopted frame, from the same place: a bar frames itself
+    -- from outside, an icon from just inside. Decided once, or the two
+    -- renderers sitting on one bar would eventually disagree about it.
+    ns.PaintBorder(aura.chrome, style, isBar)
 
     local zoom = style.iconZoom
     aura.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
@@ -683,7 +686,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     local aura = BuildAuraVisual(cell)
     aura:Show()
     LayoutAuraVisual(aura, cfg, slot)
-    StyleAuraVisual(aura, style)
+    StyleAuraVisual(aura, style, slot.kind == "bar")
 
     -- Carried on the cell, because the glow events repaint it later and have
     -- no style table in hand.
