@@ -247,6 +247,86 @@ cannot work once the key is banded.
 `Core/Catalog.lua` got the same resolver, but it is **parked out of the TOC**
 until 12.1, so that half is inert today and correct when it returns.
 
+### The settings, taken apart — 2026-08-07
+
+Their tracking-bar vocabulary is **93 fields** (`grep -oE "cfg[.][a-zA-Z_]+"
+EllesmereUICdmBuffBars.lua`), their icon-bar defaults another ~40
+(`EllesmereUICooldownManager.lua:527`). Ours is 52 bar fields + 16 effects.
+The gap is not evenly spread, and most of it is not worth closing.
+
+**What they have that is genuinely missing here** — ranked by what it is worth
+to a Blood tank, which is the only ranking that matters for this addon:
+
+| theirs | fields | worth |
+|---|---|---|
+| stack thresholds — colour changes past N stacks, with ticks, a max, and multiple bands | 14 | **Bone Shield.** The single biggest win available |
+| pandemic glow — glows inside the refresh window | 10 | high: it is the other half of "when do I press it" |
+| custom active states (`EllesmereUICdmFakeActive.lua`) — user says "this is active for 20s after use", for trinkets/potions/racials Blizzard's CDM does not track as buffs | — | **high, and nothing else here can do it** |
+| charge hash lines across the fill | 5 | medium, cheap to build |
+| keybind text on an icon, with size/offset/align/colour | 6 | medium |
+| style presets, saved per profile and applied by name | — | medium, and see the note below |
+| spark, gradient fill, vertical bars, decimals below N seconds, custom duration | ~12 | low each |
+| name/timer/stack text with independent position, size and offset | 14 | low: three of ours are booleans, and that is a deliberate simplification |
+
+**The style-preset idea is worth stealing for its SHAPE, not its feature.**
+`TBB_STYLE_KEYS` (`EllesmereUICdmBuffBars.lua:1511`) is an explicit list of
+which of the 93 keys are *look* and which are *identity or position*, and
+`CopyTBBStyle` copies key-exact **including nil**, so two bars resolve
+defaults identically. We already made the same distinction the hard way in
+4.10.0 (the look belongs to the SLOT, the spell does not) but we have no such
+list — `Bars:CopyLayoutFrom` names what to DROP instead of what to copy, which
+is the fragile direction: a field added tomorrow is silently copied.
+
+**Where we are already better, and should not "fix" it:**
+
+- **Arrangements.** They have rows, spacing and a vertical flag. We have grid,
+  staggered and a free puzzle with per-cell scale, offset, kind and
+  visibility. Nothing in their file approaches it.
+- **One bar, mixed cell kinds.** A tracking bar sitting among icons is ours
+  alone; theirs are three fixed bar types.
+- **Visibility.** Ours is a rule set (`ns.SHOW_*` in `Core/Visibility.lua`);
+  theirs is six booleans (`visHideHousing`, `visOnlyInstances`,
+  `visHideMounted`, `visHideNoTarget`, `visHideNoEnemy`, `barVisibility`).
+  Ours also has a fade factor rather than a hard hide.
+- **The self test.** They have none.
+
+### The 12.1 aura engine: what today's reading ADDS to `Core/Engine.lua`
+
+`Core/Engine.lua` is parked and its contract is already correct — it was
+written against these files and points 1, 2, 4 and 5 of its header match
+`EllesmereUI_AuraKit.lua` exactly. Do not rewrite it. These are the gaps:
+
+1. **A container must be SHOWN to be processed.** The engine parses auras from
+   a run-when-visible OnUpdate. `EllesmereUICdmTbbDecimals.lua:258` hosts its
+   container on a 1px frame that is *shown at alpha 0* — never hidden. This is
+   the SAME rule as the buff-bar park finding above: in this system **hidden
+   means no data**, everywhere. Alpha is the only safe off switch.
+2. **Unanchored is a silent death.** `spec.point` is required; an unanchored
+   container "builds, binds slots, and then never processes a single aura"
+   (`:310-313`). Ours anchors already — keep it, and now we know why.
+3. **A hidden one-slot container is a legal DATA SOURCE for text.** This is
+   the technique we do not have: declare a slot filtered to the spell
+   (`candidateFilters = { includeSpellIDs = {...} }`), create a FontString
+   *inside* the button, hand it to `SetDurationText`, and then **copy its
+   string out** to our own bar's timer each tick. That renders the countdown
+   of an aura nobody may read — including decimals — without ever touching a
+   secret. `EllesmereUICdmTbbDecimals.lua:280-306`.
+4. **Two slots must never claim the same spell ID.** Spell families share one
+   `cooldownInfo` (ritual + art chains list each other in `linkedSpellIDs`),
+   and family-wide filters on two bars made the engine bind the live aura to
+   whichever slot it liked — **the losing bar showed nothing at all**. Their
+   fix is a two-pass claim: saved identity claims its ids first, enrichment
+   only fills unclaimed ones (`:204-253`). Our `VariantFamily` expansion has
+   exactly this failure mode waiting for it.
+5. **`AddAuraGroup` costs ~4-6ms each** — it eagerly builds a 10-button batch.
+   Monolithic builds spike proportionally to group count, which is why they
+   split shell/add/finish and drain it through an 8ms-budgeted queue
+   (`EllesmereUI_AuraKit.lua:866-872`, `:963`).
+6. **Creating a container in combat is legal since build 68914.** Any
+   in-combat guard written before that is now costing us a rebuild.
+7. **`updateInterval` is a binding-level knob** since the 68914 schema:
+   `BuildDurationTextOpts(formatter, colorCurve, 0.05)`, not a container one.
+
 ### What they have that we do not
 
 Their per-bar vocabulary, from `DEFAULTS` at `:527` and the `cfg.` inventory of
@@ -851,9 +931,15 @@ basics.
    seconds**, **suppress GCD**, **custom duration**, **per-spec bar sets**.
 
    The spell picker is DONE and produced 4.12.0 — see *What the spell picker
-   said* below. Next is `EUI_CooldownManager_Options.lua`, then
-   `EllesmereUICdmFakeActive.lua` (which bears on previewing an inactive bar,
-   something our build mode fakes by hand).
+   said* below. The settings sweep is DONE — see *The settings, taken apart*.
+   `EllesmereUICdmFakeActive.lua` turned out NOT to be a preview engine: it is
+   **custom active states**, a user-defined "this is active for N seconds
+   after I press it" for trinkets, potions and racials that Blizzard's CDM
+   never reports as buffs. Nothing here can do that, and it is on the
+   candidate list. Still unread: the bodies behind
+   `EUI_CooldownManager_Options.lua` (19764 lines; the labels and the
+   structure are extracted, the code is not) and the five marked sections of
+   `EllesmereUICooldownManager.lua`.
 
 3. **Smooth fill for the mirror**, already found and not yet built:
    `SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)`. The
