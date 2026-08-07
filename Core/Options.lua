@@ -105,6 +105,54 @@ local function BuildGeneralPage(page, width)
 
     grid:Note("Left click opens this window, drag moves it around the minimap edge.")
 
+    ---------------------------------------------------------------------
+    -- Another character's layout
+    --
+    -- The other half of settings being per character. Without this, every
+    -- alt starts from an empty screen and nobody builds the same interface
+    -- twice - which is why the owner asked for it in the same breath as the
+    -- per-character rule itself.
+    ---------------------------------------------------------------------
+    -- A FUNCTION, not a table: another character's profile appears the moment
+    -- they log out, and a list built once at login would never show them.
+    -- UI.Dropdown takes either.
+    local function OtherCharacters()
+        local out = {}
+        for _, entry in ipairs(ns.OtherProfiles()) do
+            out[#out + 1] = {
+                value = entry.key,
+                text = string.format("%s  |cff888888%d %s|r", entry.key,
+                    entry.bars, entry.bars == 1 and "bar" or "bars"),
+            }
+        end
+        if #out == 0 then
+            out[1] = { value = false, text = "|cff888888No other character yet|r" }
+        end
+        return out
+    end
+
+    local copyRow = grid:FullRow("Take a layout from", { controlWidth = 190 })
+    UI.Dropdown(copyRow, OtherCharacters, function() return nil end,
+        function(value)
+            if not value then return end
+            local ok, result = ns.Bars:CopyLayoutFrom(value)
+            if ok then
+                ns.Print(string.format("Copied %d bar%s from |cffffd100%s|r. "
+                    .. "The cells are empty - a spell belongs to the character "
+                    .. "that can cast it.",
+                    result, result == 1 and "" or "s", value))
+            else
+                ns.Print("|cffff4040Nothing copied|r - " .. tostring(result) .. ".")
+            end
+        end, { emptyText = "Pick a character" })
+
+    grid:Note("Everything you built comes across - the bars, their "
+        .. "arrangements, sizes, looks, rules and positions - and every cell "
+        .. "arrives EMPTY. The spells stay behind on purpose: a Death Knight's "
+        .. "cooldowns are not castable on a Paladin, and copying them is the "
+        .. "bug this whole split exists to prevent. This replaces the bars you "
+        .. "have here.")
+
     grid:Section("Everything")
 
     local resetArmed = false

@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.10.0"
+ns.version = "4.11.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -96,11 +96,15 @@ ns.DEFAULTS = {
     -- 5: the one fill setting becomes two - which END the fill sits at, and
     --    whether it grows or drains. They were shipped as one and the label
     --    described the half that was not implemented.
-    -- 6: the spells on a bar move to a per-class-and-spec table. The LAYOUT
-    --    stays shared by every character; the spells cannot be, because a
-    --    Paladin was being shown a row of Death Knight cooldowns.
+    -- 6: the spells on a bar move to a per-class-and-spec table.
+    -- 7: EVERY setting moves under the character it was made on. See
+    --    ns.OpenProfile - the owner's rule is that a change to the UI belongs
+    --    to the character and realm that made it, and no keying by class or
+    --    spec can stop two characters of one class overwriting each other.
+    --    Version 6 is therefore now a split INSIDE one character's profile:
+    --    the spec you are in decides which spells its bars hold.
     -- See Bars:Migrate.
-    dbVersion  = 6,
+    dbVersion  = 7,
 
     -- Bars: a grid of cells, each holding one spell from Blizzard's Cooldown
     -- Manager. Seeded once on first run and never re-seeded, so a deleted
@@ -116,24 +120,10 @@ ns.DEFAULTS = {
     -- to whatever took the old one's place.
     lastBarID  = 0,
 
-    -- Procs seen on this account, per class and spec:
-    --   ["DEATHKNIGHT:250"] = { [glowingSpellID] = {
-    --       display  = <spellID>,   what icon to draw
-    --       auraID   = <spellID>,   the aura itself, for the 12.1 engine
-    --       duration = <seconds>,   MEASURED between glow show and hide
-    --       seen     = <count>,
-    --   } }
-    -- Recorded by watching, never hardcoded - see Core/Auras.lua for why the
-    -- client cannot simply be asked.
-    procs      = {},
-
-    -- Auras named by hand: [auraSpellID] = { parent = <glowing spellID> }.
-    auraLinks  = {},
-
-    -- Shipped procs this account threw away: [glowing spellID] = true. A
-    -- deletion has to survive the file that supplies the entry reloading,
-    -- which is why it is a list of what NOT to show rather than a deletion.
-    procsHidden = {},
+    -- The recorded procs, the hand-made aura links and the list of shipped
+    -- procs somebody threw away are NOT here. They are measurements, shared
+    -- by every character on the account - see ns.OpenProfile and
+    -- ACCOUNT_DEFAULTS below, and ns.account.* is how they are read.
 
     -- The font every piece of text on every bar uses unless that one piece
     -- has been given its own. One place to change it, and no need to visit
@@ -430,6 +420,90 @@ function ns.SeedGroups()
 end
 
 ---------------------------------------------------------------------------
+-- WHOSE SETTINGS THESE ARE
+--
+-- Owner, 2026-08-07: "mach ich eine änderung am ui oder egal was, muss das
+-- unter dem charakter namen und server gespeichert werden".
+--
+-- So the file holds one profile per character, keyed "Name - Realm" - the
+-- same key EllesmereUI uses on this client, verified rather than invented.
+-- Everything you can change is in there: the bars, their looks, where they
+-- sit, the font, unlock-mode habits, the minimap button.
+--
+-- WHAT STAYS SHARED, and it is not a UI setting: the recorded procs, the
+-- aura links and the list of shipped procs somebody threw away. Those are
+-- MEASUREMENTS - hours of playing to collect, identical for anyone of that
+-- class and spec, and impossible to type back in. Filing them per character
+-- would make every alt start the recording again from nothing.
+--
+-- The owner's own reason for the split, verbatim: "sonst wird das pro klasse
+-- oder spec ja jedes mal überschrieben". Two characters of one class were
+-- writing over each other, and no keying by class or spec can fix that -
+-- only keying by the character.
+---------------------------------------------------------------------------
+function ns.CharacterKey()
+    local name = UnitName("player")
+    if not name then return nil end
+    local realm = GetRealmName and GetRealmName() or ""
+    return name .. " - " .. realm
+end
+
+-- The measurements, shared by every character on the account.
+local ACCOUNT_DEFAULTS = {
+    procs       = {},
+    auraLinks   = {},
+    procsHidden = {},
+}
+
+function ns.OpenProfile()
+    local store = ZwoelfStuffDB
+
+    -- A file written before profiles existed: everything in it belonged to
+    -- whoever was playing, so it becomes that character's profile and the
+    -- measurements are lifted out to the account.
+    if store.chars == nil then
+        local old = {}
+        for key, value in pairs(store) do
+            old[key] = value
+            store[key] = nil
+        end
+
+        store.account = {}
+        for key in pairs(ACCOUNT_DEFAULTS) do
+            store.account[key] = old[key]
+            old[key] = nil
+        end
+
+        store.chars = {}
+        local key = ns.CharacterKey()
+        if key and next(old) then store.chars[key] = old end
+    end
+
+    store.account = ns.ApplyDefaults(store.account or {}, ACCOUNT_DEFAULTS)
+    ns.account = store.account
+
+    local key = ns.CharacterKey() or "unknown"
+    store.chars[key] = store.chars[key] or {}
+    ns.db = ns.ApplyDefaults(store.chars[key], ns.DEFAULTS)
+    ns.profileKey = key
+end
+
+-- Every other character with a profile, newest list built on demand because
+-- it changes whenever somebody else logs out.
+function ns.OtherProfiles()
+    local out = {}
+    if not (ZwoelfStuffDB and ZwoelfStuffDB.chars) then return out end
+
+    for key, profile in pairs(ZwoelfStuffDB.chars) do
+        if key ~= ns.profileKey and type(profile) == "table" then
+            out[#out + 1] = { key = key, bars = #(profile.bars or {}) }
+        end
+    end
+    table.sort(out, function(a, b) return a.key < b.key end)
+    return out
+end
+
+---------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------
 local boot = CreateFrame("Frame")
@@ -439,7 +513,7 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON then
         ZwoelfStuffDB = ZwoelfStuffDB or {}
-        ns.db = ns.ApplyDefaults(ZwoelfStuffDB, ns.DEFAULTS)
+        ns.OpenProfile()
 
         -- Before Seed and before Prepare: everything below this line reads a
         -- bar, and a migration that runs after the first read is a migration
@@ -646,10 +720,10 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         -- Recorded procs survive. They are measurements that took hours of
         -- playing to collect and cannot be typed back in, so they are not
         -- "settings" - /zs auras forget is how those go away.
-        local procs = ns.db.procs
+        local procs = ns.account.procs
         ZwoelfStuffDB = {}
         ns.db = ns.ApplyDefaults(ZwoelfStuffDB, ns.DEFAULTS)
-        ns.db.procs = procs or ns.db.procs
+        ns.account.procs = procs or ns.account.procs
         ns.Bars:Seed()
         ns.Bars:Prepare()
         ns.Auras:Invalidate()

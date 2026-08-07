@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.11.0",
+        date = "2026-08-07",
+        lines = {
+            "EVERY SETTING IS NOW SAVED UNDER THE CHARACTER AND REALM THAT MADE IT. Your rule, and your reason for it was the right one: keying by class or spec cannot work, because two characters of the same class write over each other. Your existing settings become the profile of whichever character you are on when this version first loads.",
+            "The per-spec split from the last version survives INSIDE a profile: the spec you are in decides which spells its bars hold, so an offspec keeps its own picks without touching your main spec's.",
+            "NEW, and the other half of the same idea: 'Take a layout from' in Settings. Pick another character and their bars arrive here - arrangements, sizes, looks, rules, positions - with every cell EMPTY. The spells stay behind on purpose: a Death Knight's cooldowns are not castable on a Paladin, and copying them is the exact bug this split exists to prevent.",
+            "The recorded procs stay shared by the whole account. They are not a UI setting - they are measurements that take hours of playing to collect and are identical for anyone of that class and spec. Filing them per character would make every alt start the recording from nothing.",
+            "FIXED: the first fight on a new character read as a wall of errors. Every proc the recorder had never seen printed its own line. Nothing was wrong - that is the recorder doing exactly its job - but announcing each discovery in the middle of a pull is not the way to say so. They are collected now and reported once.",
+        },
+    },
+    {
         version = "4.10.0",
         date = "2026-08-07",
         lines = {

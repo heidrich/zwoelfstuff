@@ -277,6 +277,83 @@ function Bars:BindSpec()
 end
 
 ---------------------------------------------------------------------------
+-- Taking another character's layout
+--
+-- The other half of per-character settings, and the owner named it in the
+-- same breath: "das sind dann auswahloptionen ob ich das layout von anderen
+-- chars übernehmen will". Without it, every alt starts from an empty screen
+-- and nobody builds the same interface twice.
+--
+-- THE SPELLS DO NOT COME. That is the whole reason the settings are split per
+-- character: a Death Knight's cooldowns are not castable on a Paladin, and
+-- copying them across would recreate the bug this all started with. What
+-- arrives is the shape - the bars, their names, arrangements, sizes, looks,
+-- rules and positions - with every cell empty and waiting.
+---------------------------------------------------------------------------
+-- Copied all the way down, not referenced: a shared table would mean editing
+-- one bar's border silently repainted every bar made from it. Recursive
+-- rather than an ipairs pass, because the text settings are hash tables and
+-- ipairs over one of those copies NOTHING - a preset that looked saved and
+-- restored an empty table.
+--
+-- Declared here rather than beside the preset code that used to own it: the
+-- layout copy above needs it too, and a second copy of the same function is
+-- the kind of duplicate that drifts.
+local function DeepCopy(value)
+    if type(value) ~= "table" then return value end
+
+    local copy = {}
+    for key, inner in pairs(value) do copy[key] = DeepCopy(inner) end
+    return copy
+end
+
+function Bars:CopyLayoutFrom(profileKey)
+    local store = ZwoelfStuffDB and ZwoelfStuffDB.chars
+    local source = store and store[profileKey]
+    if not (source and source.bars) then return false, "that character has no bars" end
+
+    local copied = {}
+    for _, cfg in ipairs(source.bars) do
+        local bar = DeepCopy(cfg)
+
+        -- Everything that names a spell is dropped, and the ids are re-issued
+        -- so an attachment cannot end up pointing at one of OUR bars by
+        -- coincidence of numbering.
+        bar.cellsBySpec, bar.parkedBySpec = nil, nil
+        bar.cells, bar.parked = {}, {}
+        bar.id = 0
+
+        copied[#copied + 1] = bar
+    end
+
+    if #copied == 0 then return false, "that character has no bars" end
+
+    -- Attachments are by id, so the old ids have to be mapped onto the new
+    -- ones. Done in a second pass, because a bar can be attached to one that
+    -- comes after it in the list.
+    local newID = {}
+    for index, bar in ipairs(copied) do
+        newID[source.bars[index].id] = self:NextID()
+        bar.id = newID[source.bars[index].id]
+    end
+    for _, bar in ipairs(copied) do
+        if bar.anchor then
+            bar.anchor.to = newID[bar.anchor.to]
+            if not bar.anchor.to then bar.anchor = nil end
+        end
+    end
+
+    ns.db.bars = copied
+    self:Prepare()
+    self:BindSpec()
+    self.boundSpec = nil
+    self:BindSpec()
+
+    self:Changed()
+    return true, #copied
+end
+
+---------------------------------------------------------------------------
 -- Access
 ---------------------------------------------------------------------------
 function Bars:All()
@@ -780,19 +857,6 @@ function Bars:Style(cfg, height)
         stacks    = TextStyle(cfg.stacks,    height, 0.30, 8, 16),
         spellName = TextStyle(cfg.spellName, height, 0.45, 9, 14),
     }
-end
-
--- Copied all the way down, not referenced: a shared table would mean editing
--- one bar's border silently repainted every bar made from it. Recursive
--- rather than an ipairs pass, because the text settings are hash tables and
--- ipairs over one of those copies NOTHING - a preset that looked saved and
--- restored an empty table.
-local function DeepCopy(value)
-    if type(value) ~= "table" then return value end
-
-    local copy = {}
-    for key, inner in pairs(value) do copy[key] = DeepCopy(inner) end
-    return copy
 end
 
 function Bars:CaptureStyle(index)

@@ -4,6 +4,46 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.0] - 2026-08-07
+
+### Changed
+
+- **Every setting is now saved under the character and realm that made it.**
+  Owner's rule: *"mach ich eine änderung am ui oder egal was, muss das unter
+  dem charakter namen und server gespeichert werden"* — with the reason given
+  in the same breath: *"sonst wird das pro klasse oder spec ja jedes mal
+  überschrieben"*. That is correct and no keying by class or spec can fix it;
+  two characters of one class were writing over each other. The profile key is
+  `"Name - Realm"`, the same one EllesmereUI uses on this client. Your existing
+  settings become the profile of the character you are on when 4.11.0 first
+  loads.
+  Version 6's per-spec split survives *inside* a profile: the spec you are in
+  decides which spells its bars hold, so an offspec keeps its own picks.
+- **The recorded procs stay shared by the whole account.** They are not a UI
+  setting: they are measurements that take hours of play to collect, are
+  identical for anyone of that class and spec, and cannot be typed back in.
+  Filing them per character would make every alt start the recording again
+  from nothing.
+
+### Added
+
+- **"Take a layout from" in Settings.** The other half of per-character
+  settings, and the owner asked for it in the same breath: pick another
+  character and their bars arrive here — arrangements, sizes, looks, rules and
+  positions — with every cell EMPTY. The spells stay behind on purpose: a
+  Death Knight's cooldowns are not castable on a Paladin, and copying them is
+  the bug this split exists to prevent. Attachments are re-pointed at the new
+  bars' ids rather than left aiming at numbers from another profile.
+
+### Fixed
+
+- **The first fight on a new character read as a wall of errors.** Every proc
+  the recorder had never seen printed its own line — reported as *"sooo viele
+  tracking fehler bei allen klassen und spells und buffs"*. Nothing was
+  wrong: that is the recorder doing its job, and it was announcing each
+  discovery in the middle of a pull. They are collected now and reported once,
+  a few seconds after the last one arrives.
+
 ## [4.10.0] - 2026-08-07
 
 ### Fixed

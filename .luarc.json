@@ -25,6 +25,7 @@
     "GetBuildInfo",
     "GetCursorPosition",
     "GetNumGroupMembers",
+    "GetRealmName",
     "GetTime",
     "InCombatLockdown",
     "IsAltKeyDown",

@@ -132,8 +132,8 @@ end
 -- ADDON_LOADED on. Nothing should fire in between, but a recorder that throws
 -- would take an event handler down with it, so it checks.
 local function Recorded(key, create)
-    if not key or not ns.db or not ns.db.procs then return nil end
-    local store = ns.db.procs
+    if not key or not ns.db or not ns.account.procs then return nil end
+    local store = ns.account.procs
     if not store[key] and create then store[key] = {} end
     return store[key]
 end
@@ -145,6 +145,44 @@ end
 -- actually lights up.
 ---------------------------------------------------------------------------
 local showAt = {}
+
+---------------------------------------------------------------------------
+-- Telling you about a proc nobody had seen before
+--
+-- ONE LINE, LATER, not one line each the moment it happens.
+--
+-- The recorder is always on, and the first fight on a character it has never
+-- watched raises a glow for nearly everything that class does. A print per
+-- proc turns that into a wall of chat that reads as the addon complaining -
+-- reported as "sooo viele tracking fehler bei allen klassen und spells und
+-- buffs", which is exactly what it looks like and is not an error at all.
+--
+-- So they are collected and reported once, a few seconds after the last one
+-- arrives. Discovering things IS the point of this mechanism; announcing each
+-- discovery in the middle of a pull is not.
+---------------------------------------------------------------------------
+local newProcs, announceQueued = {}, false
+
+local function Announce(spellID)
+    newProcs[#newProcs + 1] = ns.SpellName(spellID) or tostring(spellID)
+    if announceQueued then return end
+
+    announceQueued = true
+    C_Timer.After(6, function()
+        announceQueued = false
+        local count = #newProcs
+        if count == 0 then return end
+
+        -- Named while the list is short enough to read; counted after that.
+        local what = (count <= 4) and table.concat(newProcs, ", ")
+            or (count .. " new procs")
+        wipe(newProcs)
+
+        ns.Print(string.format("|cff40ff40%s|r seen for the first time on this "
+            .. "spec, and recorded. Nothing is wrong - open Auras to see them.",
+            what))
+    end)
+end
 
 local function NoteShow(spellID)
     local key = Auras:SpecKey()
@@ -158,11 +196,7 @@ local function NoteShow(spellID)
         entry = { seen = 0 }
         store[spellID] = entry
 
-        -- Worth saying once: a proc nobody knew about is exactly what this
-        -- whole mechanism exists to find.
-        ns.Print(string.format("|cff40ff40New proc seen:|r %s |cff888888%d|r. "
-            .. "It is in the Auras list now.",
-            ns.SpellName(spellID) or "?", spellID))
+        Announce(spellID)
 
         if ns.Options and ns.Options.OnCatalogChanged then
             ns.Options:OnCatalogChanged()
@@ -356,7 +390,7 @@ end
 function Auras:Procs()
     local key = self:SpecKey()
     local merged = {}
-    local hidden = ns.db.procsHidden or {}
+    local hidden = ns.account.procsHidden or {}
 
     for spellID, entry in pairs(Bundled(key)) do
         -- A shipped entry the user threw away stays thrown away. Without
@@ -400,7 +434,7 @@ function Auras:Procs()
 
     -- Anything the user pointed at by hand, whatever spec recorded it. Here
     -- the key IS the aura, because the user named the buff they want to see.
-    for spellID, entry in pairs(ns.db.auraLinks or {}) do
+    for spellID, entry in pairs(ns.account.auraLinks or {}) do
         local glow = entry.parent or spellID
         local into = merged[glow] or {}
         merged[glow] = into
@@ -506,8 +540,8 @@ function Auras:Forget(glowSpellID)
 
     if hadRecording then store[glowSpellID] = nil end
     if isBundled then
-        ns.db.procsHidden = ns.db.procsHidden or {}
-        ns.db.procsHidden[glowSpellID] = true
+        ns.account.procsHidden = ns.account.procsHidden or {}
+        ns.account.procsHidden[glowSpellID] = true
     end
 
     self:Invalidate()
@@ -520,9 +554,9 @@ end
 -- that does not involve editing saved variables by hand.
 function Auras:Remember()
     local count = 0
-    for _ in pairs(ns.db.procsHidden or {}) do count = count + 1 end
+    for _ in pairs(ns.account.procsHidden or {}) do count = count + 1 end
 
-    ns.db.procsHidden = {}
+    ns.account.procsHidden = {}
     self:Invalidate()
     ns.Print("Restored", count, "hidden proc" .. (count == 1 and "" or "s") .. ".")
     return count
