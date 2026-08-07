@@ -8,6 +8,21 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.16.0",
+        date = "2026-08-07",
+        lines = {
+            "NEW: SPARK. A bright line riding the moving edge of a tracking bar's fill. Under Bar fill.",
+            "It costs nothing per frame, which is the small nice part: it is anchored to the fill's TEXTURE rather than positioned by hand, so the game moves it along with the clock and this addon never touches it again.",
+            "",
+            "NEW: CHARGE MARKS. One line across the fill per boundary between charges - three charges get two lines, at a third and two thirds. Its own colour, under Bar fill.",
+            "They only appear on a spell that actually HAS more than one charge, so you can leave the setting on for a whole bar without marking everything on it. And they are anchored to the bar rather than to the fill, so they stay where they are while the fill moves past them - the exact opposite of the spark, on purpose.",
+            "",
+            "NOT BUILT, and here is why: keybind text on an icon. It reads like a small thing next to these two and it is not. Getting the key for a spell means walking every action bar and every binding name, resolving each slot to a spell - through macros as well - and then following the bar PAGE as it changes with your stance, your form and any vehicle you sit in. That is a subsystem, not a setting, and it is the wrong thing to start two days before the basics are due. Say the word and it gets built properly after.",
+            "",
+            "That is all four you picked out of the reference addon.",
+        },
+    },
+    {
         version = "4.15.0",
         date = "2026-08-07",
         lines = {

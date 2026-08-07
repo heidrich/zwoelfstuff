@@ -1087,6 +1087,15 @@ function Workspace:BuildOptionsPane(parent, width)
         { 0.30, 0.85, 0.35 },   -- capped
     }
 
+    fillRows[#fillRows + 1] = Switch("Spark", "showSpark",
+        "A bright line on the moving edge")
+    fillRows[#fillRows + 1] = Switch("Charge marks", "chargeMarks",
+        "One line per charge boundary")
+    fillRows[#fillRows + 1] = Colour("Mark colour", "chargeMarkColor")
+    fillRows[#fillRows + 1] = grid:Note("Charge marks only appear on a spell "
+        .. "that HAS more than one charge, so the setting can stay on for a "
+        .. "whole bar without marking everything on it.")
+
     fillRows[#fillRows + 1] = grid:Section("Stack colours", "look-stacks")
     fillRows[#fillRows + 1] = grid:Note("The bar changes colour once the stack "
         .. "count reaches a number you pick. Below the lowest one it wears the "

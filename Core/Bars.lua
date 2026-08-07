@@ -146,6 +146,16 @@ ns.BAR_DEFAULTS = {
     fillSide    = false,       -- true starts the fill at the right-hand end
     fillGrow    = false,       -- true fills up as time passes
 
+    -- A bright line riding the leading edge of the fill. Anchored TO the
+    -- fill's texture, so it follows the clock without costing a frame.
+    showSpark   = false,
+
+    -- One line across the fill per charge boundary: three charges get two
+    -- lines, at a third and two thirds. Only ever shown for a spell that has
+    -- more than one charge, so the setting can stay on for a whole bar.
+    chargeMarks     = false,
+    chargeMarkColor = { 0, 0, 0 },
+
     -- STACK THRESHOLDS. The bar's fill changes colour once the stack count
     -- reaches a number you choose. Bone Shield is the reason it exists.
     --
@@ -762,6 +772,7 @@ ns.BAR_STYLE_KEYS = {
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
     "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "showSpark", "chargeMarks", "chargeMarkColor",
     "stackThresholds",
     "countdown", "stacks", "spellName",
 
@@ -863,6 +874,18 @@ function Bars:StackThresholds(cfg)
     return out
 end
 
+-- How many lines divide N charges. Two charges have ONE boundary between
+-- them, so it is N-1: drawing N puts a line on the end of the bar, where it
+-- reads as a border rather than as a division.
+--
+-- In the model rather than beside the renderer so it can be checked, and so
+-- the off-by-one has one home.
+function Bars:ChargeDivisions(charges)
+    local count = tonumber(charges)
+    if not count or count < 2 then return 0 end
+    return math.floor(count) - 1
+end
+
 function Bars:Style(cfg, height)
     height = height or 40
 
@@ -897,6 +920,9 @@ function Bars:Style(cfg, height)
         fillSide    = cfg.fillSide and true or false,
         fillGrow    = cfg.fillGrow and true or false,
 
+        showSpark       = cfg.showSpark and true or false,
+        chargeMarks     = cfg.chargeMarks and true or false,
+        chargeMarkColor = cfg.chargeMarkColor or { 0, 0, 0 },
         stackThresholds = self:StackThresholds(cfg),
 
         countdown = TextStyle(cfg.countdown, height, 0.42, 9, 20),

@@ -354,6 +354,28 @@ local function TestFill()
     cfg.fillTexture = "ZS Neon"
     Check("A chosen fill texture wins",
         ns.Bars:Style(cfg, 24).fillTexture == "ZS Neon")
+
+    -- The spark and the charge marks are opposites on purpose: one is
+    -- anchored to the fill's TEXTURE so it rides the clock, the other to the
+    -- fill FRAME so it stays put. Nothing here can see a frame, so what is
+    -- checked is that both reach the renderer at all.
+    cfg.showSpark, cfg.chargeMarks = true, true
+    local look = ns.Bars:Style(cfg, 24)
+    Check("The spark and the charge marks reach the renderer",
+        look.showSpark == true and look.chargeMarks == true)
+
+    local travels = {}
+    for _, key in ipairs(ns.BAR_STYLE_KEYS) do travels[key] = true end
+    Check("Both travel with the look",
+        travels.showSpark and travels.chargeMarks and travels.chargeMarkColor)
+
+    -- N charges are divided by N-1 lines, not N. Off by one here draws a line
+    -- on the very end of the bar, where it reads as a border rather than as a
+    -- division. Asked of the renderer's own helper, not of a copy of the rule.
+    Check("Three charges are split by two lines", ns.Bars:ChargeDivisions(3) == 2)
+    Check("One charge is split by nothing", ns.Bars:ChargeDivisions(1) == 0)
+    Check("A nonsense charge count draws nothing",
+        ns.Bars:ChargeDivisions(nil) == 0 and ns.Bars:ChargeDivisions(0) == 0)
 end
 
 ---------------------------------------------------------------------------

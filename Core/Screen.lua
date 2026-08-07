@@ -122,6 +122,21 @@ local function BuildAuraVisual(cell)
     -- ApplyThresholds below for why they are not made here.
     aura.thresholds = {}
 
+    -- One line per charge boundary, also on demand: most spells have one
+    -- charge and would carry an empty pool for the whole session.
+    aura.marks = {}
+
+    -- THE SPARK RIDES THE FILL'S TEXTURE, not the fill frame.
+    --
+    -- Anchored to the texture's leading edge, it follows the clock with no
+    -- per-frame work at all: the engine moves the texture, and anything
+    -- anchored to it moves with it. Anchoring to the frame instead would mean
+    -- computing a position every tick, for the same picture.
+    aura.spark = aura.fill:CreateTexture(nil, "OVERLAY")
+    aura.spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+    aura.spark:SetBlendMode("ADD")
+    aura.spark:Hide()
+
     aura.cd = CreateFrame("Cooldown", nil, aura, "CooldownFrameTemplate")
     aura.cd:SetDrawEdge(false)
     aura.cd:SetDrawSwipe(true)
@@ -212,6 +227,9 @@ local function StyleAuraVisual(aura, style, isBar)
     -- they are applied from RefreshFill, which owns everything about the
     -- fill's behaviour and deliberately takes no style.
     aura.stackThresholds = style.stackThresholds
+    aura.showSpark = style.showSpark
+    aura.chargeMarks = style.chargeMarks
+    aura.chargeMarkColor = style.chargeMarkColor
 
     local name = style.spellName
     ns.Media.ApplyFont(aura.label, name.font, name.size, name.outline, name.color)
@@ -380,6 +398,87 @@ local function EnsureThreshold(aura, index)
     return overlay
 end
 
+-- How many charges a spell has, or nil for the ordinary one-charge case.
+-- The count can be secret, so it is checked before any comparison.
+local function MaxCharges(spellID)
+    local get = C_Spell and C_Spell.GetSpellCharges
+    if not (get and ns.CanCompute(spellID)) then return nil end
+
+    local ok, charges = pcall(get, spellID)
+    if not (ok and type(charges) == "table") then return nil end
+
+    local most = charges.maxCharges
+    if not ns.CanCompute(most) or type(most) ~= "number" then return nil end
+    if most <= 1 then return nil end
+    return math.floor(most + 0.5)
+end
+
+-- The lines between charges. Three charges give two lines, at a third and
+-- two thirds - the boundaries, not the charges, which is why it is N-1.
+--
+-- Drawn across the fill FRAME rather than its texture: these divisions belong
+-- to the bar's whole length and must not move with the clock. That is exactly
+-- the opposite of the spark, which is anchored to the texture for the same
+-- reason in reverse.
+local function ApplyChargeMarks(cell)
+    local aura = cell.aura
+    if not (aura and aura.fill) then return end
+
+    local wanted = 0
+    if aura.chargeMarks then
+        wanted = ns.Bars:ChargeDivisions(MaxCharges(cell.spellID))
+    end
+    if wanted == 0 and #aura.marks == 0 then return end
+
+    local colour = aura.chargeMarkColor or { 0, 0, 0 }
+    local width = aura.fill:GetWidth()
+
+    for index = 1, wanted do
+        local mark = aura.marks[index]
+        if not mark then
+            mark = aura.fill:CreateTexture(nil, "OVERLAY")
+            aura.marks[index] = mark
+        end
+        mark:SetColorTexture(colour[1], colour[2], colour[3], 0.85)
+        mark:ClearAllPoints()
+        -- One pixel, from the left edge, so the divisions stay where they are
+        -- whichever end the fill starts from.
+        mark:SetPoint("TOPLEFT", aura.fill, "TOPLEFT",
+            math.floor(width * index / (wanted + 1) + 0.5), 0)
+        mark:SetPoint("BOTTOMLEFT", aura.fill, "BOTTOMLEFT",
+            math.floor(width * index / (wanted + 1) + 0.5), 0)
+        mark:SetWidth(1)
+        mark:Show()
+    end
+
+    for index = wanted + 1, #aura.marks do aura.marks[index]:Hide() end
+end
+
+local function ApplySpark(cell)
+    local aura = cell.aura
+    if not (aura and aura.spark) then return end
+
+    if not aura.showSpark then
+        aura.spark:Hide()
+        return
+    end
+
+    local texture = aura.fill:GetStatusBarTexture()
+    if not texture then
+        aura.spark:Hide()
+        return
+    end
+
+    aura.spark:ClearAllPoints()
+    aura.spark:SetWidth(10)
+    -- Anchored to the END the fill grows towards, so it sits on the moving
+    -- edge rather than on the fixed one.
+    local edge = aura.fill:GetReverseFill() and "LEFT" or "RIGHT"
+    aura.spark:SetPoint("TOP", texture, edge, 0, 0)
+    aura.spark:SetPoint("BOTTOM", texture, edge, 0, 0)
+    aura.spark:Show()
+end
+
 local function ApplyThresholds(cell)
     local aura = cell.aura
     if not (aura and aura.fill) then return end
@@ -455,6 +554,8 @@ local function RefreshFill(cell)
     -- After the fill has its texture and orientation, because the overlays
     -- copy both and anchor to its texture object.
     ApplyThresholds(cell)
+    ApplyChargeMarks(cell)
+    ApplySpark(cell)
 
     -- MIRRORED FROM BLIZZARD'S OWN BAR.
     --
@@ -948,6 +1049,8 @@ function Screen:BlankCell(cell)
         -- that stays blank never reaches. Left shown, they would go on being
         -- fed a stack count for a spell that is no longer here.
         for _, overlay in ipairs(cell.aura.thresholds) do overlay:Hide() end
+        for _, mark in ipairs(cell.aura.marks) do mark:Hide() end
+        cell.aura.spark:Hide()
     end
     if cell.caption then cell.caption:Hide() end
     ns.Effects.Silence(cell)

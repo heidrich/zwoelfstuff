@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.15.0**. Read this first.
+State as of **2026-08-07**, version **4.16.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~86 checks in
+**Run `/zs test` before you believe anything below.** ~91 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.15.0 is statically clean over 25 files and passes its own checks.
+Version 4.16.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -262,8 +262,8 @@ to a Blood tank, which is the only ranking that matters for this addon:
 | ~~stack thresholds~~ — **BUILT in 4.13.0**, three bands. Ticks and a stack-driven fill length were left out | 14 | **Bone Shield.** Was the single biggest win available |
 | ~~pandemic glow~~ — **BUILT in 4.15.0** as one effect. Their five glow styles, speed, thickness and line count were left out | 10 | was high: the other half of "when do I press it" |
 | ~~custom active states~~ — **BUILT in 4.14.0** as "Active for". Their per-spell menu, glow styling and 12.1 engine-slot driver were left out | — | was **high, and nothing else here could do it** |
-| charge hash lines across the fill | 5 | medium, cheap to build |
-| keybind text on an icon, with size/offset/align/colour | 6 | medium |
+| ~~charge hash lines~~ — **BUILT in 4.16.0** as charge marks, plus the spark | 5 | was medium, and it was cheap |
+| keybind text on an icon | 6 | **NOT small — see below.** Still open, owner deferred |
 | style presets, saved per profile and applied by name | — | medium, and see the note below |
 | spark, gradient fill, vertical bars, decimals below N seconds, custom duration | ~12 | low each |
 | name/timer/stack text with independent position, size and offset | 14 | low: three of ours are booleans, and that is a deliberate simplification |
@@ -393,6 +393,44 @@ nothing on exactly the content where it matters.
 
 Not built: their five glow styles, glow speed, thickness, line count and the
 "Blizzard Default" pass-through that leaves Blizzard's own marker showing.
+
+### Spark and charge marks — two anchors, deliberately opposite
+
+Both are one texture and both are cheap, but they are anchored to different
+things and that IS the feature:
+
+- **The spark is anchored to `fill:GetStatusBarTexture()`**, so the engine
+  moves it with the clock and nothing here runs per frame. Positioning it by
+  hand each tick would draw the same picture for real work.
+- **The charge marks are anchored to the fill FRAME**, so they stay put while
+  the fill slides past them. Anchored to the texture they would slide too,
+  which turns divisions into decoration.
+
+The off-by-one lives in `Bars:ChargeDivisions` rather than beside the
+renderer, so it can be tested: N charges have N-1 boundaries, and drawing N
+puts a line on the end of the bar where it reads as a border. Charge count is
+`C_Spell.GetSpellCharges(id).maxCharges`, secret-guarded before comparison
+and ignored at 1 (`EllesmereUICdmBuffBars.lua:2122`).
+
+### Keybind text is NOT a small feature — read this before promising it
+
+It sits in the reference's list next to the spark and it is nothing like it.
+`EllesmereUICooldownManager.lua:7580-7650` and `EllesmereUICdmHooks.lua:8930`:
+
+- iterate every binding definition set (`ACTIONBUTTON1..12`,
+  `MULTIACTIONBAR1BUTTON1..12`, and the rest) and call `GetBindingKey` on each
+- map each binding to an action SLOT, and each slot to a spell — including
+  through macros
+- follow the action bar PAGE, which moves with stance, form, bonus bar and
+  vehicle (`GetBonusBarOffset` -> pages 7+, else `GetActionBarPage`), and they
+  additionally prefer their own action-bar module's `actionpage` attribute
+- de-prioritise macro binds so a direct spell bind wins
+- rebuild the whole cache on every binding, page, form and spec change
+- abbreviate the key text (`NUMPADPLUS` -> `N+`, `BUTTON` -> `M`, ...)
+
+That is a subsystem with its own cache and its own invalidation rules. It was
+NOT started two days before the basics are due; the owner can call for it
+after.
 
 ### The 12.1 aura engine: what today's reading ADDS to `Core/Engine.lua`
 
