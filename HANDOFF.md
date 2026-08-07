@@ -1,6 +1,12 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.6.1**. Read this first.
+State as of **2026-08-07**, version **4.7.0**. Read this first.
+
+**Run `/zs test` before you believe anything below.** Forty-eight checks, in
+`Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
+bars. It is the only kind of test this addon can have — there is no WoW without
+a client — and it was written by reverting the fixes in a scratch copy until it
+went red, so it is a regression test and not a decoration.
 
 ## Where we are
 
@@ -18,9 +24,9 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.6.1 is statically clean over 25 files. Parts of it HAVE now been
-seen running — see *What is confirmed in game* below, which is the list that
-matters, because the rest has only ever been read.
+Version 4.7.0 is statically clean over 26 files and passes its own 48 checks.
+Parts of it HAVE now been seen running — see *What is confirmed in game* below,
+which is the list that matters, because the rest has only ever been read.
 
 ## What is confirmed in game, and what is not
 
@@ -45,17 +51,54 @@ and "it works" are different claims and only one of them is worth anything.
 - The bar textures were generated one directory ABOVE the repo, so the addon
   registered twenty names pointing at nothing. Fixed and verified as
   uncompressed 32-bit bottom-up 256x64 TGA — the format the client loads.
+- **Switching pattern scattered the bar and never gave it back** (4.7.0). The
+  root cause and the twelve fixes around it are the next section.
+
+**Covered by `/zs test` — proven by code, not by eye**
+
+Everything the self test asserts is now checked on every run: arrangement
+geometry for all five patterns, the two coordinate systems, pattern round
+trips, the rows and columns sliders, and the visibility rules against their own
+explanations. That is not the same as "seen working" and is not listed as such
+— it is the difference between "the maths is right" and "it looks right".
 
 **Written, never run**
 
-- Every arrangement except Grid: staggered, arc, diagonal, puzzle.
-- Build mode in all of it: cell handles, dragging, wheel-scaling, the spell
-  palette, the tool panel.
-- Every effect: flash, ready edge, nag, low warning, aura glow, dim.
-- Every visibility rule.
+- Build mode as a whole: cell handles, dragging, wheel-scaling, the spell
+  palette, the tool panel. The MODEL under it is tested; the frames are not.
+- Every effect on screen: flash, ready edge, nag, low warning, aura glow, dim.
+- The new bar fill on a cell this addon draws itself.
 - Drag-and-drop of a spell from the list onto a cell.
 - The media previews in the dropdowns.
 - The logo as a TGA (header verified, loading not).
+
+## The 4.7.0 bug hunt, and the one root cause under it
+
+The owner reported one thing: *"wenn ich diese einstellungen ändere, switchen
+die nicht mehr zurück"*. Reading the code that report pointed at turned up
+eleven more. All twelve are in the CHANGELOG; three matter for anyone working
+on this next.
+
+**One field, two meanings.** `cellOpts[i].x/y` was a POSITION in the puzzle and
+an OFFSET from a slot everywhere else. Entering the puzzle wrote positions into
+it; every other arrangement then added them to the slot it had worked out, for
+ever, and nothing anywhere removed them. The puzzle has `px/py` now, and
+`Layout.OffsetKeys/GetOffset/SetOffset` are the only way either pair is
+touched — add a third arrangement with its own coordinate system and it goes
+through the same three functions.
+
+**A slider must not be able to destroy work.** `SetGrid` compacted every spell
+to the front on every change and dropped whatever no longer fitted. Cells keep
+their index now, and anything that does not fit is PARKED in `cfg.parked` and
+comes home to its own slot when there is room. `Bars:Resized` is the one place
+that does it, and it is called from every operation that changes the count.
+
+**A cell is reused for whatever spell lands at its index.** Everything
+remembered about the previous one — the aura clock, the effects' "was it ready
+a moment ago" — has to be cleared with it. It was not, so a swapped icon
+arrived lit up and flashed for a transition that belonged to a spell no longer
+on the bar. Anything new that caches per-cell state belongs in the same reset
+in `Screen:PaintCell` and `Screen:BlankCell`.
 
 **Owner's verdict on the look, verbatim:** *"ich finde das alles nicht so
 dolle was im spiel angezeigt wird"*, and the icon *"ist jetzt auch nicht
@@ -476,6 +519,29 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **One field with two meanings is a bug waiting for a switch.** A cell's
+  `x/y` meant "position" in one arrangement and "offset from a slot" in every
+  other, so changing arrangement silently reinterpreted the number. It looked
+  economical and it cost a whole class of defect. If two things are measured
+  from different origins, give them different fields — the storage is free and
+  the confusion is not.
+- **A setting that can DELETE work has to be reversible.** The Columns slider
+  dropped every spell that no longer had a cell. People drag a slider to see
+  what it does; that must never be the destructive path. Park it, do not
+  delete it.
+- **Reset per-cell state wherever a cell can change what it holds.** Frames are
+  pooled and reused by index, so an aura clock and an effect state machine
+  outlive the spell they were about. A stale flag shows up as a phantom flash
+  or an icon that arrives already lit.
+- **Write the test by breaking the code again.** The self test was validated by
+  reverting the fixes in a scratch copy of `Core/` and confirming it went from
+  48/0 to 40/8. A test that has only ever been seen green proves nothing about
+  what it would catch.
+- **The language server ships a Lua runtime.**
+  `lua-language-server.exe -E script.lua` runs plain Lua 5.5. With a stub for
+  `CreateFrame` and a handful of globals, the whole model layer — Layout, Bars,
+  Visibility, Effects — runs and the self test can be executed on the desktop
+  before anybody logs in. The harness is a throwaway; the technique is not.
 - **Generated files land where the SHELL is, not where the repo is.** Twenty
   bar textures were written one directory above the repo and the commit that
   announced them contained none of them — the addon registered twenty names
@@ -543,28 +609,26 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 lands on **11 Aug** and the 12.1 features go in after that, not instead of the
 basics.
 
-1. **Bug hunt.** The owner's call, and the right one: a great deal was built
-   in one session and most of it has never run. Work down *Written, never run*
-   above, one group at a time, and prefer FIXING to adding until that list is
-   short.
-2. **Our own drawn bar cells have no fill.** A tracking bar the addon draws
-   itself (an aura proc, or a cooldown whose frame is not pooled) shows a
-   backdrop, an icon, a name and a sweep — but no status bar. It does not look
-   like a bar. Adopted buff-bar frames are fine; they bring Blizzard's own.
-   This is the largest known gap.
-3. **"The background shows through the circle"** — reported with a screenshot,
+1. **Bug hunt, continued.** The owner's call, and the right one. 4.7.0 swept
+   `Layout`, `Bars`, `Screen`, `Effects`, `Visibility` and the parts of
+   `Widgets`/`OptionsBars`/`EditMode` those touch — twelve defects, all in the
+   CHANGELOG. **Not yet swept:** `CDM.lua`, `Auras.lua`, `Options.lua`,
+   `Glow.lua`, `Minimap.lua`, and the rest of `EditMode.lua` (the palette and
+   the tool panel). Start there, and extend `/zs test` with every rule that
+   turns out to be checkable — a fix without a check comes back.
+2. **"The background shows through the circle"** — reported with a screenshot,
    diagnosis deliberately NOT guessed. `/zs skin` now reports which template a
    frame came from and walks its child frames; ask for that output rather than
    reasoning about it. Guessing here cost a day once already.
-4. **Owner-side data**: confirm the remaining proc durations by letting one run
+3. **Owner-side data**: confirm the remaining proc durations by letting one run
    out *without* casting the ability, then `/zs auras export` for Blood and
    paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
-5. **A better logo.** The owner does not like the current one and is going to
+4. **A better logo.** The owner does not like the current one and is going to
    ask Claude Design. Bring back a PNG or SVG; converting it to a game-ready
    TGA is a two-minute job (see `Media/`, and the header rules under
    *Verification*).
-6. **Tank ideas** — the owner has a list, held back until the basics stand.
-7. After 12.1 lands: un-park the aura stack and re-test it.
+5. **Tank ideas** — the owner has a list, held back until the basics stand.
+6. After 12.1 lands: un-park the aura stack and re-test it.
 
 ### The window density pass is DONE, and what it changed
 

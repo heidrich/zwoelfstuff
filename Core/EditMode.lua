@@ -244,6 +244,19 @@ local function Origin(cfg)
     return cfg.x or 0, cfg.y or 0
 end
 
+-- The pinned-point numbers that put the bar's CENTRE on the screen centre.
+--
+-- Not 0,0 - that only centres a bar pinned by its middle. Pinned by its left
+-- edge, 0 puts the EDGE on the centre line and the bar sits half a bar to the
+-- right, so "Centre on screen" quietly did something other than what it says.
+-- The drag already carries this translation; the buttons did not.
+local function CentringOffsets(index, cfg)
+    local originX, originY = Origin(cfg)
+    local centreX, centreY = ns.Screen:CentreOffset(index)
+    if not centreX then return originX, originY end
+    return originX - centreX, originY - centreY
+end
+
 local function UpdateReadout(mover)
     local cfg = BarConfig(mover.index)
     if not cfg then return end
@@ -272,7 +285,14 @@ local function SetSelected(mover)
     end
     selected = mover
     if mode == "build" then
-        picked = { bar = mover.index, cell = picked and picked.cell or 1 }
+        -- The cell index carries across so clicking about between bars does
+        -- not keep resetting you to slot 1 - but CLAMPED, or picking a bar
+        -- with fewer cells than the last one leaves the inspector reading
+        -- "slot 9 of 6" and the arrows nudging a slot that is not there.
+        local cfg = BarConfig(mover.index)
+        local cell = (picked and picked.cell) or 1
+        if cfg then cell = math.min(cell, ns.Bars:CellCount(cfg)) end
+        picked = { bar = mover.index, cell = math.max(1, cell) }
     end
     RefreshInspector()
     if tools and tools:IsShown() then tools.Refresh() end
@@ -356,13 +376,16 @@ local function OpenMenu(mover)
             OpenAttachMenu(mover)
         end }
         items[#items + 1] = { text = "Centre on screen", onClick = function()
-            ApplyMove(mover, 0, 0)
+            local x, y = CentringOffsets(index, cfg)
+            ApplyMove(mover, x, y)
         end }
         items[#items + 1] = { text = "Centre horizontally", onClick = function()
-            ApplyMove(mover, 0, cfg.y or 0)
+            local x = CentringOffsets(index, cfg)
+            ApplyMove(mover, x, select(2, Origin(cfg)))
         end }
         items[#items + 1] = { text = "Centre vertically", onClick = function()
-            ApplyMove(mover, cfg.x or 0, 0)
+            local _, y = CentringOffsets(index, cfg)
+            ApplyMove(mover, (Origin(cfg)), y)
         end }
     end
 
@@ -1246,9 +1269,21 @@ local function BuildTools()
         return button
     end
 
-    Centre("Centre", function(mover) ApplyMove(mover, 0, 0) end, 0)
-    Centre("Across", function(mover, cfg) ApplyMove(mover, 0, cfg.y or 0) end, 1)
-    Centre("Down", function(mover, cfg) ApplyMove(mover, cfg.x or 0, 0) end, 2)
+    -- Through CentringOffsets, not 0: a bar pinned by an edge stores a number
+    -- that is not its centre, and writing 0 there moves the EDGE onto the
+    -- centre line. See the comment on that function.
+    Centre("Centre", function(mover, cfg)
+        local x, y2 = CentringOffsets(mover.index, cfg)
+        ApplyMove(mover, x, y2)
+    end, 0)
+    Centre("Across", function(mover, cfg)
+        local x = CentringOffsets(mover.index, cfg)
+        ApplyMove(mover, x, select(2, Origin(cfg)))
+    end, 1)
+    Centre("Down", function(mover, cfg)
+        local _, y2 = CentringOffsets(mover.index, cfg)
+        ApplyMove(mover, (Origin(cfg)), y2)
+    end, 2)
     y = y - 25
 
     tools:SetHeight(-y + 10)
@@ -1401,9 +1436,17 @@ local function BuildToolbar()
     end, "soft")
     gridBtn:SetPoint("BOTTOMLEFT", toolbar, "BOTTOMLEFT", 12, 12)
 
-    local overlayBtn = UI.Button(toolbar, "Hide overlay", 100, function()
+    -- The label follows the state, because this button is the ONLY way back:
+    -- hiding the overlay hides every mover with it, so the Shift-right-click
+    -- that got you here is not available to get you out. A button that still
+    -- reads "Hide overlay" while the overlay is hidden reads as a dead end.
+    local overlayBtn
+    overlayBtn = UI.Button(toolbar, "Hide overlay", 100, function()
         EditMode:SetOverlayShown(not EditMode.overlayShown)
+        overlayBtn:SetText(EditMode.overlayShown and "Hide overlay"
+            or "Show overlay")
     end, "soft")
+    EditMode.overlayButton = overlayBtn
     overlayBtn:SetPoint("LEFT", gridBtn, "RIGHT", 6, 0)
 
     local toolsBtn = UI.Button(toolbar, "Tools", 62, function()
@@ -1580,6 +1623,13 @@ end
 function EditMode:SetOverlayShown(shown)
     self.overlayShown = shown and true or false
     if not overlay then return end
+
+    -- Also when something OTHER than the button changed it: Shift-right-click
+    -- on a mover, and unlocking, both come through here.
+    if self.overlayButton then
+        self.overlayButton:SetText(self.overlayShown and "Hide overlay"
+            or "Show overlay")
+    end
 
     overlay.dim:SetShown(self.overlayShown)
     for _, mover in ipairs(movers) do
