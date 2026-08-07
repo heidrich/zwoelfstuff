@@ -118,6 +118,10 @@ local function BuildAuraVisual(cell)
     aura.fill:SetValue(0)
     aura.fill:Hide()
 
+    -- One overlay per stack threshold is created on demand; see
+    -- ApplyThresholds below for why they are not made here.
+    aura.thresholds = {}
+
     aura.cd = CreateFrame("Cooldown", nil, aura, "CooldownFrameTemplate")
     aura.cd:SetDrawEdge(false)
     aura.cd:SetDrawSwipe(true)
@@ -188,10 +192,13 @@ local function StyleAuraVisual(aura, style, isBar)
     -- invisible because of a typo in a saved variable.
     local fill = style.fillTexture
     if fill and ns.Media.IsKnown("statusbar", fill) then
-        aura.fill:SetStatusBarTexture(ns.Media.Statusbar(fill))
+        aura.fillTexturePath = ns.Media.Statusbar(fill)
     else
-        aura.fill:SetStatusBarTexture(ns.WHITE)
+        aura.fillTexturePath = ns.WHITE
     end
+    -- Kept on the frame because the threshold overlays wear the same texture,
+    -- and resolving it twice is how the two ended up looking different.
+    aura.fill:SetStatusBarTexture(aura.fillTexturePath)
 
     local colour = style.fillColor
     aura.fill:SetStatusBarColor(colour[1], colour[2], colour[3], style.fillAlpha)
@@ -201,6 +208,10 @@ local function StyleAuraVisual(aura, style, isBar)
     -- whether it grows or drains. The clock is in RefreshFill.
     aura.fill:SetReverseFill(style.fillSide)
     aura.grow = style.fillGrow and true or false
+    -- Handed to the overlays through the frame rather than as an argument:
+    -- they are applied from RefreshFill, which owns everything about the
+    -- fill's behaviour and deliberately takes no style.
+    aura.stackThresholds = style.stackThresholds
 
     local name = style.spellName
     ns.Media.ApplyFont(aura.label, name.font, name.size, name.outline, name.color)
@@ -332,6 +343,107 @@ end
 --
 -- Everything it needs is on the cell, so a render pass in the middle of a
 -- buff picks the fill back up where it was instead of blanking it.
+---------------------------------------------------------------------------
+-- Stack thresholds: colour past N stacks, WITHOUT ever comparing N
+--
+-- The stack count can be a secret value, and secret values may not be
+-- compared, added to or tested for truth in Lua. So the comparison is not
+-- done in Lua. Each threshold gets a StatusBar whose range is exactly
+-- (value - 1, value), and the count is pushed into it with SetValue - a
+-- sanctioned sink for a secret. The C layer does the arithmetic and the
+-- overlay snaps from empty to full as the count crosses the threshold.
+--
+-- WITH SEVERAL THRESHOLDS, EVERY CROSSED OVERLAY IS FULL AT ONCE. "The
+-- highest crossed one wins" therefore cannot be an `if` - there is nothing
+-- to branch on. It has to be draw order: overlay i is parented to overlay
+-- i-1, a child always renders above its parent, and the list is sorted
+-- ascending, so the highest crossed threshold paints last and covers the
+-- rest. Read off EllesmereUICdmBuffBars.lua:1995-2103; the whole trick is
+-- theirs and it is the only legal way to do this on 12.x.
+--
+-- Created on demand rather than up front: most bars have no thresholds at
+-- all, and a StatusBar per cell per threshold is real memory on a 24-cell
+-- bar that will never use one.
+---------------------------------------------------------------------------
+local function EnsureThreshold(aura, index)
+    local pool = aura.thresholds
+    if pool[index] then return pool[index] end
+
+    -- Parent is the PREVIOUS overlay, which is what puts a higher threshold
+    -- above a lower one. The first sits on the fill itself.
+    local overlay = CreateFrame("StatusBar", nil, pool[index - 1] or aura.fill)
+    overlay:SetFrameLevel(aura.fill:GetFrameLevel() + 2)
+    overlay:SetMinMaxValues(0, 1)
+    overlay:SetValue(0)
+    overlay:Hide()
+    pool[index] = overlay
+    return overlay
+end
+
+local function ApplyThresholds(cell)
+    local aura = cell.aura
+    if not (aura and aura.fill) then return end
+
+    local list = aura.stackThresholds or {}
+    if #list == 0 and #aura.thresholds == 0 then return end
+    local texture = aura.fill:GetStatusBarTexture()
+
+    for index, entry in ipairs(list) do
+        local overlay = EnsureThreshold(aura, index)
+
+        overlay:SetStatusBarTexture(aura.fillTexturePath or ns.WHITE)
+        overlay:SetOrientation(aura.fill:GetOrientation())
+        overlay:SetReverseFill(aura.fill:GetReverseFill())
+
+        -- Anchored to the fill's TEXTURE, not to the fill: the threshold
+        -- recolours the part of the bar that is actually filled, so the bar
+        -- keeps its length from the clock and only changes colour. Re-anchored
+        -- every pass because SetStatusBarTexture replaces the texture object.
+        overlay:ClearAllPoints()
+        if texture then
+            overlay:SetAllPoints(texture)
+        else
+            overlay:SetAllPoints(aura.fill)
+        end
+
+        local colour = entry.color
+        local tex = overlay:GetStatusBarTexture()
+        if tex then
+            tex:SetVertexColor(colour[1], colour[2], colour[3], entry.alpha or 1)
+            tex:SetDrawLayer("ARTWORK", math.min(7, index))
+        end
+
+        -- THE COMPARISON, expressed as a range. Nothing in Lua reads it.
+        overlay:SetMinMaxValues(entry.value - 1, entry.value)
+        overlay:SetValue(0)
+        overlay:Show()
+    end
+
+    for index = #list + 1, #aura.thresholds do
+        aura.thresholds[index]:Hide()
+    end
+end
+
+-- Push the current count into every live overlay. The value may be secret;
+-- SetValue takes it untouched.
+local function FeedThresholds(cell)
+    local aura = cell.aura
+    if not (aura and aura.thresholds[1]) then return end
+
+    local item = cell.mirrorItem or cell.item
+    if not item then return end
+
+    local count = ns.CDM:ItemStacks(item)
+    -- nil means the count is unknowable right now - leave the overlays where
+    -- they are rather than reporting zero, which would flash the bar back to
+    -- its base colour every time the cache is empty for a frame.
+    if count == nil then return end
+
+    for _, overlay in ipairs(aura.thresholds) do
+        if overlay:IsShown() then pcall(overlay.SetValue, overlay, count) end
+    end
+end
+
 local function RefreshFill(cell)
     local aura = cell.aura
     if not (aura and aura.fill) then return end
@@ -339,6 +451,10 @@ local function RefreshFill(cell)
     local fill = aura.fill
     fill:SetScript("OnUpdate", nil)
     fill:SetMinMaxValues(0, 1)
+
+    -- After the fill has its texture and orientation, because the overlays
+    -- copy both and anchor to its texture object.
+    ApplyThresholds(cell)
 
     -- MIRRORED FROM BLIZZARD'S OWN BAR.
     --
@@ -380,6 +496,11 @@ local function RefreshFill(cell)
                 if got then aura.timer:SetText(text or "") end
             end
 
+            -- The stack count changes without the value changing at all - a
+            -- Bone Shield charge falls off while the timer runs on - so it is
+            -- read here rather than on a render pass.
+            FeedThresholds(cell)
+
             -- Whether the buff is up is Blizzard's answer as well, and it
             -- changes without any render pass - so it is asked here rather
             -- than once, when the cell happened to be painted.
@@ -418,6 +539,7 @@ local function RefreshFill(cell)
     end
 
     fill:SetValue(Level(1))
+    FeedThresholds(cell)
     fill:SetScript("OnUpdate", function(self)
         local left = ends - GetTime()
         if left <= 0 then
@@ -426,6 +548,7 @@ local function RefreshFill(cell)
             return
         end
         self:SetValue(Level(left / duration))
+        FeedThresholds(cell)
     end)
 end
 
@@ -817,6 +940,11 @@ function Screen:BlankCell(cell)
         -- countdown nobody can see, for ever.
         cell.aura.fill:SetScript("OnUpdate", nil)
         cell.aura.fill:SetValue(0)
+        -- Same reason as the SetValue above: a blanked cell keeps its frames,
+        -- and the overlays are only re-applied from RefreshFill - which a cell
+        -- that stays blank never reaches. Left shown, they would go on being
+        -- fed a stack count for a spell that is no longer here.
+        for _, overlay in ipairs(cell.aura.thresholds) do overlay:Hide() end
     end
     if cell.caption then cell.caption:Hide() end
     ns.Effects.Silence(cell)

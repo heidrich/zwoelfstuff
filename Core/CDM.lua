@@ -323,6 +323,41 @@ function CDM:InfoSpellID(info)
 end
 
 ---------------------------------------------------------------------------
+-- How many stacks an item frame is showing
+--
+-- READ BUT NEVER INSPECTED. On 12.0 this number can be a secret value, and
+-- on 12.1 it is one inside restricted content. So it is fetched, stored and
+-- handed to widget setters - `StatusBar:SetValue` and `FontString:SetText`
+-- both take secret arguments natively - and nothing here ever compares it,
+-- adds to it or tests it for truth. The comparison against a threshold
+-- happens inside the C layer; see the overlays in Core/Screen.lua.
+--
+-- Two sources, in the reference's order (EllesmereUICdmBuffBars.lua:3259):
+-- the frame's own cached aura table first, because it reads without erroring
+-- on every client, and the aura-instance query only as a fallback for a frame
+-- whose cache is not populated - that call HARD ERRORS on restricted units,
+-- so it is guarded twice over.
+---------------------------------------------------------------------------
+function CDM:ItemStacks(item)
+    if not item then return nil end
+
+    local cached = item.auraDataCached
+    if cached and cached.applications ~= nil then return cached.applications end
+
+    local instanceID = item.auraInstanceID
+    local unit = item.auraDataUnit
+    local get = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
+    -- ns.CanCompute rather than a bare issecretvalue: a secret instance ID
+    -- may not be passed to the query, and nil must not reach it either.
+    if get and unit and ns.CanCompute(instanceID) then
+        local ok, data = pcall(get, unit, instanceID)
+        if ok and data and data.applications ~= nil then return data.applications end
+    end
+
+    return nil
+end
+
+---------------------------------------------------------------------------
 -- The full catalogue of what the Cooldown Manager knows
 --
 -- Two sources, on purpose:

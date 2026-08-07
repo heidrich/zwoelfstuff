@@ -8,6 +8,19 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.13.0",
+        date = "2026-08-07",
+        lines = {
+            "NEW: STACK COLOURS. A tracking bar changes colour once the stack count reaches a number you pick, with three bands. This is the Bone Shield setting, and it is the thing the reference addon has that was worth having most.",
+            "Below the lowest band the bar wears its normal Bar fill colour - so the way to say 'warn me under five' is a red fill with a band at 5 in your usual colour. There is no separate 'below' mode to get the wrong way round. Set a band's count to 0 to switch it off.",
+            "",
+            "WHY THIS WORKS AT ALL, because it is not obvious and it is the reason nobody else's addon does it on this patch: since 12.0 the stack count can arrive as a protected value. An addon may pass one along but may never compare it, add to it, or even test it for true - doing so taints the addon. So this addon does not compare it. Each band is a bar whose range is set to exactly the number you chose, the count is handed to the game, and the GAME decides whether it has been crossed. The comparison happens where it is allowed to happen.",
+            "With several bands crossed at once, which colour wins cannot be decided by an if - there is nothing an addon may look at. It is decided by what is painted last: each band sits on top of the one below it, so the highest one you have crossed covers the rest. The approach is EllesmereUI's and it is the only legal way to do this.",
+            "",
+            "This is the first of four things you picked out of that addon. Custom active states, pandemic glow and the small ones - charge marks, keybind text, the spark - are next.",
+        },
+    },
+    {
         version = "4.12.0",
         date = "2026-08-07",
         lines = {

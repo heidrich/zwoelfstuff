@@ -357,6 +357,74 @@ local function TestFill()
 end
 
 ---------------------------------------------------------------------------
+-- Stack thresholds
+--
+-- The renderer stacks one overlay per threshold and lets DRAW ORDER decide
+-- which colour wins, because the count may be a secret value and cannot be
+-- compared in Lua. That makes ascending order a correctness requirement
+-- rather than a tidiness one, and it is the kind of rule that fails by
+-- looking slightly wrong rather than by throwing.
+---------------------------------------------------------------------------
+local function TestStackThresholds()
+    local cfg = Fresh({ kind = "bar" })
+
+    Check("A bar with no thresholds has an empty list",
+        #ns.Bars:StackThresholds(cfg) == 0)
+
+    -- Deliberately out of order: the panel writes three fixed rows and the
+    -- user can put the big number in the first one.
+    cfg.stackThresholds = {
+        { value = 10, color = { 0, 1, 0 } },
+        { value = 3,  color = { 1, 0, 0 } },
+        { value = 7,  color = { 1, 1, 0 } },
+    }
+    local sorted = ns.Bars:StackThresholds(cfg)
+    Check("Thresholds come back in ascending order",
+        #sorted == 3 and sorted[1].value == 3
+        and sorted[2].value == 7 and sorted[3].value == 10,
+        #sorted == 3 and string.format("%d, %d, %d",
+            sorted[1].value, sorted[2].value, sorted[3].value) or nil)
+    Check("A threshold keeps its own colour through the sort",
+        sorted[1].color[1] == 1 and sorted[1].color[2] == 0
+        and sorted[3].color[2] == 1 and sorted[3].color[1] == 0)
+
+    -- 0 is how the panel switches a band off, and it has to mean off rather
+    -- than "a threshold every aura crosses just by existing".
+    cfg.stackThresholds = {
+        { value = 0, color = { 1, 0, 0 } },
+        { value = 5, color = { 0, 1, 0 } },
+    }
+    local live = ns.Bars:StackThresholds(cfg)
+    Check("A count of zero switches its band off",
+        #live == 1 and live[1].value == 5)
+
+    cfg.stackThresholds = { { value = 4.7, color = { 1, 0, 0 } } }
+    Check("A threshold is a whole number of stacks",
+        ns.Bars:StackThresholds(cfg)[1].value == 4)
+
+    cfg.stackThresholds = { { value = "nonsense" }, { value = 6 } }
+    Check("Nonsense in the saved list is dropped, not rendered",
+        #ns.Bars:StackThresholds(cfg) == 1)
+
+    -- The renderer styles frames from this list; a shared table would let one
+    -- bar's edit reach another's.
+    cfg.stackThresholds = { { value = 5, color = { 1, 0, 0 } } }
+    local first = ns.Bars:StackThresholds(cfg)
+    local second = ns.Bars:StackThresholds(cfg)
+    Check("Each read gets its own list", first ~= second
+        and first[1] ~= second[1] and first[1].color ~= second[1].color)
+
+    Check("The thresholds reach the style", #ns.Bars:Style(cfg, 24).stackThresholds == 1)
+
+    -- The look travels to another character; what the cells hold does not.
+    local travels = false
+    for _, key in ipairs(ns.BAR_STYLE_KEYS) do
+        if key == "stackThresholds" then travels = true end
+    end
+    Check("Stack colours count as part of the look", travels)
+end
+
+---------------------------------------------------------------------------
 -- Which spell a frame stands for
 --
 -- Every one of these is a bug that was reported as "it tracks the wrong
@@ -636,6 +704,7 @@ function Test:Run()
         { "Rows and columns", TestGridSliders },
         { "Per character", TestPerSpec },
         { "Bar fill",      TestFill },
+        { "Stack colours", TestStackThresholds },
         { "Spell identity", TestSpellIdentity },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },

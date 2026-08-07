@@ -146,6 +146,19 @@ ns.BAR_DEFAULTS = {
     fillSide    = false,       -- true starts the fill at the right-hand end
     fillGrow    = false,       -- true fills up as time passes
 
+    -- STACK THRESHOLDS. The bar's fill changes colour once the stack count
+    -- reaches a number you choose. Bone Shield is the reason it exists.
+    --
+    -- A list of { value, color }, and the colour BELOW the lowest threshold
+    -- is the bar's own fillColor. So the natural way to say "warn me under
+    -- five" is a red fill with one threshold at 5 wearing the normal colour -
+    -- there is no separate "below" mode to get the wrong way round.
+    --
+    -- Sorted ascending, because the order IS the draw order: see the overlay
+    -- pool in Core/Screen.lua, where the highest crossed threshold has to
+    -- paint last and cannot be chosen with an `if`.
+    stackThresholds = {},      -- { { value = 5, color = {r,g,b}, alpha = 1 }, ... }
+
     -- Text. Three elements, one shape each, because "the countdown can be
     -- moved but the stack count cannot" is the kind of arbitrary limit that
     -- makes people go looking for another addon.
@@ -749,6 +762,7 @@ ns.BAR_STYLE_KEYS = {
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
     "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "stackThresholds",
     "countdown", "stacks", "spellName",
 
     -- The arrangement travels too - it is how a bar LOOKS, not what it holds.
@@ -819,6 +833,36 @@ local function TextStyle(element, height, autoScale, floor, ceiling)
     }
 end
 
+-- The thresholds, cleaned up and SORTED ASCENDING.
+--
+-- Sorted here rather than trusted from the panel, because ascending order is
+-- not a tidiness preference: the renderer stacks one overlay per threshold and
+-- relies on the order being the draw order. An out-of-order list would leave a
+-- lower threshold painting over a higher one, which reads as the colour simply
+-- being wrong.
+--
+-- Returns a fresh list every time. The caller styles frames from it, and a
+-- shared table would let one bar's edit reach another's.
+function Bars:StackThresholds(cfg)
+    local out = {}
+    for _, entry in ipairs(cfg.stackThresholds or {}) do
+        local value = tonumber(entry and entry.value)
+        -- Whole numbers only, and at least 1: a stack count is never 0.5, and
+        -- a threshold of 0 is crossed by an aura that is merely present.
+        if value and value >= 1 then
+            local colour = entry.color or { 0.85, 0.15, 0.15 }
+            out[#out + 1] = {
+                value = math.floor(value),
+                color = { colour[1] or 0, colour[2] or 0, colour[3] or 0 },
+                alpha = entry.alpha or 1,
+            }
+        end
+    end
+
+    table.sort(out, function(a, b) return a.value < b.value end)
+    return out
+end
+
 function Bars:Style(cfg, height)
     height = height or 40
 
@@ -852,6 +896,8 @@ function Bars:Style(cfg, height)
             or cfg.backdropTexture,
         fillSide    = cfg.fillSide and true or false,
         fillGrow    = cfg.fillGrow and true or false,
+
+        stackThresholds = self:StackThresholds(cfg),
 
         countdown = TextStyle(cfg.countdown, height, 0.42, 9, 20),
         stacks    = TextStyle(cfg.stacks,    height, 0.30, 8, 16),

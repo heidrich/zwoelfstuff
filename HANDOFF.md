@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.12.0**. Read this first.
+State as of **2026-08-07**, version **4.13.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~70 checks in
+**Run `/zs test` before you believe anything below.** ~78 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.12.0 is statically clean over 25 files and passes its own checks.
+Version 4.13.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -259,7 +259,7 @@ to a Blood tank, which is the only ranking that matters for this addon:
 
 | theirs | fields | worth |
 |---|---|---|
-| stack thresholds — colour changes past N stacks, with ticks, a max, and multiple bands | 14 | **Bone Shield.** The single biggest win available |
+| ~~stack thresholds~~ — **BUILT in 4.13.0**, three bands. Ticks and a stack-driven fill length were left out | 14 | **Bone Shield.** Was the single biggest win available |
 | pandemic glow — glows inside the refresh window | 10 | high: it is the other half of "when do I press it" |
 | custom active states (`EllesmereUICdmFakeActive.lua`) — user says "this is active for 20s after use", for trinkets/potions/racials Blizzard's CDM does not track as buffs | — | **high, and nothing else here can do it** |
 | charge hash lines across the fill | 5 | medium, cheap to build |
@@ -289,6 +289,42 @@ is the fragile direction: a field added tomorrow is silently copied.
   `visHideMounted`, `visHideNoTarget`, `visHideNoEnemy`, `barVisibility`).
   Ours also has a fade factor rather than a hard hide.
 - **The self test.** They have none.
+
+### The trick that makes stack colours legal — 4.13.0
+
+Worth its own heading, because it generalises and nothing else in this
+codebase does it yet.
+
+**A secret value may be passed but never compared.** So do not compare it.
+`StatusBar:SetMinMaxValues(N - 1, N)` plus `SetValue(count)` makes the C layer
+do the comparison: the bar reads empty below N and full at or above it. Any
+"is this number past that number" question can be asked this way, and the
+answer comes back as geometry rather than as a boolean.
+
+Two consequences that are easy to get wrong:
+
+1. **With several thresholds crossed, every overlay is full at once**, so
+   "highest wins" cannot be an `if` — there is nothing readable to branch on.
+   It is DRAW ORDER: overlay *i* is parented to overlay *i-1* (a child always
+   renders above its parent) and the list is sorted ascending, so the highest
+   crossed one paints last. `Bars:StackThresholds` sorts for that reason, and
+   the self test guards it — an unsorted list does not throw, it just looks
+   slightly wrong.
+2. **The overlay anchors to the fill's TEXTURE**, not to the fill frame, so it
+   recolours only the filled part and the bar keeps its length from the clock.
+   `SetStatusBarTexture` replaces the texture object, so it must be re-anchored
+   after every texture change.
+
+The count itself comes from `CDM:ItemStacks` — `item.auraDataCached.applications`
+first because it reads without erroring on every client, then the
+aura-instance query as a fallback, guarded by `ns.CanCompute` on the instance
+ID because that call hard-errors on restricted units
+(`EllesmereUICdmBuffBars.lua:3259`). `nil` means unknowable and the renderer
+holds its last state rather than reporting zero, which would flash the bar
+back to its base colour.
+
+Not built: their tick marks, `stackBasedBar` (fill length driven by stacks
+rather than time), and multi-band editing beyond three fixed rows.
 
 ### The 12.1 aura engine: what today's reading ADDS to `Core/Engine.lua`
 

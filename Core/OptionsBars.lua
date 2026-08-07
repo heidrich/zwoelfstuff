@@ -1043,6 +1043,85 @@ function Workspace:BuildOptionsPane(parent, width)
         "Which end the fill sits at")
     fillRows[#fillRows + 1] = Switch("Fill up", "fillGrow",
         "Grow as time passes instead of draining away")
+    -- Stack colours ----------------------------------------------------------
+    --
+    -- Three bands rather than a list editor with add and remove buttons. A
+    -- stack bar has two or three meaningful readings - low, normal, capped -
+    -- and three fixed rows say that better than an empty list does. A count of
+    -- 0 switches its band off, so the rows are their own on/off.
+    --
+    -- The list in the config stays variable-length; only this panel is fixed,
+    -- so nothing has to change here if the renderer is ever given more.
+    local function ThresholdEntry(index)
+        local _, cfg = Workspace:Current()
+        if not cfg then return nil end
+        cfg.stackThresholds = cfg.stackThresholds or {}
+        return cfg.stackThresholds[index]
+    end
+    local function GetThreshold(index, field, fallback)
+        return function()
+            local entry = ThresholdEntry(index)
+            if not entry then return fallback end
+            local value = entry[field]
+            if value == nil then return fallback end
+            return value
+        end
+    end
+    local function SetThreshold(index, field)
+        return function(value)
+            local _, cfg = Workspace:Current()
+            if not cfg then return end
+            cfg.stackThresholds = cfg.stackThresholds or {}
+            local entry = cfg.stackThresholds[index]
+            if not entry then
+                entry = { value = 0, color = { 0.85, 0.15, 0.15 } }
+                cfg.stackThresholds[index] = entry
+            end
+            entry[field] = value
+        end
+    end
+
+    local BAND_COLOURS = {
+        { 0.85, 0.15, 0.15 },   -- low
+        { 1.00, 0.78, 0.20 },   -- middling
+        { 0.30, 0.85, 0.35 },   -- capped
+    }
+
+    fillRows[#fillRows + 1] = grid:Section("Stack colours", "look-stacks")
+    fillRows[#fillRows + 1] = grid:Note("The bar changes colour once the stack "
+        .. "count reaches a number you pick. Below the lowest one it wears the "
+        .. "Bar fill colour above - so the way to say \"warn me under five\" is "
+        .. "a red fill with a band at 5 in your normal colour. Set a count to 0 "
+        .. "to switch that band off.")
+
+    for index = 1, 3 do
+        fillRows[#fillRows + 1] = UI.Slider(
+            grid:FullRow("At ... stacks", { controlWidth = 124 }), {
+                get = GetThreshold(index, "value", 0),
+                set = SetThreshold(index, "value"),
+                min = 0, max = 20, step = 1, apply = Apply,
+                format = function(v)
+                    if (v or 0) < 1 then return "off" end
+                    return string.format("%d+", v)
+                end,
+            })
+        local fallback = BAND_COLOURS[index]
+        fillRows[#fillRows + 1] = UI.Swatch(
+            grid:FullRow("Colour", { controlWidth = 124 }),
+            function()
+                local colour = GetThreshold(index, "color", fallback)()
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b) SetThreshold(index, "color")({ r, g, b }) end,
+            Apply)
+    end
+
+    fillRows[#fillRows + 1] = grid:Note("Blizzard reports the count, and on this "
+        .. "patch it may arrive as a protected value that no addon may read. "
+        .. "This addon never reads it: each band is a bar whose range is set to "
+        .. "the number you chose, and the game itself decides whether the count "
+        .. "has crossed it. That is why it works at all.")
+
     fillRows[#fillRows + 1] = grid:Note("Leave the texture empty and the fill "
         .. "wears the backdrop's, so the bar reads as one object. This reaches "
         .. "buff bars adopted from Blizzard's Cooldown Manager as well, so the "
