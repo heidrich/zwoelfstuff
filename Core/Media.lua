@@ -185,6 +185,14 @@ function ns.PaintBorder(chrome, style, outside)
         chrome:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", pad, -pad)
     end
 
+    -- Shown, every time. CDM:Release hides the whole chrome frame when it
+    -- hands an item back to Blizzard, and nothing here ever turned it on
+    -- again - so a spell that left a bar and came back had no border for the
+    -- rest of the session, and the textures below were being set on a frame
+    -- nobody could see. The empty case is handled by hiding the CONTENTS
+    -- rather than the frame.
+    chrome:Show()
+
     if size <= 0 then
         chrome.pixel:Hide()
         if chrome.SetBackdrop then chrome:SetBackdrop(nil) end

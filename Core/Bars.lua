@@ -34,27 +34,20 @@ ns.BAR_DEFAULTS = {
     cells   = {},              -- [index] = spellID; holes are empty cells
 
     -- How the cells are arranged. See Core/Layout.lua - "grid" is rows and
-    -- columns, "free" is the puzzle, and everything in between is a lattice
-    -- with one rule changed.
+    -- columns, "stagger" is the same lattice with every other line pushed
+    -- along, and "free" is the puzzle, which has no lattice at all.
     layout  = "grid",
     flow    = "rows",          -- which axis fills before it wraps
     growX   = "right",         -- reading direction across
     growY   = "down",          -- reading direction down
 
-    -- How many cells an arrangement that has no rows and columns holds. A
-    -- puzzle, an arc and a diagonal are a SEQUENCE, so a grid of 2x3 means
-    -- nothing to them; this is their length.
+    -- How many cells the puzzle holds. It has no rows and columns, so a grid
+    -- of 2x3 means nothing to it; this is its length.
     freeCount = 6,
 
-    -- Arrangement dials. Each one belongs to exactly one arrangement and is
-    -- ignored by the others, which is why they are flat rather than nested:
-    -- switching from an arc to a grid and back must not lose the arc's shape.
+    -- Belongs to Staggered and is ignored by the others. Flat rather than
+    -- nested, so switching pattern and switching back cannot lose it.
     staggerOffset = 50,        -- percent of a cell, on every other line
-    arcRadius     = 0,         -- 0 works it out from the cell size and count
-    arcStart      = 90,        -- degrees; 0 is due right, 90 is up
-    arcSpan       = 180,       -- degrees covered; 360 closes the ring
-    diagonalX     = 100,       -- percent of a cell width per step
-    diagonalY     = -100,      -- percent of a cell height per step
 
     -- The puzzle raster. Dragging a cell in build mode lands on it, so a
     -- hand-built layout still lines up. 0 is free-hand.
@@ -116,11 +109,13 @@ ns.BAR_DEFAULTS = {
     swipeAlpha = 0.70,
     showEdge   = false,        -- the bright line that follows the sweep
 
-    -- THE FILL OF A TRACKING BAR THE ADDON DRAWS ITSELF.
+    -- THE FILL OF A TRACKING BAR, whichever of the two renderers draws it.
     --
-    -- An adopted buff-bar frame brings Blizzard's own status bar with it. A
-    -- cell we draw had none at all, so a bar-shaped aura was a square icon
-    -- and a hole beside it - which is not a bar by any reading.
+    -- A cell we draw had no fill at all, so a bar-shaped aura was a square
+    -- icon and a hole beside it. An adopted buff-bar frame had Blizzard's,
+    -- which no setting here could reach - so one row could hold two bars
+    -- wearing two different textures with one picker between them. Both go
+    -- through these four values now.
     --
     -- Empty texture means "wear the backdrop's", so the default bar is one
     -- object rather than two textures that happen to be adjacent.
@@ -596,8 +591,7 @@ ns.BAR_STYLE_KEYS = {
     -- their spells into, and overwriting them would rearrange the work rather
     -- than the styling.
     "layout", "flow", "growX", "growY",
-    "staggerOffset", "arcRadius", "arcStart", "arcSpan",
-    "diagonalX", "diagonalY", "raster",
+    "staggerOffset", "raster",
 
     -- Effects are a look. Visibility rules are not: "only in raids" belongs to
     -- that one bar's job, and copying it onto another is never what was meant.
@@ -1070,7 +1064,34 @@ function Bars:Migrate()
         end
     end
 
-    ns.db.dbVersion = 3
+    -- 3 -> 4: Arc and Diagonal are gone (owner, 2026-08-07: they threw errors
+    -- and did not look good). A bar still naming one would otherwise fall
+    -- through to the grid branch of the engine while its pattern picker showed
+    -- nothing selected - so it is moved onto Grid properly, keeping the number
+    -- of cells it had rather than the rows and columns it was ignoring.
+    if from < 4 then
+        local moved = 0
+
+        for _, cfg in ipairs(ns.db.bars) do
+            if cfg.layout == "arc" or cfg.layout == "diagonal" then
+                local count = math.max(1, cfg.freeCount or 6)
+                cfg.layout = "grid"
+                cfg.columns = math.max(1, math.min(count, 12))
+                cfg.rows = math.max(1, math.ceil(count / cfg.columns))
+                moved = moved + 1
+            end
+            cfg.arcRadius, cfg.arcStart, cfg.arcSpan = nil, nil, nil
+            cfg.diagonalX, cfg.diagonalY = nil, nil
+        end
+
+        if moved > 0 then
+            ns.Print(string.format("Arc and Diagonal have been removed. %d bar%s "
+                .. "moved onto Grid, with everything still on %s.",
+                moved, moved == 1 and "" or "s", moved == 1 and "it" or "them"))
+        end
+    end
+
+    ns.db.dbVersion = 4
 end
 
 function Bars:Prepare()

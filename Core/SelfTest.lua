@@ -141,26 +141,25 @@ local function TestLayout()
         Near(scaledSlots[2].x - scaledSlots[1].x, 92),
         string.format("%.1f, expected 92", scaledSlots[2].x - scaledSlots[1].x))
 
-    -- A closed ring is a ring: every cell the same distance from the middle.
-    local ring = Fresh({ layout = "arc", freeCount = 8, arcSpan = 360 })
-    local ringSlots = Slots(ring)
-    local radius = math.sqrt(ringSlots[1].x ^ 2 + ringSlots[1].y ^ 2)
-    local even = true
-    for _, slot in ipairs(ringSlots) do
-        if not Near(math.sqrt(slot.x ^ 2 + slot.y ^ 2), radius, 0.5) then
-            even = false
-        end
-    end
-    Check("Arc: a closed ring is round", even)
+    -- Staggered pushes every other LINE and leaves the first one alone.
+    local stagger = Fresh({ layout = "stagger", rows = 2, columns = 3,
+        iconSize = 40, spacing = 6, staggerOffset = 50 })
+    local staggerSlots = Slots(stagger)
+    Check("Staggered: the first line is not moved",
+        Near(staggerSlots[1].x, 20), string.format("%.1f", staggerSlots[1].x))
+    Check("Staggered: the second line is pushed by half a cell",
+        Near(staggerSlots[4].x - staggerSlots[1].x, 23),
+        string.format("%.1f, expected 23", staggerSlots[4].x - staggerSlots[1].x))
 
-    -- A diagonal steps by the same vector every time.
-    local diag = Fresh({ layout = "diagonal", freeCount = 4 })
-    local diagSlots = Slots(diag)
-    local stepX = diagSlots[2].x - diagSlots[1].x
-    local stepY = diagSlots[2].y - diagSlots[1].y
-    Check("Diagonal: every step is the same",
-        Near(diagSlots[4].x - diagSlots[3].x, stepX)
-        and Near(diagSlots[4].y - diagSlots[3].y, stepY))
+    -- Arc and Diagonal are GONE, and a saved bar naming one must not quietly
+    -- come out as something with the right cell count and the wrong shape.
+    for _, dead in ipairs({ "arc", "diagonal" }) do
+        local gone = true
+        for _, entry in ipairs(ns.LAYOUTS) do
+            if entry.value == dead then gone = false end
+        end
+        Check("'" .. dead .. "' is no longer offered", gone)
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -235,19 +234,21 @@ local function TestPatternRoundTrip()
     end
 
     -- The puzzle starts as what you were just looking at, whatever that was.
-    local arc = Fresh({ layout = "arc", freeCount = 6 })
-    local arcSlots = Slots(arc)
-    ns.Bars:Relayout(arc, "free")
-    local puzzleSlots = Slots(arc)
+    -- Staggered, because it is the one left whose slots a rows-and-columns
+    -- loop would NOT reproduce - which is exactly the mistake this catches.
+    local shaped = Fresh({ layout = "stagger", rows = 2, columns = 3 })
+    local before = Slots(shaped)
+    ns.Bars:Relayout(shaped, "free")
+    local puzzleSlots = Slots(shaped)
 
-    local ok, why = SameGeometry(arcSlots, puzzleSlots)
+    local ok, why = SameGeometry(before, puzzleSlots)
     Check("The puzzle opens on the arrangement you left", ok, why)
 
     -- And coming back to a puzzle finds it as it was left, not re-seeded.
-    ns.Layout.SetOffset(arc, 1, 123, 45)
-    ns.Bars:Relayout(arc, "grid")
-    ns.Bars:Relayout(arc, "free")
-    local x, y = ns.Layout.GetOffset(arc, 1)
+    ns.Layout.SetOffset(shaped, 1, 123, 45)
+    ns.Bars:Relayout(shaped, "grid")
+    ns.Bars:Relayout(shaped, "free")
+    local x, y = ns.Layout.GetOffset(shaped, 1)
     Check("A puzzle you already built is not re-seeded",
         Near(x, 123) and Near(y, 45), string.format("%.0f,%.0f", x, y))
 end

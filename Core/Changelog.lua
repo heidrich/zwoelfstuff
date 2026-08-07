@@ -8,6 +8,20 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.8.0",
+        date = "2026-08-07",
+        lines = {
+            "FIXED, reported: a picked texture never reached an adopted buff bar. Blizzard's tracked-bar template carries its own status bar and this addon had never touched it - so what was on screen was Blizzard's gradient, and no setting here could change it. It takes the bar fill's texture, colour and opacity now, which means the bar Blizzard draws and the bar we draw finally wear the same settings.",
+            "The backdrop section now says where its plate is actually visible. It sits BEHIND the icon, and spell art is opaque - so on a square icon you will never see it whatever texture you pick. That was the other half of the same complaint, and it is a fact about the layer rather than a bug. For the coloured part of a bar, use Bar fill.",
+            "REMOVED: Arc and Diagonal. They threw errors and did not look good, and neither was worth the six settings it cost. Any bar still on one moves onto Grid with everything on it intact. The geometry was correct and tested, so if they ever come back the fault to look for is in the panel around them.",
+            "REMOVED: the Build on screen row in the settings panel. It was a second button for what the bar card already does, on a page you have to open first, and its control sat on top of its own text. The card's button is called Build on screen now and is the only way in.",
+            "FIXED: the Cooldown Manager could only ever be found once. A negative answer was cached for the whole session - and the usual reason for that answer is the one the addon then tells you to fix, so doing what it asked changed nothing until a reload.",
+            "FIXED, and this one was rude: releasing a frame left Blizzard's own display stripped. Every decoration this addon silences was pinned at zero by a hook that never stopped, so switching the takeover off handed Blizzard back a Cooldown Manager with no borders and no range veil until a reload. What each part looked like before is recorded and restored now, rounded corners included.",
+            "FIXED: a spell that left a bar and came back had no border for the rest of the session. Releasing hid the frame the border is painted into, and nothing ever turned it back on.",
+            "FIXED: Centre on screen did not centre a bar pinned by an edge - it put that EDGE on the centre line. Hiding the overlay was a dead end, because it hides the movers you would need to bring it back. And picking a bar with fewer cells than the last one left the selection reading slot 9 of 6.",
+        },
+    },
+    {
         version = "4.7.0",
         date = "2026-08-07",
         lines = {

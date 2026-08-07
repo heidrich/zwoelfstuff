@@ -4,6 +4,65 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.0] - 2026-08-07
+
+### Fixed
+
+- **A picked texture never reached an adopted buff bar.** Reported: *"die
+  texturen werden nicht übernommen"*, and exactly right — Blizzard's
+  TrackedBar template carries its own StatusBar, and this addon had never
+  touched it. What was on screen was Blizzard's gradient and no setting here
+  could change it. It now takes the bar fill's texture, colour and opacity,
+  so the bar Blizzard draws and the bar this addon draws wear the same
+  settings. The StatusBar is located rather than assumed: the field name
+  first, then a walk of the child frames, so a member renamed in a patch
+  costs the fill and never an error.
+- **The Cooldown Manager could only be found once.** `IsAvailable` cached a
+  NEGATIVE answer for the session. The usual reason for that answer is that
+  Blizzard's Cooldown Manager has not been switched on yet — which is exactly
+  what the addon then told you to go and do, and then refused to notice you
+  had done. Only a positive answer is cached now.
+- **Releasing a frame left Blizzard's own display stripped.** Every decoration
+  this addon silences — borders, shadows, the out-of-range veil — was pinned
+  at alpha zero by a hook that never stopped. Switch the takeover off, or move
+  a spell off a bar, and Blizzard got back an icon with its decorations
+  permanently removed until a reload. What each region looked like before is
+  now recorded and restored, the rounded-corner mask included.
+- **A released frame lost its border for good.** `PaintBorder` never showed the
+  chrome frame it paints into, and releasing hides it — so a spell that left a
+  bar and came back had no border for the rest of the session while the
+  addon carefully set textures on a frame nobody could see.
+- **"Centre on screen" did not centre an edge-pinned bar** — it wrote 0 into
+  the pinned point's offset, which puts that edge on the centre line. The menu
+  entry and the three tool buttons now translate the same way the drag always
+  did.
+- **Hiding the overlay was a dead end.** It hides every mover, so the
+  Shift-right-click that got you there cannot get you back, and the only
+  button that can still read "Hide overlay". It follows the state now.
+- **Selecting a smaller bar left the selection past its end** — "slot 9 of 6",
+  with the arrow keys nudging a cell that does not exist.
+
+### Removed
+
+- **Arc and Diagonal.** The owner reported that they threw errors and did not
+  look good; both were true enough that keeping them was not worth the six
+  settings they cost. The geometry itself was correct and tested, so if either
+  ever returns the fault to look for is in the panel around it. A saved bar
+  still on one is migrated onto Grid with its cells intact, and the self test
+  now asserts that neither is offered again.
+- **The "Build on screen" row in the settings panel.** It was a second button
+  for what the bar card already does, on a page you have to open first, and
+  its control sat on top of its own sublabel. The card's button is renamed to
+  **Build on screen** and is now the only way in.
+
+### Changed
+
+- The Backdrop section says where the plate is actually visible. It sits
+  BEHIND the icon, and spell art is opaque — so on a square icon you will
+  never see it, whatever texture is picked. That was the other half of "the
+  textures are not applied", and it is a fact about the layer rather than a
+  bug.
+
 ## [4.7.0] - 2026-08-07
 
 A bug-fix release with two additions that exist because of the bugs. Nine

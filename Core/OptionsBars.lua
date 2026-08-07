@@ -135,7 +135,7 @@ local function BuildCard(parent, width)
 
     local title = UI.Label(card, "", 13.5, C.text)
     title:SetPoint("LEFT", number, "RIGHT", 8, 0)
-    title:SetWidth(width - 230)      -- never under the header's three actions
+    title:SetWidth(width - 300)      -- never under the header's three actions
     title:SetWordWrap(false)
 
     -- Two-step, because one stray click would otherwise throw away a bar the
@@ -172,9 +172,13 @@ local function BuildCard(parent, width)
     options:SetPoint("RIGHT", remove, "LEFT", -2, 0)
 
     -- Straight from the card onto the screen. An arrangement is something you
-    -- judge by looking at it where it will live, not in a preview - and this
-    -- is the only place most people will ever find build mode.
-    local build = UI.GhostButton(card, "Build", function()
+    -- judge by looking at it where it will live, not in a preview.
+    --
+    -- THE ONLY WAY IN, on purpose. The settings panel used to carry a second
+    -- "Build on screen" row doing exactly this - two buttons for one action,
+    -- one of them on a page you have to open first, and its control sat on top
+    -- of its own sublabel. The card is where the bar is, so the button is here.
+    local build = UI.GhostButton(card, "Build on screen", function()
         if not card.dkIndex then return end
         Workspace:Select(card.dkIndex)
         ns.EditMode:OpenBuild()
@@ -910,18 +914,6 @@ function Workspace:BuildOptionsPane(parent, width)
     local staggerRow = Slide("Offset", "staggerOffset", 0, 100, 5,
         function(v) return string.format("%d%%", v) end)
 
-    local arcSpanRow  = Slide("Arc", "arcSpan", 30, 360, 5,
-        function(v) return string.format("%d deg", v) end)
-    local arcStartRow = Slide("Starts at", "arcStart", 0, 359, 5,
-        function(v) return string.format("%d deg", v) end)
-    local arcRadRow   = Slide("Radius", "arcRadius", 0, 400, 5,
-        function(v) return v <= 0 and "auto" or string.format("%d", v) end)
-
-    local diagXRow = Slide("Step across", "diagonalX", -200, 200, 5,
-        function(v) return string.format("%d%%", v) end)
-    local diagYRow = Slide("Step down", "diagonalY", -200, 200, 5,
-        function(v) return string.format("%d%%", v) end)
-
     local rasterRow = Slide("Snap to", "raster", 0, 40, 1,
         function(v) return v <= 0 and "free hand" or string.format("%d px", v) end)
 
@@ -946,19 +938,6 @@ function Workspace:BuildOptionsPane(parent, width)
         end)
     straightenBtn:SetPoint("RIGHT", straightenRow.slot, "RIGHT", 0, 0)
 
-    local buildRow = grid:FullRow("Build on screen", {
-        controlWidth = 150,
-        sublabel = "Drag, scale and swap each slot where it lives",
-    })
-    local buildBtn = UI.Button(buildRow.slot, "Open build mode", 150, function()
-        local index = Workspace:Current()
-        if index then
-            Workspace:Select(index)
-            ns.EditMode:OpenBuild()
-        end
-    end, "primary")
-    buildBtn:SetPoint("RIGHT", buildRow.slot, "RIGHT", 0, 0)
-
     -- Which of the above apply right now. Recorded as one function so the
     -- rule lives in a single place rather than in nine SetRelevant calls
     -- scattered through the section.
@@ -974,13 +953,8 @@ function Workspace:BuildOptionsPane(parent, width)
         end
 
         flowRow:SetRelevant(lattice)
-        growYRow:SetRelevant(lattice or kind == "diagonal")
+        growYRow:SetRelevant(lattice)
         staggerRow:SetRelevant(kind == "stagger")
-        arcSpanRow:SetRelevant(kind == "arc")
-        arcStartRow:SetRelevant(kind == "arc")
-        arcRadRow:SetRelevant(kind == "arc")
-        diagXRow:SetRelevant(kind == "diagonal")
-        diagYRow:SetRelevant(kind == "diagonal")
         rasterRow:SetRelevant(kind == "free")
         straightenRow:SetRelevant(ns.Layout.HasOffsets(cfg))
     end
@@ -1021,6 +995,13 @@ function Workspace:BuildOptionsPane(parent, width)
     Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent)
     UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
         Get("backdropTexture"), Set("backdropTexture"), Apply)
+    -- Said out loud, because "I picked a texture and nothing happened" is
+    -- otherwise an unanswerable question. The plate is BEHIND the art, and
+    -- spell art is opaque and fills its cell.
+    grid:Note("This sits behind the icon, so on a square icon you will not see "
+        .. "it - spell art is opaque. It shows on a tracking bar, beside and "
+        .. "under the fill, and through an aura this addon dims while it is "
+        .. "down. For the coloured part of a bar, use Bar fill.")
 
     -- The fill of a tracking bar this addon draws itself ---------------------
     --
@@ -1040,9 +1021,9 @@ function Workspace:BuildOptionsPane(parent, width)
     fillRows[#fillRows + 1] = Switch("Fill up", "fillReverse",
         "Grow from empty instead of draining away")
     fillRows[#fillRows + 1] = grid:Note("Leave the texture empty and the fill "
-        .. "wears the backdrop's, so the bar reads as one object. Buff bars "
-        .. "adopted from Blizzard's Cooldown Manager bring their own fill and "
-        .. "ignore all of this.")
+        .. "wears the backdrop's, so the bar reads as one object. This reaches "
+        .. "buff bars adopted from Blizzard's Cooldown Manager as well, so the "
+        .. "two kinds of bar on one row look like one design.")
 
     grid:Section("Cooldown sweep", "look-sweep")
 

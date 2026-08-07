@@ -59,9 +59,15 @@ end
 -- the aura engine this is expected to be present. It can still be missing on
 -- an older client, so callers check.
 function CDM:IsAvailable()
-    if self.available ~= nil then return self.available end
+    -- ONLY A POSITIVE ANSWER IS CACHED.
+    --
+    -- A negative one is a statement about this moment, and the usual reason
+    -- for it is the one the message below names: Blizzard's Cooldown Manager
+    -- has not been switched on yet, so its frames do not exist. Caching that
+    -- meant doing exactly what the addon asked for changed nothing until a
+    -- reload - the addon told the user to fix it and then refused to notice.
+    if self.available then return true end
 
-    self.available = false
     self.unavailableReason = nil
 
     if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo) then
@@ -448,12 +454,30 @@ end
 local OVERLAY_FILE = 6707800
 local SQUARE_MASK  = "Interface\\Buttons\\WHITE8X8"
 
--- Silenced regions, and it STAYS silenced.
+-- The named decorations, in one list.
+--
+-- Read once by the stripper and once by the restorer, because two copies of
+-- this list would drift and the second one would silently stop putting
+-- something back.
+local DECORATIONS = {
+    "Border", "Shadow", "IconShadow", "DebuffBorder", "CooldownFlash",
+    "SpellActivationAlert",
+}
+
+-- Silenced regions, and it STAYS silenced - until we let go.
 --
 -- Alpha is not a one-time setting on these: the out-of-range veil is driven
 -- by range, so Blizzard writes its alpha back whenever you move. A single
 -- SetAlpha(0) is a decoration that returns the moment you walk anywhere. The
 -- hook is the same self-healing trick the item frames use for their anchor.
+--
+-- WHAT EACH REGION LOOKED LIKE BEFORE IS RECORDED. The version before this
+-- one kept nothing, and said so - "an alpha of zero is all we know, not what
+-- it was before". That was not a limitation, it was an omission, and it had a
+-- real cost: releasing a frame back to Blizzard left every decoration pinned
+-- at zero for the rest of the session, the range veil included. Switch the
+-- takeover off and Blizzard's own Cooldown Manager was left permanently
+-- stripped by an addon that claimed to have let go.
 --
 -- Weak keys, and the record lives here rather than on the region: writing a
 -- custom key onto a Blizzard object is one of the named ways to taint it.
@@ -463,20 +487,40 @@ local hushing = false
 local function Dim(region, alsoHide)
     if not region then return end
 
-    if not hushed[region] then
-        hushed[region] = true
+    local record = hushed[region]
+    if not record then
+        record = {
+            alpha = (region.GetAlpha and region:GetAlpha()) or 1,
+            shown = region.IsShown and region:IsShown() or false,
+        }
+        hushed[region] = record
+
         pcall(hooksecurefunc, region, "SetAlpha", function(self)
-            if hushing or not hushed[self] then return end
+            local held = hushed[self]
+            if hushing or not (held and held.silent) then return end
             hushing = true
             self:SetAlpha(0)
             hushing = false
         end)
     end
 
+    record.silent = true
     hushing = true
     pcall(region.SetAlpha, region, 0)
     if alsoHide then pcall(region.Hide, region) end
     hushing = false
+end
+
+-- Gives a decoration back at the alpha it had before we touched it. The hook
+-- stays - a hook cannot be removed - but with `silent` off it does nothing,
+-- so Blizzard is free to drive the region again.
+local function Undim(region)
+    local record = region and hushed[region]
+    if not (record and record.silent) then return end
+
+    record.silent = false
+    pcall(region.SetAlpha, region, record.alpha)
+    if record.shown then pcall(region.Show, region) end
 end
 
 -- Blizzard rounds its icons with a mask texture, and the corners cannot be
@@ -488,17 +532,38 @@ end
 -- do is take it off the texture rather than try to redefine it. The white
 -- square is kept as a second attempt, because a mask that cannot be removed
 -- can still sometimes be flattened.
+-- Which masks were taken off which texture, so they can be put back. Weak
+-- keys, same reason as everything else in this file.
+local unmasked = setmetatable({}, { __mode = "k" })
+
 local function Unmask(frame, masked)
     if not frame then return end
 
     for _, region in ipairs({ frame:GetRegions() }) do
         if region.IsObjectType and region:IsObjectType("MaskTexture") then
             if masked and masked.RemoveMaskTexture then
+                local taken = unmasked[masked]
+                if not taken then
+                    taken = {}
+                    unmasked[masked] = taken
+                end
+                taken[region] = true
                 pcall(masked.RemoveMaskTexture, masked, region)
             end
             pcall(region.SetTexture, region, SQUARE_MASK)
         end
     end
+end
+
+-- Rounded corners back on a frame we no longer own.
+local function Remask(masked)
+    local taken = masked and unmasked[masked]
+    if not taken then return end
+
+    for region in pairs(taken) do
+        if masked.AddMaskTexture then pcall(masked.AddMaskTexture, masked, region) end
+    end
+    unmasked[masked] = nil
 end
 
 -- Runs on EVERY skin pass, not once per frame.
@@ -509,12 +574,9 @@ end
 -- once is a decoration removed until the next time it is handed out. The work
 -- is a handful of regions and only happens when something actually changed.
 local function StripDecorations(item)
-    Dim(item.Border)
-    Dim(item.Shadow)
-    Dim(item.IconShadow)
-    Dim(item.DebuffBorder)
-    Dim(item.CooldownFlash)
-    Dim(item.SpellActivationAlert, true)
+    for _, key in ipairs(DECORATIONS) do
+        Dim(item[key], key == "SpellActivationAlert")
+    end
 
     -- The masks on the item belong to its icon; the ones on the Cooldown
     -- belong to its swipe, which is not reachable from here - so that one
@@ -542,6 +604,31 @@ local function StripDecorations(item)
             if isChrome then Dim(region, true) end
         end
     end
+end
+
+-- THE FILL OF AN ADOPTED BUFF BAR.
+--
+-- Blizzard's TrackedBar template carries its own StatusBar, and nothing here
+-- ever touched it - so a texture picked in our own panel could not reach the
+-- one thing on screen that most obviously IS a bar. Reported by the owner as
+-- "die texturen werden nicht übernommen", and entirely correct: what was on
+-- screen was Blizzard's own gradient, and no setting in this addon could
+-- change it.
+--
+-- FOUND RATHER THAN ASSUMED. The field name is tried first and the children
+-- are walked for a StatusBar if it is not there, so a member Blizzard renames
+-- in a patch costs the fill and never an error.
+local function BarFill(item)
+    local fill = item.Bar
+    if fill and fill.SetStatusBarTexture then return fill end
+
+    for _, child in ipairs({ item:GetChildren() }) do
+        if child.GetObjectType and child:GetObjectType() == "StatusBar"
+            and child.SetStatusBarTexture then
+            return child
+        end
+    end
+    return nil
 end
 
 -- style comes from ns.Bars:Style, so every number here has already been
@@ -573,6 +660,23 @@ function CDM:Skin(item, style, shape)
         -- layout.
         if item.Icon then
             pcall(item.Icon.SetTexCoord, item.Icon, zoom, 1 - zoom, zoom, 1 - zoom)
+        end
+
+        -- Its fill DOES get our texture and colour, which is the one part of
+        -- the template that is a surface rather than a layout. Without this
+        -- the texture picker had no effect on the most bar-like thing the
+        -- addon puts on screen, and the two renderers - Blizzard's bar and
+        -- the one we draw ourselves - sat side by side wearing different
+        -- textures with one setting between them.
+        local fill = BarFill(item)
+        if fill then
+            local key = style.fillTexture
+            if key and ns.Media.IsKnown("statusbar", key) then
+                pcall(fill.SetStatusBarTexture, fill, ns.Media.Statusbar(key))
+            end
+            local colour = style.fillColor
+            pcall(fill.SetStatusBarColor, fill, colour[1], colour[2], colour[3],
+                style.fillAlpha)
         end
     else
         -- The art has to be told to fill the frame. Sizing the FRAME is not
@@ -654,10 +758,26 @@ function CDM:Release(item)
         state.alpha = nil
         item:SetAlpha(1)
     end
-    -- The stripped decorations are NOT put back. They cannot be: an alpha of
-    -- zero is all we know, not what it was before. The border is ours though,
-    -- and leaving it on a frame Blizzard is drawing again would be a mark
-    -- from an addon that says it let go.
+    -- THE STRIPPED DECORATIONS GO BACK, at the alpha they had before we
+    -- silenced them. They used to stay at zero for the rest of the session,
+    -- and that was not a limitation of the approach - nothing had recorded
+    -- the old value. The cost was real: switching the takeover off handed
+    -- Blizzard back a Cooldown Manager with no borders and no range veil,
+    -- from an addon that had just said it was letting go.
+    for _, key in ipairs(DECORATIONS) do Undim(item[key]) end
+    for _, region in ipairs({ item:GetRegions() }) do Undim(region) end
+    if item.Cooldown then
+        for _, region in ipairs({ item.Cooldown:GetRegions() }) do Undim(region) end
+    end
+
+    -- And its rounded corners. The mask was taken OFF the icon rather than
+    -- redefined - see Unmask - so putting it back is one call and the icon is
+    -- Blizzard's own shape again.
+    Remask(item.Icon)
+
+    -- Our own plate and border are ours. Leaving either on a frame Blizzard
+    -- is drawing again would be a mark from an addon that says it let go.
+    if state.plate then state.plate:Hide() end
     if state.chrome then state.chrome:Hide() end
 end
 

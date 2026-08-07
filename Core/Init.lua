@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.7.0"
+ns.version = "4.8.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -90,10 +90,11 @@ ns.GROUP_DEFAULTS = {
 
 ns.DEFAULTS = {
     -- 3: the puzzle got its own two coordinate fields. Before that a cell's
-    -- x/y meant a position in the puzzle and a nudge everywhere else, and
-    -- switching arrangement silently reinterpreted one as the other. See
-    -- Bars:Migrate.
-    dbVersion  = 3,
+    --    x/y meant a position in the puzzle and a nudge everywhere else, and
+    --    switching arrangement silently reinterpreted one as the other.
+    -- 4: Arc and Diagonal removed; bars on either move onto Grid.
+    -- See Bars:Migrate.
+    dbVersion  = 4,
 
     -- Bars: a grid of cells, each holding one spell from Blizzard's Cooldown
     -- Manager. Seeded once on first run and never re-seeded, so a deleted

@@ -4,21 +4,21 @@
 -- Pure geometry. Nothing in this file creates a frame, reads the game or
 -- knows what a spell is: it takes a bar's settings and answers "cell 7 sits
 -- HERE and is THIS big". That is what makes an arrangement testable, and it
--- is why the five arrangements below are five short functions rather than
--- five copies of the render pass.
+-- is why each arrangement below is one short function rather than a copy of
+-- the render pass.
 --
 -- THE COORDINATE SYSTEM.
 --
 -- Local to the bar, origin anywhere, +x right and +y UP - the same way WoW
 -- reads a SetPoint offset, so no renderer has to flip a sign. Every slot is
--- returned as its CENTRE plus a size. Centres, not corners, because an arc
+-- returned as its CENTRE plus a size. Centres, not corners, because a puzzle
 -- and a mixed grid have no shared corner to measure from, and because a cell
 -- that grows should grow around itself rather than shove its neighbours.
 --
 -- Screen.lua takes the bounding box over all slots, makes the bar frame that
 -- size, and anchors each cell by its centre. So a bar is always exactly as
 -- big as what it holds - which is what makes the unlock overlay, snapping and
--- attachment work for a circle exactly as well as for a row.
+-- attachment work for a hand-built layout exactly as well as for a row.
 --
 -- THE PUZZLE, AND WHY IT KEEPS ITS OWN TWO NUMBERS.
 --
@@ -42,19 +42,24 @@ local _, ns = ...
 local Layout = {}
 ns.Layout = Layout
 
-local cos, sin, rad, floor, max, abs = math.cos, math.sin, math.rad, math.floor, math.max, math.abs
+local floor, max = math.floor, math.max
 
+-- THREE, not five.
+--
+-- Arc and Diagonal were removed on 2026-08-07: the owner reported that they
+-- threw errors and did not look good, and both were true enough that keeping
+-- them was not worth the settings they cost. The geometry itself was correct
+-- and tested - so if either ever comes back, the fault to look for is in the
+-- panel around it, not in the arithmetic. A saved bar that still names one is
+-- migrated onto Grid; see Bars:Migrate.
 ns.LAYOUTS = {
     { value = "grid",     text = "Grid",
       note = "Rows and columns. The straight answer." },
     { value = "stagger",  text = "Staggered",
       note = "Every other line pushed along by half a cell." },
-    { value = "arc",      text = "Arc",
-      note = "Cells around a circle. A full 360 closes the ring." },
-    { value = "diagonal", text = "Diagonal",
-      note = "Each cell steps by a fixed offset. Steps, ladders, slants." },
     { value = "free",     text = "Puzzle",
-      note = "Every cell exactly where you dragged it. No lattice at all." },
+      note = "No rows, no columns. Every cell sits exactly where you dragged "
+          .. "it, and you drag them in build mode." },
 }
 
 -- Which way a grid fills before it wraps.
@@ -248,46 +253,6 @@ local function StaggerSlot(cfg, index, cellW, cellH, spacing, lineSpacing, colum
     return x, y
 end
 
--- The radius that puts exactly `spacing` between neighbours, from the chord
--- of the step angle. Worked out rather than guessed, so an arc of four big
--- icons and one of twelve small ones both come out evenly spaced.
-local function AutoRadius(step, cellW, spacing)
-    local half = rad(abs(step)) / 2
-    local chord = sin(half)
-    if chord < 0.0001 then return (cellW + spacing) * 2 end
-    return (cellW + spacing) / (2 * chord)
-end
-
--- No cell HEIGHT here on purpose: an arc is spaced along its circumference,
--- and the chord that decides the radius is measured across the widest thing
--- on it. Taking the height as well would make a ring of wide bars overlap.
-local function ArcSlot(cfg, index, cellW, spacing, count)
-    local span = cfg.arcSpan or 180
-    local closed = abs(span) >= 359.5
-
-    -- A closed ring divides by the count; an open arc puts a cell on each end
-    -- and divides by the gaps between them.
-    local divisor = closed and count or max(1, count - 1)
-    local step = span / divisor
-    if (cfg.growX or "right") == "left" then step = -step end
-
-    local radius = cfg.arcRadius or 0
-    if radius <= 0 then radius = AutoRadius(step, cellW, spacing) end
-
-    local angle = rad((cfg.arcStart or 90) + step * (index - 1))
-    return cos(angle) * radius, sin(angle) * radius
-end
-
-local function DiagonalSlot(cfg, index, cellW, cellH, spacing, lineSpacing)
-    local stepX = (cellW + spacing) * ((cfg.diagonalX or 100) / 100)
-    local stepY = (cellH + lineSpacing) * ((cfg.diagonalY or -100) / 100)
-
-    if (cfg.growX or "right") == "left" then stepX = -stepX end
-    if (cfg.growY or "down") == "up" then stepY = -stepY end
-
-    return (index - 1) * stepX + cellW / 2, (index - 1) * stepY - cellH / 2
-end
-
 ---------------------------------------------------------------------------
 -- The whole bar
 --
@@ -327,10 +292,6 @@ function Layout.Build(cfg, count, spacing, lineSpacing)
             -- else. A cell nudged while it was in a grid must not arrive here
             -- carrying that nudge - see the header.
             x, y = (opts and opts.px) or 0, (opts and opts.py) or 0
-        elseif kind == "arc" then
-            x, y = ArcSlot(cfg, index, baseW, spacing, count)
-        elseif kind == "diagonal" then
-            x, y = DiagonalSlot(cfg, index, baseW, baseH, spacing, lineSpacing)
         elseif kind == "stagger" then
             x, y = StaggerSlot(cfg, index, baseW, baseH, spacing, lineSpacing,
                 columns, rows)
@@ -400,10 +361,7 @@ end
 -- has however many the user dragged in, and growing it is what the "add"
 -- button does rather than a second pair of sliders.
 function Layout.CellCount(cfg)
-    if Layout.IsFree(cfg) or (cfg.layout or "grid") == "arc"
-        or (cfg.layout or "grid") == "diagonal" then
-        return max(1, cfg.freeCount or 6)
-    end
+    if Layout.IsFree(cfg) then return max(1, cfg.freeCount or 6) end
     return max(1, (cfg.rows or 1) * (cfg.columns or 1))
 end
 
