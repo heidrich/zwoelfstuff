@@ -44,14 +44,25 @@ ns.EditMode = EditMode
 local UI = ns.UI
 local C = UI.C
 
-local SNAP_DISTANCE = 10       -- screen units, matched against bar centres and edges
 local NUDGE = 1
 local NUDGE_FAST = 10
-local GRID_STEP = 40
+
+-- Everything about how unlock mode BEHAVES lives in saved variables, so it is
+-- there again tomorrow. Read through one function rather than reached into,
+-- because it has to survive a profile that predates any of these keys.
+local function Prefs()
+    ns.db.editMode = ns.db.editMode or {}
+    local prefs = ns.db.editMode
+    if prefs.gridStep == nil then prefs.gridStep = 40 end
+    if prefs.snap == nil then prefs.snap = true end
+    if prefs.snapDistance == nil then prefs.snapDistance = 10 end
+    if prefs.dim == nil then prefs.dim = 0.35 end
+    return prefs
+end
 
 local unlocked = false
 local mode = "bars"            -- "bars" | "build"
-local overlay, toolbar, keyCatcher, palette, inspector
+local overlay, toolbar, keyCatcher, palette, inspector, tools
 local movers = {}
 local handles = {}             -- [barIndex] = { [cellIndex] = handle }
 local selected = nil           -- the selected MOVER
@@ -105,12 +116,23 @@ local function Candidates(index, half, axis)
 end
 
 local function Snap(value, index, half, axis)
-    local best, bestDistance, guide = value, SNAP_DISTANCE, nil
+    local prefs = Prefs()
+    local best, bestDistance, guide = value, prefs.snapDistance, nil
 
     for _, candidate in ipairs(Candidates(index, half, axis)) do
         local distance = math.abs(candidate.value - value)
         if distance < bestDistance then
             bestDistance, best, guide = distance, candidate.value, candidate.guide
+        end
+    end
+
+    -- The screen grid, when it is asked for, and only where nothing better
+    -- caught. A bar edge lining up with another bar's edge beats landing on
+    -- an arbitrary multiple of 40, so this is the fallback and not the rule.
+    if prefs.snapToGrid and not guide then
+        local step = prefs.gridStep
+        if step and step > 0 then
+            best = math.floor(value / step + 0.5) * step
         end
     end
 
@@ -148,39 +170,63 @@ local function ShowGuide(texture, offset, vertical)
     texture:Show()
 end
 
--- Drawn once and reused: a grid rebuilt on every toggle is a few hundred
--- textures churned for nothing.
+-- The grid is REDRAWN when the step changes, so the lines are pooled rather
+-- than created: a texture cannot be destroyed, and a fresh set every time
+-- somebody drags the step slider would leak a few hundred of them per drag.
+local gridPool, gridUsed = {}, 0
+
+local function GridLine(vertical, offset, strong)
+    gridUsed = gridUsed + 1
+    local line = gridPool[gridUsed]
+    if not line then
+        line = gridLines:CreateTexture(nil, "BACKGROUND")
+        gridPool[gridUsed] = line
+    end
+
+    line:SetColorTexture(1, 1, 1, strong and 0.35 or 0.12)
+    line:ClearAllPoints()
+    if vertical then
+        line:SetWidth(1)
+        line:SetHeight(0)
+        line:SetPoint("TOP", gridLines, "TOP", offset, 0)
+        line:SetPoint("BOTTOM", gridLines, "BOTTOM", offset, 0)
+    else
+        line:SetHeight(1)
+        line:SetWidth(0)
+        line:SetPoint("LEFT", gridLines, "LEFT", 0, offset)
+        line:SetPoint("RIGHT", gridLines, "RIGHT", 0, offset)
+    end
+    line:Show()
+end
+
+local function DrawGrid()
+    if not gridLines then return end
+
+    local step = math.max(4, Prefs().gridStep or 40)
+    local width  = UIParent:GetWidth()
+    local height = UIParent:GetHeight()
+    gridUsed = 0
+
+    -- Measured OUT FROM THE CENTRE in both directions, because the centre is
+    -- what every bar's position is measured from. A grid starting at the
+    -- screen edge would put its lines where no coordinate is round.
+    for offset = 0, width / 2, step do
+        GridLine(true, offset, offset == 0)
+        if offset > 0 then GridLine(true, -offset, false) end
+    end
+    for offset = 0, height / 2, step do
+        GridLine(false, offset, offset == 0)
+        if offset > 0 then GridLine(false, -offset, false) end
+    end
+
+    for index = gridUsed + 1, #gridPool do gridPool[index]:Hide() end
+end
+
 local function BuildGrid()
     gridLines = CreateFrame("Frame", nil, overlay)
     gridLines:SetAllPoints(overlay)
     gridLines:Hide()
-
-    local width  = UIParent:GetWidth()
-    local height = UIParent:GetHeight()
-
-    local function Line(vertical, offset, strong)
-        local line = gridLines:CreateTexture(nil, "BACKGROUND")
-        local alpha = strong and 0.35 or 0.12
-        line:SetColorTexture(1, 1, 1, alpha)
-        if vertical then
-            line:SetWidth(1)
-            line:SetPoint("TOP", gridLines, "TOP", offset, 0)
-            line:SetPoint("BOTTOM", gridLines, "BOTTOM", offset, 0)
-        else
-            line:SetHeight(1)
-            line:SetPoint("LEFT", gridLines, "LEFT", 0, offset)
-            line:SetPoint("RIGHT", gridLines, "RIGHT", 0, offset)
-        end
-    end
-
-    for offset = 0, width / 2, GRID_STEP do
-        Line(true, offset, offset == 0)
-        if offset > 0 then Line(true, -offset, false) end
-    end
-    for offset = 0, height / 2, GRID_STEP do
-        Line(false, offset, offset == 0)
-        if offset > 0 then Line(false, -offset, false) end
-    end
+    DrawGrid()
 end
 
 ---------------------------------------------------------------------------
@@ -219,7 +265,7 @@ local function SetSelected(mover)
             isIt and C.accent[1] or C.accentDim[1],
             isIt and C.accent[2] or C.accentDim[2],
             isIt and C.accent[3] or C.accentDim[3], 1)
-        other.coords:SetShown(isIt)
+        other.coords:SetShown(isIt or Prefs().showCoords)
         -- Raised while selected, so two overlapping bars do not leave you
         -- dragging the one underneath the one you clicked.
         other:SetFrameLevel(overlay:GetFrameLevel() + (isIt and 20 or 10))
@@ -229,6 +275,7 @@ local function SetSelected(mover)
         picked = { bar = mover.index, cell = picked and picked.cell or 1 }
     end
     RefreshInspector()
+    if tools and tools:IsShown() then tools.Refresh() end
 end
 
 local function ApplyMove(mover, x, y)
@@ -431,7 +478,7 @@ local function CreateMover(index)
         UpdateReadout(self)
     end)
     mover:SetScript("OnLeave", function(self)
-        if selected ~= self then self.coords:Hide() end
+        if selected ~= self and not Prefs().showCoords then self.coords:Hide() end
     end)
 
     return mover
@@ -657,6 +704,7 @@ function SelectCell(barIndex, cellIndex)
     end
 
     RefreshInspector()
+    if tools and tools:IsShown() then tools.Refresh() end
 end
 
 ---------------------------------------------------------------------------
@@ -694,7 +742,7 @@ local function OnUpdate()
     -- Free movement with Alt held: snapping is right almost always, and
     -- "almost" is why there has to be a way to switch it off in the moment.
     local lineX, lineY
-    if not (dragging.anchored or IsAltKeyDown()) then
+    if Prefs().snap and not (dragging.anchored or IsAltKeyDown()) then
         -- Snapped in CENTRE terms and written back in pinned-point terms, so
         -- a bar pinned by its left edge still lines up by its middle.
         local centreX, guideLineX = Snap(x + dragging.toCentreX, mover.index,
@@ -943,6 +991,293 @@ local function BuildPalette()
 end
 
 ---------------------------------------------------------------------------
+-- The tool panel
+--
+-- Everything you would otherwise have to close the overlay, open the window,
+-- change one number and come back for. Two groups, and the split is what each
+-- one belongs to: the SCREEN settings are how you work, and they are saved
+-- because they are a habit; the BAR settings are the one you have selected,
+-- and they are the same numbers the options page edits.
+--
+-- Deliberately not every setting. Colours, fonts and effects are things you
+-- judge by looking at one bar closely, and the window is the place for that.
+-- What is here is what you judge by looking at the WHOLE SCREEN, which is
+-- exactly what you cannot do from inside a window covering it.
+---------------------------------------------------------------------------
+
+-- Which bar the panel is editing: the one whose cell is picked in build mode,
+-- otherwise the selected mover. Nil is a real answer and the panel says so
+-- rather than quietly editing bar 1.
+local function CurrentBar()
+    if mode == "build" and picked then
+        return picked.bar, ns.db.bars[picked.bar]
+    end
+    if selected then return selected.index, ns.db.bars[selected.index] end
+    return nil, nil
+end
+
+local function BuildTools()
+    tools = CreateFrame("Frame", nil, overlay)
+    tools:SetSize(292, 392)
+    tools:SetPoint("LEFT", UIParent, "LEFT", 40, 0)
+    tools:SetFrameLevel(overlay:GetFrameLevel() + 40)
+    tools:EnableMouse(true)
+    tools:SetMovable(true)
+    tools:RegisterForDrag("LeftButton")
+    tools:SetScript("OnDragStart", tools.StartMoving)
+    tools:SetScript("OnDragStop", tools.StopMovingOrSizing)
+    tools:SetClampedToScreen(true)
+    tools:Hide()
+
+    UI.Fill(tools, "BACKGROUND", C.windowBg)
+    local edge = ns.CreateBorder(tools, 1, "BORDER")
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    local title = UI.Label(tools, "Tools", 13, C.text)
+    title:SetPoint("TOPLEFT", tools, "TOPLEFT", 12, -10)
+
+    local rule = UI.Separator(tools, true)
+    rule:SetPoint("TOPLEFT", tools, "TOPLEFT", 0, -32)
+    rule:SetPoint("TOPRIGHT", tools, "TOPRIGHT", 0, -32)
+
+    local y = -42
+    local INNER = 12
+    local WIDTH = 292 - INNER * 2
+    local refreshers = {}
+
+    local function Heading(text)
+        local label = UI.Label(tools, text:upper(), 10, C.textFaint)
+        label:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+        y = y - 18
+        return label
+    end
+
+    local function Slider(cfg)
+        local slider = UI.MiniSlider(tools, cfg)
+        slider:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+        slider:SetWidth(WIDTH)
+        y = y - 23
+        refreshers[#refreshers + 1] = slider
+        return slider
+    end
+
+    -- A switch that says what it IS, not what pressing it would do. "Snap:
+    -- on" reads at a glance across a screen; "Turn snapping off" has to be
+    -- parsed every single time.
+    local function Switch(text, get, set, width, sameLine)
+        local button
+        button = UI.Button(tools, text, width or WIDTH, function()
+            set(not get())
+            if button.Refresh then button.Refresh() end
+        end, "soft")
+        button:SetHeight(21)
+
+        if sameLine then
+            button:SetPoint("TOPRIGHT", tools, "TOPRIGHT", -INNER, y + 24)
+        else
+            button:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+            y = y - 24
+        end
+
+        button.Refresh = function()
+            local on = get() and true or false
+            button:SetText(text .. ":  " .. (on and "on" or "off"))
+            button.label:SetTextColor(
+                on and C.accent[1] or C.textFaint[1],
+                on and C.accent[2] or C.textFaint[2],
+                on and C.accent[3] or C.textFaint[3])
+        end
+        refreshers[#refreshers + 1] = button
+        return button
+    end
+
+    -----------------------------------------------------------------------
+    -- The screen
+    -----------------------------------------------------------------------
+    Heading("Screen")
+
+    local half = math.floor((WIDTH - 6) / 2)
+
+    Switch("Grid", function() return gridLines and gridLines:IsShown() end,
+        function(value) EditMode:SetGridShown(value) end, half)
+    Switch("Snap to it", function() return Prefs().snapToGrid end,
+        function(value) Prefs().snapToGrid = value end, half, true)
+
+    Slider({
+        label = "Grid", labelWidth = 60, min = 8, max = 160, step = 4,
+        get = function() return Prefs().gridStep end,
+        set = function(value)
+            Prefs().gridStep = value
+            DrawGrid()
+        end,
+    })
+
+    Switch("Snapping", function() return Prefs().snap end,
+        function(value) Prefs().snap = value end, half)
+    Switch("Coordinates", function() return Prefs().showCoords end,
+        function(value)
+            Prefs().showCoords = value
+            EditMode:Refresh()
+        end, half, true)
+
+    Slider({
+        label = "Catch", labelWidth = 60, min = 2, max = 40, step = 1,
+        get = function() return Prefs().snapDistance end,
+        set = function(value) Prefs().snapDistance = value end,
+    })
+
+    Slider({
+        label = "Dim", labelWidth = 60, min = 0, max = 0.8, step = 0.05,
+        get = function() return Prefs().dim end,
+        set = function(value)
+            Prefs().dim = value
+            if overlay then overlay.dim:SetColorTexture(0, 0, 0, value) end
+        end,
+    })
+
+    -----------------------------------------------------------------------
+    -- The selected bar
+    -----------------------------------------------------------------------
+    y = y - 8
+    local barHeading = Heading("Nothing selected")
+
+    -- Every one of these edits the bar the panel is pointing at, and every
+    -- one is the SAME field the options page edits. One writer, so there is
+    -- no version of a number that only one of the two knows about.
+    local function BarGet(key, fallback)
+        return function()
+            local _, cfg = CurrentBar()
+            return cfg and cfg[key] or fallback
+        end
+    end
+    local function BarSet(key)
+        return function(value)
+            local index, cfg = CurrentBar()
+            if not cfg then return end
+            cfg[key] = value
+            ns.Bars:Changed(index)
+        end
+    end
+
+    local patternBtn = UI.Button(tools, "Pattern", WIDTH, function()
+        local index, cfg = CurrentBar()
+        if not cfg then return end
+
+        -- Cycles rather than opening a menu. There are five, you are looking
+        -- at the screen while you press it, and the answer to "what does this
+        -- one look like" is one click away either direction.
+        local at = 1
+        for position, entry in ipairs(ns.LAYOUTS) do
+            if entry.value == (cfg.layout or "grid") then at = position end
+        end
+        local next_ = ns.LAYOUTS[(at % #ns.LAYOUTS) + 1]
+        ns.Bars:SetLayout(index, next_.value)
+    end, "soft")
+    patternBtn:SetHeight(21)
+    patternBtn:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+    y = y - 25
+
+    local rowsSlider = Slider({
+        label = "Rows", labelWidth = 60, min = 1, max = 12, step = 1,
+        get = BarGet("rows", 1),
+        set = function(value)
+            local index, cfg = CurrentBar()
+            if cfg then ns.Bars:SetGrid(index, value, cfg.columns) end
+        end,
+    })
+    local colsSlider = Slider({
+        label = "Columns", labelWidth = 60, min = 1, max = 12, step = 1,
+        get = BarGet("columns", 1),
+        set = function(value)
+            local index, cfg = CurrentBar()
+            if cfg then ns.Bars:SetGrid(index, cfg.rows, value) end
+        end,
+    })
+    local slotsSlider = Slider({
+        label = "Slots", labelWidth = 60, min = 1, max = 40, step = 1,
+        get = BarGet("freeCount", 6), set = BarSet("freeCount"),
+    })
+
+    local iconSlider = Slider({
+        label = "Icon", labelWidth = 60, min = 16, max = 100, step = 2,
+        get = BarGet("iconSize", 40), set = BarSet("iconSize"),
+    })
+    local widthSlider = Slider({
+        label = "Width", labelWidth = 60, min = 60, max = 400, step = 5,
+        get = BarGet("barWidth", 200), set = BarSet("barWidth"),
+    })
+    local heightSlider = Slider({
+        label = "Height", labelWidth = 60, min = 10, max = 60, step = 2,
+        get = BarGet("barHeight", 24), set = BarSet("barHeight"),
+    })
+
+    Slider({
+        label = "Spacing", labelWidth = 60, min = 0, max = 24, step = 1,
+        get = BarGet("spacing", 4), set = BarSet("spacing"),
+    })
+    Slider({
+        label = "Row gap", labelWidth = 60, min = 0, max = 24, step = 1,
+        get = BarGet("lineSpacing", 4), set = BarSet("lineSpacing"),
+    })
+    Slider({
+        label = "Scale", labelWidth = 60, min = 0.4, max = 2.5, step = 0.05,
+        get = BarGet("scale", 1), set = BarSet("scale"),
+    })
+
+    -- Centring, from here, because it is the one placement you cannot do by
+    -- eye and the one people want most often.
+    y = y - 4
+    local third = math.floor((WIDTH - 12) / 3)
+
+    local function Centre(text, fn, offset)
+        local button = UI.Button(tools, text, third, function()
+            local index, cfg = CurrentBar()
+            if not (cfg and movers[index]) then return end
+            fn(movers[index], cfg)
+        end, "soft")
+        button:SetHeight(21)
+        button:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER + offset * (third + 6), y)
+        return button
+    end
+
+    Centre("Centre", function(mover) ApplyMove(mover, 0, 0) end, 0)
+    Centre("Across", function(mover, cfg) ApplyMove(mover, 0, cfg.y or 0) end, 1)
+    Centre("Down", function(mover, cfg) ApplyMove(mover, cfg.x or 0, 0) end, 2)
+    y = y - 25
+
+    tools:SetHeight(-y + 10)
+
+    tools.Refresh = function()
+        local index, cfg = CurrentBar()
+
+        barHeading:SetText(cfg and (cfg.name or ("BAR " .. index)):upper()
+            or "|cff888888NOTHING SELECTED|r")
+
+        if cfg then
+            local lattice = ns.Layout.UsesGrid(cfg)
+            local isBar = cfg.kind == "bar"
+
+            for _, entry in ipairs(ns.LAYOUTS) do
+                if entry.value == (cfg.layout or "grid") then
+                    patternBtn:SetText("Pattern:  " .. entry.text)
+                end
+            end
+
+            rowsSlider:SetShown(lattice)
+            colsSlider:SetShown(lattice)
+            slotsSlider:SetShown(not lattice)
+            iconSlider:SetShown(not isBar)
+            widthSlider:SetShown(isBar)
+            heightSlider:SetShown(isBar)
+        end
+
+        for _, widget in ipairs(refreshers) do
+            if widget:IsShown() and widget.Refresh then widget.Refresh() end
+        end
+    end
+end
+
+---------------------------------------------------------------------------
 -- The panel
 --
 -- Always visible while unlocked, including while the overlay is hidden -
@@ -1061,6 +1396,17 @@ local function BuildToolbar()
     end, "soft")
     overlayBtn:SetPoint("LEFT", gridBtn, "RIGHT", 6, 0)
 
+    local toolsBtn = UI.Button(toolbar, "Tools", 62, function()
+        if not tools then return end
+        if tools:IsShown() then
+            tools:Hide()
+        else
+            tools.Refresh()
+            tools:Show()
+        end
+    end, "soft")
+    toolsBtn:SetPoint("LEFT", overlayBtn, "RIGHT", 6, 0)
+
     local spellsBtn = UI.Button(toolbar, "Spells", 72, function()
         if not palette then return end
         if palette:IsShown() then
@@ -1071,7 +1417,7 @@ local function BuildToolbar()
             palette:Show()
         end
     end, "soft")
-    spellsBtn:SetPoint("LEFT", overlayBtn, "RIGHT", 6, 0)
+    spellsBtn:SetPoint("LEFT", toolsBtn, "RIGHT", 6, 0)
 
     local doneBtn = UI.Button(toolbar, "Done", 72, function()
         EditMode:SetUnlocked(false)
@@ -1111,10 +1457,11 @@ local function Build()
 
     overlay.dim = overlay:CreateTexture(nil, "BACKGROUND")
     overlay.dim:SetAllPoints(overlay)
-    overlay.dim:SetColorTexture(0, 0, 0, 0.35)
+    overlay.dim:SetColorTexture(0, 0, 0, Prefs().dim)
 
     BuildGrid()
     BuildGuides()
+    BuildTools()
     BuildToolbar()
     BuildPalette()
     BuildKeyCatcher()
@@ -1189,6 +1536,7 @@ function EditMode:Refresh()
                 cfg.enabled == false and C.textFaint[2] or C.text[2],
                 cfg.enabled == false and C.textFaint[3] or C.text[3])
             UpdateReadout(mover)
+            mover.coords:SetShown(Prefs().showCoords or selected == mover)
             mover:SetShown(self.overlayShown)
 
             RefreshHandles(index, cfg)
@@ -1277,6 +1625,7 @@ function EditMode:SetUnlocked(state)
         Propagate(keyCatcher, true)
         if gridLines then gridLines:Hide() end
         if palette then palette:Hide() end
+        if tools then tools:Hide() end
     end
 end
 

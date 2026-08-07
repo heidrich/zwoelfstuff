@@ -15,7 +15,7 @@ ns.version = "4.6.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
-ns.ICON_TEXTURE = 1380870
+ns.ICON_TEXTURE = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo"
 
 -- The aura this addon was built for: the Boiling Point buff, 15s, Blood
 -- Death Knight. Everything user-facing resolves the name from the client at
@@ -134,6 +134,21 @@ ns.DEFAULTS = {
     -- a cooldown onto our bar leaves a hole in Blizzard's row, because its
     -- layout does not know the frame moved. See Core/Screen.lua.
     takeOverCDM = true,
+
+    -- How unlock and build mode behave. Saved rather than reset each time,
+    -- because these are working habits: somebody who arranges on a 20-pixel
+    -- grid with snapping off wants that again tomorrow, and re-setting it at
+    -- the top of every session is the kind of small tax that makes a tool
+    -- feel like it is not on your side.
+    editMode = {
+        grid         = false,
+        gridStep     = 40,
+        snap         = true,
+        snapDistance = 10,
+        snapToGrid   = false,
+        dim          = 0.35,
+        showCoords   = false,
+    },
 
     -- Parked with the 12.1 stack; kept so nothing is lost when it returns.
     groups     = {},

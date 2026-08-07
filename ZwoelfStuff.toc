@@ -6,7 +6,7 @@
 ## Version: 4.6.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
-## IconTexture: 1380870
+## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
 ## X-License: MIT
 ## X-Category: Buffs & Debuffs
 
