@@ -388,6 +388,15 @@ local function Hold(item)
         if pin and pin.alpha then Reassert(pin, frame) end
     end)
 
+    -- Scale, because the size we set is compensated FOR the scale. Blizzard's
+    -- Cooldown Manager has its own size slider in Edit Mode, and one drag on
+    -- it would otherwise put every icon back out of line with no event to
+    -- tell us. We never CALL SetScale on their frame - we only react to it.
+    hooksecurefunc(item, "SetScale", function(frame)
+        local pin = adopted[frame]
+        if pin and pin.width then Reassert(pin, frame) end
+    end)
+
     return state
 end
 
