@@ -284,9 +284,16 @@ end
 --
 -- The cell's OWN kind decides, not the bar's: one cell in a row of icons can
 -- be a tracking bar, which is the whole point of the per-cell override.
-local function ItemGeometry(cfg, cell, item, slot)
+-- Which of Blizzard's two templates a frame came out of. It decides how the
+-- frame may be restyled AND whether we add anything of our own beside it, so
+-- it is asked once and passed along rather than re-derived in three places.
+local function ItemShape(item)
     local viewer = itemViewer[item]
-    local isBarShaped = viewer ~= nil and viewer.kind == "bar"
+    return (viewer and viewer.kind) or "icon"
+end
+
+local function ItemGeometry(cfg, cell, item, slot)
+    local isBarShaped = ItemShape(item) == "bar"
     local width, height = slot.w, slot.h
 
     if slot.kind ~= "bar" or isBarShaped then
@@ -627,6 +634,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         cell.auraEntry, cell.conflict = nil, nil
         if cell.aura then cell.aura:Hide() end
 
+        local shape = ItemShape(item)
         local anchor, itemWidth, itemHeight, visible =
             ItemGeometry(cfg, cell, item, slot)
 
@@ -637,10 +645,18 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         -- adopted icon is Blizzard's child and does not inherit our alpha.
         ns.CDM:SetAlpha(item,
             visible and (cfg.alpha or 1) * (self.unlocked and 1 or factor) or 0)
-        ns.CDM:Skin(item, style)
+        ns.CDM:Skin(item, style, shape)
 
-        self:PaintCaption(cell, cfg, spellID, slot,
-            visible and itemWidth or 0, style)
+        -- A buff-bar frame writes its own name and timer along the bar. Ours
+        -- on top of that is the same word twice, and it was being pushed off
+        -- the right-hand edge into an ellipsis because the "icon" it makes
+        -- room for is the whole frame.
+        if shape == "bar" then
+            if cell.caption then cell.caption:Hide() end
+        else
+            self:PaintCaption(cell, cfg, spellID, slot,
+                visible and itemWidth or 0, style)
+        end
 
         -- The flash, the edge and the nag. Greying is a vertex colour on
         -- Blizzard's own icon texture - the same kind of decoration change

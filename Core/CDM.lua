@@ -546,32 +546,56 @@ end
 
 -- style comes from ns.Bars:Style, so every number here has already been
 -- resolved the same way it will be for our own drawn cells.
-function CDM:Skin(item, style)
+--
+-- shape says which of Blizzard's two templates this frame is: "icon" or
+-- "bar". It decides ONE thing, and that thing is load-bearing - see below.
+function CDM:Skin(item, style, shape)
     if not item then return end
     local state = Hold(item)
 
     StripDecorations(item)
 
-    -- The art has to be told to fill the frame. Sizing the FRAME is not
-    -- enough: each viewer's template anchors its own icon texture its own way
-    -- - a fixed size here, an inset there - so six adopted icons in one row
-    -- came out at six sizes, sitting at six different offsets, while the
-    -- cells behind them were a perfectly even grid.
-    --
-    -- Re-anchored on every pass, because these frames are re-decorated when
-    -- the pool hands them out again.
     local zoom = style.iconZoom
-    if item.Icon then
-        item.Icon:ClearAllPoints()
-        item.Icon:SetAllPoints(item)
-        pcall(item.Icon.SetTexCoord, item.Icon, zoom, 1 - zoom, zoom, 1 - zoom)
-    end
 
-    -- Same for the sweep, or the cooldown would darken a rectangle that is
-    -- not the icon it belongs to.
-    if item.Cooldown then
-        item.Cooldown:ClearAllPoints()
-        item.Cooldown:SetAllPoints(item)
+    if shape == "bar" then
+        -- A BUFF-BAR FRAME IS ALREADY A WHOLE BAR.
+        --
+        -- Blizzard's TrackedBar template carries a square icon at one end, a
+        -- StatusBar that fills with the remaining time, and its own name and
+        -- timer text. Forcing its icon to fill the frame - which is exactly
+        -- right for the icon template, and the fix that made six adopted
+        -- icons one size in 4.5.0 - smears that icon across the full width of
+        -- the bar. Which is the one thing a tracking bar must never look like,
+        -- and it is what the owner saw the first time one was on screen.
+        --
+        -- So its parts are left where its own template put them. Only the
+        -- crop is applied, because that is about the art rather than the
+        -- layout.
+        if item.Icon then
+            pcall(item.Icon.SetTexCoord, item.Icon, zoom, 1 - zoom, zoom, 1 - zoom)
+        end
+    else
+        -- The art has to be told to fill the frame. Sizing the FRAME is not
+        -- enough: each viewer's template anchors its own icon texture its own
+        -- way - a fixed size here, an inset there - so six adopted icons in
+        -- one row came out at six sizes, sitting at six different offsets,
+        -- while the cells behind them were a perfectly even grid.
+        --
+        -- Re-anchored on every pass, because these frames are re-decorated
+        -- when the pool hands them out again.
+        if item.Icon then
+            item.Icon:ClearAllPoints()
+            item.Icon:SetAllPoints(item)
+            pcall(item.Icon.SetTexCoord, item.Icon, zoom, 1 - zoom, zoom, 1 - zoom)
+        end
+
+        -- Same for the sweep, or the cooldown would darken a rectangle that is
+        -- not the icon it belongs to. A bar frame's cooldown is its fill and
+        -- is left alone with everything else.
+        if item.Cooldown then
+            item.Cooldown:ClearAllPoints()
+            item.Cooldown:SetAllPoints(item)
+        end
     end
 
     -- The plate goes on the item at BACKGROUND, under its own icon texture.
@@ -659,6 +683,17 @@ function CDM:DumpSkin()
     -- there. A size or an anchor that does not match is not a styling
     -- problem, it is somebody overwriting us - and the two have completely
     -- different fixes.
+    -- Which template each frame came out of. Blizzard's two are restyled
+    -- differently on purpose - a bar frame is already a whole bar and its
+    -- parts are left alone - so a report that does not say which is which
+    -- cannot answer "why does this one look different".
+    local shapeOf = {}
+    for _, viewer in ipairs(self.VIEWERS) do
+        self:ForEachItem(viewer.key, function(item)
+            shapeOf[item] = viewer.kind
+        end)
+    end
+
     ns.Print("|cffffd100--- pinned icons: asked for / actually ---|r")
     local count = 0
 
@@ -684,10 +719,11 @@ function CDM:DumpSkin()
             local anchorOK = relativeTo == state.anchor[2]
                 and point == state.anchor[1] and relativePoint == state.anchor[3]
 
-            ns.Print(string.format("%s %s |cff888888%d|r  %.0fx%.0f px%s  "
-                .. "scale %.2f%s  anchor %s%s",
+            ns.Print(string.format("%s %s |cff888888%d|r |cff7ec6d4%s|r  "
+                .. "%.0fx%.0f px%s  scale %.2f%s  anchor %s%s",
                 (sizeOK and anchorOK) and "|cff40ff40ok|r" or "|cffff4040NO|r",
                 ns.SpellName(spellID) or "?", spellID or 0,
+                shapeOf[item] or "?",
                 gotW, gotH,
                 sizeOK and "" or string.format(" |cffff4040(asked %.0fx%.0f)|r",
                     wantW, wantH),
@@ -723,9 +759,19 @@ function CDM:DumpSkin()
 
     ns.Print("|cffffd100--- skin report:", ns.SpellName(targetSpell) or "?",
         "(" .. tostring(targetSpell) .. ") ---|r")
-    ns.Print(string.format("frame %.0fx%.0f, alpha %.2f, shown %s",
+    ns.Print(string.format("frame %.0fx%.0f, alpha %.2f, shown %s, template %s",
         target:GetWidth() or 0, target:GetHeight() or 0, target:GetAlpha(),
-        tostring(target:IsShown())))
+        tostring(target:IsShown()), shapeOf[target] or "?"))
+
+    -- Child FRAMES, not just regions. A buff-bar frame keeps its fill in a
+    -- StatusBar of its own, so a bar that has gone blank has gone blank
+    -- somewhere the region walk below cannot see.
+    for _, child in ipairs({ target:GetChildren() }) do
+        local kind = child.GetObjectType and child:GetObjectType() or "?"
+        ns.Print(string.format("  child %s |cff888888a=%.2f shown %s %.0fx%.0f|r",
+            kind, child:GetAlpha() or 1, tostring(child:IsShown()),
+            child:GetWidth() or 0, child:GetHeight() or 0))
+    end
 
     for _, region in ipairs({ target:GetRegions() }) do
         local kind = region.GetObjectType and region:GetObjectType() or "?"
