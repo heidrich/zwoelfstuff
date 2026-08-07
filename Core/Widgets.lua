@@ -1542,7 +1542,7 @@ function UI.CellGrid(parent, cfg)
                     local start = (place == "right") and 0 or inset
 
                     cell.fill:ClearAllPoints()
-                    if style and style.fillReverse then
+                    if style and style.fillSide then
                         cell.fill:SetPoint("TOPRIGHT", cell, "TOPLEFT",
                             start + area, 0)
                         cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMLEFT",

@@ -619,6 +619,8 @@ end
 -- are walked for a StatusBar if it is not there, so a member Blizzard renames
 -- in a patch costs the fill and never an error.
 local function BarFill(item)
+    if not item then return nil end
+
     local fill = item.Bar
     if fill and fill.SetStatusBarTexture then return fill end
 
@@ -627,6 +629,29 @@ local function BarFill(item)
             and child.SetStatusBarTexture then
             return child
         end
+    end
+    return nil
+end
+CDM.BarFill = function(_, item) return BarFill(item) end
+
+-- Is this buff actually up?
+--
+-- IsActive, not IsShown. Read off EllesmereUICdmBuffBars.lua:4725 with the
+-- reasoning kept, because it is not obvious: a buff-bar item stays SHOWN
+-- while inactive unless the user switched on Blizzard's own "Hide when
+-- inactive", which is off by default - so IsShown would say yes all evening.
+--
+-- Returns nil when it cannot be answered, which is not the same as false.
+function CDM:ItemIsActive(item)
+    if not item then return nil end
+
+    if item.IsActive then
+        local ok, active = pcall(item.IsActive, item)
+        if ok then return active and true or false end
+    end
+    if item.IsShown then
+        local ok, shown = pcall(item.IsShown, item)
+        if ok then return shown and true or false end
     end
     return nil
 end

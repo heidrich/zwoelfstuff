@@ -1018,8 +1018,10 @@ function Workspace:BuildOptionsPane(parent, width)
     fillRows[#fillRows + 1] = UI.MediaPicker(
         grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
         Get("fillTexture"), Set("fillTexture"), Apply)
-    fillRows[#fillRows + 1] = Switch("Fill up", "fillReverse",
-        "Grow from empty instead of draining away")
+    fillRows[#fillRows + 1] = Switch("Start on the right", "fillSide",
+        "Which end the fill sits at")
+    fillRows[#fillRows + 1] = Switch("Fill up", "fillGrow",
+        "Grow as time passes instead of draining away")
     fillRows[#fillRows + 1] = grid:Note("Leave the texture empty and the fill "
         .. "wears the backdrop's, so the bar reads as one object. This reaches "
         .. "buff bars adopted from Blizzard's Cooldown Manager as well, so the "

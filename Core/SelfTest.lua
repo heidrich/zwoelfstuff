@@ -288,6 +288,37 @@ local function TestGridSliders()
 end
 
 ---------------------------------------------------------------------------
+-- The bar fill
+--
+-- Which END the fill sits at and whether it GROWS are two different things.
+-- They were one setting whose label described the half that was not
+-- implemented, so turning on "fill up" moved the bar to the other side.
+---------------------------------------------------------------------------
+local function TestFill()
+    local cfg = Fresh({ kind = "bar" })
+
+    cfg.fillSide, cfg.fillGrow = true, false
+    local side = ns.Bars:Style(cfg, 24)
+    Check("The side and the direction are separate settings",
+        side.fillSide == true and side.fillGrow == false)
+
+    cfg.fillSide, cfg.fillGrow = false, true
+    local grow = ns.Bars:Style(cfg, 24)
+    Check("Filling up does not move the bar to the other end",
+        grow.fillSide == false and grow.fillGrow == true)
+
+    -- An empty texture means "wear the backdrop's", so a default bar reads as
+    -- one object rather than two textures that happen to be adjacent.
+    cfg.fillTexture, cfg.backdropTexture = "", "ZS Smooth"
+    Check("An empty fill texture follows the backdrop",
+        ns.Bars:Style(cfg, 24).fillTexture == "ZS Smooth")
+
+    cfg.fillTexture = "ZS Neon"
+    Check("A chosen fill texture wins",
+        ns.Bars:Style(cfg, 24).fillTexture == "ZS Neon")
+end
+
+---------------------------------------------------------------------------
 -- The visibility rules
 ---------------------------------------------------------------------------
 local function TestVisibility()
@@ -437,6 +468,7 @@ function Test:Run()
         { "Coordinates",   TestOffsets },
         { "Pattern switch", TestPatternRoundTrip },
         { "Rows and columns", TestGridSliders },
+        { "Bar fill",      TestFill },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

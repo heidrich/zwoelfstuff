@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.9.0",
+        date = "2026-08-07",
+        lines = {
+            "You asked whether we could look at how EllesmereUI solves this. We did, and it changed the architecture rather than a setting.",
+            "TRACKING BARS ARE DRAWN NOW, not adopted. Blizzard's tracked-bar template is a whole bar - its own border, its own fill, its own two font strings - and none of it is ours to restyle. That is why what you saw never matched the preview, and why a border stayed on a bar whose thickness you had set to zero. There is no amount of stripping that turns somebody else's template into your design.",
+            "So Blizzard's frame is kept alive as a DATA SOURCE at alpha 0, and the bar is drawn here with its value taken straight from Blizzard's status bar - passed through, never inspected, which is what keeps it legal with secret values. Blizzard's timer text comes across with it, so nothing is lost. This is exactly what the reference addon does, and the reason its tracking bars look like its own work.",
+            "ICONS ARE STILL ADOPTED, on purpose. There the frame IS the art: Blizzard's icon is the right one for the talents you have, its swipe and charges are already correct, and drawing our own would mean reading aura data - which this patch forbids. The two halves are different problems and now get different answers.",
+            "FIXED, reported: 'Fill up' moved the bar to the other end instead of making it fill up. It was one setting doing the wrong one of two jobs - the label promised a direction in TIME and the code asked for a direction in SPACE. Two settings now: Start on the right, and Fill up. If you had the old one switched on you get Fill up, because that is what its label told you it was.",
+        },
+    },
+    {
         version = "4.8.0",
         date = "2026-08-07",
         lines = {

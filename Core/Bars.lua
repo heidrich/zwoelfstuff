@@ -122,7 +122,19 @@ ns.BAR_DEFAULTS = {
     fillColor   = { 1.00, 0.478, 0.239 },
     fillAlpha   = 0.85,
     fillTexture = "",
-    fillReverse = false,       -- true fills up instead of draining away
+
+    -- TWO SETTINGS, because they are two different things and shipping them
+    -- as one was a real bug: "Fill up" was wired to SetReverseFill, which
+    -- moves the fill to the OTHER END rather than making it grow.
+    --
+    --   fillSide  which end the fill starts from. SetReverseFill.
+    --   fillGrow  grows as time passes instead of draining away. That is the
+    --             CLOCK, and on this client it is Blizzard's own
+    --             StatusBar:SetTimerDuration with
+    --             Enum.StatusBarTimerDirection.ElapsedTime - read off
+    --             EllesmereUICdmBuffBars.lua:4088, not invented here.
+    fillSide    = false,       -- true starts the fill at the right-hand end
+    fillGrow    = false,       -- true fills up as time passes
 
     -- Text. Three elements, one shape each, because "the countdown can be
     -- moved but the stack count cannot" is the kind of arbitrary limit that
@@ -583,7 +595,7 @@ ns.BAR_STYLE_KEYS = {
     "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
-    "fillColor", "fillAlpha", "fillTexture", "fillReverse",
+    "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
     "countdown", "stacks", "spellName",
 
     -- The arrangement travels too - it is how a bar LOOKS, not what it holds.
@@ -685,7 +697,8 @@ function Bars:Style(cfg, height)
         -- to be next to each other.
         fillTexture = (cfg.fillTexture ~= "" and cfg.fillTexture)
             or cfg.backdropTexture,
-        fillReverse = cfg.fillReverse and true or false,
+        fillSide    = cfg.fillSide and true or false,
+        fillGrow    = cfg.fillGrow and true or false,
 
         countdown = TextStyle(cfg.countdown, height, 0.42, 9, 20),
         stacks    = TextStyle(cfg.stacks,    height, 0.30, 8, 16),
@@ -763,7 +776,7 @@ ns.BUILT_IN_LOOKS = {
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
             fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.85,
-            fillTexture = "", fillReverse = false,
+            fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
@@ -782,7 +795,7 @@ ns.BUILT_IN_LOOKS = {
             iconZoom = 0,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.8, showEdge = true,
             fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.80,
-            fillTexture = "", fillReverse = false,
+            fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
@@ -802,7 +815,7 @@ ns.BUILT_IN_LOOKS = {
             iconZoom = 0.12,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.85, showEdge = false,
             fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 1.00,
-            fillTexture = "", fillReverse = false,
+            fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "THICKOUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 0.9, 0.4 }, "THICKOUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "OUTLINE", "LEFT"),
@@ -819,7 +832,7 @@ ns.BUILT_IN_LOOKS = {
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
             fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.85,
-            fillTexture = "", fillReverse = false,
+            fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
@@ -840,7 +853,7 @@ ns.BUILT_IN_LOOKS = {
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.6, showEdge = false,
             fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.50,
-            fillTexture = "", fillReverse = false,
+            fillTexture = "", fillSide = false, fillGrow = false,
             countdown = { show = false },
             stacks    = { show = false },
             spellName = { show = false },
@@ -1091,7 +1104,22 @@ function Bars:Migrate()
         end
     end
 
-    ns.db.dbVersion = 4
+    -- 4 -> 5: the one fill setting becomes two.
+    --
+    -- Anybody who switched the old one on read its label - "grow from empty
+    -- instead of draining away" - so that is what they meant, and that is
+    -- where the value goes. What it actually DID was move the fill to the
+    -- other end of the bar, which is the setting they did not ask for.
+    if from < 5 then
+        for _, cfg in ipairs(ns.db.bars) do
+            if cfg.fillReverse ~= nil then
+                if cfg.fillGrow == nil then cfg.fillGrow = cfg.fillReverse end
+                cfg.fillReverse = nil
+            end
+        end
+    end
+
+    ns.db.dbVersion = 5
 end
 
 function Bars:Prepare()

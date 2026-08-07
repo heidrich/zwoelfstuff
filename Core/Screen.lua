@@ -141,6 +141,16 @@ local function BuildAuraVisual(cell)
     aura.label = aura.textLayer:CreateFontString(nil, "OVERLAY")
     aura.label:SetJustifyH("LEFT")
     aura.label:SetWordWrap(false)
+
+    -- The countdown at the far end of a MIRRORED bar. A bar we clock ourselves
+    -- puts its number in the Cooldown widget over the icon; a mirrored one has
+    -- no duration of its own to give that widget, so the text is copied from
+    -- Blizzard's own timer instead. Only ever shown in that case.
+    aura.timer = aura.textLayer:CreateFontString(nil, "OVERLAY")
+    aura.timer:SetJustifyH("RIGHT")
+    aura.timer:SetWordWrap(false)
+    ns.Media.ApplyFont(aura.timer, nil, 11)
+    aura.timer:Hide()
     -- A font HERE, not only where the size is chosen. Icon cells hide the
     -- label and never reach that branch, and SetText on a font string with no
     -- font raises rather than doing nothing.
@@ -185,10 +195,18 @@ local function StyleAuraVisual(aura, style, isBar)
 
     local colour = style.fillColor
     aura.fill:SetStatusBarColor(colour[1], colour[2], colour[3], style.fillAlpha)
-    aura.fill:SetReverseFill(style.fillReverse)
+    -- WHICH END, not which direction in time. Those are two settings now, and
+    -- confusing them was the reported "fillup richtung stimmt nicht": this call
+    -- moves the fill to the other end of the bar and has nothing to do with
+    -- whether it grows or drains. The clock is in RefreshFill.
+    aura.fill:SetReverseFill(style.fillSide)
+    aura.grow = style.fillGrow and true or false
 
     local name = style.spellName
     ns.Media.ApplyFont(aura.label, name.font, name.size, name.outline, name.color)
+
+    local timer = style.countdown
+    ns.Media.ApplyFont(aura.timer, timer.font, timer.size, timer.outline, timer.color)
 end
 
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
@@ -233,6 +251,10 @@ local function LayoutAuraVisual(aura, cfg, slot)
         aura.label:SetWidth(math.max(10, width - inset - 5))
         aura.label:SetShown((cfg.spellName or {}).show ~= false)
 
+        aura.timer:ClearAllPoints()
+        aura.timer:SetPoint("RIGHT", aura, "RIGHT",
+            (shown and placement == "right") and -(height + 5) or -5, 0)
+
         aura.cd:ClearAllPoints()
         if shown then
             aura.cd:SetAllPoints(aura.icon)
@@ -249,6 +271,7 @@ local function LayoutAuraVisual(aura, cfg, slot)
 
         aura.label:Hide()
         aura.fill:Hide()
+        aura.timer:Hide()
 
         aura.cd:ClearAllPoints()
         aura.cd:SetAllPoints(aura.icon)
@@ -315,9 +338,73 @@ local function RefreshFill(cell)
 
     local fill = aura.fill
     fill:SetScript("OnUpdate", nil)
+    fill:SetMinMaxValues(0, 1)
+
+    -- MIRRORED FROM BLIZZARD'S OWN BAR.
+    --
+    -- The cell holds a spell the Cooldown Manager tracks, so Blizzard has a
+    -- StatusBar for it with correct timing worked out inside the game. Its
+    -- numbers are passed straight through - SetValue is a supported sink for
+    -- a secret value, and nothing here inspects or computes with one. The
+    -- approach is EllesmereUI's (EllesmereUICdmBuffBars.lua:4649, "reads
+    -- min/max/value from Blizzard's Bar - zero duration computation"), and it
+    -- is why our bar can look like OUR bar while keeping Blizzard's clock.
+    local mirror = cell.mirrorItem and ns.CDM:BarFill(cell.mirrorItem)
+    if mirror then
+        -- Blizzard's own timer text, copied across. The first FontString on
+        -- one of these StatusBars is the spell name and the SECOND is the
+        -- timer - counted rather than named, because they have no names
+        -- (EllesmereUICdmBuffBars.lua:3407).
+        local timerText
+        local seen = 0
+        for _, region in ipairs({ mirror:GetRegions() }) do
+            if region.GetObjectType and region:GetObjectType() == "FontString" then
+                seen = seen + 1
+                if seen == 2 then timerText = region break end
+            end
+        end
+        aura.timer:SetShown(timerText ~= nil)
+
+        local function Tick(self)
+            local ok = pcall(function()
+                self:SetMinMaxValues(mirror:GetMinMaxValues())
+                self:SetValue(mirror:GetValue())
+            end)
+            if not ok then
+                self:SetScript("OnUpdate", nil)
+                return
+            end
+
+            if timerText then
+                local got, text = pcall(timerText.GetText, timerText)
+                if got then aura.timer:SetText(text or "") end
+            end
+
+            -- Whether the buff is up is Blizzard's answer as well, and it
+            -- changes without any render pass - so it is asked here rather
+            -- than once, when the cell happened to be painted.
+            local active = ns.CDM:ItemIsActive(cell.mirrorItem)
+            if active ~= nil and active ~= cell.active then
+                cell.active = active
+                PaintAura(cell, active)
+            end
+        end
+
+        Tick(fill)
+        fill:SetScript("OnUpdate", Tick)
+        return
+    end
+
+    aura.timer:Hide()
+
+    -- Our own clock, for an aura Blizzard does not track.
+    local grow = aura.grow
+    local function Level(fraction)
+        return grow and (1 - fraction) or fraction
+    end
 
     if not (cell.active and fill:IsShown()) then
-        fill:SetValue(0)
+        fill:SetValue(Level(0))
         return
     end
 
@@ -330,15 +417,15 @@ local function RefreshFill(cell)
         return
     end
 
-    fill:SetValue(1)
+    fill:SetValue(Level(1))
     fill:SetScript("OnUpdate", function(self)
         local left = ends - GetTime()
         if left <= 0 then
-            self:SetValue(0)
+            self:SetValue(Level(0))
             self:SetScript("OnUpdate", nil)
             return
         end
-        self:SetValue(left / duration)
+        self:SetValue(Level(left / duration))
     end)
 end
 
@@ -697,6 +784,13 @@ function Screen:BlankCell(cell)
         ns.CDM:Release(cell.item)
         cell.item = nil
     end
+    -- A mirrored frame is held at alpha 0 rather than pinned, so letting go of
+    -- it is the same call - otherwise Blizzard's own bar stays invisible after
+    -- the cell that borrowed its numbers is gone.
+    if cell.mirrorItem then
+        ns.CDM:Release(cell.mirrorItem)
+        cell.mirrorItem = nil
+    end
     if cell.aura then
         cell.aura:Hide()
         ClearCooldown(cell.aura.cd)
@@ -733,9 +827,11 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     if cell.spellID ~= spellID then
         cell.active, cell.auraEnds, cell.auraDuration = nil, nil, nil
         cell.fxState = nil
+        cell.mirrorItem = nil
         if cell.aura then
             ClearCooldown(cell.aura.cd)
             cell.aura.fill:SetScript("OnUpdate", nil)
+            cell.aura.timer:SetText("")
         end
     end
 
@@ -747,7 +843,29 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     cell.spellID = spellID
 
     local item = itemBySpell[spellID]
-    if item and not claimedNow[item] then
+
+    -- A BAR-SHAPED CELL IS DRAWN, NEVER ADOPTED.
+    --
+    -- Blizzard's TrackedBar template is a whole bar: its own border, its own
+    -- fill, its own two font strings. None of that is ours to restyle, and
+    -- that is why the thing on screen never matched the preview and why a
+    -- border stayed on a bar whose thickness was set to zero. There is no
+    -- amount of stripping that turns somebody else's template into your
+    -- design.
+    --
+    -- So the frame is kept alive as a DATA SOURCE at alpha 0, and the bar is
+    -- drawn here with its numbers taken straight from Blizzard's StatusBar.
+    -- This is EllesmereUI's approach - "reads min/max/value from Blizzard's
+    -- Bar, zero duration computation" - and the reason its tracking bars look
+    -- like its own work rather than like a reskin.
+    --
+    -- ICONS ARE STILL ADOPTED. There the frame IS the art: Blizzard's icon is
+    -- the correct one for the talent you have, its swipe and charges are
+    -- already right, and drawing our own would mean reading aura data, which
+    -- this patch forbids. The two halves are different problems.
+    local barCell = slot.kind == "bar"
+
+    if item and not claimedNow[item] and not barCell then
         -- A Cooldown Manager spell: adopt Blizzard's frame.
         claimedNow[item] = true
         claimedBy[spellID] = cfg.name or ("Bar " .. bar.index)
@@ -792,11 +910,30 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         return
     end
 
-    -- The same spell on two bars. One frame cannot be in two places, so the
-    -- first bar keeps it and this cell is drawn dimmer rather than empty -
-    -- an empty cell where you know you put something reads as a fault.
     cell.item = nil
-    cell.conflict = item and claimedBy[spellID] or nil
+    cell.mirrorItem = nil
+
+    if item and not claimedNow[item] then
+        -- A bar-shaped cell whose spell Blizzard tracks: claim the frame so
+        -- nothing else takes it, keep it alive and INVISIBLE, and drive our
+        -- own bar off it. Not pinned: an invisible frame does not need to be
+        -- anywhere, and leaving Blizzard's layout alone is one less fight.
+        claimedNow[item] = true
+        claimedBy[spellID] = cfg.name or ("Bar " .. bar.index)
+        held[item] = true
+        cell.mirrorItem = item
+        cell.conflict = nil
+        ns.CDM:SetAlpha(item, 0)
+
+        local active = ns.CDM:ItemIsActive(item)
+        if active ~= nil then cell.active = active end
+    else
+        -- The same spell on two bars. One frame cannot be in two places, so
+        -- the first bar keeps it and this cell is drawn dimmer rather than
+        -- empty - an empty cell where you know you put something reads as a
+        -- fault.
+        cell.conflict = item and claimedBy[spellID] or nil
+    end
 
     -- An aura proc, or a cooldown whose frame is not pooled right now. It
     -- carries its own name, so the caption for adopted icons stands down.

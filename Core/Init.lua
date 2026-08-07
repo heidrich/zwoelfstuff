@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.8.0"
+ns.version = "4.9.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -93,8 +93,11 @@ ns.DEFAULTS = {
     --    x/y meant a position in the puzzle and a nudge everywhere else, and
     --    switching arrangement silently reinterpreted one as the other.
     -- 4: Arc and Diagonal removed; bars on either move onto Grid.
+    -- 5: the one fill setting becomes two - which END the fill sits at, and
+    --    whether it grows or drains. They were shipped as one and the label
+    --    described the half that was not implemented.
     -- See Bars:Migrate.
-    dbVersion  = 4,
+    dbVersion  = 5,
 
     -- Bars: a grid of cells, each holding one spell from Blizzard's Cooldown
     -- Manager. Seeded once on first run and never re-seeded, so a deleted

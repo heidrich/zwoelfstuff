@@ -4,6 +4,47 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.9.0] - 2026-08-07
+
+Answering *"kann man nicht schauen wie das elle ui löst?"* — yes, and it
+changed the architecture. `EllesmereUICdmBuffBars.lua` was read rather than
+guessed at, and it settles two things this addon had wrong.
+
+### Changed
+
+- **Tracking bars are now DRAWN, not adopted.** Blizzard's TrackedBar template
+  is a whole bar — its own border, its own fill, its own two font strings —
+  and none of it is ours to restyle. That is why the bar on screen never
+  matched the preview and why a border stayed on a bar whose thickness was set
+  to zero: there is no amount of stripping that turns somebody else's template
+  into your design. Blizzard's frame is now kept alive as a *data source* at
+  alpha 0, and the bar is drawn here with its value taken straight from
+  Blizzard's StatusBar — `SetMinMaxValues`/`SetValue` passed through, nothing
+  inspected or computed, which is what keeps it legal with secret values. The
+  reference does exactly this: *"reads min/max/value from Blizzard's Bar —
+  zero duration computation"* (EllesmereUICdmBuffBars.lua:4649).
+  Blizzard's timer text is copied across so nothing is lost; the second
+  FontString on the StatusBar is the timer, counted rather than named because
+  they have none (ibid. 3407).
+  **Icons are still adopted** and that is deliberate — there the frame IS the
+  art, its icon is correct for the talent you have, and drawing our own would
+  mean reading aura data.
+
+### Fixed
+
+- **"Fill up" moved the bar to the other end instead of making it fill up.**
+  Reported: *"fillup richtung stimmt nicht"*. It was one setting doing the
+  wrong one of two jobs — the label promised a direction in TIME and the code
+  called `SetReverseFill`, which is a direction in SPACE. They are two
+  settings now: **Start on the right** (which end the fill sits at) and
+  **Fill up** (grows as time passes instead of draining). A profile that had
+  the old one switched on gets **Fill up**, because that is what its label
+  said it was.
+
+### Migration
+
+Saved variables move to version 5.
+
 ## [4.8.0] - 2026-08-07
 
 ### Fixed
