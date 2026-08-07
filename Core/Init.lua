@@ -482,6 +482,7 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         ns.CDM:Dump()
 
     elseif cmd == "skin" then
+        ns.Screen:DumpCells()
         ns.CDM:DumpSkin()
 
     elseif cmd == "auras" then

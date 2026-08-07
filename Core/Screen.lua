@@ -686,6 +686,52 @@ function Screen:ResyncAuras()
 end
 
 ---------------------------------------------------------------------------
+-- Every cell, and which of the two mechanisms is drawing it
+--
+-- The skin report covers adopted frames. It cannot cover the cells we draw
+-- ourselves, and a bar is usually a mix - so "the icons are different sizes"
+-- was being answered with only half the icons on the table.
+---------------------------------------------------------------------------
+function Screen:DumpCells()
+    ns.Print("|cffffd100--- every cell, both kinds ---|r")
+
+    for index, cfg in ipairs(ns.db.bars) do
+        local bar = barFrames[index]
+        if bar then
+            local width, height = Metrics(cfg)
+            ns.Print(string.format("|cffffd100%d. %s|r  %dx%d, cells asked for "
+                .. "%.0fx%.0f", index, cfg.name or "?", cfg.rows or 1,
+                cfg.columns or 1, width, height))
+
+            for cellIndex, cell in ipairs(bar.cells) do
+                if cell:IsShown() and cell.spellID then
+                    local drawn = cell.item == nil
+                    local w, h = cell:GetWidth(), cell:GetHeight()
+
+                    -- What is actually on screen for a drawn cell is the aura
+                    -- frame, not the cell: if those two disagree the cell is
+                    -- right and the thing inside it is not.
+                    local innerW, innerH = w, h
+                    if drawn and cell.aura then
+                        innerW, innerH = cell.aura:GetWidth(), cell.aura:GetHeight()
+                    end
+
+                    ns.Print(string.format("   %d %s |cff888888%d|r  cell "
+                        .. "%.0fx%.0f  drawn %.0fx%.0f  %s",
+                        cellIndex, ns.SpellName(cell.spellID) or "?",
+                        cell.spellID, w, h, innerW, innerH,
+                        drawn and "|cffffd100ours|r" or "|cff40ff40adopted|r"))
+                end
+            end
+        end
+    end
+
+    ns.Print("|cff888888ours = we draw it (an aura proc, or a cooldown whose "
+        .. "frame is not pooled right now). Those are dimmed while inactive - "
+        .. "that is on purpose, not a size.|r")
+end
+
+---------------------------------------------------------------------------
 -- Unlocked look
 --
 -- The grid itself becomes visible, so an empty bar is still something you can
