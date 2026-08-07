@@ -63,6 +63,87 @@ are about to switch into.
 Changing rows or columns **re-flows** what is already there rather than
 scrambling it: 6×1 becomes 3×2 with the same spells in the same order.
 
+### Arrangements
+
+A bar does not have to be a row. Under **Options → Arrangement** there are five
+shapes, and the card in the middle column previews whichever one you pick —
+the editor asks the same engine the screen does, so an arc curves in the window
+too.
+
+| Arrangement | What it is |
+| --- | --- |
+| **Grid** | rows and columns |
+| **Staggered** | every other line pushed along by half a cell |
+| **Arc** | cells around a circle — set the span, the start angle and the radius; a full 360° closes the ring |
+| **Diagonal** | each cell steps by a fixed offset — steps, ladders, slants |
+| **Puzzle** | every cell exactly where you dragged it. No lattice at all |
+
+With them: **fill order** (rows first or columns first), **reading direction**
+on both axes, and **which point the bar is pinned by**. That last one is what
+people usually mean by grow direction — pinned by the centre a bar spreads both
+ways when it gains a row, pinned by an edge it grows away from that edge.
+
+The arc radius is worked out from the cell size and the count unless you name
+one, so four big icons and twelve small ones are both evenly spaced.
+
+**Puzzle is not a separate mode.** Every arrangement adds each cell's own
+offset on top of whatever the lattice worked out, so nudging one icon out of a
+neat row and building a free-form layout are the same edit.
+
+### Per-cell overrides
+
+Any single cell can carry its own **scale**, its own **offset**, its own
+**kind** and its own **visibility**. One icon in a row at 150 %. A tracking bar
+in among the icons. A slot hidden while you decide.
+
+The overrides travel with the **spell**, not the position: drag a cell to
+another slot and its settings come along, and re-flowing a grid carries them in
+the same sequence the spells move in.
+
+### Build mode
+
+`/zs build`, the **Build** button on any bar card, or the switch in the unlock
+toolbar. The bar's panel shrinks to a chip above it and every cell gets a
+handle of its own:
+
+- **drag** it — snapped to the bar's raster, hold **Alt** for free hand
+- **scroll** over it to scale it
+- **Tab** through the slots, **arrow keys** to nudge, **Delete** to empty
+- **right click** for kind, hide and reset
+
+The **spell palette** opens beside it. Click a slot, click a spell, and the
+selection walks on to the next slot — filling a bar is one click each. Every
+Cooldown Manager spell is in it, greyed when your build does not have it.
+
+### Effects
+
+All off until you ask for them. Under **Options → When it comes back** and
+**Nag and warn**:
+
+- a **flash** when a cooldown lands, with a pulse count and a colour
+- an **edge** while the spell is up, optionally only in combat
+- a **nag** — a spell ready for *n* seconds *in combat* starts pulsing, for the
+  defensive you keep forgetting
+- a **last-seconds warning** on the auras this addon clocks itself
+- a **glow** while a tracked aura is up, and **greying out** while a cooldown
+  runs
+
+What drives them is Blizzard's own answer to "is this on a *real* cooldown",
+global cooldown excluded — without that exclusion every spell in the game comes
+off cooldown every 1.5 s and the flash is a strobe.
+
+### When a bar is on screen
+
+**Options → When to show it** turns a bar into a conditional one: combat, group
+size, target, rested area, and six kinds of place — world, dungeon, raid,
+scenario or delve, battleground, arena.
+
+Every rule has to agree, and every one of them starts on *any*, so a rule you
+have not set can never be the reason something is missing. Out of condition a
+bar is gone — or dimmed to whatever you choose, which is what you want while
+you are still arranging it. The section tells you which rule is currently
+keeping it off screen.
+
 ### Per-bar settings
 
 **Options** on a bar's header turns the right column into that bar's settings —
@@ -220,6 +301,7 @@ client fully rather than relying on `/reload`.
 | --- | --- |
 | `/zs` | open the window |
 | `/zs unlock` / `lock` | move the bars around the screen |
+| `/zs build` | take a bar apart slot by slot, on screen |
 | `/zs bars` | list your bars (`add <name>` / `remove <n>`) |
 | `/zs cdm` | what Blizzard's Cooldown Manager currently holds |
 | `/zs auras` | the procs seen on this spec, and what drives each one |
@@ -232,6 +314,10 @@ client fully rather than relying on `/reload`.
 | `/zs reset` | restore defaults, keeping recorded procs |
 
 ### Unlock mode
+
+Two modes, and the difference is the level you work at: **Move bars** treats a
+whole bar as one object, **Build** treats every cell as one. The toolbar
+switches between them.
 
 Every bar gets a panel with its live coordinates. Drag it, or select it and
 nudge with the arrow keys — Shift for 10. It snaps to the screen centre and to
@@ -282,11 +368,14 @@ at least once so the duration is measured rather than guessed, then
 | `Core/CDM.lua` | Blizzard's Cooldown Manager: find the viewers, adopt their item frames, hold them |
 | `Core/KnownProcs.lua` | the shipped proc database, by class and spec |
 | `Core/Auras.lua` | records procs while you play, measures their duration, exports them |
-| `Core/Bars.lua` | the data model: a bar is a grid of cells |
+| `Core/Bars.lua` | the data model: cells, arrangement, per-cell overrides |
+| `Core/Layout.lua` | pure geometry — where every cell of a bar ends up |
+| `Core/Visibility.lua` | the rules that decide when a bar is on screen |
+| `Core/Effects.lua` | flash, edge, nag, warning — what a cell does beyond sitting there |
 | `Core/Glow.lua` | proc glow — expanding ring plus flash, no external library |
 | `Core/Widgets.lua` | the design system: every control is built here |
 | `Core/Screen.lua` | the bars on screen — adopted frames and drawn aura cells |
-| `Core/EditMode.lua` | unlock mode: movers, snapping, guides, the cog menu |
+| `Core/EditMode.lua` | unlock **and** build mode: movers, cell handles, the spell palette, snapping |
 | `Core/Minimap.lua` | minimap button |
 | `Core/OptionsBars.lua` | the middle and right columns of the window |
 | `Core/Options.lua` | the window shell and the secondary pages |
