@@ -1,12 +1,12 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.7.0**. Read this first.
+State as of **2026-08-07**, version **4.11.1**. Read this first.
 
-**Run `/zs test` before you believe anything below.** Forty-eight checks, in
+**Run `/zs test` before you believe anything below.** ~50 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
-bars. It is the only kind of test this addon can have — there is no WoW without
-a client — and it was written by reverting the fixes in a scratch copy until it
-went red, so it is a regression test and not a decoration.
+bars. It never touches saved data. It was written by reverting the fixes in a
+scratch copy of `Core/` until it went red, so it is a regression test and not a
+decoration — and it can be run **on the desktop**, see *Lessons* below.
 
 ## Where we are
 
@@ -18,13 +18,14 @@ The window is an app in three fixed columns, and what you arrange in it
 **renders on screen**. Bars are placed in unlock mode and taken apart, slot by
 slot, in **build mode** — the two are one file and one overlay, at two levels.
 
-A bar is no longer a row of icons. It is an *arrangement*: grid, staggered,
-arc, diagonal or **puzzle**, with per-cell scale, offset, kind and visibility
+A bar is no longer a row of icons. It is an *arrangement*: grid, staggered or
+**puzzle** (arc and diagonal were removed in 4.8.0), with per-cell scale,
+offset, kind and visibility
 on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.7.0 is statically clean over 26 files and passes its own 48 checks.
+Version 4.11.1 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -57,8 +58,9 @@ and "it works" are different claims and only one of them is worth anything.
 **Covered by `/zs test` — proven by code, not by eye**
 
 Everything the self test asserts is now checked on every run: arrangement
-geometry for all five patterns, the two coordinate systems, pattern round
-trips, the rows and columns sliders, and the visibility rules against their own
+geometry for every pattern, the two coordinate systems, pattern round trips,
+the rows and columns sliders, the bar-fill settings, what is shared between
+characters and what is not, and the visibility rules against their own
 explanations. That is not the same as "seen working" and is not listed as such
 — it is the difference between "the maths is right" and "it looks right".
 
@@ -71,6 +73,43 @@ explanations. That is not the same as "seen working" and is not listed as such
 - Drag-and-drop of a spell from the list onto a cell.
 - The media previews in the dropdowns.
 - The logo as a TGA (header verified, loading not).
+
+## What changed on 2026-08-07, after 4.6.1
+
+Seven releases in one session, all of them driven by owner reports. The three
+that changed the SHAPE of the addon, because nothing below makes sense without
+them:
+
+**4.9.0 — tracking bars are DRAWN, not adopted.** Blizzard's `TrackedBar`
+template is a whole bar: its own border, its own fill, its own two font
+strings. None of it is restyleable, which is why the thing on screen never
+matched the preview and why a border stayed on a bar set to thickness zero.
+The frame is kept alive as a *data source* at alpha 0 and our own StatusBar
+mirrors it — `SetMinMaxValues`/`SetValue` passed straight through, nothing
+inspected, which is what keeps it legal with secret values. **Icons are still
+adopted** and that stays deliberate: there the frame IS the art. See
+`Screen:PaintCell`, and `EllesmereUICdmBuffBars.lua:4649` for the same
+decision made by the reference.
+
+**4.11.0 — every setting lives under `"Name - Realm"`.** Owner: *"mach ich eine
+änderung am ui oder egal was, muss das unter dem charakter namen und server
+gespeichert werden"*, because *"sonst wird das pro klasse oder spec ja jedes
+mal überschrieben"*. `ns.db` points at the profile; `ns.account` holds the
+recorded procs, which are measurements and stay shared. `ns.OpenProfile` is
+the only place that knows. **Settings → "Take a layout from"** copies another
+character's bars with every cell empty.
+
+**4.10.0 — inside a profile, the spells are per spec.** `cfg.cells` is pointed
+at `cellsBySpec[class:spec]` by `Bars:BindSpec`. Forty-five call sites are
+unchanged because only that one function knows the rule. The consequence, and
+it reverses an earlier decision: **the per-cell look belongs to the SLOT, not
+the spell** — a slot at 150% is part of a layout every character sees.
+
+Everything else, in one line each: the puzzle got its own coordinate fields
+(4.7.0); Arc and Diagonal were removed on the owner's call (4.8.0); the fill
+picker now reaches adopted buff bars (4.8.0); "Fill up" was split from "which
+end" (4.9.0); the spell list sorts in Blizzard's own order (4.11.1). All twenty-odd
+fixes are in CHANGELOG.md with the reasoning.
 
 ## The 4.7.0 bug hunt, and the one root cause under it
 
@@ -537,6 +576,18 @@ The scan survives, demoted to suggesting a caption in the reverse direction
   reverting the fixes in a scratch copy of `Core/` and confirming it went from
   48/0 to 40/8. A test that has only ever been seen green proves nothing about
   what it would catch.
+- **Read the API before calling it, including your own.** `UI.Dropdown` takes
+  its option list as a table OR A FUNCTION with `cfg.emptyText`; an `items`
+  and `placeholder` pair was invented from memory and would have shipped a
+  dead control. The rule about not guessing WoW APIs applies to this codebase
+  too — it is 15 000 lines and nobody remembers it exactly.
+- **`.luarc.json` uses FLAT dotted keys.** Adding a nested `diagnostics`
+  object beside `"diagnostics.globals"` silently replaced the setting, dropped
+  sixty declared globals and turned four added names into 405 warnings.
+- **A per-item chat print is a wall of text on somebody else's character.**
+  The proc recorder announced every new discovery on its own line; the first
+  fight on a fresh alt read as "sooo viele tracking fehler". Collect and say
+  it once.
 - **The language server ships a Lua runtime.**
   `lua-language-server.exe -E script.lua` runs plain Lua 5.5. With a stub for
   `CreateFrame` and a handful of globals, the whole model layer — Layout, Bars,
@@ -609,13 +660,46 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 lands on **11 Aug** and the 12.1 features go in after that, not instead of the
 basics.
 
-1. **Bug hunt, continued.** The owner's call, and the right one. 4.7.0 swept
-   `Layout`, `Bars`, `Screen`, `Effects`, `Visibility` and the parts of
-   `Widgets`/`OptionsBars`/`EditMode` those touch — twelve defects, all in the
-   CHANGELOG. **Not yet swept:** `CDM.lua`, `Auras.lua`, `Options.lua`,
-   `Glow.lua`, `Minimap.lua`, and the rest of `EditMode.lua` (the palette and
-   the tool panel). Start there, and extend `/zs test` with every rule that
-   turns out to be checkable — a fix without a check comes back.
+1. **TAKE THE REFERENCE'S COOLDOWN MANAGER APART.** The owner's next
+   instruction, and the reasoning behind it is proven: every time this session
+   stopped guessing and read
+   `C:\Games\World of Warcraft\_retail_\Interface\AddOns\EllesmereUICooldownManager\`
+   it produced a better answer than anything reasoned from first principles.
+   It settled the bar architecture (4.9.0) and the fill semantics.
+
+   What is already known, so it is not re-derived:
+
+   | file | lines | what it holds |
+   |---|---|---|
+   | `EllesmereUICdmBuffBars.lua` | 5734 | tracking bars. `:4649` mirror, `:4725` IsActive-not-IsShown, `:3407` the 2nd FontString is the timer, `:4088` `SetTimerDuration` + `StatusBarTimerDirection.ElapsedTime`, `:3635` + `:4807` smooth fill via `SetValue(v, Enum.StatusBarInterpolation.ExponentialEaseOut)`, `:2322` spark anchoring, `:2471` `SetReverseFill` |
+   | `EllesmereUICdmHooks.lua` | 9009 | the icon side and the taint rules |
+   | `EllesmereUICooldownManager.lua` | 9701 | the viewers themselves — **not read yet** |
+   | `EUI_CooldownManager_Options.lua` | 19764 | their options page. Labels extracted; the code behind them **not read** |
+   | `EllesmereUICdmSpellPicker.lua` | 2034 | their spell picker — relevant to the sorting the owner just reported |
+   | `EllesmereUICdmFakeActive.lua` | 1530 | how they preview a bar that is not active |
+
+   Their per-bar setting vocabulary is already inventoried (grep `cfg%.`
+   in the buff-bars file). What we do NOT have and they do:
+   **stack thresholds** (bar changes colour past N stacks — that is Bone
+   Shield, and the single biggest win for a Blood tank), **pandemic glow**,
+   **charge hash lines**, **spark**, **gradient fills**, **vertical bars**,
+   **five glow types** including a resource-aware one, **decimals below N
+   seconds**, **suppress GCD**, **custom duration**, **per-spec bar sets**.
+
+   Start with `EllesmereUICooldownManager.lua` and the options file, since
+   those two are the unread half.
+
+2. **Smooth fill for the mirror**, already found and not yet built:
+   `SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)`. The
+   mirror in `Screen.RefreshFill` sets raw values every frame, so it steps
+   where it could glide. One argument.
+
+3. **Bug hunt, continued.** 4.7.0–4.11.1 swept `Layout`, `Bars`, `Screen`,
+   `Effects`, `Visibility`, `CDM`, `Media`, `Minimap` and the parts of
+   `Widgets`/`OptionsBars`/`EditMode` those touch. **Not yet swept:**
+   `Auras.lua`, `Options.lua`, and the rest of `EditMode.lua` (the palette and
+   the tool panel). Extend `/zs test` with every rule that turns out to be
+   checkable — a fix without a check comes back.
 2. **"The background shows through the circle"** — reported with a screenshot,
    diagnosis deliberately NOT guessed. `/zs skin` now reports which template a
    frame came from and walks its child frames; ask for that output rather than
