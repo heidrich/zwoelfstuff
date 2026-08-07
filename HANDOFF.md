@@ -144,6 +144,86 @@ dolle was im spiel angezeigt wird"*, and the icon *"ist jetzt auch nicht
 cool"*. Both stand. The agreed diagnosis is in *Why it looks weaker than it
 should* below.
 
+## Taking the reference apart: what the CDM block actually says
+
+Started 2026-08-07 on the owner's instruction. Read so far:
+`EllesmereUICooldownManager.lua` (structure, defaults, hide/restore) and
+`EllesmereUICdmBuffBars.lua` (the tracking bars, in full earlier).
+
+### The finding that contradicts our own header
+
+`Core/Screen.lua` carries five rules "verbatim from the reference", one of
+which is **"Never move Blizzard frames offscreen"**. That comes from
+`EllesmereUICdmHooks.lua` and it is true THERE. But
+`EllesmereUICooldownManager.lua:3303` does exactly that, on purpose, and says
+why in a way that lands directly on the mirror we shipped in 4.9.0:
+
+> It is parked offscreen rather than Hidden because TBB mirrors min/max/value
+> straight off Blizzard's Bar frames — **a hidden viewer stops updating them**.
+> The park, not the alpha, is what actually holds: Blizzard's hide-when-
+> inactive fade **animates the viewer's alpha back to 1** whenever a tracked
+> buff goes active, through a path no hook can see.
+
+Both halves apply to us now:
+
+1. **A hidden viewer stops feeding the mirror.** Our bars are driven by
+   `blizzBar:GetValue()`. If the viewer is hidden — by the user in Blizzard's
+   Edit Mode, or by Blizzard's own hide-when-inactive — our bar freezes. We
+   already warn about hidden viewers (`Screen:WarnIfInvisible`); we do not
+   handle it.
+2. **Alpha 0 does not hold on the buff-bar viewer.** Blizzard animates it back
+   to 1 on the next proc, so Blizzard's own bars draw on top of ours. This is a
+   PREDICTED bug in 4.9.0, not yet observed — the owner should be asked whether
+   Blizzard's buff bars reappear over ours during a fight.
+
+Their answer, in order: park the viewer at `-10000, 10000` (position, never
+`Hide`); hook `SetPoint`, `SetAllPoints` AND `SetParent` to re-park, because
+the last two strand the frame without ever calling the first; **defer the
+re-park by one frame** (`C_Timer.After(0)`) because Blizzard re-anchors from
+inside an Edit Mode layout pass that goes on to move protected systems, and
+re-parking inline carries taint into it; in combat set alpha only and flush on
+`PLAYER_REGEN_ENABLED`, because the frame is protected; and run a 10 Hz
+integrity check that reads where the viewer actually is, with a **tolerant**
+compare — exact equality failed every pass on a scaled UI and re-parked
+forever.
+
+### What they have that we do not
+
+Their per-bar vocabulary, from `DEFAULTS` at `:527` and the `cfg.` inventory of
+the buff-bars file. Ranked by what it is worth to a Blood tank:
+
+1. **Stack thresholds** — the bar changes colour past N stacks. That is Bone
+   Shield, and it is the single biggest win available.
+2. **Pandemic glow** — glows while the buff is inside its refresh window.
+   Mode, colour, thickness, style, speed, background.
+3. **Charge hash lines** — separators across the fill, one per charge.
+4. **Keybind text on an icon**, with size, offset, alignment and colour.
+5. Spark, gradient fills, vertical orientation, decimals below N seconds,
+   custom duration, per-bar background (behind the whole bar, not per icon),
+   custom icon shapes, tooltip on hover, five glow types including a
+   resource-aware one, suppress GCD.
+
+Their visibility conditions we lack: **hide while mounted**, **hide with no
+enemy target**, instances-only, and a housing rule.
+
+### Structural differences, stated so they are not mistaken for bugs
+
+- **They REPLACE Blizzard's icon bars; we adopt them.** Their `cdmBars` block
+  is commented "our replacement for Blizzard CDM" with `hideBlizzard = true`.
+  Ours is deliberate and still correct for icons — the frame IS the art there
+  — but it is a different architecture, not a lesser version of theirs.
+- **They keep per-spec PROFILES** (`spec = {}`, `activeSpecKey`,
+  "Per-Spec Profile Helpers" at `:1678`). We key per character and split the
+  spells per spec inside that, which is the owner's rule.
+
+### Not read yet
+
+`EUI_CooldownManager_Options.lua` (19 764 lines — the labels are inventoried,
+the code behind them is not), `EllesmereUICdmSpellPicker.lua` (2 034 —
+relevant to the sorting the owner reported), `EllesmereUICdmFakeActive.lua`
+(1 530 — how they preview a bar that is not active), and
+`EllesmereUICooldownManager.lua` beyond the sections named above.
+
 ## Why it looks weaker than it should
 
 Three reasons, and only the third is fixable by trying harder.
