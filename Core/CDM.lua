@@ -201,7 +201,11 @@ function CDM:Catalogue()
     -- that is what a cell stores.
     local bySpell = {}
 
-    local function Add(cooldownID, viewerKey, live)
+    -- `order` is BLIZZARD'S OWN position for this spell inside its category.
+    -- It is the order the Cooldown Manager displays them in - the order you
+    -- arranged in Blizzard's Edit Mode and see on screen - and it is what the
+    -- picker sorts by. Alphabetical looked tidy and matched nothing.
+    local function Add(cooldownID, viewerKey, live, order)
         if not cooldownID then return end
         local info = self:GetInfo(cooldownID)
         if not info then return end
@@ -217,6 +221,10 @@ function CDM:Catalogue()
                 existing.viewer = viewerKey
                 existing.cooldownID = cooldownID
             end
+            -- The live pass has no order to give - a frame pool is not a
+            -- sorted list - so it comes from the category set, whichever pass
+            -- gets here second.
+            if order and not existing.order then existing.order = order end
             if live then existing.known = true end
             return
         end
@@ -225,6 +233,7 @@ function CDM:Catalogue()
             cooldownID = cooldownID,
             spellID    = spellID,
             viewer     = viewerKey,
+            order      = order,
             name       = ns.SpellName(spellID) or ("Spell " .. spellID),
             icon       = ns.SpellTexture(spellID),
             -- A frame in a live pool is on screen, so it is talented by
@@ -253,7 +262,10 @@ function CDM:Catalogue()
             local viewerKey = self:CategoryViewer(category)
             local ok, set = pcall(getSet, category, true)
             if ok and type(set) == "table" then
-                for _, cooldownID in ipairs(set) do Add(cooldownID, viewerKey) end
+                -- ipairs, so the index IS Blizzard's order for the category.
+                for index, cooldownID in ipairs(set) do
+                    Add(cooldownID, viewerKey, false, index)
+                end
             end
         end
     end
@@ -261,9 +273,16 @@ function CDM:Catalogue()
     local out = {}
     for _, entry in pairs(bySpell) do out[#out + 1] = entry end
 
-    -- pairs() has no order, so the spell ID is the tiebreaker: without one the
-    -- list would reshuffle two same-named spells every time it is built.
+    -- BLIZZARD'S ORDER, then name for anything it has no opinion about.
+    --
+    -- pairs() has no order at all, so something has to decide - and "what the
+    -- Cooldown Manager shows, in the order it shows it" is the only answer
+    -- that makes the picker match the thing it is picking from. The spell ID
+    -- is the last tiebreak, or two same-named spells would swap places every
+    -- time the list is rebuilt.
     table.sort(out, function(a, b)
+        local aOrder, bOrder = a.order or 9999, b.order or 9999
+        if aOrder ~= bOrder then return aOrder < bOrder end
         if a.name == b.name then return a.spellID < b.spellID end
         return a.name < b.name
     end)

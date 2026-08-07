@@ -4,6 +4,23 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.1] - 2026-08-07
+
+### Fixed
+
+- **The spell list was sorted alphabetically, which matched nothing.** The
+  panel says "From your Cooldown Manager" at the top, and the Cooldown Manager
+  has an order of its own — the one you arranged in Blizzard's Edit Mode and
+  the one the icons appear in on screen. The picker now uses that order:
+  `GetCooldownViewerCategorySet` returns the category already sorted, so the
+  index is recorded and sorted by. What you cannot cast still goes last within
+  its group — worth listing for a build you are about to switch into, not
+  worth scrolling past. Names only break ties now, which also stops a German
+  client filing its umlauts after Z.
+- **The list footer counted everything as "cooldowns".** Four of its six
+  groups are not: utility, buffs, buff bars and recorded auras. It counts
+  entries now and says so.
+
 ## [4.11.0] - 2026-08-07
 
 ### Changed

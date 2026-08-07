@@ -8,9 +8,12 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
-        version = "4.11.0",
+        version = "4.11.1",
         date = "2026-08-07",
         lines = {
+            "FIXED, reported: the spell list was sorted alphabetically, and alphabetical matched nothing. The panel says 'From your Cooldown Manager' at the top - and the Cooldown Manager has an order of its own, the one you arranged in Blizzard's Edit Mode and the one the icons appear in on screen. The list uses that order now. What you cannot cast still goes last in its group; names only break ties.",
+            "FIXED: the counter at the bottom called everything 'cooldowns'. Four of the six groups in that list are not cooldowns.",
+            "",
             "EVERY SETTING IS NOW SAVED UNDER THE CHARACTER AND REALM THAT MADE IT. Your rule, and your reason for it was the right one: keying by class or spec cannot work, because two characters of the same class write over each other. Your existing settings become the profile of whichever character you are on when this version first loads.",
             "The per-spec split from the last version survives INSIDE a profile: the spec you are in decides which spells its bars hold, so an offspec keeps its own picks without touching your main spec's.",
             "NEW, and the other half of the same idea: 'Take a layout from' in Settings. Pick another character and their bars arrive here - arrangements, sizes, looks, rules, positions - with every cell EMPTY. The spells stay behind on purpose: a Death Knight's cooldowns are not castable on a Paladin, and copying them is the exact bug this split exists to prevent.",

@@ -586,12 +586,28 @@ function Workspace:BuildSpellPane(parent, width)
             end
         end
 
-        -- Within a group: what you can cast first, what you cannot after.
-        -- Greyed entries are worth listing but not worth scrolling past.
+        -- WITHIN A GROUP: what you can cast, in BLIZZARD'S OWN ORDER.
+        --
+        -- Alphabetical was tidy and matched nothing. This panel says "From
+        -- your Cooldown Manager" at the top, and the Cooldown Manager has an
+        -- order of its own - the one you arranged in Blizzard's Edit Mode and
+        -- the one the icons appear in on screen. Sorting by anything else
+        -- makes the picker and the thing it picks from two different lists.
+        --
+        -- What you cannot cast still goes last. It is worth listing - a bar
+        -- can be built for the build you are about to switch into - but not
+        -- worth scrolling past to reach what you can use.
+        --
+        -- Names only ever break a tie now, which also quietly stops a German
+        -- client sorting its umlauts after Z.
         for _, group in ipairs(GROUPS) do
             table.sort(buckets[group.key], function(a, b)
                 local aKnown, bKnown = a.known ~= false, b.known ~= false
                 if aKnown ~= bKnown then return aKnown end
+
+                local aOrder, bOrder = a.order or 9999, b.order or 9999
+                if aOrder ~= bOrder then return aOrder < bOrder end
+
                 if a.name == b.name then return a.spellID < b.spellID end
                 return a.name < b.name
             end)
@@ -716,7 +732,10 @@ function Workspace:BuildSpellPane(parent, width)
         content:SetHeight(math.max(1, -y))
         if scroll.Update then scroll.Update() end
 
-        footer:SetText(string.format("%d of %d cooldowns", matched, #catalogue))
+        -- "cooldowns" was wrong for four of the six groups this list holds -
+        -- utility, buffs, buff bars and recorded auras are not cooldowns, and
+        -- a count that miscounts what it is counting reads as a bug.
+        footer:SetText(string.format("%d of %d", matched, #catalogue))
     end
 
     -- Typing filters as you type; there is nothing to submit.
