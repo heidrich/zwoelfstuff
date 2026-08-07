@@ -323,6 +323,70 @@ function CDM:InfoSpellID(info)
 end
 
 ---------------------------------------------------------------------------
+-- The pandemic window - asked, not calculated
+--
+-- The refresh window is the last ~30% of an aura's duration, where recasting
+-- wastes nothing. The obvious way to find it is to divide the remaining time
+-- by the full duration, and on this patch that is exactly what an addon may
+-- not do: both numbers can be secret, and dividing one secret by another is
+-- the taint everything else here is built to avoid.
+--
+-- BLIZZARD ALREADY KNOWS. Its Cooldown Manager shows a pandemic marker of its
+-- own, through two methods on the item frame - ShowPandemicStateFrame and
+-- HidePandemicStateFrame. Hooking those turns the question from arithmetic
+-- into a fact somebody else worked out, inside the game, where the numbers
+-- are readable. The reference does exactly this
+-- (EllesmereUICdmBuffBars.lua:81-128) and calculates nothing.
+--
+-- IT DEPENDS ON A BLIZZARD SETTING. The methods only fire for auras the user
+-- has switched pandemic alerts on for, in Blizzard's own Cooldown Manager
+-- options. Nothing here can turn that on for them, so the panel says so.
+---------------------------------------------------------------------------
+
+-- frame -> true while it is inside its refresh window.
+local pandemic = setmetatable({}, { __mode = "k" })
+local pandemicHooked = setmetatable({}, { __mode = "k" })
+
+-- AT FILE SCOPE, DELIBERATELY. A hooksecurefunc callback is billed to the
+-- addon whose execution context created the closure, so a body made inside
+-- another addon's call path bills THEM for every one of our repaints. The
+-- reference found this by bisection and says so at its own hook site; a
+-- closure built per frame inside a render pass would repeat the mistake.
+local function OnPandemicShow(frame)
+    pandemic[frame] = true
+end
+
+local function OnPandemicHide(frame)
+    pandemic[frame] = nil
+end
+
+-- Idempotent, and safe to call every render pass: a frame is hooked once.
+function CDM:HookPandemic(item)
+    if not item or pandemicHooked[item] then return end
+    if type(item.ShowPandemicStateFrame) ~= "function" then return end
+
+    pandemicHooked[item] = true
+    hooksecurefunc(item, "ShowPandemicStateFrame", OnPandemicShow)
+    if type(item.HidePandemicStateFrame) == "function" then
+        hooksecurefunc(item, "HidePandemicStateFrame", OnPandemicHide)
+    end
+end
+
+function CDM:InPandemic(item)
+    return item ~= nil and pandemic[item] == true
+end
+
+-- Whether this client has the methods at all. Asked once for the panel, so
+-- "my pandemic glow does nothing" has an answer that is not a shrug.
+function CDM:PandemicSupported()
+    local found = false
+    self:ForEachItemEverywhere(function(item)
+        if type(item.ShowPandemicStateFrame) == "function" then found = true end
+    end)
+    return found
+end
+
+---------------------------------------------------------------------------
 -- How many stacks an item frame is showing
 --
 -- READ BUT NEVER INSPECTED. On 12.0 this number can be a secret value, and

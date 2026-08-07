@@ -1262,6 +1262,16 @@ function Workspace:BuildOptionsPane(parent, width)
 
     FxSwitch("Glow while the aura is up", "activeGlow")
     FxColour("Aura colour", "activeColor")
+
+    FxSwitch("Glow in the refresh window", "pandemicGlow")
+    FxColour("Refresh colour", "pandemicColor")
+    -- The dependency is stated rather than discovered. "I switched it on and
+    -- nothing happens" is otherwise a question with no answer on this screen.
+    grid:Note("The tail of an aura where recasting it wastes nothing. This "
+        .. "addon does not work the window out - it cannot, the numbers are "
+        .. "protected on this patch - it asks Blizzard, which already knows. "
+        .. "So it only lights for the spells you have switched pandemic alerts "
+        .. "on for in Blizzard's own Cooldown Manager settings.")
     FxSwitch("Grey out on cooldown", "dimOnCooldown")
     FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent)
     FxSlide("Pulse speed", "pulseSpeed", 0.4, 2.5, 0.1,

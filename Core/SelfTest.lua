@@ -660,6 +660,18 @@ local function TestEffects()
     local nag = ns.ApplyDefaults({}, ns.EFFECT_DEFAULTS)
     nag.reminderAfter = 5
     Check("A reminder counts as an effect", ns.Effects.Wanted(nag))
+
+    -- The refresh window has no clock of its own to keep it alive, so a bar
+    -- that uses only this effect still has to be registered with the ticker.
+    local pandemic = ns.ApplyDefaults({}, ns.EFFECT_DEFAULTS)
+    pandemic.pandemicGlow = true
+    Check("The refresh glow alone registers the bar", ns.Effects.Wanted(pandemic))
+
+    -- Asked of nothing: a cell with no Blizzard frame behind it must answer
+    -- "no" rather than throw, because that is the everyday case for a proc
+    -- this addon draws itself.
+    local ok, answer = pcall(ns.CDM.InPandemic, ns.CDM, nil)
+    Check("Nothing is never in its refresh window", ok and answer == false)
 end
 
 ---------------------------------------------------------------------------

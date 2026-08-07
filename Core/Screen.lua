@@ -1028,6 +1028,10 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         held[item] = true
         cell.item = item
         cell.auraEntry, cell.conflict = nil, nil
+        -- Idempotent, so calling it on every pass costs one table read. Only
+        -- frames a cell actually holds are hooked, which bounds it by the
+        -- number of cells rather than by everything the game is tracking.
+        ns.CDM:HookPandemic(item)
 
         -- A CUSTOM ACTIVE WINDOW DRAWS OVER THE ADOPTED ICON.
         --
@@ -1105,6 +1109,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         held[item] = true
         cell.mirrorItem = item
         cell.conflict = nil
+        ns.CDM:HookPandemic(item)
         ns.CDM:SetAlpha(item, 0)
 
         local active = ns.CDM:ItemIsActive(item)

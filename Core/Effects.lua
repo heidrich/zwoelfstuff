@@ -61,6 +61,13 @@ ns.EFFECT_DEFAULTS = {
     activeGlow   = false,
     activeColor  = { 0.45, 0.90, 1.00 },
 
+    -- The refresh window: the tail of an aura where recasting wastes nothing.
+    -- NOT calculated here - Blizzard works it out and this addon hooks the
+    -- answer, see CDM:InPandemic. It therefore only lights for auras the user
+    -- has pandemic alerts switched on for in Blizzard's own settings.
+    pandemicGlow  = false,
+    pandemicColor = { 1.00, 0.45, 0.15 },
+
     -- Below this many seconds left, the cell pulses. Ours-only, see header.
     lowWarn      = 0,
     lowColor     = { 1.00, 0.35, 0.30 },
@@ -296,6 +303,15 @@ local function TickCell(entry, inCombat, span)
         glowAlpha = 0.85
     end
 
+    -- THE REFRESH WINDOW WINS OVER THE PLAIN GLOWS, for the same reason the
+    -- nag does: it is the one that means "press this now". It sits below the
+    -- last-seconds warning, which is more urgent still.
+    if fxOpts.pandemicGlow
+        and ns.CDM:InPandemic(cell.mirrorItem or cell.item) then
+        glowColour = fxOpts.pandemicColor
+        glowAlpha = 0.45 + 0.55 * Pulse(fxOpts.pulseSpeed)
+    end
+
     -- The last-seconds warning, on top of whatever else is showing.
     local low = fxOpts.lowWarn or 0
     if low > 0 and remaining and remaining > 0 and remaining <= low then
@@ -394,6 +410,7 @@ end)
 function Effects.Wanted(fxOpts)
     if not fxOpts then return false end
     return fxOpts.readyFlash or fxOpts.readyGlow or fxOpts.activeGlow
+        or fxOpts.pandemicGlow
         or fxOpts.dimOnCooldown
         or (fxOpts.reminderAfter or 0) > 0
         or (fxOpts.lowWarn or 0) > 0

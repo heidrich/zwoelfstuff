@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.14.0**. Read this first.
+State as of **2026-08-07**, version **4.15.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~84 checks in
+**Run `/zs test` before you believe anything below.** ~86 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.14.0 is statically clean over 25 files and passes its own checks.
+Version 4.15.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -260,7 +260,7 @@ to a Blood tank, which is the only ranking that matters for this addon:
 | theirs | fields | worth |
 |---|---|---|
 | ~~stack thresholds~~ — **BUILT in 4.13.0**, three bands. Ticks and a stack-driven fill length were left out | 14 | **Bone Shield.** Was the single biggest win available |
-| pandemic glow — glows inside the refresh window | 10 | high: it is the other half of "when do I press it" |
+| ~~pandemic glow~~ — **BUILT in 4.15.0** as one effect. Their five glow styles, speed, thickness and line count were left out | 10 | was high: the other half of "when do I press it" |
 | ~~custom active states~~ — **BUILT in 4.14.0** as "Active for". Their per-spell menu, glow styling and 12.1 engine-slot driver were left out | — | was **high, and nothing else here could do it** |
 | charge hash lines across the fill | 5 | medium, cheap to build |
 | keybind text on an icon, with size/offset/align/colour | 6 | medium |
@@ -355,6 +355,44 @@ there is no event at the end of a number somebody typed.
 Not built: their per-spell right-click menu, per-state glow styling, and the
 12.1 engine-slot driver that reads a real aura's remaining time for the
 built-in rules.
+
+### The refresh window is ASKED, not calculated — 4.15.0
+
+The third piece of the same lesson as the stack colours, and the strongest
+form of it: **when the arithmetic is forbidden, find who already did it.**
+
+Pandemic is "remaining <= 0.3 * duration". Both numbers can be secret on this
+patch, and dividing one secret by another is precisely the taint everything
+here is built to avoid. There is no clever way to do that division.
+
+Blizzard's Cooldown Manager marks the window itself, through two methods on
+the item frame: **`ShowPandemicStateFrame` / `HidePandemicStateFrame`**.
+`CDM:HookPandemic` hooks both and keeps a weak-keyed frame -> boolean;
+`CDM:InPandemic` reads it. No arithmetic anywhere
+(`EllesmereUICdmBuffBars.lua:81-128`).
+
+Three things worth keeping in mind:
+
+1. **It depends on a BLIZZARD setting.** The methods only fire for auras the
+   user has pandemic alerts enabled for, in Blizzard's own options. Nothing we
+   can do about it, so the panel says so rather than leaving "I switched it on
+   and nothing happens" unanswerable.
+2. **The hook bodies are at FILE SCOPE, deliberately.** A `hooksecurefunc`
+   callback is billed to the addon whose execution context created the
+   closure, so a body built inside a render pass can bill ANOTHER addon for
+   every one of our repaints. The reference found this by bisection and says
+   so at its own hook site.
+3. **Hooked per claimed frame, not per live frame.** Idempotent, so calling it
+   every render pass costs one table read, and it is bounded by the number of
+   cells rather than by everything the game tracks.
+
+Their Lifebloom fallback — for auras Blizzard never flags — was NOT copied. It
+reads `duration`/`expirationTime` off a named aura scan with a secret guard
+that bails out, so it is a special case for one druid spell that degrades to
+nothing on exactly the content where it matters.
+
+Not built: their five glow styles, glow speed, thickness, line count and the
+"Blizzard Default" pass-through that leaves Blizzard's own marker showing.
 
 ### The 12.1 aura engine: what today's reading ADDS to `Core/Engine.lua`
 

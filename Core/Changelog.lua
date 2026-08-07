@@ -8,6 +8,20 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.15.0",
+        date = "2026-08-07",
+        lines = {
+            "NEW: GLOW IN THE REFRESH WINDOW. The tail of an aura where recasting it wastes nothing - pandemic, if you know the word. Under Effects, with its own colour.",
+            "",
+            "THIS ADDON DOES NOT WORK THE WINDOW OUT, and that is the interesting part. Doing so means dividing the time left by the full duration, and on this patch both of those numbers can be protected - dividing one protected number by another is exactly the thing that taints an addon and breaks it. So it is not calculated. Blizzard already knows where the window is, because its own Cooldown Manager marks it, and this addon simply asks. The question stops being arithmetic and becomes a fact somebody else worked out inside the game, where the numbers are readable.",
+            "The catch is honest and the panel says it: it only lights for the spells you have switched pandemic alerts on for in Blizzard's own Cooldown Manager settings. Nothing here can turn that on for you.",
+            "",
+            "It outranks the plain glows, because it is the one that means press this now, and gives way to the last-seconds warning, which is more urgent still.",
+            "",
+            "Third of the four you picked. The small ones - charge marks, keybind text, the spark - are what is left.",
+        },
+    },
+    {
         version = "4.14.0",
         date = "2026-08-07",
         lines = {
