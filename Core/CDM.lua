@@ -325,6 +325,27 @@ end
 -- custom key onto a Blizzard frame table is one of the named ways to taint it.
 local adopted = setmetatable({}, { __mode = "k" })
 
+-- How much bigger this frame draws than the cell it sits on.
+--
+-- Blizzard scales its item frames - the Cooldown Manager's own size slider in
+-- Edit Mode does exactly that - and a frame's WIDTH is measured in its own
+-- coordinate space. A frame at scale 1.2 reports 36 and draws 43. That is
+-- why every icon measured correct while three of them were visibly the wrong
+-- size and shoved into each other: the report was reading the number that
+-- does not decide anything.
+--
+-- SetScale on a Blizzard frame is off the table, so the size is compensated
+-- instead. Anchoring needs no correction - a point resolves in screen space.
+local function ScaleRatio(frame, anchorFrame)
+    if not (anchorFrame and anchorFrame.GetEffectiveScale) then return 1 end
+
+    local mine = frame:GetEffectiveScale()
+    local theirs = anchorFrame:GetEffectiveScale()
+    if not (mine and theirs) or mine <= 0 then return 1 end
+
+    return theirs / mine
+end
+
 local function Reassert(state, frame)
     if state.applying then return end
     state.applying = true
@@ -334,7 +355,8 @@ local function Reassert(state, frame)
         frame:SetPoint(a[1], a[2], a[3], a[4], a[5])
     end
     if state.width then
-        frame:SetSize(state.width, state.height)
+        local ratio = ScaleRatio(frame, state.anchor and state.anchor[2])
+        frame:SetSize(state.width * ratio, state.height * ratio)
     end
     if state.alpha then
         frame:SetAlpha(state.alpha)
@@ -637,19 +659,32 @@ function CDM:DumpSkin()
             local spellID = self:ItemSpellID(item)
             local point, relativeTo, relativePoint = item:GetPoint(1)
 
-            local wantW, wantH = state.width or 0, state.height or 0
-            local gotW, gotH = item:GetWidth() or 0, item:GetHeight() or 0
-            local sizeOK = math.abs(gotW - wantW) < 0.5 and math.abs(gotH - wantH) < 0.5
+            -- On SCREEN, not in the frame's own coordinate space. A frame at
+            -- scale 1.2 reports 36 and draws 43, and reporting the 36 is how
+            -- five icons were declared correct while three of them were
+            -- visibly the wrong size.
+            local scale = item:GetEffectiveScale() or 1
+            local cellScale = (state.anchor and state.anchor[2]
+                and state.anchor[2]:GetEffectiveScale()) or scale
+
+            local wantW = (state.width or 0) * cellScale
+            local wantH = (state.height or 0) * cellScale
+            local gotW = (item:GetWidth() or 0) * scale
+            local gotH = (item:GetHeight() or 0) * scale
+            local sizeOK = math.abs(gotW - wantW) < 1 and math.abs(gotH - wantH) < 1
             local anchorOK = relativeTo == state.anchor[2]
                 and point == state.anchor[1] and relativePoint == state.anchor[3]
 
-            ns.Print(string.format("%s %s |cff888888%d|r  size %.0fx%.0f%s  "
-                .. "anchor %s%s",
+            ns.Print(string.format("%s %s |cff888888%d|r  %.0fx%.0f px%s  "
+                .. "scale %.2f%s  anchor %s%s",
                 (sizeOK and anchorOK) and "|cff40ff40ok|r" or "|cffff4040NO|r",
                 ns.SpellName(spellID) or "?", spellID or 0,
                 gotW, gotH,
                 sizeOK and "" or string.format(" |cffff4040(asked %.0fx%.0f)|r",
                     wantW, wantH),
+                item:GetScale() or 1,
+                math.abs(scale - cellScale) < 0.001 and ""
+                    or string.format(" |cffff4040(cell is %.2f)|r", cellScale),
                 tostring(point) .. "/" .. tostring(relativePoint),
                 anchorOK and "" or string.format(" |cffff4040(asked %s/%s, and it "
                     .. "is on a different frame)|r", state.anchor[1], state.anchor[3])))

@@ -208,24 +208,38 @@ local function ClearCooldown(cd)
     end
 end
 
--- Active auras are lit; inactive ones stay in place, dimmed. A cell that
+-- Active auras are lit; inactive ones stay in place, quieter. A cell that
 -- disappeared entirely would make the bar re-flow under the eye, and the
 -- point of a fixed grid is that a spell is always in the same place.
+--
+-- "Quieter" is one setting, not three stacked. Alpha AND desaturation AND a
+-- vertex darkening on top turned an icon into a dark box that read as broken
+-- next to its sharp neighbours - which is exactly what it looked like on a
+-- bar where two of six cells are ours.
 local function PaintAura(cell, active)
     local aura = cell.aura
     if not aura then return end
 
-    aura.icon:SetDesaturated(not active)
+    aura.icon:SetVertexColor(1, 1, 1)
+
     if active then
-        aura.icon:SetVertexColor(1, 1, 1)
+        aura.icon:SetDesaturated(false)
         aura:SetAlpha(1)
-    else
-        aura.icon:SetVertexColor(0.6, 0.6, 0.6)
-        -- A cell whose spell is taken by an earlier bar is dimmer still: it
-        -- is not waiting to light up, it is never going to.
-        aura:SetAlpha(cell.conflict and 0.18 or 0.35)
-        ClearCooldown(aura.cd)
+        aura:Show()
+        return
     end
+
+    local alpha = cell.inactiveAlpha or 0.55
+    -- A cell whose spell an earlier bar already took is quieter still: it is
+    -- not waiting to light up, it is never going to.
+    if cell.conflict then alpha = alpha * 0.4 end
+
+    aura.icon:SetDesaturated(cell.inactiveDesaturate ~= false)
+    aura:SetAlpha(alpha)
+    -- Zero means "do what Blizzard does and take it away", for anyone who
+    -- prefers that to a placeholder.
+    aura:SetShown(alpha > 0)
+    ClearCooldown(aura.cd)
 end
 
 ---------------------------------------------------------------------------
@@ -567,6 +581,11 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
     LayoutAuraVisual(aura, cfg, width, height)
     StyleAuraVisual(aura, style)
 
+    -- Carried on the cell, because the glow events repaint it later and have
+    -- no style table in hand.
+    cell.inactiveAlpha = style.inactiveAlpha
+    cell.inactiveDesaturate = style.inactiveDesaturate
+
     aura.icon:SetTexture(ns.SpellTexture(spellID))
     aura.label:SetText(ns.SpellName(spellID) or "")
 
@@ -708,18 +727,19 @@ function Screen:DumpCells()
                     local drawn = cell.item == nil
                     local w, h = cell:GetWidth(), cell:GetHeight()
 
-                    -- What is actually on screen for a drawn cell is the aura
-                    -- frame, not the cell: if those two disagree the cell is
-                    -- right and the thing inside it is not.
-                    local innerW, innerH = w, h
-                    if drawn and cell.aura then
-                        innerW, innerH = cell.aura:GetWidth(), cell.aura:GetHeight()
-                    end
+                    -- Screen pixels. A frame at scale 1.2 reports 36 and
+                    -- draws 43, and reporting the 36 is how a row of icons
+                    -- was declared even while three of them were not.
+                    local cellScale = cell:GetEffectiveScale() or 1
+                    local shown = cell.item or (drawn and cell.aura) or cell
+                    local shownScale = shown:GetEffectiveScale() or cellScale
 
                     ns.Print(string.format("   %d %s |cff888888%d|r  cell "
-                        .. "%.0fx%.0f  drawn %.0fx%.0f  %s",
+                        .. "%.0fx%.0f px  drawn %.0fx%.0f px  %s",
                         cellIndex, ns.SpellName(cell.spellID) or "?",
-                        cell.spellID, w, h, innerW, innerH,
+                        cell.spellID, w * cellScale, h * cellScale,
+                        (shown:GetWidth() or 0) * shownScale,
+                        (shown:GetHeight() or 0) * shownScale,
                         drawn and "|cffffd100ours|r" or "|cff40ff40adopted|r"))
                 end
             end

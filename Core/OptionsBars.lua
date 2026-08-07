@@ -829,6 +829,12 @@ function Workspace:BuildOptionsPane(parent, width)
     grid:Note("Blizzard's icon art has a border baked into the file. Cropping "
         .. "cuts it off; at 0 you see the whole thing, frame and all.")
 
+    Slide("While inactive", "inactiveAlpha", 0, 1, 0.05, Percent)
+    Switch("Grey out while inactive", "inactiveDesaturate")
+    grid:Note("Auras this addon draws itself stay in place while they are "
+        .. "down, so the bar does not re-flow under your eye. At 0 they "
+        .. "disappear instead, the way Blizzard's own buff icons do.")
+
     grid:Section("Border", "look-border")
 
     Slide("Thickness", "borderSize", 0, 4, 1)

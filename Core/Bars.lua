@@ -69,6 +69,15 @@ ns.BAR_DEFAULTS = {
     -- baked-in border that this crops off; 0 shows the whole file.
     iconZoom = 0.08,
 
+    -- What an aura we draw ourselves looks like while it is NOT up. Blizzard
+    -- simply removes its own buff icons, which makes a bar re-flow under your
+    -- eye - the point of a fixed grid is that a spell is always in the same
+    -- place. So ours stay, quieter.
+    --
+    -- 0 hides them after all, for anyone who wants Blizzard's behaviour.
+    inactiveAlpha      = 0.55,
+    inactiveDesaturate = true,
+
     -- The cooldown sweep.
     swipeColor = { 0.00, 0.00, 0.00 },
     swipeAlpha = 0.70,
@@ -284,7 +293,7 @@ ns.BAR_STYLE_KEYS = {
     "scale", "alpha",
     "borderSize", "borderColor", "borderTexture",
     "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
-    "iconZoom",
+    "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
     "countdown", "stacks", "spellName",
 }
@@ -361,6 +370,9 @@ function Bars:Style(cfg, height)
         backdropTexture = cfg.backdropTexture,
 
         iconZoom = math.min(0.2, math.max(0, cfg.iconZoom or 0.08)),
+
+        inactiveAlpha      = cfg.inactiveAlpha or 0.55,
+        inactiveDesaturate = cfg.inactiveDesaturate ~= false,
 
         swipeColor = cfg.swipeColor or { 0, 0, 0 },
         swipeAlpha = cfg.swipeAlpha or 0.7,
