@@ -382,38 +382,48 @@ basics. The parked stack (`Engine`, `Catalog`, `Probe`, `Groups`, `CoTanks`,
 `OptionsGroups`) is what waits for it, plus the owner's tank ideas, which they
 deliberately held back until the basics stand.
 
+1. **The window still reads "altbacken" and wastes space.** Only the WIDTHS
+   have been changed so far (1360x760, rail 168, settings column 400) — that
+   answered "make the right column wider", not the density complaint. Row
+   height, section spacing and card padding are untouched: `UI.ROW_H`,
+   `UI.SECTION_H`, `UI.ROW_GAP`, `UI.COL_GAP` in `Core/Widgets.lua`, plus the
+   `UI.Card` and `UI.Page` paddings. **This is the next job.**
+2. **Owner-side data**: confirm the remaining proc durations by letting one run
+   out *without* casting the ability, then `/zs auras export` for Blood and
+   paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
+3. **Tank ideas** — the owner has a list, held back until the basics stand.
+4. **Logo** — SVG for the repo, TGA for the game. WoW cannot load SVG.
+   Interim: `## IconTexture: 1380870`.
+5. After 12.1 lands: un-park the aura stack and re-test it.
 
-1. **The icons on screen are still wrong, and the next step is measurement,
-   not another guess.** `/zs skin` now prints every pinned icon as *asked for
-   vs actually there* — size and anchor, with the mismatch spelled out. Run it
-   and read that first. What is already known from running it:
-   - `UI-CooldownManager-OORshadow` sat at alpha 0.5 on a self-cast spell.
-     Stripped by atlas prefix now, and the alpha is **hooked**, because it is
-     driven by range and Blizzard writes it back when you move.
-   - The mask was back to Blizzard's rounded `130871` after a one-time strip.
-     These frames come out of a pool and are re-decorated when handed out, so
-     stripping runs on **every** skin pass now.
-   - Sizing the item FRAME is not enough: each viewer anchors its own icon
-     texture its own way. `item.Icon` and `item.Cooldown` are told to fill the
-     frame on every pass. **This is the fix that has not been seen working
-     yet.** If the icons are still uneven after it, `/zs skin` will say
-     whether the frames themselves are wrong (somebody is overwriting us) or
-     only the art inside them (anchoring, again).
-2. **The owner's design notes on the window**, not yet done: it still reads
-   "altbacken", too much wasted space. The rail is 168 and the settings column
-   400 now, window 1360x760 — that was the width complaint, not the density
-   one. Row height, section spacing and the card padding are untouched.
-3. **Owner-side data**: confirm the remaining proc durations by letting one
-   run out *without* casting the ability, then `/zs auras export` for Blood
-   and paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
-4. **Tank ideas** — the owner has a list and asked to keep them until the
-   basics are done. `Core/CoTanks.lua` is written and parked; it returns with
-   12.1 on 11 Aug.
-5. **Logo** — SVG for the repo, TGA for the game. WoW cannot load SVG. PIL is
-   installed, no rasteriser. Interim: `## IconTexture: 1380870`.
-6. After 12.1 lands: un-park the aura stack and re-test it.
+### The icons are FIXED, and the lesson cost a day
 
-Everything is committed and pushed to `github.com/heidrich/zwoelfstuff`.
+Adopted icons came out at different sizes and shoved into each other, and
+`/zs skin` reported every one of them as a correct 36x36. Both were true:
+
+**A frame's width is measured in its OWN coordinate space.** Blizzard scales
+its item frames — its Cooldown Manager has a size slider in Edit Mode — and on
+one live bar there were four different scales at once: 1.30, 1.10, 1.10, 0.90,
+against a cell at 0.64. A frame at scale 1.3 reports 36 and draws 47. Every
+check passed while nothing matched.
+
+So: both reports read `GetEffectiveScale` and print **screen pixels**, the
+pinned size is compensated by the ratio between the frame's effective scale and
+the cell's, and `SetScale` is hooked so a later rescale re-asserts. Anchoring
+needs no correction — a point resolves in screen space already.
+
+Three other things had to be true first, all found the same way:
+`UI-CooldownManager-OORshadow` at alpha 0.5 (an out-of-range veil on a
+self-cast spell); the rounded mask, which had to be **removed from the icon**
+rather than redefined; and the icon texture, which has to be told to fill the
+frame because each viewer anchors its own.
+
+**The rule this leaves behind:** with these frames, nothing is one-time. Anchor,
+size, alpha, mask, scale and the icon's own anchoring all come back when the
+pool hands the frame out again. Everything is re-applied on every skin pass and
+hooked where Blizzard writes it back. And when a measurement disagrees with the
+screen, **the measurement is wrong** — the owner said so three times before I
+looked at the right number.
 
 ### Known, decided, do not re-litigate
 
