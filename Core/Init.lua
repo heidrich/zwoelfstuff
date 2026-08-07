@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.5.0"
+ns.version = "4.6.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -431,6 +431,7 @@ local usage = {
     "|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r - commands:",
     "  |cffffd100/zs|r - open the window",
     "  |cffffd100/zs unlock|r / |cffffd100lock|r - move the bars around the screen",
+    "  |cffffd100/zs build|r - take a bar apart slot by slot, on screen",
     "",
     "  Bars",
     "  |cffffd100/zs bars|r - list them (|cffffd100add <name>|r / |cffffd100remove <n>|r)",
@@ -464,6 +465,11 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
 
     elseif cmd == "unlock" or cmd == "lock" then
         ns.EditMode:SetUnlocked(cmd == "unlock")
+
+    elseif cmd == "build" then
+        -- Unlocks first if it has to. "Build" names an intent, not a mode you
+        -- have to be in something else to reach.
+        ns.EditMode:OpenBuild()
 
     elseif cmd == "minimap" then
         local sub = rest:lower()

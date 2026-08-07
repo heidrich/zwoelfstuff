@@ -33,6 +33,39 @@ ns.BAR_DEFAULTS = {
     columns = 6,
     cells   = {},              -- [index] = spellID; holes are empty cells
 
+    -- How the cells are arranged. See Core/Layout.lua - "grid" is rows and
+    -- columns, "free" is the puzzle, and everything in between is a lattice
+    -- with one rule changed.
+    layout  = "grid",
+    flow    = "rows",          -- which axis fills before it wraps
+    growX   = "right",         -- reading direction across
+    growY   = "down",          -- reading direction down
+
+    -- How many cells an arrangement that has no rows and columns holds. A
+    -- puzzle, an arc and a diagonal are a SEQUENCE, so a grid of 2x3 means
+    -- nothing to them; this is their length.
+    freeCount = 6,
+
+    -- Arrangement dials. Each one belongs to exactly one arrangement and is
+    -- ignored by the others, which is why they are flat rather than nested:
+    -- switching from an arc to a grid and back must not lose the arc's shape.
+    staggerOffset = 50,        -- percent of a cell, on every other line
+    arcRadius     = 0,         -- 0 works it out from the cell size and count
+    arcStart      = 90,        -- degrees; 0 is due right, 90 is up
+    arcSpan       = 180,       -- degrees covered; 360 closes the ring
+    diagonalX     = 100,       -- percent of a cell width per step
+    diagonalY     = -100,      -- percent of a cell height per step
+
+    -- The puzzle raster. Dragging a cell in build mode lands on it, so a
+    -- hand-built layout still lines up. 0 is free-hand.
+    raster = 4,
+
+    -- Per-cell overrides: cellOpts[index] = { scale, x, y, kind, hidden }.
+    -- This is what lets one icon in a row be twice the size, one cell be a
+    -- tracking bar among icons, and any of them sit where the lattice would
+    -- not have put it. Absent for every cell nobody has touched.
+    cellOpts = {},
+
     -- Size
     iconSize    = 40,
     barWidth    = 200,
@@ -125,6 +158,14 @@ ns.BAR_DEFAULTS = {
         y       = 0,
     },
 
+    -- What the cell does beyond sitting there: the flash when a cooldown
+    -- lands, the edge while it is ready, the nag when you have been sitting
+    -- on it. Filled from ns.EFFECT_DEFAULTS so there is one definition.
+    effects = ns.EFFECT_DEFAULTS,
+
+    -- When this bar is on screen at all. Filled from ns.SHOW_DEFAULTS.
+    show = ns.SHOW_DEFAULTS,
+
     -- Position, relative to the screen centre. Always the bar's own centre,
     -- so the readout in unlock mode means something and snapping is
     -- arithmetic rather than a case analysis.
@@ -155,11 +196,57 @@ function Bars:Count()
     return #ns.db.bars
 end
 
--- How many cells a bar has. The grid is always rows x columns, so an empty
--- trailing cell is a real, clickable place to put something - that is what
--- makes "add a row" mean anything before you have filled it.
+-- How many cells a bar has. A lattice is rows x columns, so an empty trailing
+-- cell is a real, clickable place to put something - that is what makes "add
+-- a row" mean anything before you have filled it. An arc, a diagonal and a
+-- puzzle are a sequence instead and carry their own length.
 function Bars:CellCount(cfg)
-    return math.max(1, (cfg.rows or 1) * (cfg.columns or 1))
+    return ns.Layout.CellCount(cfg)
+end
+
+-- One more cell on an arrangement that has no rows and columns. The button
+-- that calls this is the whole "add something to the puzzle" gesture.
+function Bars:AddCell(index)
+    local cfg = self:Get(index)
+    if not cfg then return false end
+
+    if ns.Layout.UsesGrid(cfg) then
+        cfg.rows = math.min(20, (cfg.rows or 1) + 1)
+    else
+        cfg.freeCount = math.min(40, (cfg.freeCount or 6) + 1)
+    end
+
+    self:Changed(index)
+    return true
+end
+
+-- Takes a cell out of a sequence and closes the gap behind it, spell and
+-- per-cell settings together. Leaving the hole would be the easy version and
+-- it is wrong: the cells below would all shift by one on the next re-flow.
+function Bars:RemoveCell(index, cell)
+    local cfg = self:Get(index)
+    if not cfg then return false end
+
+    local last = self:CellCount(cfg)
+    for position = cell, last - 1 do
+        cfg.cells[position] = cfg.cells[position + 1]
+        if cfg.cellOpts then
+            cfg.cellOpts[position] = cfg.cellOpts[position + 1]
+        end
+    end
+    cfg.cells[last] = nil
+    if cfg.cellOpts then cfg.cellOpts[last] = nil end
+
+    -- A lattice keeps its shape - taking a cell out of a 2x3 grid would leave
+    -- a grid that is no longer rectangular - so there the last slot simply
+    -- becomes empty. A sequence gets one shorter, which is what "remove" means
+    -- when there are no rows and columns to preserve.
+    if not ns.Layout.UsesGrid(cfg) then
+        cfg.freeCount = math.max(1, (cfg.freeCount or 6) - 1)
+    end
+
+    self:Changed(index)
+    return true
 end
 
 ---------------------------------------------------------------------------
@@ -219,11 +306,20 @@ end
 
 -- Drag and drop. Moving onto an occupied cell swaps, which is what dragging
 -- one icon onto another visibly looks like it should do.
+--
+-- The per-cell settings travel WITH the spell. A cell that was scaled up and
+-- nudged is that spell's presentation, not that position's - leaving the
+-- overrides behind would silently apply them to whatever moved in.
 function Bars:MoveCell(index, from, to)
     local cfg = self:Get(index)
     if not cfg or from == to then return false end
 
     cfg.cells[from], cfg.cells[to] = cfg.cells[to], cfg.cells[from]
+
+    if cfg.cellOpts then
+        cfg.cellOpts[from], cfg.cellOpts[to] = cfg.cellOpts[to], cfg.cellOpts[from]
+    end
+
     self:Changed(index)
     return true
 end
@@ -240,8 +336,15 @@ function Bars:AddSpell(index, spellID)
         end
     end
 
-    cfg.rows = (cfg.rows or 1) + 1
-    return self:SetCell(index, self:CellCount(cfg) - (cfg.columns or 1) + 1, spellID)
+    -- Full: grow, then put it in the first slot that appeared. A lattice grows
+    -- by a row, a sequence by one slot - which is why the growing is asked for
+    -- rather than written out here.
+    local before = self:CellCount(cfg)
+    self:AddCell(index)
+    local after = self:CellCount(cfg)
+    if after <= before then return false end
+
+    return self:SetCell(index, before + 1, spellID)
 end
 
 -- Re-flowing keeps the sequence: changing the column count must not scramble
@@ -257,17 +360,96 @@ function Bars:SetGrid(index, rows, columns)
     -- Compact to a plain sequence first, then re-lay it into the new grid.
     -- Without this, shrinking a grid would silently drop whatever sat in the
     -- cells that no longer exist.
-    local sequence = {}
+    --
+    -- The per-cell settings are carried in the SAME sequence. Keyed by cell
+    -- index, they would otherwise stay where they were while the spells moved
+    -- past them - one re-flow and every override is on the wrong icon.
+    local sequence, extras = {}, {}
     for cell = 1, self:CellCount(cfg) do
-        if cfg.cells[cell] then sequence[#sequence + 1] = cfg.cells[cell] end
+        if cfg.cells[cell] then
+            sequence[#sequence + 1] = cfg.cells[cell]
+            extras[#sequence] = cfg.cellOpts and cfg.cellOpts[cell] or nil
+        end
     end
 
     cfg.rows, cfg.columns = rows, columns
     wipe(cfg.cells)
+    if cfg.cellOpts then wipe(cfg.cellOpts) end
     for position, spellID in ipairs(sequence) do
         if position > self:CellCount(cfg) then break end
         cfg.cells[position] = spellID
+        if extras[position] then
+            cfg.cellOpts = cfg.cellOpts or {}
+            cfg.cellOpts[position] = extras[position]
+        end
     end
+
+    self:Changed(index)
+    return true
+end
+
+-- Switching arrangement, without losing what is already in the bar.
+--
+-- A lattice counts its cells as rows x columns; an arc, a diagonal and a
+-- puzzle count them as a length. Switching between the two without carrying
+-- the number across is what makes a six-icon row become a six-icon default
+-- that happens to be the same size by luck, and a 3x4 grid collapse to six.
+function Bars:SetLayout(index, layout)
+    local cfg = self:Get(index)
+    if not cfg or cfg.layout == layout then return false end
+
+    local before = self:CellCount(cfg)
+    cfg.layout = layout
+    local usesGrid = ns.Layout.UsesGrid(cfg)
+
+    if usesGrid then
+        -- Back onto a lattice: keep the count, in one line unless it was long.
+        local columns = math.min(before, 12)
+        cfg.columns = math.max(1, columns)
+        cfg.rows = math.max(1, math.ceil(before / cfg.columns))
+    else
+        cfg.freeCount = math.max(1, math.min(40, before))
+    end
+
+    -- A puzzle with every cell at 0,0 is a stack nobody can pull apart. The
+    -- first switch spreads them along the row they came from, so what appears
+    -- is the bar you had, now movable - not a pile.
+    if layout == "free" then
+        local width = ns.Layout.CellSize(cfg, nil)
+        local spacing = cfg.spacing or 4
+        local columns = math.max(1, cfg.columns or 1)
+
+        for cell = 1, self:CellCount(cfg) do
+            local opts = ns.Layout.CellOpts(cfg, cell)
+            if not (opts and (opts.x or opts.y)) then
+                opts = ns.Layout.EnsureCellOpts(cfg, cell)
+                local column = (cell - 1) % columns
+                local row = math.floor((cell - 1) / columns)
+                opts.x = column * (width + spacing)
+                opts.y = -row * (width + spacing)
+            end
+        end
+    end
+
+    self:Changed(index)
+    return true
+end
+
+-- Changing which point of the bar is pinned, without the bar jumping.
+--
+-- The stored x/y are that point's offset from the screen centre, so simply
+-- writing a new point would move the bar by half its own size. Screen knows
+-- where it actually is; ask, then write the new numbers for the new point.
+function Bars:SetPivot(index, pivot)
+    local cfg = self:Get(index)
+    if not cfg or cfg.point == pivot then return false end
+
+    -- Written BEFORE the capture on purpose: the frame has not moved yet, so
+    -- reading it now gives the true geometry, and CapturePosition then works
+    -- out where the NEW point currently sits. Put the numbers back and the
+    -- bar has not budged.
+    cfg.point = pivot
+    if ns.Screen then ns.Screen:CapturePosition(index) end
 
     self:Changed(index)
     return true
@@ -296,6 +478,18 @@ ns.BAR_STYLE_KEYS = {
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
     "countdown", "stacks", "spellName",
+
+    -- The arrangement travels too - it is how a bar LOOKS, not what it holds.
+    -- Rows and columns deliberately do not: those are the shape the user laid
+    -- their spells into, and overwriting them would rearrange the work rather
+    -- than the styling.
+    "layout", "flow", "growX", "growY",
+    "staggerOffset", "arcRadius", "arcStart", "arcSpan",
+    "diagonalX", "diagonalY", "raster",
+
+    -- Effects are a look. Visibility rules are not: "only in raids" belongs to
+    -- that one bar's job, and copying it onto another is never what was meant.
+    "effects",
 }
 
 -- The three text elements, in the order they appear in the options.
@@ -456,6 +650,10 @@ ns.BUILT_IN_LOOKS = {
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
+            -- Explicitly empty, not absent: a look that says nothing about
+            -- effects would leave the last one's flashing switched on, and
+            -- "I picked Clean and it still pulses" is not a look at all.
+            effects = {},
         },
     },
     {
@@ -469,6 +667,10 @@ ns.BUILT_IN_LOOKS = {
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
+            -- Explicitly empty, not absent: a look that says nothing about
+            -- effects would leave the last one's flashing switched on, and
+            -- "I picked Clean and it still pulses" is not a look at all.
+            effects = {},
         },
     },
     {
@@ -483,6 +685,27 @@ ns.BUILT_IN_LOOKS = {
             countdown = Text(0, { 1, 1, 1 }, "THICKOUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 0.9, 0.4 }, "THICKOUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "OUTLINE", "LEFT"),
+            effects = {},
+        },
+    },
+    {
+        name = "Reactive",
+        note = "Clean, plus the things that move: a flash when a cooldown "
+            .. "lands, an edge while it is up, and a nag if you sit on it.",
+        style = {
+            borderSize = 1, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
+            iconZoom = 0.08,
+            swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
+            countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
+            stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
+            effects = {
+                readyFlash = true, readyPulses = 2,
+                readyGlow = true, readyGlowCombatOnly = true,
+                reminderAfter = 6,
+                dimOnCooldown = true, dimAmount = 0.6,
+            },
         },
     },
     {
@@ -496,6 +719,7 @@ ns.BUILT_IN_LOOKS = {
             countdown = { show = false },
             stacks    = { show = false },
             spellName = { show = false },
+            effects = {},
         },
     },
 }

@@ -4,6 +4,119 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] - 2026-08-07
+
+Arrangements, effects, rules, and a build mode you use on screen instead of in
+a window. This is the release where a bar stops being a row of icons.
+
+### Added — arrangements
+
+A bar is no longer rows and columns with a gap. There are five arrangements,
+they all come out of one engine (`Core/Layout.lua`), and the editor preview
+asks that same engine — so an arc curves in the window too.
+
+- **Grid** — rows and columns, as before.
+- **Staggered** — every other line pushed along by half a cell.
+- **Arc** — cells around a circle. Span, start angle and radius are set; a full
+  360 closes the ring, and the radius works itself out from the chord of the
+  step angle unless you name one.
+- **Diagonal** — each cell steps by a fixed offset. Steps, ladders, slants.
+- **Puzzle** — every cell exactly where you dragged it. No lattice at all.
+
+With them: **fill order** (rows first or columns first), **reading direction**
+on both axes (left to right or right to left, top to bottom or bottom to top),
+and **which point the bar is pinned by**. That last one is what people mean by
+grow direction: pinned by the centre a bar spreads both ways when it gains a
+row, pinned by an edge it grows away from that edge.
+
+Puzzle is not a special case bolted on. Every arrangement adds each cell's own
+offset on top of whatever the lattice worked out, so nudging one icon out of a
+neat row and building a free-form layout are the **same edit**. There is no
+line to cross between "a bar" and "a puzzle".
+
+### Added — per-cell overrides
+
+Any single cell can now carry its own scale, its own offset, its own kind and
+its own visibility. One icon in a row at 150%. A tracking bar in among the
+icons. A slot hidden while you decide. The overrides travel with the SPELL,
+not the position — dragging a cell to another slot takes its settings along,
+and re-flowing a grid carries them in the same sequence the spells move in.
+
+### Added — build mode
+
+`/zs build`, the **Build** button on every bar card, or the switch in the
+unlock toolbar. Two modes, and the difference is the level you work at:
+
+- **Move bars** — the whole bar is one object. Drag, snap, attach.
+- **Build** — every cell is its own object. Drag it (snapped to the bar's
+  raster, Alt for free hand), scroll to scale it, Tab through the slots, arrow
+  keys to nudge, Delete to empty, right click for kind, hide and reset.
+
+The **spell palette** opens beside it: click a slot, click a spell, and the
+selection walks on to the next slot so filling a bar is one click each. Every
+Cooldown Manager spell is in it, greyed when it is not talented — a bar can be
+built for the spec you are about to switch into.
+
+### Added — effects
+
+The half of a cooldown display you read out of the corner of your eye. All off
+by default.
+
+- **Flash** when a cooldown lands, with a pulse count and a colour.
+- **An edge** while the spell is up, optionally only in combat.
+- **A nag**: a spell that has been ready for N seconds *in combat* starts
+  pulsing. For the defensive you keep forgetting.
+- **A last-seconds warning** on the auras this addon clocks itself.
+- **A glow** while a tracked aura is up, and **greying out** while a cooldown
+  runs.
+
+What drives it is Blizzard's own `isActive` with `isOnGCD`, read off the info
+table every item frame carries — the field names are taken from working code
+on this machine, never guessed. Without the GCD test every spell in the game
+"comes off cooldown" every 1.5 seconds and the flash is a strobe. Both fields
+can arrive as secret values on 12.0, so both go through `ns.CanCompute` first
+and an unreadable state means *do nothing* rather than *guess*.
+
+Remaining time is deliberately **not** read for adopted frames: there is no
+field for it and the Cooldown widget's timing is a duration object on this
+patch. The option that needs it says so.
+
+### Added — when a bar is on screen
+
+Rules per bar, and every rule is an AND: combat, group size, target, rested,
+and six kinds of place (world, dungeon, raid, scenario or delve, battleground,
+arena). Every rule defaults to "any", so one you have not set can never be the
+reason something is missing. Out of condition, a bar is gone — or dimmed to
+whatever you choose, which is what you want while you are still arranging it.
+
+Evaluated on the events that can change the answer and never on a timer. The
+instance types are read off working code rather than written from memory, and
+a type the client reports that this list has never heard of lets the bar
+through: a new instance type in a patch must not make everyone's UI vanish in
+the new content.
+
+### Changed — the window
+
+The density pass that was owed. Every setting used to be a filled card 38px
+tall with a gap around it; forty of those is a brick wall, and "altbacken, viel
+space wasted" was right.
+
+- Rows are **flat**, 28px, separated by a hairline instead of a gap. Only the
+  row under the cursor gets a surface.
+- Section headings are smaller, their air is above them rather than evenly
+  around them, and the fold marker is a drawn plus/minus — the old `v`/`>`
+  were two glyph widths and shifted the caption every time a section folded.
+- Buttons, switches and steppers all came down a notch to match.
+- The bar preview in the middle column now draws the **real arrangement**,
+  hit-tested against the real rectangles rather than divided out of a lattice.
+
+### Notes
+
+- Nothing here has been run in the game yet — the client was closed while it
+  was built. Statically clean over 24 files.
+- Saved settings carry forward untouched: every new key has a default, and a
+  bar written before this release is a Grid with no effects and no rules.
+
 ## [4.4.0] - 2026-08-06
 
 The bars are on screen, and there is an unlock mode to put them where you

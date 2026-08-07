@@ -135,7 +135,7 @@ local function BuildCard(parent, width)
 
     local title = UI.Label(card, "", 13.5, C.text)
     title:SetPoint("LEFT", number, "RIGHT", 8, 0)
-    title:SetWidth(width - 180)      -- never under the header's two actions
+    title:SetWidth(width - 230)      -- never under the header's three actions
     title:SetWordWrap(false)
 
     -- Two-step, because one stray click would otherwise throw away a bar the
@@ -171,6 +171,16 @@ local function BuildCard(parent, width)
     end)
     options:SetPoint("RIGHT", remove, "LEFT", -2, 0)
 
+    -- Straight from the card onto the screen. An arrangement is something you
+    -- judge by looking at it where it will live, not in a preview - and this
+    -- is the only place most people will ever find build mode.
+    local build = UI.GhostButton(card, "Build", function()
+        if not card.dkIndex then return end
+        Workspace:Select(card.dkIndex)
+        ns.EditMode:OpenBuild()
+    end, C.accentCool)
+    build:SetPoint("RIGHT", options, "LEFT", -2, 0)
+
     local headerLine = UI.Separator(card)
     headerLine:SetPoint("TOPLEFT", card, "TOPLEFT", 0, -HEADER_H)
     headerLine:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, -HEADER_H)
@@ -186,19 +196,17 @@ local function BuildCard(parent, width)
     end
 
     local grid = UI.CellGrid(stage, {
-        cellSize = function()
+        -- The same engine the screen uses, so the preview is the arrangement
+        -- and not a drawing of one. An arc curves here too.
+        layout = function()
             local cfg = Cfg()
-            if not cfg then return 40, 40 end
-            if cfg.kind == "bar" then return cfg.barWidth, cfg.barHeight end
-            return cfg.iconSize, cfg.iconSize
+            if not cfg then
+                return { { x = 0, y = 0, w = 40, h = 40, kind = "icon" } },
+                    { width = 40, height = 40, centreX = 0, centreY = 0 }
+            end
+            return ns.Layout.Build(cfg, Bars:CellCount(cfg),
+                cfg.spacing or 4, cfg.lineSpacing or 4)
         end,
-        gaps = function()
-            local cfg = Cfg()
-            if not cfg then return 4, 4 end
-            return cfg.spacing, cfg.lineSpacing
-        end,
-        rows    = function() local cfg = Cfg() return cfg and cfg.rows or 1 end,
-        columns = function() local cfg = Cfg() return cfg and cfg.columns or 1 end,
         content = function(cell) local cfg = Cfg() return cfg and cfg.cells[cell] end,
         selected = function()
             if Workspace.index ~= card.dkIndex then return nil end
@@ -252,6 +260,25 @@ local function BuildCard(parent, width)
     columns:SetPoint("RIGHT", shape, "RIGHT", 0, 0)
     columns:SetWidth(sliderW)
 
+    -- An arc, a diagonal and a puzzle have no rows and columns to set. They
+    -- have a LENGTH, and offering two sliders that do nothing is worse than
+    -- offering the one that does.
+    local slots = UI.MiniSlider(shape, {
+        label = "Slots", min = 1, max = 40, step = 1,
+        get = function() local cfg = Cfg() return cfg and cfg.freeCount or 6 end,
+        set = function(value)
+            local cfg = Cfg()
+            if cfg then
+                cfg.freeCount = value
+                Bars:Changed(card.dkIndex)
+            end
+        end,
+        apply = function() Workspace:Select(card.dkIndex) end,
+    })
+    slots:SetPoint("LEFT", shape, "LEFT", 0, 0)
+    slots:SetWidth(sliderW)
+
+
     -- Clicking anywhere on the card makes it the one the spells go into.
     card:EnableMouse(true)
     card:SetScript("OnMouseDown", function()
@@ -292,8 +319,16 @@ local function BuildCard(parent, width)
         shape:SetPoint("TOPLEFT", stage, "BOTTOMLEFT", 0, -14)
         shape:SetPoint("TOPRIGHT", stage, "BOTTOMRIGHT", 0, -14)
 
-        rows.Refresh()
-        columns.Refresh()
+        local lattice = ns.Layout.UsesGrid(cfg)
+        rows:SetShown(lattice)
+        columns:SetShown(lattice)
+        slots:SetShown(not lattice)
+        if lattice then
+            rows.Refresh()
+            columns.Refresh()
+        else
+            slots.Refresh()
+        end
 
         local active = Workspace.index == card.dkIndex
         card:SetActive(active)
@@ -816,6 +851,98 @@ function Workspace:BuildOptionsPane(parent, width)
     Slide("Scale", "scale", 0.4, 2.5, 0.05,
         function(v) return string.format("%.2f", v) end)
 
+    -- Arrangement -----------------------------------------------------------
+    --
+    -- The shape of the thing, as opposed to what it is made of. Kept high on
+    -- the page and unfolded, because it is the setting that changes the most
+    -- and the one people come here for.
+    grid:Section("Arrangement")
+
+    local layoutRow = grid:FullRow("Pattern", { controlWidth = 150 })
+    UI.Dropdown(layoutRow, ns.LAYOUTS, Get("layout"), function(value)
+        local index = Workspace:Current()
+        if index then ns.Bars:SetLayout(index, value) end
+    end, { apply = Apply })
+
+    local layoutNote = grid:Note("", 26)
+
+    local flowRow = UI.Dropdown(grid:FullRow("Fill order", { controlWidth = 150 }),
+        ns.FLOWS, Get("flow"), Set("flow"), { apply = Apply })
+
+    UI.Dropdown(grid:FullRow("Across", { controlWidth = 150 }),
+        ns.GROW_X, Get("growX"), Set("growX"), { apply = Apply })
+
+    local growYRow = UI.Dropdown(grid:FullRow("Down", { controlWidth = 150 }),
+        ns.GROW_Y, Get("growY"), Set("growY"), { apply = Apply })
+
+    UI.Dropdown(grid:FullRow("Pinned by", { controlWidth = 150 }),
+        ns.PIVOTS, Get("point"), function(value)
+            local index = Workspace:Current()
+            if index then ns.Bars:SetPivot(index, value) end
+        end, { apply = Apply })
+    grid:Note("Which point of the bar stays put when it changes size. Pinned "
+        .. "by the centre it spreads both ways; pin an edge and it grows away "
+        .. "from that edge instead.")
+
+    -- One dial per pattern, and each one is only shown for the pattern it
+    -- belongs to. A page of sliders that do nothing is how a settings screen
+    -- stops being trusted.
+    local staggerRow = Slide("Offset", "staggerOffset", 0, 100, 5,
+        function(v) return string.format("%d%%", v) end)
+
+    local arcSpanRow  = Slide("Arc", "arcSpan", 30, 360, 5,
+        function(v) return string.format("%d deg", v) end)
+    local arcStartRow = Slide("Starts at", "arcStart", 0, 359, 5,
+        function(v) return string.format("%d deg", v) end)
+    local arcRadRow   = Slide("Radius", "arcRadius", 0, 400, 5,
+        function(v) return v <= 0 and "auto" or string.format("%d", v) end)
+
+    local diagXRow = Slide("Step across", "diagonalX", -200, 200, 5,
+        function(v) return string.format("%d%%", v) end)
+    local diagYRow = Slide("Step down", "diagonalY", -200, 200, 5,
+        function(v) return string.format("%d%%", v) end)
+
+    local rasterRow = Slide("Snap to", "raster", 0, 40, 1,
+        function(v) return v <= 0 and "free hand" or string.format("%d px", v) end)
+
+    local buildRow = grid:FullRow("Build on screen", {
+        controlWidth = 150,
+        sublabel = "Drag, scale and swap each slot where it lives",
+    })
+    local buildBtn = UI.Button(buildRow.slot, "Open build mode", 150, function()
+        local index = Workspace:Current()
+        if index then
+            Workspace:Select(index)
+            ns.EditMode:OpenBuild()
+        end
+    end, "primary")
+    buildBtn:SetPoint("RIGHT", buildRow.slot, "RIGHT", 0, 0)
+
+    -- Which of the above apply right now. Recorded as one function so the
+    -- rule lives in a single place rather than in nine SetRelevant calls
+    -- scattered through the section.
+    local function RefreshArrangement()
+        local _, cfg = Workspace:Current()
+        if not cfg then return end
+
+        local kind = cfg.layout or "grid"
+        local lattice = ns.Layout.UsesGrid(cfg)
+
+        for _, entry in ipairs(ns.LAYOUTS) do
+            if entry.value == kind then layoutNote:SetText(entry.note) end
+        end
+
+        flowRow:SetRelevant(lattice)
+        growYRow:SetRelevant(lattice or kind == "diagonal")
+        staggerRow:SetRelevant(kind == "stagger")
+        arcSpanRow:SetRelevant(kind == "arc")
+        arcStartRow:SetRelevant(kind == "arc")
+        arcRadRow:SetRelevant(kind == "arc")
+        diagXRow:SetRelevant(kind == "diagonal")
+        diagYRow:SetRelevant(kind == "diagonal")
+        rasterRow:SetRelevant(kind == "free")
+    end
+
     -- Looks ---------------------------------------------------------------
     --
     -- Every section from here down is FOLDED by default. There are thirty-odd
@@ -913,6 +1040,163 @@ function Workspace:BuildOptionsPane(parent, width)
         })
 
         if element.barOnly then textRows[#textRows + 1] = rows end
+    end
+
+    -- Effects -----------------------------------------------------------------
+    --
+    -- The half of a cooldown display people actually read out of the corner of
+    -- their eye. Every one of these is off by default: a screen that flashes
+    -- at you before you asked it to is the reason some addons get uninstalled
+    -- in the first fight.
+    local function FxGet(key)
+        return function()
+            local _, cfg = Workspace:Current()
+            return cfg and cfg.effects and cfg.effects[key]
+        end
+    end
+    local function FxSet(key)
+        return function(value)
+            local _, cfg = Workspace:Current()
+            if cfg and cfg.effects then cfg.effects[key] = value end
+        end
+    end
+    local function FxSwitch(label, key, sublabel)
+        return UI.Toggle(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }),
+            FxGet(key), function(value) FxSet(key)(value); Apply() end)
+    end
+    local function FxSlide(label, key, min, max, step, format)
+        return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
+            get = FxGet(key), set = FxSet(key),
+            min = min, max = max, step = step, format = format, apply = Apply,
+        })
+    end
+    local function FxColour(label, key)
+        return UI.Swatch(grid:FullRow(label, { controlWidth = 124 }),
+            function()
+                local _, cfg = Workspace:Current()
+                local colour = cfg and cfg.effects and cfg.effects[key] or { 1, 1, 1 }
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b)
+                local _, cfg = Workspace:Current()
+                if cfg and cfg.effects then cfg.effects[key] = { r, g, b } end
+            end,
+            Apply)
+    end
+    local function Seconds(v)
+        if v <= 0 then return "off" end
+        return string.format("%ds", v)
+    end
+
+    grid:Section("When it comes back", "fx-ready")
+
+    FxSwitch("Flash", "readyFlash", "A pulse the moment the cooldown ends")
+    FxSlide("How many", "readyPulses", 1, 5, 1)
+    FxColour("Flash colour", "readyColor")
+    FxSwitch("Keep an edge while it is up", "readyGlow")
+    FxSwitch("Only in combat", "readyGlowCombatOnly")
+    FxColour("Edge colour", "glowColor")
+    FxSlide("Edge thickness", "glowSize", 1, 5, 1)
+    grid:Note("Blizzard's Cooldown Manager is asked whether the spell is on a "
+        .. "real cooldown, so the global cooldown never sets any of this off.")
+
+    grid:Section("Nag and warn", "fx-nag")
+
+    FxSlide("Remind me after", "reminderAfter", 0, 20, 1, Seconds)
+    FxColour("Reminder colour", "reminderColor")
+    grid:Note("A spell that has been ready this long IN COMBAT starts pulsing. "
+        .. "For the defensive you keep forgetting.")
+
+    FxSlide("Last seconds", "lowWarn", 0, 20, 1, Seconds)
+    FxColour("Warning colour", "lowColor")
+    grid:Note("Applies to the auras this addon clocks itself, where the "
+        .. "remaining time is a number we own. Blizzard's frames do not hand "
+        .. "one out on this patch, so their icons do not carry it.")
+
+    FxSwitch("Glow while the aura is up", "activeGlow")
+    FxColour("Aura colour", "activeColor")
+    FxSwitch("Grey out on cooldown", "dimOnCooldown")
+    FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent)
+    FxSlide("Pulse speed", "pulseSpeed", 0.4, 2.5, 0.1,
+        function(v) return string.format("%.1fx", v) end)
+
+    -- Visibility ------------------------------------------------------------
+    local function RuleGet(key)
+        return function()
+            local _, cfg = Workspace:Current()
+            return cfg and cfg.show and cfg.show[key]
+        end
+    end
+    local function RuleSet(key)
+        return function(value)
+            local _, cfg = Workspace:Current()
+            if cfg and cfg.show then cfg.show[key] = value end
+        end
+    end
+
+    grid:Section("When to show it", "show-rules")
+
+    UI.Dropdown(grid:FullRow("Show", { controlWidth = 150 }),
+        ns.SHOW_MODES, RuleGet("mode"), RuleSet("mode"), { apply = Apply })
+
+    local ruleRows = {}
+    local function Rule(row)
+        ruleRows[#ruleRows + 1] = row
+        return row
+    end
+
+    Rule(UI.Dropdown(grid:FullRow("Combat", { controlWidth = 150 }),
+        ns.SHOW_COMBAT, RuleGet("combat"), RuleSet("combat"), { apply = Apply }))
+    Rule(UI.Dropdown(grid:FullRow("Group", { controlWidth = 150 }),
+        ns.SHOW_GROUP, RuleGet("group"), RuleSet("group"), { apply = Apply }))
+    Rule(UI.Dropdown(grid:FullRow("Target", { controlWidth = 150 }),
+        ns.SHOW_TARGET, RuleGet("target"), RuleSet("target"), { apply = Apply }))
+    Rule(UI.Dropdown(grid:FullRow("Rested", { controlWidth = 150 }),
+        ns.SHOW_RESTING, RuleGet("resting"), RuleSet("resting"), { apply = Apply }))
+
+    -- One switch per place, not a multi-select: six switches you can see the
+    -- state of beat one control you have to open to find out what is in it.
+    for _, place in ipairs(ns.SHOW_WHERE) do
+        Rule(UI.Toggle(grid:FullRow(place.text, { controlWidth = 124 }),
+            function()
+                local _, cfg = Workspace:Current()
+                local where = cfg and cfg.show and cfg.show.where
+                return where and where[place.key] and true or false
+            end,
+            function(value)
+                local _, cfg = Workspace:Current()
+                if not (cfg and cfg.show) then return end
+                cfg.show.where = cfg.show.where or {}
+                -- FALSE, never nil: the defaults are re-applied on every load
+                -- and a missing key would come back as "allowed" - unticking
+                -- a place would silently undo itself on the next reload.
+                cfg.show.where[place.key] = value and true or false
+                Apply()
+            end))
+    end
+
+    Rule(UI.Slider(grid:FullRow("Otherwise", { controlWidth = 124 }), {
+        get = RuleGet("hiddenAlpha"), set = RuleSet("hiddenAlpha"),
+        min = 0, max = 1, step = 0.05, apply = Apply,
+        format = function(v)
+            if v <= 0 then return "gone" end
+            return string.format("%d%%", math.floor(v * 100 + 0.5))
+        end,
+    }))
+
+    local ruleNote = grid:Note("", 26)
+
+    local function RefreshRules()
+        local _, cfg = Workspace:Current()
+        if not cfg then return end
+
+        local on = (cfg.show and cfg.show.mode) == "rules"
+        for _, row in ipairs(ruleRows) do row:SetRelevant(on) end
+
+        local why = ns.Visibility:Explain(cfg)
+        ruleNote:SetText(why and ("|cffff7a3dRight now:|r " .. why)
+            or "|cff888888Every rule has to agree. One you have not set cannot "
+            .. "be the reason something is missing.|r")
     end
 
     -- Reuse ---------------------------------------------------------------
@@ -1037,6 +1321,9 @@ function Workspace:BuildOptionsPane(parent, width)
         barWRow:SetRelevant(isBar)
         barHRow:SetRelevant(isBar)
         iconPlaceRow:SetRelevant(isBar)
+
+        RefreshArrangement()
+        RefreshRules()
 
         -- The spell name only exists on a bar-shaped cell, so its whole
         -- section - heading included - goes away on an icon bar rather than

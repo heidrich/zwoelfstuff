@@ -1,6 +1,6 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-06**, version **4.5.0**. Read this first.
+State as of **2026-08-07**, version **4.6.0**. Read this first.
 
 ## Where we are
 
@@ -8,15 +8,19 @@ The addon is built around Blizzard's Cooldown Manager. The previous approach —
 tracking auras directly — cannot work on this client, and establishing that
 took most of a session. Do not restart it.
 
-The window is an app in three fixed columns, and what you arrange in it now
-**renders on screen**, with an unlock mode to place it. Written, statically
-clean, **not yet run in the game** — the client was open the whole time it was
-built, so nothing here has been seen working.
+The window is an app in three fixed columns, and what you arrange in it
+**renders on screen**. Bars are placed in unlock mode and taken apart, slot by
+slot, in **build mode** — the two are one file and one overlay, at two levels.
 
-The addon was renamed from `DKstuff` to **ZwoelfStuff** in this session: repo
-folder, TOC, saved-variables key, slash command (`/zs`), junction, and the
-saved-variables file on disk. See *Open, in order* for the one step that is
-still owed.
+A bar is no longer a row of icons. It is an *arrangement*: grid, staggered,
+arc, diagonal or **puzzle**, with per-cell scale, offset, kind and visibility
+on top of it, effects that react to the cooldown, and rules that decide when it
+is on screen at all. See *Arrangements, effects and rules* for which file owns
+what, and why none of them can reach the others.
+
+Version 4.6.0 is statically clean over 24 files and **has not been run in the
+game** — the client was closed the whole time it was built. The icon work in
+4.5.0 WAS confirmed in game; everything added since has not.
 
 ## The shape of the window, and why it is that shape
 
@@ -126,21 +130,78 @@ to on and hides everything unplaced. The Settings note says what off costs.
 - Our bar frames sit at `MEDIUM`; adopted icons render at their viewer's
   strata, not ours.
 
-## Unlock mode
+## Unlock mode, and build mode
 
-`Core/EditMode.lua`, modelled on EllesmereUI's because that is what this addon
-is used next to. Panel per bar with live coordinates, drag or arrow keys
+`Core/EditMode.lua`. Two modes, and the difference is the level you work at.
+
+**Move bars.** Panel per bar with live coordinates, drag or arrow keys
 (Shift = 10), snapping to the screen centre and other bars' centres and edges
 with a guide line, Alt to suspend snapping, a cog menu, Shift + Right Click to
-hide the overlay, a grid, Escape to leave.
+hide the overlay, a grid, Escape to leave. Modelled on EllesmereUI's, because
+that is what this addon is used next to.
 
-**Positions are always centre-relative** — `point`/`relPoint` are forced to
-`CENTER` and `x`/`y` are the offset from the screen centre. That is what makes
-the readout meaningful and snapping arithmetic rather than a case analysis.
+**Build.** The mover shrinks to a title chip above the bar and every CELL gets
+a handle of its own. Drag it (snapped to the bar's `raster`, Alt for free
+hand), scroll to scale it, Tab through the slots, arrows to nudge, Delete to
+empty, right click for kind / hide / reset. The spell palette opens beside it:
+click a slot, click a spell, and the selection walks on to the next slot.
+Reachable as `/zs build`, the **Build** button on a bar card, or the switch in
+the toolbar.
 
-Two traps already paid for here: `OnMouseUp` only fires on the frame the
-button went down on (so `OnUpdate` also checks `IsMouseButtonDown`), and
-anything reading `ns.UI` at file scope must load **after** `Core/Widgets.lua`.
+**Positions are pinned-point relative.** `cfg.point` is one of the nine points
+and `x`/`y` are that point's offset from the screen centre; `relPoint` is
+always `CENTER`. Pinned by the centre a bar spreads both ways when it gains a
+row, pinned by an edge it grows away from that edge — that is what people mean
+by "grow direction". Snapping still works in CENTRE terms and converts once,
+in `OnUpdate`, because "line these two up" is about the shapes and not about
+what each one happens to be pinned by. `Screen:CentreOffset` is the
+translation; `Screen:CapturePosition` writes back for whatever point is pinned.
+
+Traps already paid for here:
+
+- `OnMouseUp` only fires on the frame the button went down on, so `OnUpdate`
+  also checks `IsMouseButtonDown` — for the bar drag AND the cell drag.
+- Anything reading `ns.UI` at file scope must load **after** `Core/Widgets.lua`.
+- A cell drag moves the cell FRAME directly and only commits on mouse up. A
+  full render pass walks Blizzard's frame pools, and running that per mouse
+  move is how a smooth drag becomes a stutter.
+- `target and SlotRect(target)` keeps only the FIRST return value. Lua's `and`
+  truncates; the size came back nil. Use an `if`.
+
+## Arrangements, effects and rules — where each one lives
+
+Three files added in 4.6.0, each one deliberately unable to reach the others:
+
+- **`Core/Layout.lua`** — pure geometry. Given a bar's settings it answers
+  "cell 7 sits HERE and is THIS big", in centres, in the bar's own coordinates
+  with +y up. Five arrangements: grid, staggered, arc, diagonal, **puzzle**.
+  `Screen` takes the bounding box, sizes the bar frame to it and anchors each
+  cell by its centre — so a bar is always exactly as big as what it holds, and
+  the overlay, snapping and attachment work for a circle as well as for a row.
+  Nothing in the file creates a frame or reads the game.
+
+  **Puzzle is not a special case.** Every arrangement adds the cell's own
+  offset on top of what the lattice worked out, so nudging one icon out of a
+  row and building a free-form layout are the same edit.
+
+- **`Core/Visibility.lua`** — when a bar is on screen. Every rule is an AND and
+  every default is "any", so a rule you have not set can never be the reason
+  something is missing. Sampled once per event, never polled. The instance
+  types (`party`/`raid`/`arena`/`pvp`/`scenario`/`none`) are read off
+  `EllesmereUI_Conditions.lua` on this machine, not written from memory, and an
+  unknown type lets the bar through on purpose.
+
+- **`Core/Effects.lua`** — flash, edge, nag, warning, greying. Driven by
+  `isActive` + `isOnGCD` off the Cooldown Manager info table (field names read
+  off `EllesmereUICdmHooks.lua` / `CdmFakeActive.lua`). **Without the GCD test
+  every spell "comes off cooldown" every 1.5 seconds and the flash is a
+  strobe.** Both fields can be secret on 12.0, so both go through
+  `ns.CanCompute` and an unreadable state means *do nothing*, never *guess*.
+
+  Remaining time is deliberately **not** read for adopted frames: there is no
+  field for it and the widget's timing is a duration object on this patch. Do
+  not go looking for `GetCooldownTimes` — it is not in use by any addon on this
+  machine, only in a type-annotation file.
 
 ## The one thing to not re-derive
 
@@ -168,12 +229,15 @@ client patch lands.
 | `Core/CDM.lua` | the Cooldown Manager layer — viewers, item frames, pinning |
 | `Core/Auras.lua` | procs the CDM does not carry — recorded per class+spec |
 | `Core/KnownProcs.lua` | the shipped proc database, by class and spec |
-| `Core/Bars.lua` | the bar data model — grids of cells |
+| `Core/Bars.lua` | the bar data model — cells, arrangement, per-cell overrides |
+| `Core/Layout.lua` | pure geometry: where every cell of a bar ends up |
+| `Core/Visibility.lua` | the rules that decide when a bar is on screen |
+| `Core/Effects.lua` | flash, edge, nag, warning — what a cell does beyond sitting there |
 | `Core/Glow.lua` | self-built proc glow, no external library |
 | `Core/Minimap.lua` | self-built minimap button |
 | `Core/Widgets.lua` | the design system — every control, one look |
 | `Core/Screen.lua` | the bars on screen — adopted CDM frames, drawn aura cells |
-| `Core/EditMode.lua` | unlock mode — movers, snapping, guides, the cog menu |
+| `Core/EditMode.lua` | unlock AND build mode — movers, cell handles, palette, snapping |
 | `Core/Changelog.lua` | changelog data |
 | `Core/OptionsBars.lua` | the middle (bar cards) and the right column (spells / bar options) |
 | `Core/Options.lua` | the app window: the three columns and the secondary pages |
@@ -382,12 +446,12 @@ basics. The parked stack (`Engine`, `Catalog`, `Probe`, `Groups`, `CoTanks`,
 `OptionsGroups`) is what waits for it, plus the owner's tank ideas, which they
 deliberately held back until the basics stand.
 
-1. **The window still reads "altbacken" and wastes space.** Only the WIDTHS
-   have been changed so far (1360x760, rail 168, settings column 400) — that
-   answered "make the right column wider", not the density complaint. Row
-   height, section spacing and card padding are untouched: `UI.ROW_H`,
-   `UI.SECTION_H`, `UI.ROW_GAP`, `UI.COL_GAP` in `Core/Widgets.lua`, plus the
-   `UI.Card` and `UI.Page` paddings. **This is the next job.**
+1. **Run 4.6.0 in the game.** None of the arrangement engine, build mode,
+   effects or visibility rules has been seen working — the client was closed
+   the whole time it was built. First pass to make: open `/zs`, switch a bar to
+   **Arc**, check the preview curves and the screen agrees; then `/zs build`,
+   drag a cell, scroll it, and confirm the bar frame resizes around it on mouse
+   up. Then switch **Flash** on and watch one cooldown land.
 2. **Owner-side data**: confirm the remaining proc durations by letting one run
    out *without* casting the ability, then `/zs auras export` for Blood and
    paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
@@ -395,6 +459,24 @@ deliberately held back until the basics stand.
 4. **Logo** — SVG for the repo, TGA for the game. WoW cannot load SVG.
    Interim: `## IconTexture: 1380870`.
 5. After 12.1 lands: un-park the aura stack and re-test it.
+
+### The window density pass is DONE, and what it changed
+
+The complaint was *"altbacken, viel space wasted"*. The cause was that every
+single setting was a filled card 38px tall with a gap around it — forty of
+those is a brick wall however good the colours are.
+
+What replaced it, in `Core/Widgets.lua`: rows are **flat**, 28px, separated by
+a one-pixel hairline instead of a gap, and only the row under the cursor gets a
+surface. Section headings are smaller with their air ABOVE them, and the fold
+marker is a drawn plus/minus — `v` and `>` are two different glyph widths and
+shifted the caption every time a section folded. Buttons, switches and steppers
+all came down one notch.
+
+`UI.CellGrid` no longer lays itself out. It asks `ns.Layout.Build` — the same
+engine the screen uses — and hit-tests the cursor against the real rectangles.
+A second implementation would have drifted from the first the day either
+changed, and an arc has no columns to divide by anyway.
 
 ### The icons are FIXED, and the lesson cost a day
 

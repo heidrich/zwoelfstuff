@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.5.0
+## Version: 4.6.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: 1380870
@@ -27,6 +27,12 @@ Core\CDM.lua
 # before the logic that reads it and stays a file you can paste into.
 Core\KnownProcs.lua
 Core\Auras.lua
+# The arrangement engine, the visibility rules and the effects. All three are
+# read by Bars.lua at file scope - BAR_DEFAULTS is built out of their default
+# tables - so all three load above it.
+Core\Layout.lua
+Core\Visibility.lua
+Core\Effects.lua
 Core\Bars.lua
 Core\Glow.lua
 Core\Minimap.lua

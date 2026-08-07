@@ -75,15 +75,25 @@ C.line     = { C.separator[1], C.separator[2], C.separator[3], 1 }
 
 UI.C = C
 
-UI.ROW_H      = 38
-UI.ROW_GAP    = 4
-UI.SECTION_H  = 32
-UI.COL_GAP    = 16
+-- Row geometry, and it is deliberately TIGHT.
+--
+-- Every row used to be a filled card 38 pixels tall with a 4 pixel gap, which
+-- put a visible box around every single setting. Forty of those is a brick
+-- wall, and it reads as heavy however good the colours are - the complaint
+-- was "altbacken, viel space wasted" and it was right.
+--
+-- What replaced it: rows are FLAT, separated by a hairline instead of a gap,
+-- and only the row under the cursor gets a surface. The eye follows a list
+-- rather than counting boxes, and the same page shows a third more of itself.
+UI.ROW_H      = 28
+UI.ROW_GAP    = 1
+UI.SECTION_H  = 34
+UI.COL_GAP    = 18
 
 -- The one spacing rhythm. Everything in the window is a multiple of it, which
 -- is most of what makes a layout look considered rather than assembled.
-UI.PAD    = 16
-UI.GAP    = 10
+UI.PAD    = 14
+UI.GAP    = 8
 UI.RADIUS = 0
 
 local function Tex(parent, layer, r, g, b, a)
@@ -125,7 +135,7 @@ end
 ---------------------------------------------------------------------------
 function UI.Button(parent, text, width, onClick, style)
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(width or 100, 26)
+    btn:SetSize(width or 100, 24)
 
     -- Three weights, and they are not interchangeable:
     --   nil        an ordinary action
@@ -186,26 +196,44 @@ local CONTROL_W = 150
 function UI.Row(parent, text, opts)
     opts = opts or {}
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(opts.tall and 54 or UI.ROW_H)
+    row:SetHeight(opts.tall and 42 or UI.ROW_H)
 
-    row.bg = Fill(row, "BACKGROUND", C.rowBg)
+    -- Flat until you point at it. The surface is the CURSOR's, not the row's,
+    -- which is what turns forty boxes into one list. Hidden rather than
+    -- coloured-to-match: a fill drawn every frame at the background colour is
+    -- still a fill.
+    row.bg = Fill(row, "BACKGROUND", C.surface)
+    row.bg:Hide()
+
+    -- The hairline that does the separating instead. One pixel, one step off
+    -- the background, and it stops short of both edges so a column of rows
+    -- reads as a list rather than as a table.
+    row.rule = Tex(row, "BACKGROUND", C.separator[1], C.separator[2],
+        C.separator[3], 1)
+    row.rule:SetHeight(1)
+    row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 2, 0)
+    row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 0)
 
     row.label = UI.Label(row, text, 12, C.text)
-    row.label:SetPoint("LEFT", row, "LEFT", 12, opts.sublabel and 7 or 0)
+    row.label:SetPoint("LEFT", row, "LEFT", 8, opts.sublabel and 7 or 0)
     row.label:SetWordWrap(false)
 
     if opts.sublabel then
         row.sub = UI.Label(row, opts.sublabel, 10, C.textFaint)
-        row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -2)
+        row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -1)
         row.sub:SetWordWrap(false)
     end
 
     row.slot = CreateFrame("Frame", nil, row)
-    row.slot:SetPoint("RIGHT", row, "RIGHT", -12, 0)
-    row.slot:SetSize(opts.controlWidth or CONTROL_W, row:GetHeight() - 10)
+    row.slot:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.slot:SetSize(opts.controlWidth or CONTROL_W, row:GetHeight() - 6)
 
     -- The label must never run under the control.
     row.label:SetPoint("RIGHT", row.slot, "LEFT", -8, 0)
+
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self) self.bg:Show() end)
+    row:SetScript("OnLeave", function(self) self.bg:Hide() end)
 
     row.SetRelevant = function(self, relevant)
         self.dkSkip = not relevant
@@ -224,30 +252,54 @@ function UI.SectionHeader(parent, text, onToggle, isOpen)
         or CreateFrame("Frame", nil, parent)
     header:SetHeight(UI.SECTION_H)
 
+    -- The air goes ABOVE the heading, not below it. A heading belongs to what
+    -- follows it, and spacing it evenly is what makes a long page read as one
+    -- undifferentiated column.
     local caption = text:upper()
-    local label = UI.Label(header, caption, 11, C.textDim, "")
-    label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 14 or 2, 8)
+    local label = UI.Label(header, caption, 10, C.textDim, "")
+    label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 13 or 2, 7)
 
     local line = Tex(header, "ARTWORK", C.line[1], C.line[2], C.line[3], C.line[4])
-    line:SetPoint("BOTTOMLEFT", label, "BOTTOMRIGHT", 10, 4)
-    line:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -2, 8)
+    line:SetPoint("BOTTOMLEFT", label, "BOTTOMRIGHT", 8, 4)
+    line:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -2, 7)
     line:SetHeight(1)
 
     if onToggle then
-        local marker = UI.Label(header, "", 10, C.textDim)
-        marker:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 2, 8)
+        -- A triangle drawn from two rectangles rather than a letter. "v" and
+        -- ">" are two different glyph widths and two different baselines, so
+        -- the caption next to them shifted every time a section was folded.
+        local marker = header:CreateTexture(nil, "ARTWORK")
+        marker:SetColorTexture(C.textDim[1], C.textDim[2], C.textDim[3], 1)
+        marker:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 2, 12)
+        marker:SetSize(7, 2)
+
+        local marker2 = header:CreateTexture(nil, "ARTWORK")
+        marker2:SetColorTexture(C.textDim[1], C.textDim[2], C.textDim[3], 1)
 
         header:SetScript("OnClick", onToggle)
         header:SetScript("OnEnter", function()
             label:SetTextColor(C.text[1], C.text[2], C.text[3])
+            marker:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
+            marker2:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
         end)
         header:SetScript("OnLeave", function()
             label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            marker:SetColorTexture(C.textDim[1], C.textDim[2], C.textDim[3], 1)
+            marker2:SetColorTexture(C.textDim[1], C.textDim[2], C.textDim[3], 1)
         end)
 
         header.Refresh = function()
             local open = isOpen()
-            marker:SetText(open and "v" or ">")
+            marker2:ClearAllPoints()
+            if open then
+                -- Open: a minus. Closed: a plus. Two rectangles, one of which
+                -- is simply hidden - and both states are exactly as wide.
+                marker2:Hide()
+            else
+                marker2:SetSize(2, 7)
+                marker2:SetPoint("CENTER", marker, "CENTER", 0, 0)
+                marker2:Show()
+            end
             label:SetText(caption)
         end
         header.Refresh()
@@ -261,7 +313,7 @@ end
 ---------------------------------------------------------------------------
 function UI.Toggle(row, get, set)
     local toggle = CreateFrame("Button", nil, row.slot)
-    toggle:SetSize(42, 20)
+    toggle:SetSize(38, 18)
     toggle:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
 
     local track = Fill(toggle, "BACKGROUND", C.control)
@@ -269,7 +321,7 @@ function UI.Toggle(row, get, set)
     edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     local knob = Tex(toggle, "ARTWORK", 1, 1, 1, 1)
-    knob:SetSize(16, 16)
+    knob:SetSize(14, 14)
 
     toggle.Refresh = function()
         local on = get() and true or false
@@ -306,7 +358,7 @@ end
 function UI.Counter(row, cfg)
     local holder = CreateFrame("Frame", nil, row.slot)
     holder:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-    holder:SetSize(96, 24)
+    holder:SetSize(92, 22)
 
     local value = UI.Label(holder, "", 13, C.text)
     value:SetPoint("CENTER", holder, "CENTER", 0, 0)
@@ -323,11 +375,11 @@ function UI.Counter(row, cfg)
     end
 
     local minus = UI.Button(holder, "-", 26, function() Step(-1) end)
-    minus:SetHeight(22)
+    minus:SetHeight(20)
     minus:SetPoint("LEFT", holder, "LEFT", 0, 0)
 
     local plus = UI.Button(holder, "+", 26, function() Step(1) end)
-    plus:SetHeight(22)
+    plus:SetHeight(20)
     plus:SetPoint("RIGHT", holder, "RIGHT", 0, 0)
 
     holder.Refresh = function()
@@ -1112,22 +1164,29 @@ end
 ---------------------------------------------------------------------------
 -- CellGrid - the bar, laid out as you will see it on screen
 --
--- Rows x columns of cells. An empty cell is a real place you can click, not
--- a gap, which is what makes "add a row" mean something before it is filled.
--- Left click picks the spell for that cell, right click clears it, dragging
--- one cell onto another swaps them.
+-- An empty cell is a real place you can click, not a gap, which is what makes
+-- "add a row" mean something before it is filled. Left click picks the spell
+-- for that cell, right click clears it, dragging one cell onto another swaps
+-- them.
+--
+-- IT ASKS THE SAME ENGINE THE SCREEN DOES.
+--
+-- The positions come from Core/Layout.lua, not from a rows-times-columns loop
+-- of its own. That is the difference between a preview and a promise: an arc
+-- is an arc here, a diagonal slants, a puzzle shows every cell exactly where
+-- it was dragged, and one cell scaled up is bigger in the editor too. A second
+-- implementation would drift from the first one the day either changed.
 --
 -- cfg = {
---   cellSize()  -> width, height
---   gaps()      -> spacing, lineSpacing
---   rows(), columns()
+--   layout()      -> slots, box   straight out of ns.Layout.Build
 --   content(cell) -> spellID or nil
---   onPick(cell), onClear(cell), onMove(from, to)
+--   selected(), onPick(cell), onClear(cell), onMove(from, to)
 -- }
 ---------------------------------------------------------------------------
 function UI.CellGrid(parent, cfg)
     local grid = CreateFrame("Frame", nil, parent)
     grid.cells = {}
+    grid.slots = {}
 
     -- Where a dragged cell would land: an accent outline rather than a wash
     -- over the icon, so it can be fully opaque and still show what is under it.
@@ -1137,22 +1196,30 @@ function UI.CellGrid(parent, cfg)
     markerEdge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
     marker:Hide()
 
-    local function Geometry()
-        local w, h = cfg.cellSize()
-        local sx, sy = cfg.gaps()
-        return w, h, sx, sy
+    -- One slot, as a rectangle measured from the grid's top left. The engine
+    -- answers in centres against the arrangement's own origin; this is the one
+    -- place that converts, so nothing below has to think about it twice.
+    local function SlotRect(index)
+        local slot = grid.slots[index]
+        local box = grid.box
+        if not (slot and box) then return nil end
+
+        local left = box.centreX - box.width / 2
+        local top  = box.centreY + box.height / 2
+        return slot.x - slot.w / 2 - left,
+               -(top - (slot.y + slot.h / 2)),
+               slot.w, slot.h
     end
 
     local function CellPosition(index)
-        local w, h, sx, sy = Geometry()
-        local columns = math.max(1, cfg.columns())
-        local zero = index - 1
-        local col, row = zero % columns, math.floor(zero / columns)
-        return col * (w + sx), -row * (h + sy)
+        local x, y = SlotRect(index)
+        return x or 0, y or 0
     end
 
+    -- Hit-tested against the real rectangles rather than divided out of a
+    -- lattice. An arc has no columns to divide by, and a puzzle has no lattice
+    -- at all - the arithmetic version would answer confidently and wrongly.
     local function CellUnderCursor()
-        local w, h, sx, sy = Geometry()
         local scale = grid:GetEffectiveScale()
         local cursorX, cursorY = GetCursorPosition()
         cursorX, cursorY = cursorX / scale, cursorY / scale
@@ -1160,14 +1227,18 @@ function UI.CellGrid(parent, cfg)
         local left, top = grid:GetLeft(), grid:GetTop()
         if not left or not top then return nil end
 
-        local columns = math.max(1, cfg.columns())
-        local col = math.floor((cursorX - left) / (w + sx))
-        local row = math.floor((top - cursorY) / (h + sy))
-        if col < 0 or col >= columns or row < 0 then return nil end
+        local localX, localY = cursorX - left, cursorY - top
 
-        local index = row * columns + col + 1
-        if index < 1 or index > cfg.rows() * columns then return nil end
-        return index
+        -- Backwards, so the cell drawn LAST - the one on top where two
+        -- overlap - is the one the cursor is understood to be over.
+        for index = #grid.slots, 1, -1 do
+            local x, y, w, h = SlotRect(index)
+            if x and localX >= x and localX <= x + w
+                and localY <= y and localY >= y - h then
+                return index
+            end
+        end
+        return nil
     end
 
     local function NewCell(index)
@@ -1260,9 +1331,11 @@ function UI.CellGrid(parent, cfg)
             self.icon:SetAlpha(0.3)
             grid:SetScript("OnUpdate", function()
                 local target = CellUnderCursor()
-                if target then
-                    local x, y = CellPosition(target)
-                    local w, h = Geometry()
+                -- Not `target and SlotRect(target)`: `and` keeps only the
+                -- FIRST return value, so the size would silently be nil.
+                local x, y, w, h
+                if target then x, y, w, h = SlotRect(target) end
+                if x then
                     marker:ClearAllPoints()
                     marker:SetPoint("TOPLEFT", grid, "TOPLEFT", x - 2, y + 2)
                     marker:SetSize(w + 4, h + 4)
@@ -1292,19 +1365,23 @@ function UI.CellGrid(parent, cfg)
 
     -- Returns the height it ended up needing, so the page can lay out below.
     grid.Refresh = function()
-        local w, h, sx, sy = Geometry()
-        local rows = math.max(1, cfg.rows())
-        local columns = math.max(1, cfg.columns())
-        local total = rows * columns
+        local slots, box = cfg.layout()
+        grid.slots, grid.box = slots, box
+        local total = #slots
 
         for index = 1, total do
             local cell = grid.cells[index] or NewCell(index)
-            local x, y = CellPosition(index)
+            local x, y, w, h = SlotRect(index)
 
             cell:ClearAllPoints()
             cell:SetPoint("TOPLEFT", grid, "TOPLEFT", x, y)
             cell:SetSize(w, h)
             cell.dkIndex = index
+
+            -- A cell hidden by its own override still has to be clickable in
+            -- the editor, or there would be no way to bring it back. It is
+            -- shown at a fraction instead, which also says WHY it is faint.
+            cell:SetAlpha(slots[index].hidden and 0.3 or 1)
 
             local spellID = cfg.content(index)
             cell.dkSpellID = spellID
@@ -1353,10 +1430,8 @@ function UI.CellGrid(parent, cfg)
 
         for index = total + 1, #grid.cells do grid.cells[index]:Hide() end
 
-        local width = columns * w + (columns - 1) * sx
-        local height = rows * h + (rows - 1) * sy
-        grid:SetSize(math.max(width, 1), math.max(height, 1))
-        return height
+        grid:SetSize(math.max(box.width, 1), math.max(box.height, 1))
+        return box.height
     end
 
     return grid
@@ -1553,7 +1628,7 @@ function Grid:Note(text, height)
     note:SetWidth(self.width)
     note:SetJustifyV("TOP")
     -- Width is set, so GetStringHeight reports the wrapped height.
-    return self:Wide(note, height or (note:GetStringHeight() + 10))
+    return self:Wide(note, height or (note:GetStringHeight() + 7))
 end
 
 -- A half-width row. Two consecutive calls share a line.

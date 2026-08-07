@@ -49,30 +49,38 @@ ns.Screen = Screen
 ---------------------------------------------------------------------------
 -- Where a cell sits, and how big it is
 --
--- Everything is multiplied by the bar's scale HERE rather than through
+-- The arrangement itself lives in Core/Layout.lua: it is pure geometry and it
+-- has no business being tangled up with frames. This file asks it once per
+-- bar and then places what it is told.
+--
+-- Everything is multiplied by the bar's scale in THAT file rather than through
 -- SetScale, because adopted frames are not our children - see the header.
 ---------------------------------------------------------------------------
 local function Metrics(cfg)
     local scale = cfg.scale or 1
-    local width, height
-
-    if cfg.kind == "bar" then
-        width  = (cfg.barWidth or 200) * scale
-        height = (cfg.barHeight or 24) * scale
-    else
-        width  = (cfg.iconSize or 40) * scale
-        height = width
-    end
-
+    local width, height = ns.Layout.CellSize(cfg, nil)
     return width, height, (cfg.spacing or 4) * scale, (cfg.lineSpacing or 4) * scale
 end
 
-local function CellOffset(cfg, index, width, height, spacing, lineSpacing)
-    local columns = math.max(1, cfg.columns or 1)
-    local column  = (index - 1) % columns
-    local row     = math.floor((index - 1) / columns)
-    return column * (width + spacing), -(row * (height + lineSpacing))
+-- Which point of a frame sits where, in screen coordinates. Needed because a
+-- bar can be pinned by any of its nine points now - grow-to-the-right is
+-- "pinned by the left edge", and the stored x/y are that point's offset.
+local function PointOffset(frame, point)
+    local left, bottom = frame:GetLeft(), frame:GetBottom()
+    if not (left and bottom) then return nil end
+
+    local width, height = frame:GetWidth(), frame:GetHeight()
+    local x, y = left + width / 2, bottom + height / 2
+
+    if point:find("LEFT") then x = left
+    elseif point:find("RIGHT") then x = left + width end
+
+    if point:find("BOTTOM") then y = bottom
+    elseif point:find("TOP") then y = bottom + height end
+
+    return x, y
 end
+ns.PointOffset = PointOffset
 
 ---------------------------------------------------------------------------
 -- Aura cells - our own icon, our own clock
@@ -150,8 +158,9 @@ end
 
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
 -- icon-shaped ones are just the icon.
-local function LayoutAuraVisual(aura, cfg, width, height)
-    if cfg.kind == "bar" then
+local function LayoutAuraVisual(aura, cfg, slot)
+    local width, height = slot.w, slot.h
+    if slot.kind == "bar" then
         -- Square, wherever it sits. Same rule as an adopted icon: a spell
         -- icon stretched to the width of a bar is what a tracking bar must
         -- never look like.
@@ -272,11 +281,15 @@ end
 -- cell. Everything else is an icon and must stay SQUARE: stretching a spell
 -- icon across the width of a bar is the one thing a tracking bar must never
 -- look like, and it is what happens if a cell simply hands over its size.
-local function ItemGeometry(cfg, cell, item, width, height)
+--
+-- The cell's OWN kind decides, not the bar's: one cell in a row of icons can
+-- be a tracking bar, which is the whole point of the per-cell override.
+local function ItemGeometry(cfg, cell, item, slot)
     local viewer = itemViewer[item]
     local isBarShaped = viewer ~= nil and viewer.kind == "bar"
+    local width, height = slot.w, slot.h
 
-    if cfg.kind ~= "bar" or isBarShaped then
+    if slot.kind ~= "bar" or isBarShaped then
         return { "TOPLEFT", cell, "TOPLEFT", 0, 0 }, width, height, true
     end
 
@@ -325,6 +338,13 @@ function Screen:BarFrame(index)
     return barFrames[index]
 end
 
+-- One cell's frame. Build mode puts a handle on exactly this, so what you
+-- grab on screen is the thing that is actually drawn there.
+function Screen:CellFrame(barIndex, cellIndex)
+    local bar = barFrames[barIndex]
+    return bar and bar.cells[cellIndex] or nil
+end
+
 function Screen:ApplyPosition(index)
     local cfg = ns.db.bars[index]
     local bar = barFrames[index]
@@ -354,18 +374,35 @@ end
 -- from the screen centre. Used when a bar is detached: its stored x/y are
 -- from before it was attached, and dropping it somewhere it has not been for
 -- an hour is the kind of surprise that makes people stop using a feature.
+-- Written for whichever point the bar is PINNED by, which is no longer always
+-- its centre: a bar pinned by its left edge grows to the right, and that is
+-- the setting people mean by "grow direction".
 function Screen:CapturePosition(index)
     local cfg = ns.db.bars[index]
     local bar = barFrames[index]
     if not (cfg and bar) then return end
 
+    local pointX, pointY = PointOffset(bar, cfg.point or "CENTER")
+    local screenX, screenY = UIParent:GetCenter()
+    if not (pointX and screenX) then return end
+
+    cfg.relPoint = "CENTER"
+    cfg.x = math.floor(pointX - screenX + 0.5)
+    cfg.y = math.floor(pointY - screenY + 0.5)
+end
+
+-- Where the bar's CENTRE is, as an offset from the screen centre. Snapping
+-- works in centre terms whatever the bar is pinned by, so unlock mode needs
+-- the translation in one place.
+function Screen:CentreOffset(index)
+    local bar = barFrames[index]
+    if not bar then return nil end
+
     local centreX, centreY = bar:GetCenter()
     local screenX, screenY = UIParent:GetCenter()
-    if not (centreX and screenX) then return end
+    if not (centreX and screenX) then return nil end
 
-    cfg.point, cfg.relPoint = "CENTER", "CENTER"
-    cfg.x = math.floor(centreX - screenX + 0.5)
-    cfg.y = math.floor(centreY - screenY + 0.5)
+    return centreX - screenX, centreY - screenY
 end
 
 ---------------------------------------------------------------------------
@@ -382,6 +419,11 @@ function Screen:Render()
 
     RebuildItemIndex()
     wipe(claimedBy)
+
+    -- The effect ticker walks a list that this pass rebuilds. A cell that
+    -- stops being drawn has to stop being ticked, and "remember to
+    -- unregister" is the kind of rule that survives one feature.
+    ns.Effects.BeginPass()
 
     local claimedNow = {}
 
@@ -402,18 +444,37 @@ function Screen:Render()
             barFrames[index] = bar
         end
 
-        local width, height, spacing, lineSpacing = Metrics(cfg)
-        -- Resolved once per bar and handed to BOTH renderers. Read separately
-        -- by each, "auto" would eventually mean two different sizes.
-        local style = ns.Bars:Style(cfg, height)
-        local columns = math.max(1, cfg.columns or 1)
-        local rows    = math.max(1, cfg.rows or 1)
-        local count   = columns * rows
+        local _, _, spacing, lineSpacing = Metrics(cfg)
+        local count = ns.Bars:CellCount(cfg)
 
-        bar:SetSize(columns * width + (columns - 1) * spacing,
-                    rows * height + (rows - 1) * lineSpacing)
+        -- One call, and everything about the arrangement is decided: grid,
+        -- staggered, arc, diagonal or puzzle, per-cell sizes included.
+        local slots, box = ns.Layout.Build(cfg, count, spacing, lineSpacing)
+
+        -- Auto text sizes follow the CELL, so a bar with one enlarged icon in
+        -- it gets a bigger number on that one. Cached by height, because most
+        -- bars have exactly one size and building the table per cell would be
+        -- a table per cell per pass.
+        local styles = {}
+        local function StyleFor(height)
+            local key = math.floor(height + 0.5)
+            local style = styles[key]
+            if not style then
+                style = ns.Bars:Style(cfg, height)
+                styles[key] = style
+            end
+            return style
+        end
+
+        -- Whether the rules let this bar be seen at all, and what it looks
+        -- like when they do not. See Core/Visibility.lua.
+        local factor = ns.Visibility:Factor(cfg)
+        local visible = factor > 0 or self.unlocked
+
+        bar:SetSize(box.width, box.height)
         self:ApplyPosition(index)
-        bar:SetShown(cfg.enabled ~= false)
+        bar:SetShown(visible)
+        bar:SetAlpha(self.unlocked and 1 or factor)
 
         for cellIndex = 1, count do
             local cell = bar.cells[cellIndex]
@@ -422,15 +483,22 @@ function Screen:Render()
                 bar.cells[cellIndex] = cell
             end
 
-            cell:SetSize(width, height)
+            local slot = slots[cellIndex]
+            cell:SetSize(slot.w, slot.h)
             cell:ClearAllPoints()
-            local offsetX, offsetY = CellOffset(cfg, cellIndex, width, height,
-                spacing, lineSpacing)
-            cell:SetPoint("TOPLEFT", bar, "TOPLEFT", offsetX, offsetY)
-            cell:Show()
+            -- By its CENTRE, against the bar's centre. A corner is no use
+            -- here: an arc has no corner to measure from, and a cell that is
+            -- scaled up should grow around itself rather than shove the row.
+            cell:SetPoint("CENTER", bar, "CENTER",
+                slot.x - box.centreX, slot.y - box.centreY)
+            cell:SetShown(not slot.hidden)
 
-            self:PaintCell(bar, cell, cfg, width, height, claimedNow,
-                auraBySpell, style)
+            if slot.hidden then
+                self:BlankCell(cell)
+            else
+                self:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell,
+                    StyleFor(slot.h), factor)
+            end
         end
 
         -- Cells left over from a smaller grid. The aura record has to go with
@@ -438,11 +506,7 @@ function Screen:Render()
         for cellIndex = count + 1, #bar.cells do
             local cell = bar.cells[cellIndex]
             cell:Hide()
-            cell.auraEntry, cell.conflict = nil, nil
-            if cell.item then
-                ns.CDM:Release(cell.item)
-                cell.item = nil
-            end
+            self:BlankCell(cell)
         end
     end
 
@@ -489,8 +553,9 @@ end
 -- Ours, on our own cell, because the name is not something Blizzard's icon
 -- frame carries - and a bar cell holding nothing but a square icon in one
 -- corner reads as broken rather than as deliberate.
-function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth, style)
-    if cfg.kind ~= "bar" or not style.spellName.show then
+function Screen:PaintCaption(cell, cfg, spellID, slot, iconWidth, style)
+    local width = slot.w
+    if slot.kind ~= "bar" or not style.spellName.show then
         if cell.caption then cell.caption:Hide() end
         return
     end
@@ -522,8 +587,20 @@ function Screen:PaintCaption(cell, cfg, spellID, width, height, iconWidth, style
     cell.caption:Show()
 end
 
+-- A cell that is showing nothing at all: hidden by its own override, or empty.
+function Screen:BlankCell(cell)
+    if cell.item then
+        ns.CDM:Release(cell.item)
+        cell.item = nil
+    end
+    if cell.aura then cell.aura:Hide() end
+    if cell.caption then cell.caption:Hide() end
+    ns.Effects.Silence(cell)
+    cell.spellID, cell.auraEntry, cell.conflict = nil, nil, nil
+end
+
 -- One cell: adopt, draw, or leave empty.
-function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell, style)
+function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, factor)
     local spellID = cfg.cells[cell.index]
 
     -- Whatever this cell held last time is handed back before anything else,
@@ -534,9 +611,7 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
     end
 
     if not spellID then
-        if cell.aura then cell.aura:Hide() end
-        if cell.caption then cell.caption:Hide() end
-        cell.spellID, cell.auraEntry, cell.conflict = nil, nil, nil
+        self:BlankCell(cell)
         return
     end
 
@@ -553,16 +628,29 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
         if cell.aura then cell.aura:Hide() end
 
         local anchor, itemWidth, itemHeight, visible =
-            ItemGeometry(cfg, cell, item, width, height)
+            ItemGeometry(cfg, cell, item, slot)
 
         if anchor then
             ns.CDM:Pin(item, anchor, itemWidth, itemHeight)
         end
-        ns.CDM:SetAlpha(item, visible and (cfg.alpha or 1) or 0)
+        -- The visibility rule multiplies in HERE, not on the bar frame: an
+        -- adopted icon is Blizzard's child and does not inherit our alpha.
+        ns.CDM:SetAlpha(item,
+            visible and (cfg.alpha or 1) * (self.unlocked and 1 or factor) or 0)
         ns.CDM:Skin(item, style)
 
-        self:PaintCaption(cell, cfg, spellID, width, height,
+        self:PaintCaption(cell, cfg, spellID, slot,
             visible and itemWidth or 0, style)
+
+        -- The flash, the edge and the nag. Greying is a vertex colour on
+        -- Blizzard's own icon texture - the same kind of decoration change
+        -- the skin pass already makes, and never a Hide.
+        ns.Effects.Track(cell, cfg, spellID, ns.CDM:ItemCooldownID(item), false,
+            function(value)
+                if item.Icon then
+                    pcall(item.Icon.SetVertexColor, item.Icon, value, value, value)
+                end
+            end)
         return
     end
 
@@ -578,7 +666,7 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
 
     local aura = BuildAuraVisual(cell)
     aura:Show()
-    LayoutAuraVisual(aura, cfg, width, height)
+    LayoutAuraVisual(aura, cfg, slot)
     StyleAuraVisual(aura, style)
 
     -- Carried on the cell, because the glow events repaint it later and have
@@ -594,6 +682,12 @@ function Screen:PaintCell(bar, cell, cfg, width, height, claimedNow, auraBySpell
     -- this build can no longer raise.
     cell.auraEntry = auraBySpell[spellID]
     PaintAura(cell, cell.active and true or false)
+
+    -- Ours, so the effects get a real remaining time out of the clock we run
+    -- ourselves. Adopted frames deliberately do not - see Core/Effects.lua.
+    ns.Effects.Track(cell, cfg, spellID, nil, true, function(value)
+        aura.icon:SetVertexColor(value, value, value)
+    end)
 end
 
 -- Everything the user did not place. Alpha only - see the header.
@@ -675,8 +769,12 @@ function Screen:StartAura(parentSpellID)
         local duration = entry.duration or 0
         if duration > 0 then
             cell.aura.cd:SetCooldown(GetTime(), duration)
+            -- The effect ticker has no clock of its own; this is the only
+            -- place that knows when the thing it is watching runs out.
+            ns.Effects.NoteAuraEnd(cell, GetTime() + duration)
         else
             ClearCooldown(cell.aura.cd)
+            ns.Effects.NoteAuraEnd(cell, nil)
         end
         PaintAura(cell, true)
     end)
@@ -758,6 +856,14 @@ end
 -- see and grab. Nothing here changes what is saved.
 ---------------------------------------------------------------------------
 function Screen:SetUnlocked(unlocked)
+    self.unlocked = unlocked and true or false
+
+    -- A bar hidden by its own rule - "only in a raid" - has to come back while
+    -- you are arranging it, or the rule you just wrote makes the thing you are
+    -- editing disappear. Everything is drawn at full strength while unlocked
+    -- and goes back to its rule on the next pass.
+    self:Render()
+
     for index, bar in ipairs(barFrames) do
         local cfg = ns.db.bars[index]
         if cfg then
@@ -801,6 +907,11 @@ end)
 function Screen:Start()
     ns.Bars:OnChanged(function() Screen:Render() end)
     ns.CDM:OnChanged(function() Screen:Render() end)
+
+    -- Combat, a zone change, a group forming: everything that can change the
+    -- answer to "should this bar be on screen". Event-driven, never polled.
+    ns.Visibility:Start()
+    ns.Visibility:OnChanged(function() Screen:Render() end)
 
     -- Media arrives late: an addon loading after this one registers its fonts
     -- and textures when IT is ready. Without this, a bar set to a texture

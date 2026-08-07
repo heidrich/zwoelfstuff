@@ -8,6 +8,24 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.6.0",
+        date = "2026-08-07",
+        lines = {
+            "A bar is no longer a row of icons. It is an ARRANGEMENT, and there are five: Grid, Staggered, Arc, Diagonal and Puzzle. All five come out of one engine, and the preview in the window asks that same engine - so an arc curves in the editor too, and what you see there is what lands on screen.",
+            "Arc puts the cells around a circle: set the span, where it starts and the radius, and a full 360 closes the ring. Leave the radius on auto and it works itself out from the cell size and how many there are, so four big icons and twelve small ones are both evenly spaced.",
+            "Puzzle is the one to try. No lattice at all - every cell sits exactly where you dragged it. And it is not a separate mode bolted on: every arrangement adds each cell's own offset on top of whatever the lattice worked out, so nudging one icon out of a neat row and building a free-form layout are the same edit.",
+            "With them: fill rows first or columns first, read left-to-right or right-to-left, top-to-bottom or bottom-to-top, and choose WHICH POINT of the bar stays put when it changes size. Pinned by the centre a bar spreads both ways when it gains a row; pin an edge and it grows away from that edge. That is the setting people mean by grow direction.",
+            "NEW: per-cell overrides. Any single cell can carry its own scale, its own offset, its own kind and its own visibility. One icon in a row at 150%. A tracking bar in among the icons. A slot hidden while you decide. The settings travel with the SPELL - drag a cell somewhere else and they come along.",
+            "NEW: BUILD MODE. /zs build, or the Build button on any bar card. The bar's panel shrinks out of the way and every cell gets a handle: drag it, scroll to scale it, Tab through the slots, arrows to nudge, Delete to empty, right click for kind, hide and reset. Dragging snaps to the bar's own raster; hold Alt for free hand.",
+            "The spell palette opens beside it. Click a slot, click a spell, and the selection walks on to the next slot - so filling a bar is one click each instead of a trip through a window. Everything your Cooldown Manager knows is in there, greyed when it is not talented, so you can build a bar for the spec you are about to switch into.",
+            "NEW: effects, all off until you ask. A FLASH when a cooldown lands, with a pulse count and a colour. An EDGE while the spell is up, optionally only in combat. A NAG: a spell that has been ready for six seconds in combat starts pulsing - for the defensive you keep forgetting. A last-seconds warning, a glow while a tracked aura is up, and greying out while a cooldown runs.",
+            "What drives the effects is Blizzard's own answer to 'is this on a real cooldown', global cooldown excluded. Without that exclusion every spell in the game comes off cooldown every 1.5 seconds and the flash is a strobe.",
+            "NEW: rules for when a bar is on screen at all. Combat, group size, target, rested area, and six kinds of place - world, dungeon, raid, scenario or delve, battleground, arena. Every rule has to agree, and every one of them starts on 'any', so a rule you have not set can never be the reason something is missing. Out of condition a bar is gone, or dimmed to whatever you choose - which is what you want while you are still arranging it.",
+            "The window is denser and quieter. Every setting used to be a filled card with a gap around it, and forty of those is a brick wall. Rows are flat now, separated by a hairline, and only the row under the cursor gets a surface - the same page shows a third more of itself and reads as a list instead of a stack of boxes.",
+            "New look to start from: Reactive. Clean, plus the things that move.",
+        },
+    },
+    {
         version = "4.5.0",
         date = "2026-08-06",
         lines = {

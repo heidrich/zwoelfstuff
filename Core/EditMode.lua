@@ -1,31 +1,40 @@
 ---------------------------------------------------------------------------
--- EditMode - unlock the screen and put the bars where you want them.
+-- EditMode - unlock the screen and build the thing.
 --
--- Built to work the way EllesmereUI's unlock mode does, because that is what
--- this addon is used next to and a second set of rules for "how do I move a
--- thing" is a tax on the user, not a feature:
+-- Two modes, and the difference is the level you are working at:
 --
---   * every bar gets a labelled panel over it, with its live coordinates
---   * drag it, or select it and nudge with the arrow keys (Shift = 10)
---   * it snaps to the screen centre and to the other bars, with a guide line
---     saying what it snapped to
---   * a cog on each panel opens that bar's own menu
---   * Shift + Right Click hides the overlay so you can see what is underneath
+--   MOVE   the whole bar is one object. Drag it, snap it to the screen or to
+--          another bar, attach it so it follows. This is what unlock mode has
+--          always been.
 --
--- WHY THE PANEL AND NOT THE BAR ITSELF.
+--   BUILD  every CELL is its own object. Drag one icon out of the row, scale
+--          it, swap it for a tracking bar, drop a spell into an empty slot
+--          from the palette, take one out. This is the puzzle: a grid you
+--          pull apart by hand until the display is the shape you wanted
+--          rather than the shape a row of icons happens to be.
+--
+-- One mode is not a lesser version of the other, and neither is a separate
+-- feature: the arrangement engine adds a per-cell offset on top of whatever
+-- the lattice worked out (Core/Layout.lua), so nudging one icon out of a neat
+-- row and building a free-form layout are the SAME edit. There is no line to
+-- cross between "a bar" and "a puzzle".
+--
+-- WHY A PANEL AND NOT THE BAR ITSELF.
 --
 -- Half of what a bar shows is a Blizzard frame we adopted, and those bring
 -- their own mouse handling. Dragging the bar directly would fight tooltips
 -- and clicks that are not ours to intercept. A panel above it at a higher
 -- strata answers the mouse instead, and the bar never learns it is being
--- moved.
+-- moved. The same argument makes every cell handle a panel of its own.
 --
--- POSITIONS ARE ALWAYS CENTRE-RELATIVE.
+-- POSITIONS ARE PINNED-POINT RELATIVE.
 --
--- One anchor for every bar: its centre, offset from the screen centre. That
--- is what makes the readout mean something, what makes snapping arithmetic
--- instead of a case analysis, and what keeps a bar in the same visual place
--- when the window resolution changes.
+-- A bar is placed by ONE of its nine points, offset from the screen centre.
+-- The centre is the default and the readout means what it says; pin an edge
+-- instead and the bar grows away from that edge when it gains a row. Snapping
+-- still works in centre terms, because "line these two up" is about the shapes
+-- and not about what each one happens to be pinned by - the translation
+-- happens once, here.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -41,16 +50,21 @@ local NUDGE_FAST = 10
 local GRID_STEP = 40
 
 local unlocked = false
-local overlay, toolbar, keyCatcher
+local mode = "bars"            -- "bars" | "build"
+local overlay, toolbar, keyCatcher, palette, inspector
 local movers = {}
-local selected = nil
+local handles = {}             -- [barIndex] = { [cellIndex] = handle }
+local selected = nil           -- the selected MOVER
+---@type table|nil
+local picked = nil             -- { bar = index, cell = index } in build mode
 local dragging = nil
+local cellDrag = nil
 local guideX, guideY, gridLines
 
--- Forward declaration: a mover's OnMouseUp is written before the dragging
--- section that defines this, and without it the reference would silently be
--- a global that is nil at call time.
-local StopDrag
+-- Forward declarations. A handle's script is written above the drag section
+-- that defines these, and without them the reference would silently be a
+-- global that is nil at call time.
+local StopDrag, StopCellDrag, RefreshInspector, SelectCell
 
 ---------------------------------------------------------------------------
 -- Geometry
@@ -65,18 +79,25 @@ end
 -- Every candidate carries two numbers, and they are not the same one:
 --   value  where OUR centre has to end up
 --   guide  where the line is drawn, which is the edge that actually lined up
+--
+-- Measured off the live frames rather than off the saved x/y: a bar pinned by
+-- its left edge stores a number that is not its centre, and lining two bars up
+-- is about where they ARE.
 local function Candidates(index, half, axis)
     local list = { { value = 0, guide = 0 } }   -- the screen centre
 
-    for otherIndex, cfg in ipairs(ns.db.bars) do
+    for otherIndex in ipairs(ns.db.bars) do
         local bar = ns.Screen:BarFrame(otherIndex)
         if otherIndex ~= index and bar and bar:IsShown() then
-            local centre  = (axis == "x") and (cfg.x or 0) or (cfg.y or 0)
-            local otherHalf = ((axis == "x") and bar:GetWidth() or bar:GetHeight()) / 2
+            local offsetX, offsetY = ns.Screen:CentreOffset(otherIndex)
+            if offsetX then
+                local centre = (axis == "x") and offsetX or offsetY
+                local otherHalf = ((axis == "x") and bar:GetWidth() or bar:GetHeight()) / 2
 
-            list[#list + 1] = { value = centre, guide = centre }
-            list[#list + 1] = { value = centre - otherHalf + half, guide = centre - otherHalf }
-            list[#list + 1] = { value = centre + otherHalf - half, guide = centre + otherHalf }
+                list[#list + 1] = { value = centre, guide = centre }
+                list[#list + 1] = { value = centre - otherHalf + half, guide = centre - otherHalf }
+                list[#list + 1] = { value = centre + otherHalf - half, guide = centre + otherHalf }
+            end
         end
     end
 
@@ -163,7 +184,7 @@ local function BuildGrid()
 end
 
 ---------------------------------------------------------------------------
--- One mover
+-- One mover - a whole bar
 ---------------------------------------------------------------------------
 local function BarConfig(index)
     return ns.db.bars[index]
@@ -204,6 +225,10 @@ local function SetSelected(mover)
         other:SetFrameLevel(overlay:GetFrameLevel() + (isIt and 20 or 10))
     end
     selected = mover
+    if mode == "build" then
+        picked = { bar = mover.index, cell = picked and picked.cell or 1 }
+    end
+    RefreshInspector()
 end
 
 local function ApplyMove(mover, x, y)
@@ -215,7 +240,9 @@ local function ApplyMove(mover, x, y)
     if cfg.anchor then
         cfg.anchor.x, cfg.anchor.y = x, y
     else
-        cfg.point, cfg.relPoint = "CENTER", "CENTER"
+        -- The pinned point is kept. Forcing it back to CENTER here is what
+        -- would silently undo a grow direction the moment the bar is nudged.
+        cfg.relPoint = "CENTER"
         cfg.x, cfg.y = x, y
     end
 
@@ -378,10 +405,17 @@ local function CreateMover(index)
 
         local cursorX, cursorY = CursorPosition()
         local originX, originY = Origin(cfg)
+
+        -- The gap between what we EDIT (the pinned point) and what we SNAP
+        -- (the centre). Constant for the length of a drag, so it is worked
+        -- out once rather than per frame.
+        local centreX, centreY = ns.Screen:CentreOffset(self.index)
         dragging = {
             mover = self,
             cursorX = cursorX, cursorY = cursorY,
             originX = originX, originY = originY,
+            toCentreX = (centreX or originX) - originX,
+            toCentreY = (centreY or originY) - originY,
             -- An attached bar is dragged in its parent's terms, so screen
             -- snapping does not apply: the anchor already put it flush.
             anchored = cfg.anchor ~= nil,
@@ -404,7 +438,229 @@ local function CreateMover(index)
 end
 
 ---------------------------------------------------------------------------
--- Dragging
+-- One handle - a single cell
+--
+-- Only in build mode. Every one of these sits exactly on a cell frame, so
+-- what you grab is what you see, and the bar underneath never learns about
+-- the mouse.
+---------------------------------------------------------------------------
+local function OpenCellMenu(handle)
+    local cfg = ns.db.bars[handle.barIndex]
+    if not cfg then return end
+
+    local cell = handle.cellIndex
+    local opts = ns.Layout.CellOpts(cfg, cell)
+    local spellID = cfg.cells[cell]
+
+    local items = {
+        { text = (opts and opts.kind == "bar") and "Draw as an icon"
+            or "Draw as a tracking bar",
+          onClick = function()
+              local write = ns.Layout.EnsureCellOpts(cfg, cell)
+              -- The override is dropped rather than set to the bar's own
+              -- kind: a cell that agrees with its bar should keep agreeing
+              -- when the bar changes, not freeze today's answer.
+              if write.kind then
+                  write.kind = nil
+              else
+                  write.kind = (cfg.kind == "bar") and "icon" or "bar"
+              end
+              ns.Layout.TidyCellOpts(cfg, cell)
+              ns.Bars:Changed(handle.barIndex)
+          end },
+        { text = (opts and opts.hidden) and "Show this cell" or "Hide this cell",
+          onClick = function()
+              local write = ns.Layout.EnsureCellOpts(cfg, cell)
+              write.hidden = not write.hidden or nil
+              ns.Layout.TidyCellOpts(cfg, cell)
+              ns.Bars:Changed(handle.barIndex)
+          end },
+        { text = "Back into line",
+          onClick = function()
+              local write = ns.Layout.EnsureCellOpts(cfg, cell)
+              write.x, write.y, write.scale = nil, nil, nil
+              ns.Layout.TidyCellOpts(cfg, cell)
+              ns.Bars:Changed(handle.barIndex)
+          end },
+    }
+
+    local actions = {}
+    if spellID then
+        actions[#actions + 1] = { text = "Empty this cell", onClick = function()
+            ns.Bars:ClearCell(handle.barIndex, cell)
+        end }
+    end
+    if not ns.Layout.UsesGrid(cfg) then
+        actions[#actions + 1] = { text = "Remove this cell", onClick = function()
+            ns.Bars:RemoveCell(handle.barIndex, cell)
+            picked = nil
+            RefreshInspector()
+        end }
+    end
+
+    UI.ShowMenu(handle, {
+        width = 200,
+        anchor = { "TOPLEFT", "BOTTOMLEFT", 0, -2 },
+        items = items,
+        actions = #actions > 0 and actions or nil,
+    })
+end
+
+local function ScaleCell(barIndex, cellIndex, delta)
+    local cfg = ns.db.bars[barIndex]
+    if not cfg then return end
+
+    local opts = ns.Layout.EnsureCellOpts(cfg, cellIndex)
+    local scale = (opts.scale or 1) + delta * 0.1
+    -- Clamped hard at both ends: a cell at 0.05 cannot be clicked again to
+    -- undo, and one at 12 is a wall you cannot see past to fix it.
+    opts.scale = math.max(0.3, math.min(4, math.floor(scale * 100 + 0.5) / 100))
+    if math.abs(opts.scale - 1) < 0.001 then opts.scale = nil end
+
+    ns.Layout.TidyCellOpts(cfg, cellIndex)
+    ns.Bars:Changed(barIndex)
+    RefreshInspector()
+end
+
+local function CreateHandle(barIndex, cellIndex)
+    local handle = CreateFrame("Button", nil, overlay)
+    handle.barIndex, handle.cellIndex = barIndex, cellIndex
+    handle:SetFrameLevel(overlay:GetFrameLevel() + 30)
+    handle:RegisterForClicks("LeftButtonDown", "RightButtonDown")
+    handle:EnableMouseWheel(true)
+
+    handle.tint = handle:CreateTexture(nil, "BACKGROUND")
+    handle.tint:SetAllPoints(handle)
+    handle.tint:SetColorTexture(1, 1, 1, 0.06)
+
+    handle.edge = ns.CreateBorder(handle, 1, "BORDER")
+    handle.edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 0.8)
+
+    handle.tag = UI.Label(handle, "", 10, C.textDim)
+    handle.tag:SetPoint("TOPLEFT", handle, "TOPLEFT", 2, -2)
+    handle.tag:SetWordWrap(false)
+
+    handle:SetScript("OnEnter", function(self)
+        if picked and picked.bar == self.barIndex and picked.cell == self.cellIndex then
+            return
+        end
+        self.tint:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.16)
+    end)
+    handle:SetScript("OnLeave", function(self)
+        if picked and picked.bar == self.barIndex and picked.cell == self.cellIndex then
+            return
+        end
+        self.tint:SetColorTexture(1, 1, 1, 0.06)
+    end)
+
+    handle:SetScript("OnMouseWheel", function(self, delta)
+        ScaleCell(self.barIndex, self.cellIndex, delta)
+    end)
+
+    handle:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            SelectCell(self.barIndex, self.cellIndex)
+            OpenCellMenu(self)
+            return
+        end
+
+        SelectCell(self.barIndex, self.cellIndex)
+
+        local cfg = ns.db.bars[self.barIndex]
+        local cell = ns.Screen:CellFrame(self.barIndex, self.cellIndex)
+        if not (cfg and cell) then return end
+
+        local opts = ns.Layout.CellOpts(cfg, self.cellIndex)
+        local cursorX, cursorY = CursorPosition()
+        local point, _, relPoint, offsetX, offsetY = cell:GetPoint(1)
+
+        cellDrag = {
+            barIndex = self.barIndex, cellIndex = self.cellIndex,
+            cursorX = cursorX, cursorY = cursorY,
+            startX = (opts and opts.x) or 0,
+            startY = (opts and opts.y) or 0,
+            cell = cell,
+            point = point, relPoint = relPoint,
+            frameX = offsetX or 0, frameY = offsetY or 0,
+        }
+    end)
+
+    handle:SetScript("OnMouseUp", function()
+        if cellDrag then StopCellDrag() end
+    end)
+
+    return handle
+end
+
+-- Live feedback WITHOUT a render pass. A full pass walks Blizzard's frame
+-- pools, and running that sixty times a second because a mouse is moving is
+-- how a smooth drag becomes a stutter. The cell frame is moved directly and
+-- the arrangement catches up once, on mouse up.
+local function DragCell()
+    if not cellDrag then return end
+
+    if not IsMouseButtonDown("LeftButton") then
+        StopCellDrag()
+        return
+    end
+
+    local cfg = ns.db.bars[cellDrag.barIndex]
+    if not cfg then return end
+
+    local cursorX, cursorY = CursorPosition()
+    local deltaX = cursorX - cellDrag.cursorX
+    local deltaY = cursorY - cellDrag.cursorY
+
+    local raster = IsAltKeyDown() and 0 or (cfg.raster or 0)
+    local x = ns.Layout.SnapToRaster(cellDrag.startX + deltaX, raster)
+    local y = ns.Layout.SnapToRaster(cellDrag.startY + deltaY, raster)
+
+    local opts = ns.Layout.EnsureCellOpts(cfg, cellDrag.cellIndex)
+    opts.x, opts.y = x, y
+
+    local cell = cellDrag.cell
+    cell:ClearAllPoints()
+    cell:SetPoint(cellDrag.point, cell:GetParent(), cellDrag.relPoint,
+        cellDrag.frameX + (x - cellDrag.startX),
+        cellDrag.frameY + (y - cellDrag.startY))
+
+    RefreshInspector()
+end
+
+function StopCellDrag()
+    if not cellDrag then return end
+    local barIndex, cellIndex = cellDrag.barIndex, cellDrag.cellIndex
+    cellDrag = nil
+
+    local cfg = ns.db.bars[barIndex]
+    if cfg then ns.Layout.TidyCellOpts(cfg, cellIndex) end
+    ns.Bars:Changed(barIndex)
+end
+
+function SelectCell(barIndex, cellIndex)
+    picked = { bar = barIndex, cell = cellIndex }
+
+    for _, row in pairs(handles) do
+        for _, handle in pairs(row) do
+            local isIt = handle.barIndex == barIndex and handle.cellIndex == cellIndex
+            handle.edge:SetColor(
+                isIt and C.accent[1] or C.accentDim[1],
+                isIt and C.accent[2] or C.accentDim[2],
+                isIt and C.accent[3] or C.accentDim[3],
+                isIt and 1 or 0.8)
+            handle.tint:SetColorTexture(
+                isIt and C.accent[1] or 1,
+                isIt and C.accent[2] or 1,
+                isIt and C.accent[3] or 1,
+                isIt and 0.20 or 0.06)
+        end
+    end
+
+    RefreshInspector()
+end
+
+---------------------------------------------------------------------------
+-- Dragging a bar
 --
 -- Manual rather than StartMoving, because snapping means deciding where the
 -- frame goes on every frame and StartMoving owns that decision itself.
@@ -416,6 +672,7 @@ function StopDrag()
 end
 
 local function OnUpdate()
+    if cellDrag then DragCell() end
     if not dragging then return end
 
     -- The button can be let go anywhere, including over another window or off
@@ -438,8 +695,15 @@ local function OnUpdate()
     -- "almost" is why there has to be a way to switch it off in the moment.
     local lineX, lineY
     if not (dragging.anchored or IsAltKeyDown()) then
-        x, lineX = Snap(x, mover.index, bar:GetWidth() / 2, "x")
-        y, lineY = Snap(y, mover.index, bar:GetHeight() / 2, "y")
+        -- Snapped in CENTRE terms and written back in pinned-point terms, so
+        -- a bar pinned by its left edge still lines up by its middle.
+        local centreX, guideLineX = Snap(x + dragging.toCentreX, mover.index,
+            bar:GetWidth() / 2, "x")
+        local centreY, guideLineY = Snap(y + dragging.toCentreY, mover.index,
+            bar:GetHeight() / 2, "y")
+
+        x, y = centreX - dragging.toCentreX, centreY - dragging.toCentreY
+        lineX, lineY = guideLineX, guideLineY
     end
 
     ApplyMove(mover, x, y)
@@ -461,6 +725,21 @@ local ARROWS = {
     RIGHT = {  1,  0 },
 }
 
+-- In build mode the arrows nudge the SELECTED CELL; in move mode they nudge
+-- the selected bar. Same keys, same feel, one level down.
+local function NudgeCell(where, direction, step)
+    local cfg = ns.db.bars[where.bar]
+    if not cfg then return end
+
+    local opts = ns.Layout.EnsureCellOpts(cfg, where.cell)
+    opts.x = (opts.x or 0) + direction[1] * step
+    opts.y = (opts.y or 0) + direction[2] * step
+
+    ns.Layout.TidyCellOpts(cfg, where.cell)
+    ns.Bars:Changed(where.bar)
+    RefreshInspector()
+end
+
 local function BuildKeyCatcher()
     keyCatcher = CreateFrame("Frame", nil, UIParent)
     keyCatcher:EnableKeyboard(true)
@@ -474,8 +753,37 @@ local function BuildKeyCatcher()
             return
         end
 
+        if key == "TAB" and mode == "build" and picked then
+            self:SetPropagateKeyboardInput(false)
+            local cfg = ns.db.bars[picked.bar]
+            if cfg then
+                local count = ns.Bars:CellCount(cfg)
+                SelectCell(picked.bar, (picked.cell % count) + 1)
+            end
+            return
+        end
+
+        if (key == "DELETE" or key == "BACKSPACE") and mode == "build" and picked then
+            self:SetPropagateKeyboardInput(false)
+            ns.Bars:ClearCell(picked.bar, picked.cell)
+            return
+        end
+
         local direction = ARROWS[key]
-        if not (direction and selected) then
+        if not direction then
+            self:SetPropagateKeyboardInput(true)
+            return
+        end
+
+        local step = IsShiftKeyDown() and NUDGE_FAST or NUDGE
+
+        if mode == "build" and picked then
+            self:SetPropagateKeyboardInput(false)
+            NudgeCell(picked, direction, step)
+            return
+        end
+
+        if not selected then
             self:SetPropagateKeyboardInput(true)
             return
         end
@@ -484,7 +792,6 @@ local function BuildKeyCatcher()
         local cfg = BarConfig(selected.index)
         if not cfg then return end
 
-        local step = IsShiftKeyDown() and NUDGE_FAST or NUDGE
         local x, y = Origin(cfg)
         ApplyMove(selected, x + direction[1] * step, y + direction[2] * step)
     end)
@@ -495,14 +802,188 @@ local function BuildKeyCatcher()
 end
 
 ---------------------------------------------------------------------------
+-- The palette - every spell, one click from a cell
+--
+-- The whole reason build mode exists as something you do ON SCREEN rather
+-- than in a window: pick the cell, pick the spell, see it land. Opening a
+-- settings window to fill a slot you are looking at is the long way round.
+---------------------------------------------------------------------------
+local PALETTE_COLUMNS = 6
+local PALETTE_ICON = 34
+
+local function AssignPicked(spellID)
+    if not picked then
+        ns.Print("Pick a cell first - click one of the outlined slots.")
+        return
+    end
+
+    ns.Bars:SetCell(picked.bar, picked.cell, spellID)
+
+    -- Straight on to the next one, so filling a bar is six clicks rather than
+    -- twelve. Wraps, and stops being helpful at the end rather than looping
+    -- silently back over what was just done.
+    local cfg = ns.db.bars[picked.bar]
+    if cfg then
+        local count = ns.Bars:CellCount(cfg)
+        if picked.cell < count then SelectCell(picked.bar, picked.cell + 1) end
+    end
+    RefreshInspector()
+end
+
+local function BuildPalette()
+    palette = CreateFrame("Frame", nil, overlay)
+    palette:SetSize(PALETTE_COLUMNS * (PALETTE_ICON + 4) + 24, 340)
+    palette:SetPoint("RIGHT", UIParent, "RIGHT", -40, 0)
+    palette:SetFrameLevel(overlay:GetFrameLevel() + 40)
+    palette:EnableMouse(true)
+    palette:SetMovable(true)
+    palette:RegisterForDrag("LeftButton")
+    palette:SetScript("OnDragStart", palette.StartMoving)
+    palette:SetScript("OnDragStop", palette.StopMovingOrSizing)
+    palette:SetClampedToScreen(true)
+    palette:Hide()
+
+    UI.Fill(palette, "BACKGROUND", C.windowBg)
+    local edge = ns.CreateBorder(palette, 1, "BORDER")
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    local title = UI.Label(palette, "Spells", 13, C.text)
+    title:SetPoint("TOPLEFT", palette, "TOPLEFT", 12, -10)
+
+    local hint = UI.Label(palette, "Click a slot, then a spell.", 10, C.textFaint)
+    hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+
+    local rule = UI.Separator(palette, true)
+    rule:SetPoint("TOPLEFT", palette, "TOPLEFT", 0, -46)
+    rule:SetPoint("TOPRIGHT", palette, "TOPRIGHT", 0, -46)
+
+    local body = CreateFrame("Frame", nil, palette)
+    body:SetPoint("TOPLEFT", palette, "TOPLEFT", 10, -54)
+    body:SetPoint("BOTTOMRIGHT", palette, "BOTTOMRIGHT", -8, 10)
+
+    local scroll, content = UI.ScrollArea(body,
+        PALETTE_COLUMNS * (PALETTE_ICON + 4))
+    palette.scroll, palette.content = scroll, content
+    palette.buttons = {}
+
+    palette.Refresh = function()
+        local catalogue = ns.CDM:Catalogue()
+
+        for position, entry in ipairs(catalogue) do
+            local button = palette.buttons[position]
+            if not button then
+                button = CreateFrame("Button", nil, content)
+                button:SetSize(PALETTE_ICON, PALETTE_ICON)
+
+                button.icon = button:CreateTexture(nil, "ARTWORK")
+                button.icon:SetAllPoints(button)
+                button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+                button.edge = ns.CreateBorder(button, 1, "OVERLAY")
+                button.edge:SetColor(0, 0, 0, 1)
+
+                button:SetScript("OnEnter", function(self)
+                    self.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+                end)
+                button:SetScript("OnLeave", function(self)
+                    self.edge:SetColor(0, 0, 0, 1)
+                end)
+
+                palette.buttons[position] = button
+            end
+
+            local column = (position - 1) % PALETTE_COLUMNS
+            local row = math.floor((position - 1) / PALETTE_COLUMNS)
+            button:ClearAllPoints()
+            button:SetPoint("TOPLEFT", content, "TOPLEFT",
+                column * (PALETTE_ICON + 4), -row * (PALETTE_ICON + 4))
+
+            button.icon:SetTexture(entry.icon)
+            -- A spell you have not talented is shown greyed rather than left
+            -- out: a bar can be built for the spec you are about to switch
+            -- into, and a list that silently drops half the class reads as
+            -- broken.
+            button.icon:SetDesaturated(not entry.known)
+            button:SetScript("OnClick", function() AssignPicked(entry.spellID) end)
+            button:Show()
+        end
+
+        for position = #catalogue + 1, #palette.buttons do
+            palette.buttons[position]:Hide()
+        end
+
+        local rows = math.ceil(#catalogue / PALETTE_COLUMNS)
+        content:SetHeight(math.max(1, rows * (PALETTE_ICON + 4)))
+        if scroll.Update then scroll.Update() end
+    end
+end
+
+---------------------------------------------------------------------------
 -- The panel
 --
 -- Always visible while unlocked, including while the overlay is hidden -
 -- otherwise Shift + Right Click would be a one-way door.
 ---------------------------------------------------------------------------
+local function SetMode(next_)
+    mode = next_
+    if toolbar and toolbar.Refresh then toolbar.Refresh() end
+    if palette and mode ~= "build" then palette:Hide() end
+    EditMode:Refresh()
+    RefreshInspector()
+end
+
+-- What the inspector says about the selected cell. Written out rather than
+-- built from a loop: four facts, each phrased for what it means, beats a
+-- table of key-value pairs nobody reads.
+function RefreshInspector()
+    if not inspector then return end
+
+    if mode ~= "build" then
+        inspector:SetText("Drag a bar. Arrow keys nudge it, Shift for 10.\n"
+            .. "Alt while dragging switches snapping off.\n"
+            .. "The cog attaches a bar to another one, so it moves along.")
+        return
+    end
+
+    if not picked then
+        inspector:SetText("Click a slot on any bar.\n"
+            .. "|cff888888Drag it, wheel to scale, right click for more.|r")
+        return
+    end
+
+    local cfg = ns.db.bars[picked.bar]
+    if not cfg then
+        inspector:SetText("")
+        return
+    end
+
+    local spellID = cfg.cells[picked.cell]
+    local opts = ns.Layout.CellOpts(cfg, picked.cell) or {}
+
+    local lines = {
+        string.format("|cffff7a3d%s|r  slot %d of %d", cfg.name or "?",
+            picked.cell, ns.Bars:CellCount(cfg)),
+        spellID and (ns.SpellName(spellID) or ("Spell " .. spellID))
+            or "|cff888888empty|r",
+    }
+
+    local details = {}
+    if opts.scale then details[#details + 1] = string.format("%.0f%%", opts.scale * 100) end
+    if opts.x or opts.y then
+        details[#details + 1] = string.format("%+d, %+d", opts.x or 0, opts.y or 0)
+    end
+    if opts.kind then details[#details + 1] = opts.kind end
+    if opts.hidden then details[#details + 1] = "hidden" end
+    if #details > 0 then
+        lines[#lines + 1] = "|cff888888" .. table.concat(details, "  ") .. "|r"
+    end
+
+    inspector:SetText(table.concat(lines, "\n"))
+end
+
 local function BuildToolbar()
     toolbar = CreateFrame("Frame", nil, overlay)
-    toolbar:SetSize(330, 146)
+    toolbar:SetSize(360, 168)
     toolbar:SetPoint("TOP", UIParent, "TOP", 0, -120)
     toolbar:SetFrameLevel(overlay:GetFrameLevel() + 40)
     toolbar:EnableMouse(true)
@@ -516,37 +997,78 @@ local function BuildToolbar()
     local edge = ns.CreateBorder(toolbar, 1, "BORDER")
     edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
-    local title = UI.Label(toolbar, "Unlock Mode", 14, C.text)
-    title:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 14, -12)
+    -- The mode switch, and it is the first thing in the panel because it
+    -- changes what every other control in it means.
+    local moveBtn, buildBtn
+    moveBtn = UI.Button(toolbar, "Move bars", 108, function() SetMode("bars") end)
+    moveBtn:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -12)
+
+    buildBtn = UI.Button(toolbar, "Build", 84, function() SetMode("build") end)
+    buildBtn:SetPoint("LEFT", moveBtn, "RIGHT", 6, 0)
+
+    local addBtn = UI.Button(toolbar, "Add slot", 88, function()
+        if picked then
+            ns.Bars:AddCell(picked.bar)
+        elseif selected then
+            ns.Bars:AddCell(selected.index)
+        else
+            ns.Print("Pick a bar first.")
+        end
+    end, "soft")
+    addBtn:SetPoint("LEFT", buildBtn, "RIGHT", 6, 0)
 
     local rule = UI.Separator(toolbar, true)
-    rule:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, -36)
-    rule:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", 0, -36)
+    rule:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, -48)
+    rule:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", 0, -48)
 
-    local hint = UI.Label(toolbar, table.concat({
-        "Drag a bar, or select it and use the arrow keys - Shift for 10.",
-        "Alt while dragging switches snapping off.",
-        "The cog attaches a bar to another one, so it moves along.",
-        "Shift + Right Click hides the overlay.",
-    }, "\n"), 11, C.textDim)
-    hint:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 14, -46)
-    hint:SetWidth(300)
-    hint:SetJustifyH("LEFT")
+    inspector = UI.Label(toolbar, "", 11, C.textDim)
+    inspector:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -58)
+    inspector:SetWidth(336)
+    inspector:SetJustifyH("LEFT")
+    inspector:SetJustifyV("TOP")
 
-    local gridBtn = UI.Button(toolbar, "Grid", 76, function()
+    local gridBtn = UI.Button(toolbar, "Grid", 68, function()
         EditMode:SetGridShown(not (gridLines and gridLines:IsShown()))
     end, "soft")
-    gridBtn:SetPoint("BOTTOMLEFT", toolbar, "BOTTOMLEFT", 14, 12)
+    gridBtn:SetPoint("BOTTOMLEFT", toolbar, "BOTTOMLEFT", 12, 12)
 
-    local overlayBtn = UI.Button(toolbar, "Overlay", 90, function()
+    local overlayBtn = UI.Button(toolbar, "Hide overlay", 100, function()
         EditMode:SetOverlayShown(not EditMode.overlayShown)
     end, "soft")
-    overlayBtn:SetPoint("LEFT", gridBtn, "RIGHT", 8, 0)
+    overlayBtn:SetPoint("LEFT", gridBtn, "RIGHT", 6, 0)
 
-    local doneBtn = UI.Button(toolbar, "Done", 100, function()
+    local spellsBtn = UI.Button(toolbar, "Spells", 72, function()
+        if not palette then return end
+        if palette:IsShown() then
+            palette:Hide()
+        else
+            SetMode("build")
+            palette.Refresh()
+            palette:Show()
+        end
+    end, "soft")
+    spellsBtn:SetPoint("LEFT", overlayBtn, "RIGHT", 6, 0)
+
+    local doneBtn = UI.Button(toolbar, "Done", 72, function()
         EditMode:SetUnlocked(false)
     end, "primary")
-    doneBtn:SetPoint("BOTTOMRIGHT", toolbar, "BOTTOMRIGHT", -14, 12)
+    doneBtn:SetPoint("BOTTOMRIGHT", toolbar, "BOTTOMRIGHT", -12, 12)
+
+    toolbar.Refresh = function()
+        -- The active mode is the one that reads as pressed. Two buttons and a
+        -- colour beats a segmented control nobody can tell is interactive.
+        moveBtn.label:SetTextColor(
+            mode == "bars" and C.accent[1] or C.textDim[1],
+            mode == "bars" and C.accent[2] or C.textDim[2],
+            mode == "bars" and C.accent[3] or C.textDim[3])
+        buildBtn.label:SetTextColor(
+            mode == "build" and C.accent[1] or C.textDim[1],
+            mode == "build" and C.accent[2] or C.textDim[2],
+            mode == "build" and C.accent[3] or C.textDim[3])
+        addBtn:SetShown(mode == "build")
+        spellsBtn:SetShown(mode == "build")
+    end
+    toolbar.Refresh()
 end
 
 ---------------------------------------------------------------------------
@@ -570,11 +1092,48 @@ local function Build()
     BuildGrid()
     BuildGuides()
     BuildToolbar()
+    BuildPalette()
     BuildKeyCatcher()
 end
 
--- Movers are rebuilt from the bar list rather than kept in step by hand, so
--- adding or deleting a bar while unlocked cannot leave a panel behind.
+---------------------------------------------------------------------------
+-- Keeping the overlay in step with the bars
+--
+-- Movers and handles are rebuilt from the bar list rather than kept in step by
+-- hand, so adding or deleting a bar while unlocked cannot leave a panel behind.
+---------------------------------------------------------------------------
+local function RefreshHandles(index, cfg)
+    handles[index] = handles[index] or {}
+    local row = handles[index]
+    local count = ns.Bars:CellCount(cfg)
+    local building = (mode == "build") and EditMode.overlayShown
+
+    for cellIndex = 1, count do
+        local cell = ns.Screen:CellFrame(index, cellIndex)
+        local handle = row[cellIndex]
+
+        if cell and building then
+            if not handle then
+                handle = CreateHandle(index, cellIndex)
+                row[cellIndex] = handle
+            end
+            handle.barIndex, handle.cellIndex = index, cellIndex
+            handle:ClearAllPoints()
+            handle:SetAllPoints(cell)
+
+            local spellID = cfg.cells[cellIndex]
+            handle.tag:SetText(spellID and "" or tostring(cellIndex))
+            handle:Show()
+        elseif handle then
+            handle:Hide()
+        end
+    end
+
+    for cellIndex = count + 1, #row do
+        if row[cellIndex] then row[cellIndex]:Hide() end
+    end
+end
+
 function EditMode:Refresh()
     if not (unlocked and overlay) then return end
 
@@ -589,7 +1148,17 @@ function EditMode:Refresh()
             end
             mover.index = index
             mover:ClearAllPoints()
-            mover:SetAllPoints(bar)
+
+            if mode == "build" then
+                -- Out of the way: in build mode the bar's own cells are what
+                -- you are aiming at, and a panel covering them would swallow
+                -- every click meant for a slot.
+                mover:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", 0, 2)
+                mover:SetSize(math.max(90, math.min(bar:GetWidth(), 220)), 18)
+            else
+                mover:SetAllPoints(bar)
+            end
+
             mover.name:SetText(cfg.name or ("Bar " .. index))
             mover.name:SetTextColor(
                 cfg.enabled == false and C.textFaint[1] or C.text[1],
@@ -597,6 +1166,8 @@ function EditMode:Refresh()
                 cfg.enabled == false and C.textFaint[3] or C.text[3])
             UpdateReadout(mover)
             mover:SetShown(self.overlayShown)
+
+            RefreshHandles(index, cfg)
         elseif mover then
             mover:Hide()
         end
@@ -604,7 +1175,20 @@ function EditMode:Refresh()
 
     for index = #ns.db.bars + 1, #movers do
         movers[index]:Hide()
+        if handles[index] then
+            for _, handle in pairs(handles[index]) do handle:Hide() end
+        end
     end
+
+    -- The selection can outlive what it pointed at: delete a bar, or shrink a
+    -- grid, and the cell it named is gone.
+    if picked then
+        local cfg = ns.db.bars[picked.bar]
+        if not cfg or picked.cell > ns.Bars:CellCount(cfg) then
+            picked = nil
+        end
+    end
+    RefreshInspector()
 end
 
 function EditMode:SetGridShown(shown)
@@ -622,11 +1206,20 @@ function EditMode:SetOverlayShown(shown)
     if not self.overlayShown then
         guideX:Hide()
         guideY:Hide()
+        for _, row in pairs(handles) do
+            for _, handle in pairs(row) do handle:Hide() end
+        end
+    else
+        self:Refresh()
     end
 end
 
 function EditMode:IsUnlocked()
     return unlocked
+end
+
+function EditMode:Mode()
+    return mode
 end
 
 function EditMode:SetUnlocked(state)
@@ -636,7 +1229,7 @@ function EditMode:SetUnlocked(state)
     Build()
     unlocked = state
     self.overlayShown = true
-    dragging, selected = nil, nil
+    dragging, cellDrag, selected = nil, nil, nil
 
     ns.Screen:SetUnlocked(state)
 
@@ -650,17 +1243,26 @@ function EditMode:SetUnlocked(state)
         keyCatcher:Show()
         self:SetOverlayShown(true)
         self:Refresh()
-        ns.Print("Unlocked. Drag the bars, or select one and nudge it with the "
-            .. "arrow keys. |cffffd100/zs lock|r when you are done.")
+        ns.Print("Unlocked. |cffffd100Move bars|r drags whole bars; "
+            .. "|cffffd100Build|r takes them apart slot by slot. "
+            .. "|cffffd100/zs lock|r when you are done.")
     else
         UI.ClosePopup()
         overlay:Hide()
         keyCatcher:Hide()
         keyCatcher:SetPropagateKeyboardInput(true)
         if gridLines then gridLines:Hide() end
+        if palette then palette:Hide() end
     end
 end
 
 function EditMode:Toggle()
     self:SetUnlocked(not unlocked)
+end
+
+-- Straight into build mode from anywhere - the slash command and the button
+-- in the options window both want this rather than "unlock, then switch".
+function EditMode:OpenBuild()
+    if not unlocked then self:SetUnlocked(true) end
+    SetMode("build")
 end
