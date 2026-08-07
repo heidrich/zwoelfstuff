@@ -556,6 +556,26 @@ local function MenuEntry(menu, index)
     entry:SetScript("OnEnter", function(self) self.hl:Show() end)
     entry:SetScript("OnLeave", function(self) self.hl:Hide() end)
 
+    -- The preview strip. A texture list where every row is the same grey text
+    -- tells you nothing about the one thing you are choosing, and picking a
+    -- bar texture by NAME is guessing twenty times in a row.
+    --
+    -- On the right, not behind the label: a texture painted across the whole
+    -- row competes with the word on top of it, and the darker ones make it
+    -- unreadable. This way both are legible and neither is a compromise.
+    -- Its own frame, because the outline has to go around the SWATCH and a
+    -- border built on the row would frame the whole row instead.
+    entry.swatchHost = CreateFrame("Frame", nil, entry)
+    entry.swatchHost:SetPoint("RIGHT", entry, "RIGHT", -8, 0)
+    entry.swatchHost:SetSize(76, ENTRY_H - 8)
+    entry.swatchHost:Hide()
+
+    entry.swatch = entry.swatchHost:CreateTexture(nil, "ARTWORK")
+    entry.swatch:SetAllPoints(entry.swatchHost)
+
+    entry.swatchEdge = ns.CreateBorder(entry.swatchHost, 1, "OVERLAY")
+    entry.swatchEdge:Hide()
+
     entry.label = UI.Label(entry, "", 12, C.text)
     entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
     entry.label:SetWordWrap(false)
@@ -604,6 +624,35 @@ local function ShowMenu(owner, spec)
         local colour = isAction and C.accent or (active and C.accent or C.text)
         entry.label:SetTextColor(colour[1], colour[2], colour[3])
 
+        -- Back to the panel font unless this row asks for its own. Rows are
+        -- reused, so a font left on one from a previous menu would turn up on
+        -- an unrelated entry three menus later.
+        ns.StyleUIFont(entry.label, 12)
+        entry.swatchHost:Hide()
+        entry.swatchEdge:Hide()
+
+        local preview = item.preview
+        if preview == "font" then
+            -- A font shown in itself. Nothing else answers "what does this
+            -- actually look like", and the fallback is honest: a file that
+            -- will not load leaves the row in the panel font.
+            ns.Media.ApplyFont(entry.label, item.value, 12, "")
+        elseif preview == "statusbar" and ns.Media.IsKnown("statusbar", item.value) then
+            entry.swatch:SetTexture(ns.Media.Statusbar(item.value))
+            entry.swatch:SetVertexColor(C.accent[1], C.accent[2], C.accent[3], 1)
+            entry.swatchHost:Show()
+        elseif preview == "border" and ns.Media.IsKnown("border", item.value) then
+            -- An edge file has to be drawn as an EDGE to mean anything, so
+            -- the swatch is a small framed box rather than the strip itself -
+            -- which on its own is eight tiles in a row and reads as noise.
+            entry.swatch:SetTexture(ns.WHITE)
+            entry.swatch:SetVertexColor(C.canvasBg[1], C.canvasBg[2], C.canvasBg[3], 1)
+            entry.swatchHost:Show()
+            entry.swatchEdge:SetThickness(2)
+            entry.swatchEdge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+            entry.swatchEdge:Show()
+        end
+
         if item.onDelete then
             entry.label:SetPoint("RIGHT", entry.del, "LEFT", -4, 0)
             entry.del:Show()
@@ -611,6 +660,9 @@ local function ShowMenu(owner, spec)
                 menu:Hide()
                 item.onDelete()
             end)
+        elseif entry.swatchHost:IsShown() then
+            entry.label:SetPoint("RIGHT", entry.swatchHost, "LEFT", -8, 0)
+            entry.del:Hide()
         else
             entry.label:SetPoint("RIGHT", entry, "RIGHT", -10, 0)
             entry.del:Hide()
@@ -749,7 +801,7 @@ function UI.MediaPicker(row, kind, get, set, apply, inheritLabel)
 
         for _, name in ipairs(ns.Media.List(kind)) do
             items[#items + 1] = {
-                text = name, value = name,
+                text = name, value = name, preview = kind,
                 onClick = function()
                     set(name)
                     if apply then apply() end
