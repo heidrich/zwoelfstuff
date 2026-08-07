@@ -740,12 +740,23 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 lands on **11 Aug** and the 12.1 features go in after that, not instead of the
 basics.
 
-1. **TAKE THE REFERENCE'S COOLDOWN MANAGER APART.** The owner's next
-   instruction, and the reasoning behind it is proven: every time this session
-   stopped guessing and read
+1. **PARK THE BUFF-BAR VIEWER, or confirm it is not needed.** The first
+   finding out of the reference (see *Taking the reference apart*) predicts a
+   bug in what shipped in 4.9.0: alpha 0 does not hold on that viewer, because
+   Blizzard animates it back to 1 on the next proc, so its bars can draw over
+   ours in combat. **Ask the owner first** — do Blizzard's buff bars reappear
+   during a fight? If yes, build the park exactly as written up there: position
+   not Hide, three hooks, a one-frame defer, alpha-only in combat, and a 10 Hz
+   integrity check with a tolerant compare. The same section explains why a
+   HIDDEN viewer would freeze our mirror rather than empty it — that half needs
+   handling either way.
+
+2. **CARRY ON TAKING THE REFERENCE APART.** The owner's instruction, and the
+   reasoning is proven: every time this session stopped guessing and read
    `C:\Games\World of Warcraft\_retail_\Interface\AddOns\EllesmereUICooldownManager\`
    it produced a better answer than anything reasoned from first principles.
-   It settled the bar architecture (4.9.0) and the fill semantics.
+   It settled the bar architecture (4.9.0), the fill semantics (4.9.0) and the
+   park finding above.
 
    What is already known, so it is not re-derived:
 
@@ -753,7 +764,7 @@ basics.
    |---|---|---|
    | `EllesmereUICdmBuffBars.lua` | 5734 | tracking bars. `:4649` mirror, `:4725` IsActive-not-IsShown, `:3407` the 2nd FontString is the timer, `:4088` `SetTimerDuration` + `StatusBarTimerDirection.ElapsedTime`, `:3635` + `:4807` smooth fill via `SetValue(v, Enum.StatusBarInterpolation.ExponentialEaseOut)`, `:2322` spark anchoring, `:2471` `SetReverseFill` |
    | `EllesmereUICdmHooks.lua` | 9009 | the icon side and the taint rules |
-   | `EllesmereUICooldownManager.lua` | 9701 | the viewers themselves — **not read yet** |
+   | `EllesmereUICooldownManager.lua` | 9701 | the viewers. READ: structure, `:527` defaults, `:3303` hide/restore + the park. Unread: `:3041` forcing Blizzard's Edit Mode settings, `:3815` building a bar, `:4369` icon layout, `:5183` custom icon shapes, `:7230` the tick hot path |
    | `EUI_CooldownManager_Options.lua` | 19764 | their options page. Labels extracted; the code behind them **not read** |
    | `EllesmereUICdmSpellPicker.lua` | 2034 | their spell picker — relevant to the sorting the owner just reported |
    | `EllesmereUICdmFakeActive.lua` | 1530 | how they preview a bar that is not active |
@@ -766,33 +777,33 @@ basics.
    **five glow types** including a resource-aware one, **decimals below N
    seconds**, **suppress GCD**, **custom duration**, **per-spec bar sets**.
 
-   Start with `EllesmereUICooldownManager.lua` and the options file, since
-   those two are the unread half.
+   Start with `EllesmereUICdmSpellPicker.lua` — it is small and it bears
+   directly on the sorting the owner reported — then the options file.
 
-2. **Smooth fill for the mirror**, already found and not yet built:
+3. **Smooth fill for the mirror**, already found and not yet built:
    `SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)`. The
    mirror in `Screen.RefreshFill` sets raw values every frame, so it steps
    where it could glide. One argument.
 
-3. **Bug hunt, continued.** 4.7.0–4.11.1 swept `Layout`, `Bars`, `Screen`,
+4. **Bug hunt, continued.** 4.7.0–4.11.1 swept `Layout`, `Bars`, `Screen`,
    `Effects`, `Visibility`, `CDM`, `Media`, `Minimap` and the parts of
    `Widgets`/`OptionsBars`/`EditMode` those touch. **Not yet swept:**
    `Auras.lua`, `Options.lua`, and the rest of `EditMode.lua` (the palette and
    the tool panel). Extend `/zs test` with every rule that turns out to be
    checkable — a fix without a check comes back.
-2. **"The background shows through the circle"** — reported with a screenshot,
+5. **"The background shows through the circle"** — reported with a screenshot,
    diagnosis deliberately NOT guessed. `/zs skin` now reports which template a
    frame came from and walks its child frames; ask for that output rather than
    reasoning about it. Guessing here cost a day once already.
-3. **Owner-side data**: confirm the remaining proc durations by letting one run
+6. **Owner-side data**: confirm the remaining proc durations by letting one run
    out *without* casting the ability, then `/zs auras export` for Blood and
    paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
-4. **A better logo.** The owner does not like the current one and is going to
+7. **A better logo.** The owner does not like the current one and is going to
    ask Claude Design. Bring back a PNG or SVG; converting it to a game-ready
    TGA is a two-minute job (see `Media/`, and the header rules under
    *Verification*).
-5. **Tank ideas** — the owner has a list, held back until the basics stand.
-6. After 12.1 lands: un-park the aura stack and re-test it.
+8. **Tank ideas** — the owner has a list, held back until the basics stand.
+9. After 12.1 lands: un-park the aura stack and re-test it.
 
 ### The window density pass is DONE, and what it changed
 
