@@ -4,6 +4,46 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.1] - 2026-08-07
+
+### Added
+
+- **Twenty bar textures, shipped.** Flat, Smooth, Velvet, Charcoal, Gloss,
+  Glass, Steel, Bevel, Inset, Neon, Outline, Ridged, Aluminium, Stripes,
+  Blocks, Pixel, Cylinder, Hairline, Split and Frost. They go into
+  LibSharedMedia under a `ZS` prefix, so they sit next to everything ElvUI,
+  WeakAuras and the rest registered — and they are available to those addons
+  in return. Generated rather than drawn: each one is a formula for "how
+  bright is this bar at this height", and they are white-based because a bar
+  texture is tinted by whoever draws it.
+- **Drag a spell from the list onto a cell.** It genuinely was not
+  implemented — clicking worked and always has, but picking a spell up and
+  putting it where you want it is the gesture people reach for first. The
+  cell under the cursor lights up while you drag, across every card.
+- **A tool panel in unlock mode.** Grid and its step, snap to it, snapping and
+  how far it catches, dim, permanent coordinates — saved, because they are
+  working habits. Plus the selected bar's pattern, shape, sizes, spacing,
+  scale and centring.
+- **A logo.** A cooldown sweep closing around a two-tone 12.
+
+### Changed
+
+- **The bar card is a real preview.** It paints with the bar's own backdrop,
+  texture, border and crop, through the same two functions that paint the
+  thing on screen — so picking a texture shows you that texture, in the
+  editor. A bar-shaped cell draws its square icon at the end you chose, its
+  fill beside it and its spell name on top.
+
+### Fixed
+
+- The spacing model. Only half-width rows ever got a gap; every wide block was
+  stacked flat against the one above. Invisible while rows were filled cards,
+  text on text once they were not.
+- `SetPropagateKeyboardInput` is protected in combat, and closing unlock mode
+  at a training dummy raised `ADDON_ACTION_BLOCKED`.
+- The border on an adopted buff bar sat on the fill. It frames from outside now.
+- The icon on an adopted buff bar was smeared across the full width.
+
 ## [4.6.0] - 2026-08-07
 
 Arrangements, effects, rules, and a build mode you use on screen instead of in

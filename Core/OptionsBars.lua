@@ -207,6 +207,17 @@ local function BuildCard(parent, width)
             return ns.Layout.Build(cfg, Bars:CellCount(cfg),
                 cfg.spacing or 4, cfg.lineSpacing or 4)
         end,
+        -- The bar's real look, from the same function the screen calls. This
+        -- is what makes the card a preview of what you built rather than a
+        -- diagram of it: pick a texture and you see that texture, here.
+        style = function(height)
+            local cfg = Cfg()
+            return cfg and ns.Bars:Style(cfg, height) or nil
+        end,
+        iconPlacement = function()
+            local cfg = Cfg()
+            return cfg and cfg.iconPlacement or "left"
+        end,
         content = function(cell) local cfg = Cfg() return cfg and cfg.cells[cell] end,
         selected = function()
             if Workspace.index ~= card.dkIndex then return nil end
@@ -215,6 +226,15 @@ local function BuildCard(parent, width)
         onPick = function(cell) Workspace:SelectCell(card.dkIndex, cell) end,
         onClear = function(cell)
             Bars:ClearCell(card.dkIndex, cell)
+            ns.Options:Refresh()
+        end,
+        -- A spell dragged out of the right-hand list and dropped on this
+        -- cell. The card it lands on becomes the selected one, because that
+        -- is plainly what you meant by dropping something in it.
+        onDrop = function(cell, spellID)
+            if not card.dkIndex then return end
+            Bars:SetCell(card.dkIndex, cell, spellID)
+            Workspace:SelectCell(card.dkIndex, cell)
             ns.Options:Refresh()
         end,
         onMove = function(from, to)

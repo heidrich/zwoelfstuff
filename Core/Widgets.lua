@@ -1185,10 +1185,29 @@ end
 --   selected(), onPick(cell), onClear(cell), onMove(from, to)
 -- }
 ---------------------------------------------------------------------------
+-- Every live grid, so a spell dragged out of the list can find the cell it
+-- was dropped on. The list has no idea which cards exist, and a card has no
+-- idea a drag is happening - this is the one thing that has to know both.
+local grids = {}
+
+-- The cell under the cursor across ALL of them, or nothing. Walked backwards
+-- so the most recently built card wins where two overlap.
+function UI.CellUnderCursor()
+    for index = #grids, 1, -1 do
+        local grid = grids[index]
+        if grid:IsVisible() then
+            local cell = grid.CellAt()
+            if cell then return grid, cell end
+        end
+    end
+    return nil, nil
+end
+
 function UI.CellGrid(parent, cfg)
     local grid = CreateFrame("Frame", nil, parent)
     grid.cells = {}
     grid.slots = {}
+    grids[#grids + 1] = grid
 
     -- Where a dragged cell would land: an accent outline rather than a wash
     -- over the icon, so it can be fully opaque and still show what is under it.
@@ -1250,12 +1269,38 @@ function UI.CellGrid(parent, cfg)
 
         -- Recessed, not raised: an empty cell is a slot waiting to be filled,
         -- and a well reads that way where a raised tile reads as a button.
+        -- Only ever seen on an EMPTY cell now - a filled one wears the bar's
+        -- own backdrop instead, see below.
         cell.bg = Fill(cell, "BACKGROUND", C.well)
+
+        -- The bar's real backdrop, with its real texture and colour. This is
+        -- what makes the card a PREVIEW rather than a diagram: what you are
+        -- looking at is painted by the same two functions that paint the
+        -- thing on screen, from the same style table.
+        cell.plate = cell:CreateTexture(nil, "BACKGROUND", nil, 1)
+        cell.plate:SetAllPoints(cell)
+        cell.plate:Hide()
 
         cell.icon = cell:CreateTexture(nil, "ARTWORK")
         cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
         cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
         cell.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        -- The fill of a bar-shaped cell, beside its square icon. Without it a
+        -- tracking bar in the editor is an icon and a hole, which tells you
+        -- nothing about the texture you just picked.
+        cell.fill = cell:CreateTexture(nil, "ARTWORK", nil, 1)
+        cell.fill:Hide()
+
+        cell.caption = cell:CreateFontString(nil, "OVERLAY")
+        cell.caption:SetJustifyH("LEFT")
+        cell.caption:SetWordWrap(false)
+        cell.caption:Hide()
+
+        -- Its own frame above the cell's textures, exactly like the border on
+        -- screen: a texture on the cell would be painted under the cell's own
+        -- child frames whatever layer it claims.
+        cell.chrome = ns.CreateChrome(cell)
 
         cell.plus = UI.Label(cell, "+", 16, C.textFaint)
         cell.plus:SetPoint("CENTER", cell, "CENTER", 0, -1)
@@ -1332,19 +1377,7 @@ function UI.CellGrid(parent, cfg)
             grid.dragFrom = self.dkIndex
             self.icon:SetAlpha(0.3)
             grid:SetScript("OnUpdate", function()
-                local target = CellUnderCursor()
-                -- Not `target and SlotRect(target)`: `and` keeps only the
-                -- FIRST return value, so the size would silently be nil.
-                local x, y, w, h
-                if target then x, y, w, h = SlotRect(target) end
-                if x then
-                    marker:ClearAllPoints()
-                    marker:SetPoint("TOPLEFT", grid, "TOPLEFT", x - 2, y + 2)
-                    marker:SetSize(w + 4, h + 4)
-                    marker:Show()
-                else
-                    marker:Hide()
-                end
+                grid.ShowMarker(CellUnderCursor())
             end)
         end)
 
@@ -1364,6 +1397,26 @@ function UI.CellGrid(parent, cfg)
         grid.cells[index] = cell
         return cell
     end
+
+    -- Reachable from outside, so a drag that started somewhere else entirely
+    -- can ask this grid whether the cursor is over one of its cells.
+    grid.CellAt = CellUnderCursor
+    grid.dkDrop = cfg.onDrop
+
+    grid.ShowMarker = function(index)
+        local x, y, w, h
+        if index then x, y, w, h = SlotRect(index) end
+        if not x then
+            marker:Hide()
+            return
+        end
+        marker:ClearAllPoints()
+        marker:SetPoint("TOPLEFT", grid, "TOPLEFT", x - 2, y + 2)
+        marker:SetSize(w + 4, h + 4)
+        marker:Show()
+    end
+
+    grid.HideMarker = function() marker:Hide() end
 
     -- Returns the height it ended up needing, so the page can lay out below.
     grid.Refresh = function()
@@ -1388,44 +1441,104 @@ function UI.CellGrid(parent, cfg)
             local spellID = cfg.content(index)
             cell.dkSpellID = spellID
 
+            -- The bar's OWN look, resolved by the same function the screen
+            -- calls. Asked for per cell, because a cell can be scaled and the
+            -- automatic text size follows the cell rather than the bar.
+            local style = cfg.style and cfg.style(h)
+            local isBar = slots[index].kind == "bar"
+
+            if spellID and style then
+                ns.PaintSurface(cell.plate, style)
+                ns.PaintBorder(cell.chrome, style, isBar)
+                cell.bg:Hide()
+            else
+                cell.plate:Hide()
+                cell.chrome.pixel:Hide()
+                if cell.chrome.SetBackdrop then cell.chrome:SetBackdrop(nil) end
+                cell.bg:Show()
+            end
+
             if spellID then
                 local texture = ns.SpellTexture(spellID)
                 cell.icon:SetTexture(texture or ns.WHITE)
                 cell.icon:SetDesaturated(not texture)
                 cell.icon:SetAlpha(1)
 
+                local zoom = style and style.iconZoom or 0.08
+                cell.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+
                 -- Square, even in a bar-shaped cell. Stretched across the
                 -- width of a bar a spell icon is an unreadable smear, and the
                 -- editor is supposed to show what the bar will look like -
                 -- where the icon is a square at one end.
                 cell.icon:ClearAllPoints()
-                cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
-                if w > h then
-                    cell.icon:SetPoint("BOTTOMLEFT", cell, "BOTTOMLEFT", 1, 1)
-                    cell.icon:SetWidth(h - 2)
+                if isBar then
+                    local place = cfg.iconPlacement and cfg.iconPlacement() or "left"
+                    cell.icon:SetShown(place ~= "hidden")
+                    local side = (place == "right") and "RIGHT" or "LEFT"
+                    cell.icon:SetPoint("TOP" .. side, cell, "TOP" .. side, 0, 0)
+                    cell.icon:SetPoint("BOTTOM" .. side, cell, "BOTTOM" .. side, 0, 0)
+                    cell.icon:SetWidth(h)
+
+                    -- The fill, so the texture you just picked is visible on
+                    -- the thing you picked it for.
+                    local inset = (place == "hidden") and 0 or h
+                    cell.fill:ClearAllPoints()
+                    cell.fill:SetPoint("TOPLEFT", cell, "TOPLEFT",
+                        (place == "right") and 0 or inset, 0)
+                    cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT",
+                        (place == "right") and -inset or 0, 0)
+                    if style then
+                        local fill = style.backdropTexture
+                        if fill and ns.Media.IsKnown("statusbar", fill) then
+                            cell.fill:SetTexture(ns.Media.Statusbar(fill))
+                        else
+                            cell.fill:SetTexture(ns.WHITE)
+                        end
+                        cell.fill:SetVertexColor(C.accent[1], C.accent[2],
+                            C.accent[3], 0.5)
+                    end
+                    cell.fill:Show()
+
+                    if style and style.spellName.show then
+                        local name = style.spellName
+                        ns.Media.ApplyFont(cell.caption, name.font, name.size,
+                            name.outline, name.color)
+                        cell.caption:ClearAllPoints()
+                        cell.caption:SetPoint("LEFT", cell, "LEFT",
+                            ((place == "right") and 4 or (inset + 4)), 0)
+                        cell.caption:SetWidth(math.max(8, w - inset - 8))
+                        cell.caption:SetText(ns.SpellName(spellID) or "")
+                        cell.caption:Show()
+                    else
+                        cell.caption:Hide()
+                    end
                 else
-                    cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
+                    cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 0, 0)
+                    cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 0, 0)
+                    cell.icon:Show()
+                    cell.fill:Hide()
+                    cell.caption:Hide()
                 end
 
-                cell.icon:Show()
                 cell.plus:Hide()
                 cell.number:SetText(tostring(index))
-                cell.edge:SetColor(0, 0, 0, 1)
+                cell.edge:Hide()
             else
                 cell.icon:Hide()
+                cell.fill:Hide()
+                cell.caption:Hide()
                 cell.plus:Show()
                 cell.number:SetText("")
                 cell.edge:SetColor(C.control[1], C.control[2], C.control[3], 1)
+                cell.edge:Show()
             end
 
             -- The selected cell is what the right column is editing, so it has
             -- to be obvious which one that is.
             local isSelected = cfg.selected and cfg.selected() == index
             cell.ring:SetShown(isSelected)
-            if isSelected then
-                cell.hover:Hide()
-                cell.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
-            end
+            if isSelected then cell.hover:Hide() end
 
             cell:Show()
         end
@@ -2047,6 +2160,50 @@ end
 function UI.SpellRow(parent, width, height)
     local row = CreateFrame("Button", nil, parent)
     row:SetSize(width, height or 32)
+
+    -- Drag it onto a cell. Clicking works and always has, but picking a spell
+    -- up and putting it where you want it is the gesture people reach for
+    -- first - and until now the list simply did not answer it.
+    row:RegisterForDrag("LeftButton")
+
+    row:SetScript("OnDragStart", function(self)
+        if not self.dkSpellID then return end
+
+        local proxy = GetDragProxy()
+        proxy:SetSize(30, 30)
+        proxy.icon:SetTexture(self.icon:GetTexture())
+        proxy:Show()
+
+        -- The proxy follows the cursor and the target cell lights up, so the
+        -- drop is aimed rather than hoped for. Driven from the ROW, because
+        -- the grid it will land on is not known yet.
+        self:SetScript("OnUpdate", function()
+            local scale = UIParent:GetEffectiveScale()
+            local x, y = GetCursorPosition()
+            proxy:ClearAllPoints()
+            proxy:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+
+            local grid, cell = UI.CellUnderCursor()
+            if row.dkMarked and row.dkMarked ~= grid then
+                row.dkMarked.HideMarker()
+            end
+            row.dkMarked = grid
+            if grid then grid.ShowMarker(cell) end
+        end)
+    end)
+
+    row:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+        if dragProxy then dragProxy:Hide() end
+
+        local grid, cell = UI.CellUnderCursor()
+        if row.dkMarked then row.dkMarked.HideMarker() end
+        row.dkMarked = nil
+
+        if grid and cell and grid.dkDrop and self.dkSpellID then
+            grid.dkDrop(cell, self.dkSpellID)
+        end
+    end)
 
     row.bg = Fill(row, "BACKGROUND", C.surface)
     row.bg:Hide()
