@@ -1,6 +1,6 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.6.0**. Read this first.
+State as of **2026-08-07**, version **4.6.1**. Read this first.
 
 ## Where we are
 
@@ -18,9 +18,86 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.6.0 is statically clean over 24 files and **has not been run in the
-game** — the client was closed the whole time it was built. The icon work in
-4.5.0 WAS confirmed in game; everything added since has not.
+Version 4.6.1 is statically clean over 25 files. Parts of it HAVE now been
+seen running — see *What is confirmed in game* below, which is the list that
+matters, because the rest has only ever been read.
+
+## What is confirmed in game, and what is not
+
+The owner is playing on this build. Split honestly, because "it is written"
+and "it works" are different claims and only one of them is worth anything.
+
+**Seen working**
+
+- Icons on a bar come out one size, square, correctly spaced (4.5.0, and the
+  lesson that got there is below).
+- The window renders: rail, bar cards, the settings column with the new
+  Arrangement, Effects and Visibility sections.
+- The twenty shipped bar textures appear in the texture list.
+- An adopted buff bar renders as a bar — square icon, fill, name — after the
+  smear fix.
+
+**Reported broken, then fixed, NOT yet re-checked**
+
+- The spacing model (wide blocks had no gap at all).
+- `SetPropagateKeyboardInput` blocked in combat.
+- The border sitting on a bar's fill instead of outside it.
+- The bar textures were generated one directory ABOVE the repo, so the addon
+  registered twenty names pointing at nothing. Fixed and verified as
+  uncompressed 32-bit bottom-up 256x64 TGA — the format the client loads.
+
+**Written, never run**
+
+- Every arrangement except Grid: staggered, arc, diagonal, puzzle.
+- Build mode in all of it: cell handles, dragging, wheel-scaling, the spell
+  palette, the tool panel.
+- Every effect: flash, ready edge, nag, low warning, aura glow, dim.
+- Every visibility rule.
+- Drag-and-drop of a spell from the list onto a cell.
+- The media previews in the dropdowns.
+- The logo as a TGA (header verified, loading not).
+
+**Owner's verdict on the look, verbatim:** *"ich finde das alles nicht so
+dolle was im spiel angezeigt wird"*, and the icon *"ist jetzt auch nicht
+cool"*. Both stand. The agreed diagnosis is in *Why it looks weaker than it
+should* below.
+
+## Why it looks weaker than it should
+
+Three reasons, and only the third is fixable by trying harder.
+
+1. **There is no layout engine.** No flex, no grid, no auto-height. Margin
+   collapsing had to be implemented by hand in `Grid:Layout` this session.
+2. **The primitives are poor.** Colour rectangles, textures, font strings,
+   masks. No radii, no shadows, no blur. Everything modern-looking has to
+   arrive as an image file.
+3. **It cannot be seen from here.** Every visual judgement this session came
+   out of the owner's screenshots. That is why the spacing was wrong: not a
+   skill gap, a feedback gap.
+
+The agreed way out, in the order agreed with the owner:
+
+- **Ship art instead of drawing rectangles.** Verified this session:
+  EllesmereUI's border files are all **256x32** — WoW's nine-slice strip,
+  eight 32x32 tiles in a row — and `edgeSize` values in the wild are 1, 8, 10,
+  12, 14, 16, 32. So real rounded corners with soft shadows ARE deliverable as
+  generated TGA, and they plug straight into the border texture picker that
+  already exists. This is the honest answer to the owner's border-radius
+  request: art, not a slider, because WoW has no radius property.
+- **A token layer** (`Core/Design.lua`): the window currently uses seven font
+  sizes and a dozen hand-picked spacings, every one of them guessed
+  individually.
+- **A specimen sheet**, as a PNG that can be looked at from here and a
+  `/zs design` page in game.
+- **`LibZSLayout-1.0`** as a standalone LibStub library other addons could
+  use — the box model, stacks, grid, content sizing and dirty-marking that
+  WoW lacks. Written twice by hand already (`Grid` in Widgets, `Core/Layout`
+  for the bars), so extracting it is tidying rather than inventing.
+
+**Owner's decision on sequencing (2026-08-07):** *"also das layout system
+machen wir mal wenn wir bock haben, erstmal fixen wir das addon, das hat 1000
+bugs"*. So: bug-fixing first, design system when it is wanted, library after
+that.
 
 ## The shape of the window, and why it is that shape
 
@@ -231,6 +308,7 @@ client patch lands.
 | `Core/KnownProcs.lua` | the shipped proc database, by class and spec |
 | `Core/Bars.lua` | the bar data model — cells, arrangement, per-cell overrides |
 | `Core/Layout.lua` | pure geometry: where every cell of a bar ends up |
+| `Core/MediaLibrary.lua` | the twenty bar textures this addon ships, into LibSharedMedia |
 | `Core/Visibility.lua` | the rules that decide when a bar is on screen |
 | `Core/Effects.lua` | flash, edge, nag, warning — what a cell does beyond sitting there |
 | `Core/Glow.lua` | self-built proc glow, no external library |
@@ -398,6 +476,27 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **Generated files land where the SHELL is, not where the repo is.** Twenty
+  bar textures were written one directory above the repo and the commit that
+  announced them contained none of them — the addon registered twenty names
+  pointing at nothing. `cd` into the repo in the same command, and check that
+  a generated file is actually in the commit before saying it shipped.
+- **A TGA the client will load is uncompressed, 32-bit, bottom-up origin, and
+  power-of-two.** A top-down origin or RLE compression is the usual reason a
+  texture comes out blank with no error at all. Read bytes 2, 16 and 17 of the
+  header rather than trusting the writer.
+- **Lua does not accept `\A` as an escape.** The icon path went into
+  `Init.lua` with single backslashes through a Python rewrite; the whole file
+  would have failed to parse at login. Any path written by a script needs its
+  backslashes doubled for Lua AND for the script's own string rules.
+- **`and` truncates multiple return values.** `local x, y, w, h = target and
+  SlotRect(target)` keeps only x. Use an `if`.
+- **`SetPropagateKeyboardInput` is protected in combat.** There is no way
+  around it; guard the call and give up the feature for the duration.
+
+### Older, and still true
+
+
 - **Never guess a WoW API, and never guess a spell ID.** Grep
   `C:\Games\World of Warcraft\_retail_\Interface\AddOns` first: working,
   version-matched code beats documentation and beats memory. Two IDs were
@@ -442,23 +541,30 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 **The schedule, from the owner on 2026-08-06:** heavy work over the weekend of
 8-9 Aug, and **every basic finished by Wednesday 12 Aug** — because patch 12.1
 lands on **11 Aug** and the 12.1 features go in after that, not instead of the
-basics. The parked stack (`Engine`, `Catalog`, `Probe`, `Groups`, `CoTanks`,
-`OptionsGroups`) is what waits for it, plus the owner's tank ideas, which they
-deliberately held back until the basics stand.
+basics.
 
-1. **Run 4.6.0 in the game.** None of the arrangement engine, build mode,
-   effects or visibility rules has been seen working — the client was closed
-   the whole time it was built. First pass to make: open `/zs`, switch a bar to
-   **Arc**, check the preview curves and the screen agrees; then `/zs build`,
-   drag a cell, scroll it, and confirm the bar frame resizes around it on mouse
-   up. Then switch **Flash** on and watch one cooldown land.
-2. **Owner-side data**: confirm the remaining proc durations by letting one run
+1. **Bug hunt.** The owner's call, and the right one: a great deal was built
+   in one session and most of it has never run. Work down *Written, never run*
+   above, one group at a time, and prefer FIXING to adding until that list is
+   short.
+2. **Our own drawn bar cells have no fill.** A tracking bar the addon draws
+   itself (an aura proc, or a cooldown whose frame is not pooled) shows a
+   backdrop, an icon, a name and a sweep — but no status bar. It does not look
+   like a bar. Adopted buff-bar frames are fine; they bring Blizzard's own.
+   This is the largest known gap.
+3. **"The background shows through the circle"** — reported with a screenshot,
+   diagnosis deliberately NOT guessed. `/zs skin` now reports which template a
+   frame came from and walks its child frames; ask for that output rather than
+   reasoning about it. Guessing here cost a day once already.
+4. **Owner-side data**: confirm the remaining proc durations by letting one run
    out *without* casting the ability, then `/zs auras export` for Blood and
    paste it into `Core/KnownProcs.lua`. Then Frost and Unholy.
-3. **Tank ideas** — the owner has a list, held back until the basics stand.
-4. **Logo** — SVG for the repo, TGA for the game. WoW cannot load SVG.
-   Interim: `## IconTexture: 1380870`.
-5. After 12.1 lands: un-park the aura stack and re-test it.
+5. **A better logo.** The owner does not like the current one and is going to
+   ask Claude Design. Bring back a PNG or SVG; converting it to a game-ready
+   TGA is a two-minute job (see `Media/`, and the header rules under
+   *Verification*).
+6. **Tank ideas** — the owner has a list, held back until the basics stand.
+7. After 12.1 lands: un-park the aura stack and re-test it.
 
 ### The window density pass is DONE, and what it changed
 
