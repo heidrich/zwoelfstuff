@@ -442,13 +442,32 @@ local held = {}          -- every item we have touched, so it can be handed back
 local function RebuildItemIndex()
     wipe(itemBySpell)
     wipe(itemViewer)
+
+    -- INDEXED UNDER EVERY FORM OF THE SPELL, not just the one the frame is
+    -- reporting this second. A talent that replaces a spell changes the ID
+    -- the frame resolves to, and a cell that stored the old ID would simply
+    -- stop finding it - the spell is right there on screen and the bar goes
+    -- blank. Frostbolt becoming Glacial Spike is the everyday case.
+    --
+    -- The exact ID always wins; the other forms only fill gaps. Two spells of
+    -- one family can be on screen at once (a base and its override both
+    -- tracked), and without that rule whichever came out of the pool first
+    -- would answer for both.
+    local exact = {}
+
     for _, viewer in ipairs(ns.CDM.VIEWERS) do
         ns.CDM:ForEachItem(viewer.key, function(item)
             local spellID = ns.CDM:ItemSpellID(item)
-            if spellID and not itemBySpell[spellID] then
+            if not spellID then return end
+
+            if not exact[spellID] then
+                exact[spellID] = true
                 itemBySpell[spellID] = item
-                itemViewer[item] = viewer
             end
+            for _, variant in ipairs(ns.CDM:VariantFamily(spellID)) do
+                if not itemBySpell[variant] then itemBySpell[variant] = item end
+            end
+            itemViewer[item] = viewer
         end)
     end
 end
@@ -813,7 +832,11 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
 
     -- Whatever this cell held last time is handed back before anything else,
     -- or moving a spell would leave its old frame pinned to a dead cell.
-    if cell.item and (not spellID or ns.CDM:ItemSpellID(cell.item) ~= spellID) then
+    -- SameSpell, not equality: the frame we are holding may have transformed
+    -- into another form of the same spell since the last pass, and dropping it
+    -- for that reason is how a cell goes empty mid-fight.
+    if cell.item and (not spellID
+        or not ns.CDM:SameSpell(ns.CDM:ItemSpellID(cell.item), spellID)) then
         ns.CDM:Release(cell.item)
         cell.item = nil
     end

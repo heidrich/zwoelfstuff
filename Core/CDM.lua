@@ -158,13 +158,168 @@ function CDM:GetInfo(cooldownID)
     return nil
 end
 
--- The spell a given item frame stands for. overrideSpellID wins: a talent
--- that replaces a spell reports the replacement there, and that is what the
--- player actually casts and sees.
+---------------------------------------------------------------------------
+-- Which spell an item frame stands for
+--
+-- This used to be one line - `info.overrideSpellID or info.spellID` - and
+-- that line is behind a whole class of "it tracks the wrong thing" reports.
+-- Three separate faults, each one visible in the reference's own workarounds
+-- (EllesmereUICdmSpellPicker.lua:40-231):
+--
+--   1. THE OVERRIDE GOES STALE. Blizzard keeps reporting an overrideSpellID
+--      after the talent that provided it is gone, so the cell shows a spell
+--      the player no longer has - wrong name, wrong icon. The reference
+--      takes the override only when IsPlayerSpell agrees the player has it.
+--
+--   2. THE FRAME KNOWS BETTER THAN THE INFO TABLE. Under a transform
+--      (Glacial Spike out of Frostbolt) frame:GetSpellID() returns the form
+--      that exists in the world; the static cooldownInfo does not.
+--
+--   3. AN ACTIVE AURA HANDS BACK A SECRET. While the buff is up,
+--      GetSpellID/GetAuraSpellID return secret values, so resolution falls
+--      through to the generic spec-aura entry - which is why an icon can
+--      change into something unrecognisable for exactly as long as the buff
+--      lasts. The answer is to remember the last CLEAN read per cooldownID
+--      and reuse it. It self-heals: any later clean read overwrites it, so a
+--      re-talented cooldown re-resolves on the next pass.
+--
+-- Secret discipline throughout: issecretvalue is asked BEFORE any comparison,
+-- because `id > 0` on a secret is itself the taint.
+---------------------------------------------------------------------------
+
+-- A spell ID we are allowed to do Lua on. ns.CanCompute covers the secret
+-- test; the rest rejects the shapes that are not an ID.
+local function Usable(id)
+    if type(id) ~= "number" or not ns.CanCompute(id) then return false end
+    return id > 0 and id == math.floor(id)
+end
+CDM.UsableSpellID = Usable
+
+local function CallOn(item, method)
+    local fn = item and item[method]
+    if type(fn) ~= "function" then return nil end
+    local ok, value = pcall(fn, item)
+    if ok and Usable(value) then return value end
+    return nil
+end
+
+-- Does the player have this spell right now? true, false, or nil for "the
+-- client will not say". IsPlayerSpell is what the reference asks, but it is
+-- deprecated on this build; C_SpellBook.IsSpellKnown is the current spelling
+-- and is what the installed addons use. Nil rather than a guess, so the one
+-- caller can decide what an unanswerable question means.
+local function PlayerHas(spellID)
+    if not Usable(spellID) then return nil end
+    local known = C_SpellBook and C_SpellBook.IsSpellKnown
+    if not known then return nil end
+    local ok, has = pcall(known, spellID)
+    if not ok then return nil end
+    return has and true or false
+end
+
+-- The last clean GetSpellID seen for a cooldownID, so an active (secret)
+-- read still resolves to the live talent form. Keyed by cooldownID, which is
+-- a plain number and stays readable while the aura's own fields do not.
+local cleanSpellByCooldown = {}
+
+function CDM:BaseSpell(spellID)
+    if not (Usable(spellID) and C_Spell and C_Spell.GetBaseSpell) then return nil end
+    local ok, base = pcall(C_Spell.GetBaseSpell, spellID)
+    if ok and Usable(base) and base ~= spellID then return base end
+    return nil
+end
+
+function CDM:OverrideSpell(spellID)
+    if not (Usable(spellID) and C_Spell and C_Spell.GetOverrideSpell) then return nil end
+    local ok, override = pcall(C_Spell.GetOverrideSpell, spellID)
+    if ok and Usable(override) and override ~= spellID then return override end
+    return nil
+end
+
+-- Every ID that means the same spell as this one: itself, what it was before
+-- a talent replaced it, what it becomes, and the replacement of its base.
+-- A stored spell must find its live frame across all four, or picking
+-- "Frostbolt" stops tracking the moment it turns into Glacial Spike.
+function CDM:VariantFamily(spellID)
+    local family = {}
+    if not Usable(spellID) then return family end
+
+    local function Add(id)
+        if not Usable(id) then return end
+        for _, existing in ipairs(family) do
+            if existing == id then return end
+        end
+        family[#family + 1] = id
+    end
+
+    Add(spellID)
+    Add(self:OverrideSpell(spellID))
+    local base = self:BaseSpell(spellID)
+    if base then
+        Add(base)
+        Add(self:OverrideSpell(base))
+    end
+    return family
+end
+
+-- True when two IDs name the same spell in any of its forms.
+function CDM:SameSpell(a, b)
+    if not (Usable(a) and Usable(b)) then return false end
+    if a == b then return true end
+    for _, id in ipairs(self:VariantFamily(a)) do
+        if id == b then return true end
+    end
+    for _, id in ipairs(self:VariantFamily(b)) do
+        if id == a then return true end
+    end
+    return false
+end
+
 function CDM:ItemSpellID(item)
-    local info = self:GetInfo(self:ItemCooldownID(item))
+    if not item then return nil end
+    local cooldownID = self:ItemCooldownID(item)
+
+    -- 1. The frame's own answer, and it is the authoritative one.
+    local live = CallOn(item, "GetSpellID") or CallOn(item, "GetAuraSpellID")
+    if live then
+        if type(cooldownID) == "number" then cleanSpellByCooldown[cooldownID] = live end
+        return live
+    end
+
+    -- 2. The aura is up and the frame answered with a secret. Reuse the last
+    --    clean read rather than degrading to the generic entry below.
+    if type(cooldownID) == "number" and cleanSpellByCooldown[cooldownID] then
+        return cleanSpellByCooldown[cooldownID]
+    end
+
+    -- 3. The static info, override first but only if the player has it.
+    local info = self:GetInfo(cooldownID)
     if not info then return nil end
-    return info.overrideSpellID or info.spellID
+    return self:InfoSpellID(info)
+end
+
+-- The same choice made against a plain info table, for the paths that have
+-- no frame (the static catalogue). Kept in one place so the picker and the
+-- screen can never disagree about what a cooldown is called.
+function CDM:InfoSpellID(info)
+    if type(info) ~= "table" then return nil end
+
+    local override = info.overrideSpellID
+    if Usable(override) then
+        -- The stale-override guard. When the client cannot answer, keep the
+        -- override: it is still the better guess, and this is exactly the
+        -- behaviour we had before the guard existed.
+        if PlayerHas(override) ~= false then return override end
+    end
+
+    if Usable(info.spellID) then return info.spellID end
+
+    if type(info.linkedSpellIDs) == "table" then
+        for _, linked in ipairs(info.linkedSpellIDs) do
+            if Usable(linked) then return linked end
+        end
+    end
+    return nil
 end
 
 ---------------------------------------------------------------------------
@@ -194,6 +349,98 @@ function CDM:CategoryViewer(category)
     return nil
 end
 
+-- A viewer's position in the list, which is the order the Cooldown Manager
+-- itself puts them in. Each rank owns a band of ten thousand in the sort key,
+-- so Cooldowns can never interleave with Utility.
+function CDM:ViewerRank(key)
+    for index, viewer in ipairs(self.VIEWERS) do
+        if viewer.key == key then return index - 1 end
+    end
+    return #self.VIEWERS
+end
+
+---------------------------------------------------------------------------
+-- Everything the Cooldown Manager knows, on screen or not
+--
+-- Two sources, and the better one is not the obvious one.
+--
+-- GetCooldownViewerCategorySet returns where a cooldown BELONGS. It does not
+-- know what the user did in Blizzard's own Cooldown Manager settings: a spell
+-- dragged to "Not Displayed" is still in the set, so our picker offered
+-- spells the user had deliberately removed, in an order they had deliberately
+-- changed. That is the second half of the list not matching.
+--
+-- CooldownViewerSettings' data provider answers the arrangement question -
+-- GetOrderedCooldownIDs is the user's own order, and anything hidden reports
+-- a category we do not map, so it drops out by itself. The reference reaches
+-- for it for exactly this reason (EllesmereUICdmSpellPicker.lua:437-501) and
+-- keeps the category set as the fallback, every step pcall-guarded, because
+-- the provider only exists once Blizzard's settings frame has been built.
+---------------------------------------------------------------------------
+local function SettingsProvider()
+    local settings = CooldownViewerSettings
+    if not (settings and type(settings.GetDataProvider) == "function") then return nil end
+
+    local ok, provider = pcall(settings.GetDataProvider, settings)
+    if not (ok and type(provider) == "table") then return nil end
+    if type(provider.GetOrderedCooldownIDs) ~= "function"
+        or type(provider.GetCooldownInfoForID) ~= "function" then
+        return nil
+    end
+    return provider
+end
+
+-- Calls fn(cooldownID, viewerKey, order) for every catalogued cooldown.
+-- Returns true when the arranged source answered, false when it fell back.
+function CDM:ForEachCatalogued(fn)
+    local counters = {}
+    local function Order(viewerKey)
+        local rank = self:ViewerRank(viewerKey)
+        counters[rank] = (counters[rank] or 0) + 1
+        return rank * 10000 + counters[rank]
+    end
+
+    local provider = SettingsProvider()
+    if provider then
+        local ok, ordered = pcall(provider.GetOrderedCooldownIDs, provider)
+        if ok and type(ordered) == "table" then
+            for _, cooldownID in ipairs(ordered) do
+                local okInfo, entry = pcall(provider.GetCooldownInfoForID, provider, cooldownID)
+                local category = okInfo and type(entry) == "table" and entry.category or nil
+                local viewerKey = category ~= nil and self:CategoryViewer(category) or nil
+                -- No viewer means Hidden, or a category we do not show. Both
+                -- are things the user chose not to see.
+                if viewerKey then
+                    fn(cooldownID, viewerKey, Order(viewerKey))
+                end
+            end
+            return true
+        end
+    end
+
+    -- Fallback: the static sets. Iterated through VIEWERS rather than
+    -- pairs(Enum), because pairs has no order at all and the groups came out
+    -- shuffled differently on every rebuild.
+    local categories = Enum and Enum.CooldownViewerCategory
+    local getSet = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
+    if not (categories and getSet) then return false end
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        for _, category in pairs(categories) do
+            if self:CategoryViewer(category) == viewer.key then
+                -- true: include what is not talented.
+                local ok, set = pcall(getSet, category, true)
+                if ok and type(set) == "table" then
+                    for _, cooldownID in ipairs(set) do
+                        fn(cooldownID, viewer.key, Order(viewer.key))
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 function CDM:Catalogue()
     -- Keyed by SPELL, not by cooldown. Several cooldownIDs can point at one
     -- spell - the live frame and the static entry both do - and a picker that
@@ -201,16 +448,21 @@ function CDM:Catalogue()
     -- that is what a cell stores.
     local bySpell = {}
 
-    -- `order` is BLIZZARD'S OWN position for this spell inside its category.
-    -- It is the order the Cooldown Manager displays them in - the order you
-    -- arranged in Blizzard's Edit Mode and see on screen - and it is what the
-    -- picker sorts by. Alphabetical looked tidy and matched nothing.
+    -- `order` is BLIZZARD'S OWN position for this spell on screen, and it is
+    -- absolute across all four viewers, not an index inside one category.
+    --
+    -- It has to be absolute. The old version numbered each category from 1,
+    -- so the first Cooldown and the first Utility both scored 1 and the sort
+    -- fell through to the name - which interleaved the groups alphabetically
+    -- and is exactly the "list makes no sense" that was reported. Each viewer
+    -- now owns a band of ten thousand (see ViewerRank), so groups stay whole
+    -- and the position inside a group is Blizzard's own.
     local function Add(cooldownID, viewerKey, live, order)
         if not cooldownID then return end
         local info = self:GetInfo(cooldownID)
         if not info then return end
 
-        local spellID = info.overrideSpellID or info.spellID
+        local spellID = self:InfoSpellID(info)
         if not spellID then return end
 
         local existing = bySpell[spellID]
@@ -221,9 +473,8 @@ function CDM:Catalogue()
                 existing.viewer = viewerKey
                 existing.cooldownID = cooldownID
             end
-            -- The live pass has no order to give - a frame pool is not a
-            -- sorted list - so it comes from the category set, whichever pass
-            -- gets here second.
+            -- First writer wins, and the live pass goes first: a frame's own
+            -- layoutIndex beats anything the static list claims.
             if order and not existing.order then existing.order = order end
             if live then existing.known = true end
             return
@@ -242,33 +493,26 @@ function CDM:Catalogue()
         }
     end
 
+    -- Pass one: what is on screen right now, in the order it is on screen.
+    -- layoutIndex is the frame's own position inside its viewer - the number
+    -- Blizzard lays the row out by - so this is the arrangement the user is
+    -- looking at while they read our picker.
     for _, viewer in ipairs(self.VIEWERS) do
+        local base = self:ViewerRank(viewer.key) * 10000
         self:ForEachItem(viewer.key, function(item)
-            Add(self:ItemCooldownID(item), viewer.key, true)
+            local index = item.layoutIndex
+            if type(index) ~= "number" then index = 0 end
+            Add(self:ItemCooldownID(item), viewer.key, true, base + index)
         end)
     end
 
-    -- Enum.CooldownViewerCategory rather than hardcoded numbers: the values
-    -- are Blizzard's to change, and iterating the enum survives that.
-    --
-    -- The second argument true means "including what is not talented". Those
-    -- are wanted: they are listed and greyed, so a bar can be built for a
-    -- build you are about to switch into instead of the list silently missing
-    -- half the class.
-    local categories = Enum and Enum.CooldownViewerCategory
-    local getSet = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
-    if categories and getSet then
-        for _, category in pairs(categories) do
-            local viewerKey = self:CategoryViewer(category)
-            local ok, set = pcall(getSet, category, true)
-            if ok and type(set) == "table" then
-                -- ipairs, so the index IS Blizzard's order for the category.
-                for index, cooldownID in ipairs(set) do
-                    Add(cooldownID, viewerKey, false, index)
-                end
-            end
-        end
-    end
+    -- Pass two: everything else the Cooldown Manager knows but is not showing
+    -- right now - untalented spells, and the ones Blizzard only pools when
+    -- they become relevant. They are listed and greyed, so a bar can be built
+    -- for a build you are about to switch into.
+    self:ForEachCatalogued(function(cooldownID, viewerKey, order)
+        Add(cooldownID, viewerKey, false, order)
+    end)
 
     local out = {}
     for _, entry in pairs(bySpell) do out[#out + 1] = entry end
@@ -280,8 +524,11 @@ function CDM:Catalogue()
     -- that makes the picker match the thing it is picking from. The spell ID
     -- is the last tiebreak, or two same-named spells would swap places every
     -- time the list is rebuilt.
+    -- math.huge, NOT a big-looking number: the order is banded by viewer now
+    -- (rank * 10000), so a sentinel like 9999 sits INSIDE the first viewer's
+    -- band and would file the unordered leftovers in the middle of Cooldowns.
     table.sort(out, function(a, b)
-        local aOrder, bOrder = a.order or 9999, b.order or 9999
+        local aOrder, bOrder = a.order or math.huge, b.order or math.huge
         if aOrder ~= bOrder then return aOrder < bOrder end
         if a.name == b.name then return a.spellID < b.spellID end
         return a.name < b.name

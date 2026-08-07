@@ -8,6 +8,23 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.12.0",
+        date = "2026-08-07",
+        lines = {
+            "You asked us to take the reference addon's Cooldown Manager apart instead of guessing. Its spell picker turned out to describe both of the things you reported - the list being wrong and the tracking being wrong - and it names five separate causes. All five are fixed here.",
+            "",
+            "FIXED, reported: the list mixed the groups together. Every group was numbered from 1, so the first Cooldown and the first Utility both scored 1 and the tie fell through to the name - which interleaved them alphabetically. Each group owns its own range now, and can never reach into the next one.",
+            "FIXED, and this is the bigger half: the icons actually on your screen contributed no order at all. Their order was taken from a static list instead, when every one of those frames carries its own layout position - the number Blizzard lays the row out by. That number is now what the picker sorts by, so the list reads in the order you are looking at.",
+            "FIXED: the list offered spells you had already removed. Spells dragged to 'Not Displayed' in Blizzard's own Cooldown Manager settings stay in the static category list forever, so they kept turning up here. The arrangement is read from Blizzard's settings directly now - what you hid stays hidden, and the order you dragged things into is the order you get.",
+            "",
+            "FIXED, reported: 'so many tracking errors'. A spell that a talent replaces changes the ID its frame reports - Frostbolt becoming Glacial Spike is the everyday case - and a cell holding the old ID simply stopped finding it. The spell was on screen and the cell went blank. A spell is now indexed under every form of itself, so a cell keeps it through the transform.",
+            "FIXED: an override left behind by a talent you no longer have was still believed. Blizzard keeps reporting one after the talent is gone, so a cell would show a spell you cannot cast, with the wrong name and the wrong icon. It is only taken now when the game agrees you actually have it.",
+            "FIXED, and this one was invisible until you knew where to look: while a buff was UP, its frame answers with a protected value that no addon may read - so resolution fell through to a generic entry for your spec. The icon changed into something unrecognisable for exactly as long as the buff lasted, then changed back. The last readable answer is remembered per cooldown and reused, which also means it corrects itself the moment you respec.",
+            "",
+            "The self test grew a 'Spell identity' section covering all of it - twenty more checks, two of which read your live Cooldown Manager without touching it. They were confirmed by putting the old bugs back and watching the suite go red.",
+        },
+    },
+    {
         version = "4.11.1",
         date = "2026-08-07",
         lines = {

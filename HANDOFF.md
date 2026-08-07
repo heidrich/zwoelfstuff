@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.11.1**. Read this first.
+State as of **2026-08-07**, version **4.12.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~50 checks in
+**Run `/zs test` before you believe anything below.** ~70 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.11.1 is statically clean over 25 files and passes its own checks.
+Version 4.12.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -186,6 +186,66 @@ re-parking inline carries taint into it; in combat set alpha only and flush on
 integrity check that reads where the viewer actually is, with a **tolerant**
 compare — exact equality failed every pass on a scaled UI and re-parked
 forever.
+
+### What the spell picker said — the whole of 4.12.0
+
+`EllesmereUICdmSpellPicker.lua` is 2034 lines and it describes BOTH of the
+things the owner reported. Five distinct causes, none of them guessed.
+
+**The sorting.** Two faults, and the second is the bigger one.
+
+1. Our `Catalogue` numbered every category from 1, so the first Cooldown and
+   the first Utility both scored 1 and the sort fell through to the name —
+   which interleaved the groups alphabetically. The reference gives each
+   viewer a **band of 10000** (`:288`). `CDM:ViewerRank` does that now.
+2. Our live pass supplied **no order at all**, with a comment claiming "a
+   frame pool is not a sorted list". That comment was wrong: every item frame
+   carries **`frame.layoutIndex`**, which is the position Blizzard lays the
+   row out by (`:282`). The live pass now supplies `rank * 10000 + layoutIndex`
+   and wins over the static list, exactly as the reference does.
+3. The static half came from `GetCooldownViewerCategorySet`, which does not
+   know what the user arranged: a spell dragged to **Not Displayed** stays in
+   that set forever, so our picker kept offering spells the owner had removed.
+   `CooldownViewerSettings:GetDataProvider():GetOrderedCooldownIDs()`
+   (`:453-501`) IS the arrangement — hidden entries report a category we do
+   not map, so they drop out by themselves. `CDM:ForEachCatalogued` prefers it
+   and falls back to the category sets, every step `pcall`-guarded, because
+   the provider only exists once Blizzard's settings frame has been built.
+
+**The tracking.** `info.overrideSpellID or info.spellID` was one line and
+three bugs.
+
+1. **The override goes stale.** Blizzard keeps reporting one after the talent
+   providing it is gone (`:483-493`). Guarded now by asking whether the player
+   actually has it. NOTE: the reference asks `IsPlayerSpell`, which is
+   **deprecated** on this build — `C_SpellBook.IsSpellKnown` is the current
+   spelling and what the installed addons use (27 call sites vs 21 for
+   `IsSpellKnownOrInSpellBook`).
+2. **The frame knows better than the info table** (`:158-161`). Under a
+   transform, `frame:GetSpellID()` returns the form that exists in the world.
+   It is now step one, with `GetAuraSpellID` behind it for bar frames.
+3. **An active aura answers with a secret** (`:131-141`), so resolution fell
+   through to the generic spec entry — the icon changed into something
+   unrecognisable for exactly as long as the buff was up. The last CLEAN read
+   is cached per `cooldownID` and reused. It self-heals: any later clean read
+   overwrites it.
+
+**And the consequence nobody would have predicted:** a stored spell must be
+indexed under **every form of itself**, or a talent transform orphans the cell
+— the spell is on screen and the bar goes blank (`:322-339`, `FindVariantIndex`
+matching by family). `CDM:VariantFamily` / `CDM:SameSpell` do that, and
+`Screen.RebuildItemIndex` indexes all four forms with **the exact ID winning
+and the derived ones only filling gaps** — the reference is explicit about
+why (`:71-79`): two spells of one family can be tracked at once, and without
+that rule whichever came out of the pool first answers for both.
+
+One trap this created: the order is now **absolute**, so the old `or 9999`
+sentinel for "no order" sits INSIDE the first viewer's band. It is
+`math.huge` in both sorts (`CDM.lua`, `OptionsBars.lua`). A fixed sentinel
+cannot work once the key is banded.
+
+`Core/Catalog.lua` got the same resolver, but it is **parked out of the TOC**
+until 12.1, so that half is inert today and correct when it returns.
 
 ### What they have that we do not
 
@@ -638,6 +698,19 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **A comment asserting the data is not there is a claim, not a fact.** Our
+  live pass carried "a frame pool is not a sorted list" as its reason for
+  supplying no order — and every one of those frames had a `layoutIndex` on
+  it the whole time. The wrong list the owner reported was a comment nobody
+  re-checked. Verify the negative before you build a fallback around it.
+- **A sort key that becomes absolute invalidates every sentinel.** Banding the
+  order by viewer (`rank * 10000`) turned the old `or 9999` "unordered" marker
+  into a value INSIDE the first band. Grep the sentinel when the scale of a
+  key changes; `math.huge` is the only one that survives a rescale.
+- **One line can carry three bugs.** `info.overrideSpellID or info.spellID`
+  was stale-override, ignored-frame and secret-fallthrough at once. When a
+  reference addon wraps a one-liner in 200 lines, the 200 lines are the
+  requirements — read them before deciding it is over-engineering.
 - **One field with two meanings is a bug waiting for a switch.** A cell's
   `x/y` meant "position" in one arrangement and "offset from a slot" in every
   other, so changing arrangement silently reinterpreted the number. It looked
@@ -766,7 +839,7 @@ basics.
    | `EllesmereUICdmHooks.lua` | 9009 | the icon side and the taint rules |
    | `EllesmereUICooldownManager.lua` | 9701 | the viewers. READ: structure, `:527` defaults, `:3303` hide/restore + the park. Unread: `:3041` forcing Blizzard's Edit Mode settings, `:3815` building a bar, `:4369` icon layout, `:5183` custom icon shapes, `:7230` the tick hot path |
    | `EUI_CooldownManager_Options.lua` | 19764 | their options page. Labels extracted; the code behind them **not read** |
-   | `EllesmereUICdmSpellPicker.lua` | 2034 | their spell picker — relevant to the sorting the owner just reported |
+   | `EllesmereUICdmSpellPicker.lua` | 2034 | **READ, and it paid for itself** — `:40` secret-safe ID test, `:51`/`:58` base + override, `:80` variant store (exact overwrites, derived fill gaps), `:131` the clean-SID-per-cooldownID cache, `:163` the five-step canonical resolve, `:244` order from `layoutIndex` + a 10000 band per viewer, `:453` the settings data provider (respects the user arrangement, drops Hidden), `:512` the picker list itself |
    | `EllesmereUICdmFakeActive.lua` | 1530 | how they preview a bar that is not active |
 
    Their per-bar setting vocabulary is already inventoried (grep `cfg%.`
@@ -777,8 +850,10 @@ basics.
    **five glow types** including a resource-aware one, **decimals below N
    seconds**, **suppress GCD**, **custom duration**, **per-spec bar sets**.
 
-   Start with `EllesmereUICdmSpellPicker.lua` — it is small and it bears
-   directly on the sorting the owner reported — then the options file.
+   The spell picker is DONE and produced 4.12.0 — see *What the spell picker
+   said* below. Next is `EUI_CooldownManager_Options.lua`, then
+   `EllesmereUICdmFakeActive.lua` (which bears on previewing an inactive bar,
+   something our build mode fakes by hand).
 
 3. **Smooth fill for the mirror**, already found and not yet built:
    `SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)`. The

@@ -158,9 +158,11 @@ local function CollectCooldownViewer(picked, seen)
             for _, cooldownID in ipairs(ids) do
                 local okInfo, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cooldownID)
                 if okInfo and info then
-                    -- overrideSpellID is what a talent-modified spell actually
-                    -- applies; linked IDs cover the multi-ID cases.
-                    local id = info.overrideSpellID or info.spellID
+                    -- One resolver for the whole addon: it prefers the
+                    -- override only when the player actually has it, because
+                    -- Blizzard keeps reporting one after the talent is gone.
+                    local id = ns.CDM and ns.CDM:InfoSpellID(info)
+                        or (info.overrideSpellID or info.spellID)
                     if id and not added[id] then
                         added[id] = true
                         seen[id] = true

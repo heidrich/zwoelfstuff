@@ -357,6 +357,134 @@ local function TestFill()
 end
 
 ---------------------------------------------------------------------------
+-- Which spell a frame stands for
+--
+-- Every one of these is a bug that was reported as "it tracks the wrong
+-- thing" or "the list makes no sense". They are written so that they do not
+-- depend on which class is logged in: the fabricated info tables are plain
+-- arguments, and the family checks assert the shape rather than the contents.
+---------------------------------------------------------------------------
+local function TestSpellIdentity()
+    local CDM = ns.CDM
+    if not CDM then
+        Skip("Spell identity", "the Cooldown Manager layer is not loaded")
+        return
+    end
+
+    local Usable = CDM.UsableSpellID
+    Check("A spell ID has to be a positive whole number",
+        Usable(12345) and not Usable(0) and not Usable(-3)
+        and not Usable(1.5) and not Usable("12345") and not Usable(nil))
+
+    -- The stale-override guard. 99999999 is not a spell anybody has, so a
+    -- resolver that trusts overrideSpellID blindly returns it and the cell
+    -- shows an empty icon with no name.
+    if C_SpellBook and C_SpellBook.IsSpellKnown then
+        Check("An override the player does not have is ignored",
+            CDM:InfoSpellID({ overrideSpellID = 99999999, spellID = 12345 }) == 12345)
+    else
+        Skip("An override the player does not have is ignored",
+            "this client cannot answer whether a spell is known")
+    end
+
+    Check("A missing override falls through to the spell",
+        CDM:InfoSpellID({ spellID = 12345 }) == 12345)
+    Check("An override of zero is not an override",
+        CDM:InfoSpellID({ overrideSpellID = 0, spellID = 12345 }) == 12345)
+    Check("A linked ID is better than nothing",
+        CDM:InfoSpellID({ linkedSpellIDs = { 12345 } }) == 12345)
+    Check("Nothing usable resolves to nothing",
+        CDM:InfoSpellID({}) == nil and CDM:InfoSpellID(nil) == nil)
+
+    -- The family is what lets a stored spell survive its own transform.
+    local family = CDM:VariantFamily(12345)
+    local hasSelf, clean, duplicate = false, true, false
+    local seen = {}
+    for _, id in ipairs(family) do
+        if id == 12345 then hasSelf = true end
+        if not Usable(id) then clean = false end
+        if seen[id] then duplicate = true end
+        seen[id] = true
+    end
+    Check("A spell is a member of its own family", hasSelf)
+    Check("Every member of a family is a real ID", clean)
+    Check("A family lists nothing twice", not duplicate)
+    Check("Nothing usable has no family", #CDM:VariantFamily(nil) == 0)
+
+    Check("A spell is the same spell as itself", CDM:SameSpell(12345, 12345))
+    -- Two IDs no client has, so "unrelated" is true on every client rather
+    -- than true until somebody logs in as the wrong class.
+    Check("Two unrelated spells are not the same",
+        not CDM:SameSpell(99999998, 99999999))
+    Check("Nothing is never the same as something",
+        not CDM:SameSpell(nil, 12345) and not CDM:SameSpell(12345, nil))
+
+    -- The rule the whole family exists for, asserted against whatever this
+    -- client actually reports rather than an ID picked in advance.
+    local transformed = CDM:OverrideSpell(12345) or CDM:BaseSpell(12345)
+    if transformed then
+        Check("A spell and its other form are the same spell",
+            CDM:SameSpell(12345, transformed)
+            and CDM:SameSpell(transformed, 12345))
+    else
+        Skip("A spell and its other form are the same spell",
+            "this client reports no other form for the test ID")
+    end
+
+    -- The bands. This is what stopped Cooldowns and Utility interleaving.
+    local ranks = {}
+    for index, viewer in ipairs(CDM.VIEWERS) do
+        ranks[index] = CDM:ViewerRank(viewer.key)
+    end
+    local ascending = true
+    for index = 2, #ranks do
+        if ranks[index] <= ranks[index - 1] then ascending = false end
+    end
+    Check("The viewers rank in the order they are listed", ascending)
+    Check("The first viewer ranks first", ranks[1] == 0)
+    Check("An unknown viewer ranks last",
+        CDM:ViewerRank("no such viewer") >= #CDM.VIEWERS)
+
+    -- A band is ten thousand wide, so a viewer would have to show ten
+    -- thousand cooldowns before it could reach into the next one.
+    local first  = ranks[1] * 10000 + 9999
+    local second = ranks[2] and (ranks[2] * 10000) or math.huge
+    Check("A viewer's band cannot reach into the next one", first < second)
+
+    -- READ-ONLY, against whatever the Cooldown Manager is holding right now.
+    -- The reported symptom was groups interleaving, so the catalogue is asked
+    -- whether it ever returns to a viewer it has already left behind.
+    if not CDM:IsAvailable() then
+        Skip("The picker groups the viewers", "the Cooldown Manager is not up")
+        return
+    end
+
+    local catalogue = CDM:Catalogue()
+    if #catalogue == 0 then
+        Skip("The picker groups the viewers", "the catalogue is empty")
+        return
+    end
+
+    local visited, current, revisited = {}, nil, nil
+    local ordered = true
+    local previous
+    for _, entry in ipairs(catalogue) do
+        if entry.viewer ~= current then
+            if visited[entry.viewer] then revisited = entry.viewer end
+            visited[entry.viewer] = true
+            current = entry.viewer
+        end
+        local order = entry.order
+        if order and previous and order < previous then ordered = false end
+        if order then previous = order end
+    end
+
+    Check("The picker groups the viewers", not revisited,
+        revisited and ("comes back to " .. tostring(revisited)) or nil)
+    Check("The picker never goes backwards through Blizzard's order", ordered)
+end
+
+---------------------------------------------------------------------------
 -- The visibility rules
 ---------------------------------------------------------------------------
 local function TestVisibility()
@@ -508,6 +636,7 @@ function Test:Run()
         { "Rows and columns", TestGridSliders },
         { "Per character", TestPerSpec },
         { "Bar fill",      TestFill },
+        { "Spell identity", TestSpellIdentity },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

@@ -605,7 +605,9 @@ function Workspace:BuildSpellPane(parent, width)
                 local aKnown, bKnown = a.known ~= false, b.known ~= false
                 if aKnown ~= bKnown then return aKnown end
 
-                local aOrder, bOrder = a.order or 9999, b.order or 9999
+                -- math.huge: the catalogue's order is banded per viewer, so
+                -- any fixed sentinel would land inside one of the bands.
+                local aOrder, bOrder = a.order or math.huge, b.order or math.huge
                 if aOrder ~= bOrder then return aOrder < bOrder end
 
                 if a.name == b.name then return a.spellID < b.spellID end
