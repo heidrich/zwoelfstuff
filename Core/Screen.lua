@@ -545,6 +545,9 @@ local function RefreshFill(cell)
         if left <= 0 then
             self:SetValue(Level(0))
             self:SetScript("OnUpdate", nil)
+            -- A window the player declared has no event to end it. This is
+            -- the only clock that knows, so it is the one that closes it.
+            if cell.customEnds then Screen:StopCustomActive(cell) end
             return
         end
         self:SetValue(Level(left / duration))
@@ -952,6 +955,8 @@ function Screen:BlankCell(cell)
     -- otherwise start out claiming a buff is up, with a stale end time.
     cell.spellID, cell.auraEntry, cell.conflict = nil, nil, nil
     cell.active, cell.auraEnds, cell.auraDuration = nil, nil, nil
+    -- A declared window belongs to the spell that was here, not to the cell.
+    cell.customEnds = nil
 end
 
 -- One cell: adopt, draw, or leave empty.
@@ -1023,7 +1028,33 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         held[item] = true
         cell.item = item
         cell.auraEntry, cell.conflict = nil, nil
-        if cell.aura then cell.aura:Hide() end
+
+        -- A CUSTOM ACTIVE WINDOW DRAWS OVER THE ADOPTED ICON.
+        --
+        -- Blizzard's frame stays exactly as it is - not its alpha, not its
+        -- cooldown, not its parent - and our overlay is raised above it for
+        -- as long as the window the player declared is open. That is the
+        -- reference's arrangement (EllesmereUICdmFakeActive.lua:6-9), and it
+        -- is the only one that cannot leave Blizzard's display damaged if we
+        -- are unloaded mid-window.
+        --
+        -- Drawn HERE rather than where the window starts, so there is one
+        -- renderer for the overlay and it cannot drift from the drawn cells.
+        if cell.customEnds and cell.customEnds > GetTime() then
+            local overlay = BuildAuraVisual(cell)
+            overlay:Show()
+            LayoutAuraVisual(overlay, cfg, slot)
+            StyleAuraVisual(overlay, style, slot.kind == "bar")
+            overlay:SetFrameLevel(item:GetFrameLevel() + 2)
+            overlay.icon:SetTexture(ns.SpellTexture(spellID))
+            overlay.label:SetText(ns.SpellName(spellID) or "")
+            cell.inactiveAlpha = style.inactiveAlpha
+            cell.inactiveDesaturate = style.inactiveDesaturate
+            PaintAura(cell, true)
+            RefreshFill(cell)
+        elseif cell.aura then
+            cell.aura:Hide()
+        end
 
         local shape = ItemShape(item)
         local anchor, itemWidth, itemHeight, visible =
@@ -1208,6 +1239,79 @@ function Screen:StartAura(parentSpellID)
         PaintAura(cell, true)
         RefreshFill(cell)
     end)
+end
+
+---------------------------------------------------------------------------
+-- Custom active states: a window the player declared
+--
+-- The cell already holds this spell and is usually showing Blizzard's own
+-- icon for it, with a cooldown sweep and nothing else. For the length of the
+-- window we put OUR OWN overlay on top of that icon - our swipe, our fill,
+-- our timer - and then take it away again.
+--
+-- THE ADOPTED FRAME IS NEVER TOUCHED. Not its alpha, not its cooldown, not
+-- its parent. It sits underneath, covered while we are active, exactly as it
+-- was; the reference is explicit that this is the only safe arrangement
+-- (EllesmereUICdmFakeActive.lua:6-9) and it is also the only one that cannot
+-- leave Blizzard's display damaged if we are unloaded mid-window.
+--
+-- The overlay is raised by frame level rather than by hiding anything, so
+-- nothing about the cell's own layout has to change to make room for it.
+---------------------------------------------------------------------------
+local function ForEachCellHolding(spellID, fn)
+    for index, bar in ipairs(barFrames) do
+        local cfg = ns.db.bars[index]
+        if cfg then
+            for _, cell in ipairs(bar.cells) do
+                -- NOT `held`: that name belongs to the module-level set of
+                -- frames we have borrowed, and shadowing it here would read
+                -- like the wrong thing to the next person in this file.
+                local inCell = cfg.cells and cfg.cells[cell.index]
+                if inCell and ns.CDM:SameSpell(inCell, spellID) then fn(cell, cfg) end
+            end
+        end
+    end
+end
+
+function Screen:StartCustomActive(spellID, seconds)
+    if not (ns.db and ns.db.bars) then return end
+
+    local touched = false
+
+    ForEachCellHolding(spellID, function(cell)
+        -- A cell already driven by a real aura is left alone: Blizzard's own
+        -- clock beats a number somebody typed, every time.
+        if cell.auraEntry or cell.mirrorItem then return end
+
+        local now = GetTime()
+        cell.customEnds = now + seconds
+        cell.active = true
+        cell.auraEnds, cell.auraDuration = cell.customEnds, seconds
+        if cell.aura then cell.aura.cd:SetCooldown(now, seconds) end
+        ns.Effects.NoteAuraEnd(cell, cell.customEnds)
+        touched = true
+    end)
+
+    -- The overlay itself is drawn by the render pass, so pressing the button
+    -- only has to say that the window is open. One repaint per press.
+    if touched then self:Render() end
+end
+
+-- Called when the window runs out. Separate from StopAura because there is no
+-- event behind it: the fill's own clock notices and calls this.
+function Screen:StopCustomActive(cell)
+    if not cell.customEnds then return end
+    cell.customEnds = nil
+    cell.active = false
+    cell.auraEnds, cell.auraDuration = nil, nil
+    ns.Effects.NoteAuraEnd(cell, nil)
+    ClearCooldown(cell.aura and cell.aura.cd)
+    PaintAura(cell, false)
+
+    -- The overlay goes away and leaves Blizzard's icon exactly as it was,
+    -- because it was never altered.
+    if cell.item and cell.aura then cell.aura:Hide() end
+    RefreshFill(cell)
 end
 
 function Screen:StopAura(parentSpellID)

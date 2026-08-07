@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.13.0"
+ns.version = "4.14.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -453,6 +453,19 @@ local ACCOUNT_DEFAULTS = {
     procs       = {},
     auraLinks   = {},
     procsHidden = {},
+
+    -- CUSTOM ACTIVE STATES: [spellID] = seconds.
+    --
+    -- "This is active for twenty seconds after I press it." For the things
+    -- Blizzard's Cooldown Manager shows as a cooldown and nothing more - a
+    -- trinket's use effect, a potion, a racial - where the buff it grants is
+    -- not a tracked buff and so has no clock anywhere on screen.
+    --
+    -- ACCOUNT-WIDE, and for the same reason the recorded procs are: how long
+    -- a trinket lasts is a fact about the trinket, identical on every
+    -- character. It is not a piece of user interface, so it does not belong
+    -- to a profile.
+    activeStates = {},
 }
 
 function ns.OpenProfile()

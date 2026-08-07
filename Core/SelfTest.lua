@@ -425,6 +425,57 @@ local function TestStackThresholds()
 end
 
 ---------------------------------------------------------------------------
+-- Custom active states
+--
+-- A window the player declared, for the things Blizzard only shows as a
+-- cooldown. Runs on the real account store and puts back what it found, so
+-- it is safe against saved data.
+---------------------------------------------------------------------------
+local function TestActiveStates()
+    if not (ns.Auras and ns.Auras.SetActiveState) then
+        Skip("Active states", "the aura layer is not loaded")
+        return
+    end
+
+    local store = ns.Auras:ActiveStates()
+    local restore = store[12345]
+
+    ns.Auras:SetActiveState(12345, 20)
+    Check("A declared window is remembered", ns.Auras:ActiveStateFor(12345) == 20)
+
+    Check("A spell with no window has none", ns.Auras:ActiveStateFor(12346) == nil
+        or ns.CDM:SameSpell(12345, 12346))
+
+    -- The whole reason the lookup is variant-aware: the game reports the form
+    -- you actually cast, which is not always the form you set the window on.
+    local other = ns.CDM:OverrideSpell(12345) or ns.CDM:BaseSpell(12345)
+    if other then
+        Check("The window follows the spell into its other form",
+            ns.Auras:ActiveStateFor(other) == 20)
+    else
+        Skip("The window follows the spell into its other form",
+            "this client reports no other form for the test ID")
+    end
+
+    ns.Auras:SetActiveState(12345, 0)
+    Check("Zero switches the window off",
+        ns.Auras:ActiveStateFor(12345) == nil and store[12345] == nil,
+        "an absent key, not a stored zero")
+
+    ns.Auras:SetActiveState(12345, 15)
+    ns.Auras:SetActiveState(12345, 30)
+    Check("Changing the number takes effect at once",
+        ns.Auras:ActiveStateFor(12345) == 30,
+        "the variant cache has to be dropped on every write")
+
+    Check("Nothing usable is never given a window",
+        ns.Auras:ActiveStateFor(nil) == nil)
+
+    store[12345] = restore
+    ns.ForgetActiveStates()
+end
+
+---------------------------------------------------------------------------
 -- Which spell a frame stands for
 --
 -- Every one of these is a bug that was reported as "it tracks the wrong
@@ -705,6 +756,7 @@ function Test:Run()
         { "Per character", TestPerSpec },
         { "Bar fill",      TestFill },
         { "Stack colours", TestStackThresholds },
+        { "Active states", TestActiveStates },
         { "Spell identity", TestSpellIdentity },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },

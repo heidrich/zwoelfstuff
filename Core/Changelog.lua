@@ -8,6 +8,22 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.14.0",
+        date = "2026-08-07",
+        lines = {
+            "NEW: ACTIVE FOR. Some things the Cooldown Manager only ever shows as a cooldown - a trinket's use effect, a potion, a racial. It knows exactly when they come back and nothing at all about how long they LAST, so the one number you actually want mid-fight is on screen nowhere. Say how long it lasts once, and the cell runs that window every time you press it: our sweep, our fill, our timer.",
+            "Settings, under Auras. The list offers the spells that are on your bars, because those are the only ones where declaring a window changes anything you can see. Zero switches it off.",
+            "It is remembered for the whole ACCOUNT rather than the character, for the same reason the recorded procs are: how long a trinket lasts is a fact about the trinket, identical on every alt. It is not a piece of user interface.",
+            "",
+            "A spell the Cooldown Manager already tracks as a buff is left alone. Its own clock is measured inside the game and beats a number somebody typed, every time.",
+            "The window follows a spell into its other form, so a state set before a talent transforms the spell still fires afterwards.",
+            "",
+            "BLIZZARD'S ICON IS NEVER TOUCHED - not its transparency, not its cooldown, not its parent. The window is drawn on a layer above it and taken away again, so if this addon is ever unloaded mid-window what is left behind is Blizzard's display exactly as it was. That is the reference addon's arrangement and it is the only one that cannot leave a mess.",
+            "",
+            "Second of the four you picked. Pandemic glow and the small ones - charge marks, keybind text, the spark - are still to come.",
+        },
+    },
+    {
         version = "4.13.0",
         date = "2026-08-07",
         lines = {

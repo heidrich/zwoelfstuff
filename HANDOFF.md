@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.13.0**. Read this first.
+State as of **2026-08-07**, version **4.14.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~78 checks in
+**Run `/zs test` before you believe anything below.** ~84 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.13.0 is statically clean over 25 files and passes its own checks.
+Version 4.14.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -261,7 +261,7 @@ to a Blood tank, which is the only ranking that matters for this addon:
 |---|---|---|
 | ~~stack thresholds~~ — **BUILT in 4.13.0**, three bands. Ticks and a stack-driven fill length were left out | 14 | **Bone Shield.** Was the single biggest win available |
 | pandemic glow — glows inside the refresh window | 10 | high: it is the other half of "when do I press it" |
-| custom active states (`EllesmereUICdmFakeActive.lua`) — user says "this is active for 20s after use", for trinkets/potions/racials Blizzard's CDM does not track as buffs | — | **high, and nothing else here can do it** |
+| ~~custom active states~~ — **BUILT in 4.14.0** as "Active for". Their per-spell menu, glow styling and 12.1 engine-slot driver were left out | — | was **high, and nothing else here could do it** |
 | charge hash lines across the fill | 5 | medium, cheap to build |
 | keybind text on an icon, with size/offset/align/colour | 6 | medium |
 | style presets, saved per profile and applied by name | — | medium, and see the note below |
@@ -325,6 +325,36 @@ back to its base colour.
 
 Not built: their tick marks, `stackBasedBar` (fill length driven by stacks
 rather than time), and multi-band editing beyond three fixed rows.
+
+### Active for — where it lives, and the one trap in it
+
+`ns.account.activeStates[spellID] = seconds`, account-wide beside the procs
+for the same reason: how long a trinket lasts is a fact about the trinket.
+
+The trigger is `UNIT_SPELLCAST_SUCCEEDED`, which `Core/Auras.lua` already
+listened to for the proc recorder — the press IS the event, because there is
+no aura to watch and on this patch none may be read.
+
+**THE OVERLAY IS DRAWN BY THE RENDER PASS, NOT BY THE TRIGGER.** This was the
+second attempt. The first built and styled the overlay inside
+`StartCustomActive`, and it was wrong twice over: `PaintCell`'s adopt branch
+ends with `cell.aura:Hide()` on every pass, so the next render — and there are
+many — wiped the window; and it duplicated the geometry the render pass
+already does, which is how two renderers drift apart. Now the trigger only
+records `cell.customEnds` and asks for one repaint, and the adopt branch draws
+the overlay when the window is live. One renderer.
+
+Blizzard's frame is untouched throughout — the overlay is raised by frame
+level, never by hiding or fading the adopted icon
+(`EllesmereUICdmFakeActive.lua:6-9`). If the addon is unloaded mid-window,
+what is left behind is Blizzard's display exactly as it was.
+
+The window is closed by the fill's own `OnUpdate`, because nothing else knows:
+there is no event at the end of a number somebody typed.
+
+Not built: their per-spell right-click menu, per-state glow styling, and the
+12.1 engine-slot driver that reads a real aura's remaining time for the
+built-in rules.
 
 ### The 12.1 aura engine: what today's reading ADDS to `Core/Engine.lua`
 

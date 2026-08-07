@@ -218,6 +218,66 @@ local function BuildDiagnosticsPage(page, width)
         end },
     })
 
+    -- Custom active states ---------------------------------------------------
+    --
+    -- The spells offered are the ones ON YOUR BARS, because that is the only
+    -- set where declaring a window changes anything you can see. A list of
+    -- every spell in the game would be a longer list and a worse one.
+    grid:Section("Active for")
+    grid:Note("Some things the Cooldown Manager only shows as a cooldown - a "
+        .. "trinket's use effect, a potion, a racial. It knows when they come "
+        .. "back, and nothing about how long they LAST, so the one number that "
+        .. "matters is on screen nowhere. Say how long it lasts and the cell "
+        .. "runs that window every time you press it.")
+
+    local activeSpell
+
+    local function BarSpells()
+        local out, seen = {}, {}
+        for _, cfg in ipairs((ns.db and ns.db.bars) or {}) do
+            for _, spellID in pairs(cfg.cells or {}) do
+                if spellID and not seen[spellID] then
+                    seen[spellID] = true
+                    local seconds = ns.Auras:ActiveStates()[spellID]
+                    out[#out + 1] = {
+                        value = spellID,
+                        text = (ns.SpellName(spellID) or ("Spell " .. spellID))
+                            .. (seconds and ("  |cff7ec6d4" .. seconds .. "s|r") or ""),
+                        name = ns.SpellName(spellID) or "",
+                    }
+                end
+            end
+        end
+        table.sort(out, function(a, b) return a.name < b.name end)
+        return out
+    end
+
+    UI.Dropdown(grid:FullRow("Spell", { controlWidth = 260 }), BarSpells,
+        function() return activeSpell end,
+        function(value) activeSpell = value end,
+        { emptyText = "Pick a spell from your bars" })
+
+    UI.Slider(grid:FullRow("Lasts", { controlWidth = 200 }), {
+        get = function()
+            if not activeSpell then return 0 end
+            return ns.Auras:ActiveStates()[activeSpell] or 0
+        end,
+        set = function(value)
+            if activeSpell then ns.Auras:SetActiveState(activeSpell, value) end
+        end,
+        min = 0, max = 120, step = 1,
+        format = function(v)
+            if (v or 0) < 1 then return "off" end
+            return string.format("%ds", v)
+        end,
+        apply = function() ns.Options:Refresh() end,
+    })
+
+    grid:Note("Zero switches it off. This is remembered for the whole account, "
+        .. "not this character: how long a trinket lasts is a fact about the "
+        .. "trinket. A spell the Cooldown Manager already tracks as a buff is "
+        .. "left alone - its own clock is better than a number you typed.")
+
     grid:Section("This client")
 
     local rivalRow = grid:FullRow("Another addon holding the same frames",

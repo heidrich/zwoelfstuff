@@ -219,6 +219,74 @@ local function NoteCast(spellID)
     castAt[spellID] = GetTime()
 end
 
+---------------------------------------------------------------------------
+-- Custom active states
+--
+-- "This is active for N seconds after I press it." For a trinket, a potion or
+-- a racial: Blizzard's Cooldown Manager knows when they are on cooldown and
+-- nothing at all about the buff they grant, so the one number that matters -
+-- am I still inside the window - is on screen nowhere.
+--
+-- It cannot be measured the way a proc is. A proc announces itself with a
+-- glow event; a trinket buff does not, and on this patch its aura may not be
+-- read. So the player states the number once and it is believed. That is the
+-- whole design, and it is why this is a setting rather than a recorder.
+---------------------------------------------------------------------------
+
+-- Every form of every stored spell, so a state set on one variant still
+-- fires when the game reports the other. Rebuilt on demand rather than kept
+-- in step, because the store changes when a person edits it and the lookup
+-- runs on every cast.
+local activeByVariant
+
+local function ForgetActiveStates()
+    activeByVariant = nil
+end
+ns.ForgetActiveStates = ForgetActiveStates
+
+function Auras:ActiveStates()
+    if not ns.account then return {} end
+    ns.account.activeStates = ns.account.activeStates or {}
+    return ns.account.activeStates
+end
+
+-- Seconds, or nil when this spell has no state. Variant-aware.
+function Auras:ActiveStateFor(spellID)
+    if not ns.CanCompute(spellID) then return nil end
+
+    if not activeByVariant then
+        activeByVariant = {}
+        for stored, seconds in pairs(self:ActiveStates()) do
+            local value = tonumber(seconds)
+            if value and value > 0 then
+                -- The exact ID wins; the derived forms only fill gaps, the
+                -- same rule the item index follows. Two spells of one family
+                -- can each carry their own window.
+                activeByVariant[stored] = value
+                for _, variant in ipairs(ns.CDM:VariantFamily(stored)) do
+                    if activeByVariant[variant] == nil then
+                        activeByVariant[variant] = value
+                    end
+                end
+            end
+        end
+    end
+
+    return activeByVariant[spellID]
+end
+
+function Auras:SetActiveState(spellID, seconds)
+    if not ns.CanCompute(spellID) then return end
+    local store = self:ActiveStates()
+
+    local value = tonumber(seconds)
+    -- Nil rather than 0: an absent key is "no window", and writing zeroes
+    -- would grow the saved variables by one line per spell ever looked at.
+    store[spellID] = (value and value > 0) and value or nil
+
+    ForgetActiveStates()
+end
+
 local function NoteHide(spellID)
     local started = showAt[spellID]
     showAt[spellID] = nil
@@ -699,7 +767,16 @@ watcher:SetScript("OnEvent", function(_, event, arg1, _, arg3)
         if ns.CanCompute(arg1) then NoteHide(arg1) end
 
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if ns.CanCompute(arg3) then NoteCast(arg3) end
+        if ns.CanCompute(arg3) then
+            NoteCast(arg3)
+
+            -- The only trigger a custom active state has. There is no aura to
+            -- watch and no glow to wait for - the press IS the event.
+            local seconds = Auras:ActiveStateFor(arg3)
+            if seconds and ns.Screen then
+                ns.Screen:StartCustomActive(arg3, seconds)
+            end
+        end
 
     elseif event == "SPELL_DATA_LOAD_RESULT" then
         -- Only for a description this addon asked for.
