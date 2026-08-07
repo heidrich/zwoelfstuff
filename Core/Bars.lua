@@ -116,6 +116,19 @@ ns.BAR_DEFAULTS = {
     swipeAlpha = 0.70,
     showEdge   = false,        -- the bright line that follows the sweep
 
+    -- THE FILL OF A TRACKING BAR THE ADDON DRAWS ITSELF.
+    --
+    -- An adopted buff-bar frame brings Blizzard's own status bar with it. A
+    -- cell we draw had none at all, so a bar-shaped aura was a square icon
+    -- and a hole beside it - which is not a bar by any reading.
+    --
+    -- Empty texture means "wear the backdrop's", so the default bar is one
+    -- object rather than two textures that happen to be adjacent.
+    fillColor   = { 1.00, 0.478, 0.239 },
+    fillAlpha   = 0.85,
+    fillTexture = "",
+    fillReverse = false,       -- true fills up instead of draining away
+
     -- Text. Three elements, one shape each, because "the countdown can be
     -- moved but the stack count cannot" is the kind of arbitrary limit that
     -- makes people go looking for another addon.
@@ -216,6 +229,8 @@ function Bars:AddCell(index)
         cfg.freeCount = math.min(40, (cfg.freeCount or 6) + 1)
     end
 
+    -- A bigger bar has room for anything a smaller one had to park.
+    self:Resized(cfg)
     self:Changed(index)
     return true
 end
@@ -245,6 +260,7 @@ function Bars:RemoveCell(index, cell)
         cfg.freeCount = math.max(1, (cfg.freeCount or 6) - 1)
     end
 
+    self:Resized(cfg)
     self:Changed(index)
     return true
 end
@@ -347,42 +363,113 @@ function Bars:AddSpell(index, spellID)
     return self:SetCell(index, before + 1, spellID)
 end
 
--- Re-flowing keeps the sequence: changing the column count must not scramble
--- what the user arranged, only re-wrap it.
-function Bars:SetGrid(index, rows, columns)
-    local cfg = self:Get(index)
-    if not cfg then return false end
+---------------------------------------------------------------------------
+-- Resizing a bar, without ever losing what is in it
+--
+-- EVERY CELL KEEPS ITS INDEX. That is what makes the sliders reversible:
+-- widening a grid to twelve columns and pulling it back to six gives you back
+-- exactly what you started with, and a deliberate hole in the middle of a row
+-- is still a hole afterwards.
+--
+-- The version before this one compacted everything to the front on every
+-- change. It called itself a re-flow and it was really a destroy: one drag of
+-- the Columns slider and the arrangement was gone with no way back - which is
+-- precisely what "they do not switch back" meant.
+--
+-- WHAT SHRINKING DOES.
+--
+-- A spell whose index no longer exists is PARKED, not deleted, and it comes
+-- back into its own index the moment the bar is big enough again. Losing a
+-- spell to a slider you were only dragging to see what it looked like is not
+-- something an addon gets to do.
+---------------------------------------------------------------------------
+local function Park(cfg, cell)
+    local spellID = cfg.cells[cell]
+    if not spellID then return end
 
+    cfg.parked = cfg.parked or {}
+    cfg.parked[cell] = {
+        spell = spellID,
+        opts  = cfg.cellOpts and cfg.cellOpts[cell] or nil,
+    }
+
+    cfg.cells[cell] = nil
+    if cfg.cellOpts then cfg.cellOpts[cell] = nil end
+end
+
+local function Place(cfg, cell, record)
+    cfg.cells[cell] = record.spell
+    if record.opts then
+        cfg.cellOpts = cfg.cellOpts or {}
+        cfg.cellOpts[cell] = record.opts
+    end
+end
+
+-- Anything parked that now has room again. Its own index first, so a bar that
+-- grows back is the bar you had rather than a re-sorted version of it.
+local function Unpark(cfg, count)
+    local parked = cfg.parked
+    if not parked then return end
+
+    for cell, record in pairs(parked) do
+        if cell <= count and not cfg.cells[cell] then
+            Place(cfg, cell, record)
+            parked[cell] = nil
+        end
+    end
+
+    -- Its own index is taken or gone: the first free slot, in index order so
+    -- the result does not depend on the order a hash table happens to walk in.
+    local waiting = {}
+    for cell in pairs(parked) do waiting[#waiting + 1] = cell end
+    table.sort(waiting)
+
+    for _, cell in ipairs(waiting) do
+        for target = 1, count do
+            if not cfg.cells[target] then
+                Place(cfg, target, parked[cell])
+                parked[cell] = nil
+                break
+            end
+        end
+    end
+
+    if not next(parked) then cfg.parked = nil end
+end
+
+-- Called after anything that changes how many cells a bar has. Walks what is
+-- actually there rather than counting up to some ceiling, so a table that has
+-- been hand-edited in the saved variables is handled too.
+function Bars:Resized(cfg, count)
+    count = count or self:CellCount(cfg)
+
+    local over = {}
+    for cell in pairs(cfg.cells) do
+        if cell > count then over[#over + 1] = cell end
+    end
+    for _, cell in ipairs(over) do Park(cfg, cell) end
+
+    Unpark(cfg, count)
+end
+
+-- The model operation, on a config rather than an index. Split out so the
+-- self test can exercise it on a throwaway bar without ever touching the
+-- user's own - a test that has to create a real bar to check a rule is a test
+-- that eventually leaves one behind.
+function Bars:ReshapeGrid(cfg, rows, columns)
     rows = math.max(1, math.min(20, rows or cfg.rows))
     columns = math.max(1, math.min(20, columns or cfg.columns))
     if rows == cfg.rows and columns == cfg.columns then return false end
 
-    -- Compact to a plain sequence first, then re-lay it into the new grid.
-    -- Without this, shrinking a grid would silently drop whatever sat in the
-    -- cells that no longer exist.
-    --
-    -- The per-cell settings are carried in the SAME sequence. Keyed by cell
-    -- index, they would otherwise stay where they were while the spells moved
-    -- past them - one re-flow and every override is on the wrong icon.
-    local sequence, extras = {}, {}
-    for cell = 1, self:CellCount(cfg) do
-        if cfg.cells[cell] then
-            sequence[#sequence + 1] = cfg.cells[cell]
-            extras[#sequence] = cfg.cellOpts and cfg.cellOpts[cell] or nil
-        end
-    end
-
     cfg.rows, cfg.columns = rows, columns
-    wipe(cfg.cells)
-    if cfg.cellOpts then wipe(cfg.cellOpts) end
-    for position, spellID in ipairs(sequence) do
-        if position > self:CellCount(cfg) then break end
-        cfg.cells[position] = spellID
-        if extras[position] then
-            cfg.cellOpts = cfg.cellOpts or {}
-            cfg.cellOpts[position] = extras[position]
-        end
-    end
+    self:Resized(cfg)
+    return true
+end
+
+function Bars:SetGrid(index, rows, columns)
+    local cfg = self:Get(index)
+    if not cfg then return false end
+    if not self:ReshapeGrid(cfg, rows, columns) then return false end
 
     self:Changed(index)
     return true
@@ -394,42 +481,66 @@ end
 -- puzzle count them as a length. Switching between the two without carrying
 -- the number across is what makes a six-icon row become a six-icon default
 -- that happens to be the same size by luck, and a 3x4 grid collapse to six.
-function Bars:SetLayout(index, layout)
-    local cfg = self:Get(index)
-    if not cfg or cfg.layout == layout then return false end
+function Bars:Relayout(cfg, layout)
+    if cfg.layout == layout then return false end
 
     local before = self:CellCount(cfg)
-    cfg.layout = layout
-    local usesGrid = ns.Layout.UsesGrid(cfg)
 
-    if usesGrid then
-        -- Back onto a lattice: keep the count, in one line unless it was long.
-        local columns = math.min(before, 12)
-        cfg.columns = math.max(1, columns)
-        cfg.rows = math.max(1, math.ceil(before / cfg.columns))
+    -- Where the cells are RIGHT NOW, worked out by the arrangement the bar is
+    -- still in. Taken before anything changes, because this is what seeds the
+    -- puzzle: an arc dragged into the puzzle has to arrive as that arc. The
+    -- old version re-derived a plain row out of rows and columns, so every
+    -- arrangement that was not a grid was flattened on the way in.
+    local seed
+    if layout == "free" then
+        seed = ns.Layout.Build(cfg, before, cfg.spacing or 4, cfg.lineSpacing or 4)
+    end
+
+    cfg.layout = layout
+
+    if ns.Layout.UsesGrid(cfg) then
+        -- Back onto a lattice, and the lattice's own rows and columns were
+        -- never touched while the bar was away - they are separate fields
+        -- from the sequence's length. So the shape you left is the shape you
+        -- come back to, and a 3x2 grid does not return as a row of six.
+        --
+        -- Only a bar that GREW while it was a sequence needs more room than
+        -- it had.
+        local room = (cfg.rows or 1) * (cfg.columns or 1)
+        if before > room then
+            local columns = math.max(1, math.min(before, 12))
+            cfg.columns = columns
+            cfg.rows = math.max(1, math.ceil(before / columns))
+        end
     else
         cfg.freeCount = math.max(1, math.min(40, before))
     end
 
-    -- A puzzle with every cell at 0,0 is a stack nobody can pull apart. The
-    -- first switch spreads them along the row they came from, so what appears
-    -- is the bar you had, now movable - not a pile.
-    if layout == "free" then
-        local width = ns.Layout.CellSize(cfg, nil)
-        local spacing = cfg.spacing or 4
-        local columns = math.max(1, cfg.columns or 1)
-
+    -- A puzzle with every cell at 0,0 is a stack nobody can pull apart, so the
+    -- first visit takes its positions from what was on screen a moment ago.
+    --
+    -- Only cells the puzzle has never held a position for. Coming back to a
+    -- puzzle you already arranged must find it exactly as you left it - which
+    -- it now can, because those positions live in fields no other arrangement
+    -- reads or writes. See the header of Core/Layout.lua.
+    if layout == "free" and seed then
         for cell = 1, self:CellCount(cfg) do
             local opts = ns.Layout.CellOpts(cfg, cell)
-            if not (opts and (opts.x or opts.y)) then
-                opts = ns.Layout.EnsureCellOpts(cfg, cell)
-                local column = (cell - 1) % columns
-                local row = math.floor((cell - 1) / columns)
-                opts.x = column * (width + spacing)
-                opts.y = -row * (width + spacing)
+            local slot = seed[cell]
+            if slot and not (opts and (opts.px or opts.py)) then
+                ns.Layout.SetOffset(cfg, cell, slot.x, slot.y)
             end
         end
     end
+
+    self:Resized(cfg)
+    return true
+end
+
+function Bars:SetLayout(index, layout)
+    local cfg = self:Get(index)
+    if not cfg then return false end
+    if not self:Relayout(cfg, layout) then return false end
 
     self:Changed(index)
     return true
@@ -477,6 +588,7 @@ ns.BAR_STYLE_KEYS = {
     "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
+    "fillColor", "fillAlpha", "fillTexture", "fillReverse",
     "countdown", "stacks", "spellName",
 
     -- The arrangement travels too - it is how a bar LOOKS, not what it holds.
@@ -572,6 +684,15 @@ function Bars:Style(cfg, height)
         swipeAlpha = cfg.swipeAlpha or 0.7,
         showEdge   = cfg.showEdge and true or false,
 
+        fillColor   = cfg.fillColor or { 1.00, 0.478, 0.239 },
+        fillAlpha   = cfg.fillAlpha or 0.85,
+        -- Empty means "whatever the backdrop is wearing", which is what keeps
+        -- a bar looking like one object rather than two textures that happen
+        -- to be next to each other.
+        fillTexture = (cfg.fillTexture ~= "" and cfg.fillTexture)
+            or cfg.backdropTexture,
+        fillReverse = cfg.fillReverse and true or false,
+
         countdown = TextStyle(cfg.countdown, height, 0.42, 9, 20),
         stacks    = TextStyle(cfg.stacks,    height, 0.30, 8, 16),
         spellName = TextStyle(cfg.spellName, height, 0.45, 9, 14),
@@ -647,6 +768,8 @@ ns.BUILT_IN_LOOKS = {
             backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
+            fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.85,
+            fillTexture = "", fillReverse = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
@@ -664,6 +787,8 @@ ns.BUILT_IN_LOOKS = {
             backdrop = false, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
             iconZoom = 0,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.8, showEdge = true,
+            fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.80,
+            fillTexture = "", fillReverse = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
@@ -682,6 +807,8 @@ ns.BUILT_IN_LOOKS = {
             backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 1,
             iconZoom = 0.12,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.85, showEdge = false,
+            fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 1.00,
+            fillTexture = "", fillReverse = false,
             countdown = Text(0, { 1, 1, 1 }, "THICKOUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 0.9, 0.4 }, "THICKOUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "OUTLINE", "LEFT"),
@@ -697,6 +824,8 @@ ns.BUILT_IN_LOOKS = {
             backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
+            fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.85,
+            fillTexture = "", fillReverse = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
@@ -716,6 +845,8 @@ ns.BUILT_IN_LOOKS = {
             backdrop = false, backdropColor = { 0, 0, 0 }, backdropAlpha = 0,
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.6, showEdge = false,
+            fillColor = { 1.00, 0.478, 0.239 }, fillAlpha = 0.50,
+            fillTexture = "", fillReverse = false,
             countdown = { show = false },
             stacks    = { show = false },
             spellName = { show = false },
@@ -893,6 +1024,55 @@ function Bars:Seed()
     end
 end
 
+---------------------------------------------------------------------------
+-- Saved variables written by an older version
+--
+-- Runs once, before anything reads a bar. Kept next to Prepare because the
+-- two are the same job - making a table on disk safe to use - and splitting
+-- them across files is how a migration ends up running after the thing it was
+-- supposed to fix.
+---------------------------------------------------------------------------
+function Bars:Migrate()
+    local from = ns.db.dbVersion or 0
+
+    -- 2 -> 3: the puzzle's positions move into fields of their own.
+    --
+    -- In a puzzle those numbers ARE positions, so they can be moved across
+    -- with certainty. On any other arrangement the same fields are a nudge,
+    -- and there is no way to tell a nudge somebody meant from one the old
+    -- switch-to-puzzle left behind - so those are reported rather than
+    -- guessed at, with the one action that clears them.
+    if from < 3 then
+        local strays = 0
+
+        for _, cfg in ipairs(ns.db.bars) do
+            if cfg.cellOpts then
+                local free = (cfg.layout or "grid") == "free"
+                for cell, opts in pairs(cfg.cellOpts) do
+                    if free then
+                        if opts.px == nil and opts.py == nil then
+                            opts.px, opts.py = opts.x, opts.y
+                        end
+                        opts.x, opts.y = nil, nil
+                    elseif (opts.x and opts.x ~= 0) or (opts.y and opts.y ~= 0) then
+                        strays = strays + 1
+                    end
+                    ns.Layout.TidyCellOpts(cfg, cell)
+                end
+            end
+        end
+
+        if strays > 0 then
+            ns.Print(string.format("%d cell%s carry an offset from an older "
+                .. "version. If a bar looks scattered, open it and use "
+                .. "|cffffd100Straighten|r under Arrangement.",
+                strays, strays == 1 and "" or "s"))
+        end
+    end
+
+    ns.db.dbVersion = 3
+end
+
 function Bars:Prepare()
     for _, cfg in ipairs(ns.db.bars) do
         ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
@@ -906,6 +1086,11 @@ function Bars:Prepare()
             local text = cfg[element.key]
             if text and text.font == "Friz Quadrata TT" then text.font = "" end
         end
+
+        -- Anything sitting past the last cell is parked rather than left to
+        -- be invisible for ever. A saved bar can hold one after a shrink in
+        -- an older version, and an unreachable spell reads as a lost spell.
+        self:Resized(cfg)
     end
 
     -- Two ways a saved anchor can be unusable, and both have to be caught

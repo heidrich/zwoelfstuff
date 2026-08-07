@@ -144,6 +144,10 @@ local function Sample()
         else
             state.spec = nil
         end
+    else
+        -- No API, no answer. Leaving the last one in place would keep a spec
+        -- rule running off a value nothing can refresh.
+        state.spec = nil
     end
 end
 
@@ -167,6 +171,23 @@ local function Allows(set, key)
     return set[key] and true or false
 end
 
+-- Whether the place we are in passes the rule.
+--
+-- An instance type the client reports and this list has never heard of lets
+-- the bar through on purpose: a new one in a patch must not make everybody's
+-- UI vanish in the new content. Shared with the explanation below rather than
+-- written twice - the editor was naming "not in this kind of place" as the
+-- reason in exactly the case where the evaluator lets the bar through, which
+-- is worse than no explanation at all.
+local function WhereAllows(rule)
+    for _, entry in ipairs(ns.SHOW_WHERE) do
+        if entry.key == state.where then
+            return Allows(rule.where, state.where)
+        end
+    end
+    return true
+end
+
 -- true when the bar should be visible, plus the alpha to use when it is not.
 function Visibility:Evaluate(cfg)
     if cfg.enabled == false then return false end
@@ -188,14 +209,7 @@ function Visibility:Evaluate(cfg)
         return false
     end
 
-    -- An instance type the client reports and this list has never heard of
-    -- lets the bar through. A new instance type in a patch must not make
-    -- everybody's UI vanish in the new content.
-    local known = false
-    for _, entry in ipairs(ns.SHOW_WHERE) do
-        if entry.key == state.where then known = true break end
-    end
-    if known and not Allows(rule.where, state.where) then return false end
+    if not WhereAllows(rule) then return false end
 
     if state.spec and not Allows(rule.specs, state.spec) then return false end
 
@@ -227,7 +241,7 @@ function Visibility:Explain(cfg)
     if rule.group ~= nil and rule.group ~= "any" and rule.group ~= state.group then
         return "Only " .. rule.group .. ", and you are " .. state.group .. "."
     end
-    if not Allows(rule.where, state.where) then return "Not in this kind of place." end
+    if not WhereAllows(rule) then return "Not in this kind of place." end
     if state.spec and not Allows(rule.specs, state.spec) then return "Not for this spec." end
 
     return nil

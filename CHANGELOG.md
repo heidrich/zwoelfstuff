@@ -4,6 +4,86 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.0] - 2026-08-07
+
+A bug-fix release with two additions that exist because of the bugs. Nine
+defects, one of them reported from the game and the other eight found by
+reading the code that the reported one pointed at.
+
+### Fixed
+
+- **Switching pattern scattered the bar, permanently.** Reported: change the
+  arrangement and it does not come back. Entering the puzzle wrote each cell's
+  spread-out POSITION into the same two fields a nudge uses, and every other
+  arrangement adds a nudge on top of the slot it worked out — so coming back
+  to a grid displaced every cell by where the puzzle had put it, for ever,
+  with nothing anywhere that would remove it. The puzzle now has two
+  coordinate fields of its own. Neither arrangement can see the other's, so
+  moving into the puzzle, arranging it, going back to a grid and returning now
+  finds the puzzle exactly as it was left.
+- **The Columns slider destroyed the arrangement.** Every change compacted
+  every spell to the front, which meant a deliberate hole in a row was gone
+  after one drag and there was no way back. Cells now keep their index, so
+  6 → 12 → 6 returns exactly what was there.
+- **The Columns slider deleted spells.** Shrinking a grid dropped whatever no
+  longer had a cell. Anything that does not fit is now parked and comes back
+  to its own slot the moment the bar is big enough again — a slider you drag
+  to see what it looks like must not be able to lose your work.
+- **Moving into the puzzle flattened every arrangement that was not a grid.**
+  It re-derived a plain row out of rows and columns, so an arc arrived as a
+  line. The puzzle is now seeded from where the cells actually are.
+- **Coming back from the puzzle re-shaped the lattice.** A 3×2 grid returned
+  as a row of six. Rows and columns were never touched while the bar was away,
+  so they are simply left alone now.
+- **The Opacity slider moved half a bar.** It was applied to adopted Cooldown
+  Manager frames and not to the cells this addon draws itself, so a mixed bar
+  faded unevenly.
+- **A swapped spell arrived lit up.** Cells are reused for whatever spell ends
+  up at their index, and the aura clock and the effects' "was it ready a
+  moment ago" were not reset with them — so a moved icon could show the
+  previous spell's sweep and fire a ready-flash for a transition that belonged
+  to a spell no longer on the bar.
+- **Effects were inverted on auras this addon draws.** "Ready" was read as
+  "the buff is NOT up", so the ready glow lit every proc that was down and the
+  ready flash fired when one ran out rather than when it landed. An aura cell
+  has no cooldown to be ready; the cooldown effects now stand down there, and
+  the flash fires when the proc arrives.
+- **The editor explained a rule the renderer did not apply.** In an instance
+  type this addon has never heard of, the visibility panel named "not in this
+  kind of place" as the reason a bar was hidden — while the renderer,
+  correctly, showed it. One shared test now answers both.
+- **Bar settings hid themselves.** Turning one cell of an icon bar into a
+  tracking bar in build mode gave you a cell whose width, height, name and
+  fill settings were all hidden on the page that owns it.
+
+### Added
+
+- **Tracking bars this addon draws have a fill.** They had none: a bar-shaped
+  aura was a square icon and a hole beside it. It is a real status bar, it
+  wears any LibSharedMedia texture — the twenty shipped here included — and it
+  drains on the clock this addon owns. Colour, opacity, texture and a fill-up
+  direction, with the texture defaulting to the backdrop's so a bar reads as
+  one object. Adopted buff bars bring Blizzard's own and ignore all of it,
+  which the panel says out loud.
+- **`/zs test`.** Forty-eight checks that can only run inside the game, which
+  is every check this addon has: arrangement geometry, the two coordinate
+  systems, pattern round trips, the rows and columns sliders, the visibility
+  rules against their own explanations, and a read-only pass over your bars.
+  It runs on throwaway configs and never touches your data. Against the code
+  as it stood this morning it reports eight failures — that is what a
+  regression test is for.
+- **Straighten.** Under Arrangement, and only when there is something to
+  undo: puts every cell back where the pattern wants it, leaving the puzzle's
+  own positions alone.
+
+### Migration
+
+Saved variables move to version 3. A bar already in the puzzle has its
+positions carried across with certainty. On any other arrangement a leftover
+offset cannot be told apart from one you meant, so those are counted and
+reported once at login, with a pointer to Straighten — reported rather than
+guessed at.
+
 ## [4.6.1] - 2026-08-07
 
 ### Added

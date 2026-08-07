@@ -207,7 +207,7 @@ local function Pulse(speed, phase)
     return 0.5 + 0.5 * sin(GetTime() * 3.2 * (speed or 1) + (phase or 0))
 end
 
-local function TickCell(entry, inCombat)
+local function TickCell(entry, inCombat, span)
     local cell = entry.cell
     local fx = cell.fx
     if not fx then return end
@@ -222,41 +222,58 @@ local function TickCell(entry, inCombat)
     ---------------------------------------------------------------------
     -- What is true right now
     ---------------------------------------------------------------------
-    local ready, remaining
+    -- TWO DIFFERENT QUESTIONS, and they are not each other's opposite.
+    --
+    --   ready  a COOLDOWN is available again. nil when it cannot be read.
+    --   lit    one of OUR OWN auras is up. nil when this is not that kind of
+    --          cell at all.
+    --
+    -- The first version answered both with one field - `ready = not active` on
+    -- an aura cell - and it was backwards in the way that shows: the ready
+    -- glow lit every proc that was DOWN, and the ready flash fired when one
+    -- ran out rather than when it landed. An aura cell has no cooldown to be
+    -- ready, so `ready` simply stays unknown there and every cooldown effect
+    -- below stands down on its own.
+    local ready, lit, remaining
 
     if entry.drawn then
-        -- Our own aura cell: we own the clock, so both answers are exact.
-        ready = not cell.active
-        if cell.active and state.auraEnds then
+        lit = cell.active and true or false
+        if lit and state.auraEnds then
             remaining = state.auraEnds - GetTime()
         end
     else
         local onCd = OnCooldown(entry.cooldownID)
-        if onCd == nil then
-            ready = nil
-        else
-            ready = not onCd
-        end
+        if onCd ~= nil then ready = not onCd end
     end
 
     ---------------------------------------------------------------------
-    -- The flash, on the edge from "was on cooldown" to "is ready"
+    -- The flash, on the edge into the state worth noticing: a cooldown
+    -- coming back, or one of our own auras landing.
+    --
+    -- Compared against `false` rather than "not nil": the very first tick
+    -- after a cell appears knows nothing about the tick before it, and a
+    -- flash there would fire on every reload and every re-flow.
     ---------------------------------------------------------------------
-    if ready ~= nil and state.wasReady ~= nil and ready and not state.wasReady then
-        if fxOpts.readyFlash then
-            state.flashLeft = (fxOpts.readyPulses or 2) * 0.35
-            state.flashTotal = state.flashLeft
-        end
-        state.readySince = GetTime()
+    local arrived
+    if lit ~= nil then
+        arrived = lit and state.wasLit == false
+        state.wasLit = lit
+    elseif ready ~= nil then
+        arrived = ready and state.wasReady == false
+        state.wasReady = ready
     end
 
-    if ready ~= nil and not ready then
+    if arrived and fxOpts.readyFlash then
+        state.flashLeft = (fxOpts.readyPulses or 2) * 0.35
+    end
+
+    -- How long it has been sitting there ready, for the nag. Cooldowns only:
+    -- an aura that is up is not something you are forgetting to press.
+    if ready == false then
         state.readySince = nil
     elseif ready and not state.readySince then
         state.readySince = GetTime()
     end
-
-    if ready ~= nil then state.wasReady = ready end
 
     ---------------------------------------------------------------------
     -- Draw it
@@ -274,7 +291,7 @@ local function TickCell(entry, inCombat)
         and (inCombat or not fxOpts.readyGlowCombatOnly) then
         glowColour = fxOpts.glowColor
         glowAlpha = 0.85
-    elseif fxOpts.activeGlow and entry.drawn and cell.active then
+    elseif fxOpts.activeGlow and lit then
         glowColour = fxOpts.activeColor
         glowAlpha = 0.85
     end
@@ -302,7 +319,11 @@ local function TickCell(entry, inCombat)
     end
 
     if state.flashLeft and state.flashLeft > 0 then
-        state.flashLeft = state.flashLeft - TICK
+        -- The REAL span since the last tick, not the throttle interval. They
+        -- are not the same number - a tick fires on the first frame at or
+        -- after TICK, so counting in TICKs makes "two pulses" run long on a
+        -- loaded machine and drift further the worse the frame rate is.
+        state.flashLeft = state.flashLeft - span
         local colour = fxOpts.readyColor or { 1, 1, 1 }
         -- Repeating sawtooth, so "two pulses" is two visible flashes rather
         -- than one long fade that happens to last twice as long.
@@ -343,6 +364,8 @@ local ticker = CreateFrame("Frame")
 ticker:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed < TICK then return end
+
+    local span = elapsed
     elapsed = 0
     if count == 0 then return end
 
@@ -351,7 +374,7 @@ ticker:SetScript("OnUpdate", function(_, delta)
     for index = 1, count do
         local entry = watched[index]
         if entry and entry.cell then
-            local ok, err = pcall(TickCell, entry, inCombat)
+            local ok, err = pcall(TickCell, entry, inCombat, span)
             if not ok then
                 -- One bad cell must not stop the other eleven, and it must not
                 -- spam the error frame sixteen times a second either.

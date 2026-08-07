@@ -2,3 +2,6 @@
 Thumbs.db
 *.bak
 *.zip
+
+# lua-language-server --check writes its logs here
+.lscheck/

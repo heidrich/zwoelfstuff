@@ -925,6 +925,27 @@ function Workspace:BuildOptionsPane(parent, width)
     local rasterRow = Slide("Snap to", "raster", 0, 40, 1,
         function(v) return v <= 0 and "free hand" or string.format("%d px", v) end)
 
+    -- The way back out of a bar somebody has been experimenting with.
+    --
+    -- Every arrangement adds each cell's own nudge on top of the slot it
+    -- worked out, which is what makes "pull one icon out of the row" possible
+    -- - and it is also how a bar ends up looking broken with no obvious way
+    -- back. Only offered when there is something to undo, and it leaves the
+    -- puzzle's own positions alone: those belong to the other pattern.
+    local straightenRow = grid:FullRow("Straighten", {
+        controlWidth = 150,
+        sublabel = "Put every cell back where this pattern wants it",
+    })
+    local straightenBtn = UI.Button(straightenRow.slot, "Straighten", 150,
+        function()
+            local index, cfg = Workspace:Current()
+            if not (index and cfg) then return end
+            ns.Layout.ClearOffsets(cfg)
+            ns.Bars:Changed(index)
+            ns.Options:Refresh()
+        end)
+    straightenBtn:SetPoint("RIGHT", straightenRow.slot, "RIGHT", 0, 0)
+
     local buildRow = grid:FullRow("Build on screen", {
         controlWidth = 150,
         sublabel = "Drag, scale and swap each slot where it lives",
@@ -961,6 +982,7 @@ function Workspace:BuildOptionsPane(parent, width)
         diagXRow:SetRelevant(kind == "diagonal")
         diagYRow:SetRelevant(kind == "diagonal")
         rasterRow:SetRelevant(kind == "free")
+        straightenRow:SetRelevant(ns.Layout.HasOffsets(cfg))
     end
 
     -- Looks ---------------------------------------------------------------
@@ -999,6 +1021,28 @@ function Workspace:BuildOptionsPane(parent, width)
     Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent)
     UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
         Get("backdropTexture"), Set("backdropTexture"), Apply)
+
+    -- The fill of a tracking bar this addon draws itself ---------------------
+    --
+    -- Only ever visible on a bar-shaped cell, so the whole section stands down
+    -- on a bar of icons rather than offering four settings that do nothing.
+    -- An ADOPTED buff bar brings Blizzard's own fill and is not affected by
+    -- any of this; the note says so, because "why did my colour not take" is
+    -- otherwise a genuinely unanswerable question.
+    local fillRows = {
+        grid:Section("Bar fill", "look-fill"),
+        Colour("Colour", "fillColor"),
+        Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent),
+    }
+    fillRows[#fillRows + 1] = UI.MediaPicker(
+        grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
+        Get("fillTexture"), Set("fillTexture"), Apply)
+    fillRows[#fillRows + 1] = Switch("Fill up", "fillReverse",
+        "Grow from empty instead of draining away")
+    fillRows[#fillRows + 1] = grid:Note("Leave the texture empty and the fill "
+        .. "wears the backdrop's, so the bar reads as one object. Buff bars "
+        .. "adopted from Blizzard's Cooldown Manager bring their own fill and "
+        .. "ignore all of this.")
 
     grid:Section("Cooldown sweep", "look-sweep")
 
@@ -1336,11 +1380,27 @@ function Workspace:BuildOptionsPane(parent, width)
         local _, cfg = Workspace:Current()
         if not cfg then return end
 
+        -- Whether anything on this bar is bar SHAPED, which is not the same
+        -- question as whether the bar is. Build mode can turn one cell in a
+        -- row of icons into a tracking bar - and while this asked only about
+        -- cfg.kind, doing that gave you a cell whose width, name and fill
+        -- settings were all hidden on the page that owns it.
         local isBar = cfg.kind == "bar"
-        iconRow:SetRelevant(not isBar)
+        if not isBar and cfg.cellOpts then
+            for _, opts in pairs(cfg.cellOpts) do
+                if opts.kind == "bar" then isBar = true break end
+            end
+        end
+
+        iconRow:SetRelevant(cfg.kind ~= "bar")
         barWRow:SetRelevant(isBar)
         barHRow:SetRelevant(isBar)
         iconPlaceRow:SetRelevant(isBar)
+
+        for _, region in ipairs(fillRows) do
+            region.dkSkip = not isBar
+            region:SetShown(isBar)
+        end
 
         RefreshArrangement()
         RefreshRules()

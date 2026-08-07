@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.6.1"
+ns.version = "4.7.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -89,7 +89,11 @@ ns.GROUP_DEFAULTS = {
 }
 
 ns.DEFAULTS = {
-    dbVersion  = 2,
+    -- 3: the puzzle got its own two coordinate fields. Before that a cell's
+    -- x/y meant a position in the puzzle and a nudge everywhere else, and
+    -- switching arrangement silently reinterpreted one as the other. See
+    -- Bars:Migrate.
+    dbVersion  = 3,
 
     -- Bars: a grid of cells, each holding one spell from Blizzard's Cooldown
     -- Manager. Seeded once on first run and never re-seeded, so a deleted
@@ -391,6 +395,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         ZwoelfStuffDB = ZwoelfStuffDB or {}
         ns.db = ns.ApplyDefaults(ZwoelfStuffDB, ns.DEFAULTS)
 
+        -- Before Seed and before Prepare: everything below this line reads a
+        -- bar, and a migration that runs after the first read is a migration
+        -- that fixed nothing.
+        ns.Bars:Migrate()
         ns.Bars:Seed()
         ns.Bars:Prepare()
 
@@ -461,6 +469,7 @@ local usage = {
     "  |cffffd100/zs auras forget <glowID>|r - drop one, shipped ones included",
     "  |cffffd100/zs auras remember|r - put every forgotten one back",
     "",
+    "  |cffffd100/zs test|r - run the addon's own checks and report failures",
     "  |cffffd100/zs minimap|r - show or hide the minimap button",
     "  |cffffd100/zs reset|r - restore defaults, keeping recorded procs",
 }
@@ -505,6 +514,9 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "skin" then
         ns.Screen:DumpCells()
         ns.CDM:DumpSkin()
+
+    elseif cmd == "test" then
+        ns.SelfTest:Run()
 
     elseif cmd == "auras" then
         local sub, arg = rest:match("^(%S*)%s*(.-)$")

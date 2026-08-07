@@ -102,6 +102,22 @@ local function BuildAuraVisual(cell)
     aura.icon = aura:CreateTexture(nil, "ARTWORK")
     aura.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
+    -- THE FILL. Only ever seen on a bar-shaped cell.
+    --
+    -- An adopted buff-bar frame arrives with Blizzard's own status bar in it.
+    -- A cell we draw ourselves had nothing, so a bar-shaped aura was a square
+    -- icon with a hole beside it - it did not read as a bar at all, which is
+    -- the whole reason somebody picks that shape.
+    --
+    -- A real StatusBar rather than a texture we resize by hand: it takes the
+    -- textures out of LibSharedMedia unchanged, it clips its own art instead
+    -- of squashing it, and the value is one number.
+    aura.fill = CreateFrame("StatusBar", nil, aura)
+    aura.fill:SetFrameLevel(aura:GetFrameLevel() + 1)
+    aura.fill:SetMinMaxValues(0, 1)
+    aura.fill:SetValue(0)
+    aura.fill:Hide()
+
     aura.cd = CreateFrame("Cooldown", nil, aura, "CooldownFrameTemplate")
     aura.cd:SetDrawEdge(false)
     aura.cd:SetDrawSwipe(true)
@@ -155,6 +171,22 @@ local function StyleAuraVisual(aura, style, isBar)
         ns.StyleNumbers(aura.cd, style.countdown)
     end
 
+    -- The fill wears a real LibSharedMedia texture, so the twenty this addon
+    -- ships and everything the user's other addons registered are all equally
+    -- available to it. An unknown name falls back to a flat white that the
+    -- colour below tints - never to nothing, which is how a bar ends up
+    -- invisible because of a typo in a saved variable.
+    local fill = style.fillTexture
+    if fill and ns.Media.IsKnown("statusbar", fill) then
+        aura.fill:SetStatusBarTexture(ns.Media.Statusbar(fill))
+    else
+        aura.fill:SetStatusBarTexture(ns.WHITE)
+    end
+
+    local colour = style.fillColor
+    aura.fill:SetStatusBarColor(colour[1], colour[2], colour[3], style.fillAlpha)
+    aura.fill:SetReverseFill(style.fillReverse)
+
     local name = style.spellName
     ns.Media.ApplyFont(aura.label, name.font, name.size, name.outline, name.color)
 end
@@ -178,6 +210,18 @@ local function LayoutAuraVisual(aura, cfg, slot)
             aura.icon:SetPoint("BOTTOM" .. side, aura, "BOTTOM" .. side, 0, 0)
             aura.icon:SetWidth(height)
         end
+
+        -- The fill takes the whole cell except the square the icon occupies.
+        -- The name then reads OVER it, the way it does on every other bar in
+        -- the game - a bar with the text pushed off to one side of the fill
+        -- wastes the width that made it a bar.
+        local gap = shown and height or 0
+        aura.fill:ClearAllPoints()
+        aura.fill:SetPoint("TOPLEFT", aura, "TOPLEFT",
+            (placement == "right") and 0 or gap, 0)
+        aura.fill:SetPoint("BOTTOMRIGHT", aura, "BOTTOMRIGHT",
+            (placement == "right") and -gap or 0, 0)
+        aura.fill:Show()
 
         local inset = shown and (height + 5) or 5
         aura.label:ClearAllPoints()
@@ -204,6 +248,7 @@ local function LayoutAuraVisual(aura, cfg, slot)
         aura.icon:SetAllPoints(aura)
 
         aura.label:Hide()
+        aura.fill:Hide()
 
         aura.cd:ClearAllPoints()
         aura.cd:SetAllPoints(aura.icon)
@@ -252,6 +297,49 @@ local function PaintAura(cell, active)
     -- prefers that to a placeholder.
     aura:SetShown(alpha > 0)
     ClearCooldown(aura.cd)
+end
+
+-- The fill of a bar-shaped aura cell, driven by the clock this addon owns.
+--
+-- Its own OnUpdate rather than a seat in the effects ticker: that ticker only
+-- walks cells which asked for an effect, and a bar has to drain whether or
+-- not anything else is switched on. It runs ONLY while an aura is actually
+-- up and takes its script off again the moment it is not, so a screen full of
+-- idle cells costs nothing at all.
+--
+-- Everything it needs is on the cell, so a render pass in the middle of a
+-- buff picks the fill back up where it was instead of blanking it.
+local function RefreshFill(cell)
+    local aura = cell.aura
+    if not (aura and aura.fill) then return end
+
+    local fill = aura.fill
+    fill:SetScript("OnUpdate", nil)
+
+    if not (cell.active and fill:IsShown()) then
+        fill:SetValue(0)
+        return
+    end
+
+    local ends, duration = cell.auraEnds, cell.auraDuration
+    if not (ends and duration and duration > 0) then
+        -- Up, but of unknown length - a proc nobody has timed yet, or one
+        -- picked up by the resync after a reload. Full is the honest answer:
+        -- an empty bar would say "about to run out", which is a lie.
+        fill:SetValue(1)
+        return
+    end
+
+    fill:SetValue(1)
+    fill:SetScript("OnUpdate", function(self)
+        local left = ends - GetTime()
+        if left <= 0 then
+            self:SetValue(0)
+            self:SetScript("OnUpdate", nil)
+            return
+        end
+        self:SetValue(left / duration)
+    end)
 end
 
 ---------------------------------------------------------------------------
@@ -484,7 +572,13 @@ function Screen:Render()
         bar:SetSize(box.width, box.height)
         self:ApplyPosition(index)
         bar:SetShown(visible)
-        bar:SetAlpha(self.unlocked and 1 or factor)
+
+        -- The bar's own opacity belongs HERE as well, not only on the adopted
+        -- frames. Our own cells are this frame's children and an adopted one
+        -- is not, so the two need it applied in two places - and while it was
+        -- applied in only one, the Opacity slider moved half of a mixed bar
+        -- and left the other half at full strength.
+        bar:SetAlpha((cfg.alpha or 1) * (self.unlocked and 1 or factor))
 
         for cellIndex = 1, count do
             local cell = bar.cells[cellIndex]
@@ -603,10 +697,20 @@ function Screen:BlankCell(cell)
         ns.CDM:Release(cell.item)
         cell.item = nil
     end
-    if cell.aura then cell.aura:Hide() end
+    if cell.aura then
+        cell.aura:Hide()
+        ClearCooldown(cell.aura.cd)
+        -- Its OnUpdate as well, or a cell taken off the bar goes on running a
+        -- countdown nobody can see, for ever.
+        cell.aura.fill:SetScript("OnUpdate", nil)
+        cell.aura.fill:SetValue(0)
+    end
     if cell.caption then cell.caption:Hide() end
     ns.Effects.Silence(cell)
+    -- The clock's own state too. A cell that comes back into use later would
+    -- otherwise start out claiming a buff is up, with a stale end time.
     cell.spellID, cell.auraEntry, cell.conflict = nil, nil, nil
+    cell.active, cell.auraEnds, cell.auraDuration = nil, nil, nil
 end
 
 -- One cell: adopt, draw, or leave empty.
@@ -618,6 +722,21 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     if cell.item and (not spellID or ns.CDM:ItemSpellID(cell.item) ~= spellID) then
         ns.CDM:Release(cell.item)
         cell.item = nil
+    end
+
+    -- A CELL IS REUSED FOR WHATEVER SPELL ENDS UP AT ITS INDEX, so everything
+    -- remembered about the last one has to go with it. Two of those are state
+    -- machines: the aura clock, and the effects' "was it ready a moment ago".
+    -- Left behind, they made a swapped icon arrive lit up with the previous
+    -- spell's sweep still running, and fire a ready-flash for a transition
+    -- that belonged to a spell no longer on the bar.
+    if cell.spellID ~= spellID then
+        cell.active, cell.auraEnds, cell.auraDuration = nil, nil, nil
+        cell.fxState = nil
+        if cell.aura then
+            ClearCooldown(cell.aura.cd)
+            cell.aura.fill:SetScript("OnUpdate", nil)
+        end
     end
 
     if not spellID then
@@ -701,6 +820,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     -- this build can no longer raise.
     cell.auraEntry = auraBySpell[spellID]
     PaintAura(cell, cell.active and true or false)
+    RefreshFill(cell)
 
     -- Ours, so the effects get a real remaining time out of the clock we run
     -- ourselves. Adopted frames deliberately do not - see Core/Effects.lua.
@@ -787,15 +907,18 @@ function Screen:StartAura(parentSpellID)
         cell.active = true
         local duration = entry.duration or 0
         if duration > 0 then
+            cell.auraEnds, cell.auraDuration = GetTime() + duration, duration
             cell.aura.cd:SetCooldown(GetTime(), duration)
             -- The effect ticker has no clock of its own; this is the only
             -- place that knows when the thing it is watching runs out.
-            ns.Effects.NoteAuraEnd(cell, GetTime() + duration)
+            ns.Effects.NoteAuraEnd(cell, cell.auraEnds)
         else
+            cell.auraEnds, cell.auraDuration = nil, nil
             ClearCooldown(cell.aura.cd)
             ns.Effects.NoteAuraEnd(cell, nil)
         end
         PaintAura(cell, true)
+        RefreshFill(cell)
     end)
 end
 
@@ -803,7 +926,9 @@ function Screen:StopAura(parentSpellID)
     ForEachAuraCell(function(cell, entry)
         if entry.parent ~= parentSpellID then return end
         cell.active = false
+        cell.auraEnds, cell.auraDuration = nil, nil
         PaintAura(cell, false)
+        RefreshFill(cell)
     end)
 end
 
@@ -817,7 +942,12 @@ function Screen:ResyncAuras()
     ForEachAuraCell(function(cell, entry)
         local ok, active = pcall(isOverlayed, entry.parent)
         cell.active = (ok and active) and true or false
+        -- No end time: the glow was already up when we looked, so nobody
+        -- knows when it started. RefreshFill shows a full bar rather than
+        -- inventing a countdown.
+        cell.auraEnds, cell.auraDuration = nil, nil
         PaintAura(cell, cell.active)
+        RefreshFill(cell)
     end)
 end
 

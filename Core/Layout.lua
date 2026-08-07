@@ -20,13 +20,22 @@
 -- big as what it holds - which is what makes the unlock overlay, snapping and
 -- attachment work for a circle exactly as well as for a row.
 --
--- THE PUZZLE.
+-- THE PUZZLE, AND WHY IT KEEPS ITS OWN TWO NUMBERS.
 --
--- "free" is not a special case bolted on: it is the arrangement that ignores
--- the lattice and uses only each cell's own offset. Every other arrangement
--- ADDS that offset on top of what it worked out, so nudging one icon out of a
--- neat row is the same edit as building a whole free-form layout. One rule,
--- and there is no line to cross between "a bar" and "a puzzle".
+-- "free" ignores the lattice and puts each cell exactly where it was dragged.
+-- Every other arrangement works a position out and then adds the cell's nudge
+-- on top, so pulling one icon out of a neat row is a normal edit.
+--
+-- Those are two DIFFERENT quantities. A puzzle's numbers are a POSITION; a
+-- lattice's are an OFFSET from a slot the lattice chose. They were once the
+-- same pair of fields, and that was a real bug: entering the puzzle wrote
+-- spread-out positions into x/y, and switching back to a grid read them as
+-- nudges and scattered the grid - permanently, because nothing ever removed
+-- them. So the puzzle has px/py of its own.
+--
+-- The gain is not only correctness. Because neither field is touched by the
+-- other arrangement, you can move a bar into the puzzle, drag it about, go
+-- back to a grid and return - and find the puzzle exactly as you left it.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -108,8 +117,64 @@ function Layout.TidyCellOpts(cfg, index)
 
     local interesting = (opts.scale and opts.scale ~= 1)
         or (opts.x and opts.x ~= 0) or (opts.y and opts.y ~= 0)
+        or (opts.px and opts.px ~= 0) or (opts.py and opts.py ~= 0)
         or opts.kind or opts.hidden
     if not interesting then cfg.cellOpts[index] = nil end
+end
+
+---------------------------------------------------------------------------
+-- The two numbers the editor writes
+--
+-- Which pair of fields a drag lands in depends on the arrangement, and that
+-- is the whole point - see the header. Every caller goes through here, so no
+-- editor has to know the rule and none of them can disagree about it.
+---------------------------------------------------------------------------
+function Layout.OffsetKeys(cfg)
+    if (cfg.layout or "grid") == "free" then return "px", "py" end
+    return "x", "y"
+end
+
+function Layout.GetOffset(cfg, index)
+    local opts = Layout.CellOpts(cfg, index)
+    if not opts then return 0, 0 end
+    local keyX, keyY = Layout.OffsetKeys(cfg)
+    return opts[keyX] or 0, opts[keyY] or 0
+end
+
+function Layout.SetOffset(cfg, index, x, y)
+    local opts = Layout.EnsureCellOpts(cfg, index)
+    local keyX, keyY = Layout.OffsetKeys(cfg)
+    opts[keyX], opts[keyY] = x, y
+    return opts
+end
+
+-- Is anything nudged off the lattice at all? Drives whether the way out of a
+-- scattered bar is offered, so it is not a button that does nothing on the
+-- ninety per cent of bars nobody has dragged.
+function Layout.HasOffsets(cfg)
+    if not cfg.cellOpts then return false end
+    local keyX, keyY = Layout.OffsetKeys(cfg)
+
+    for _, opts in pairs(cfg.cellOpts) do
+        if (opts[keyX] and opts[keyX] ~= 0) or (opts[keyY] and opts[keyY] ~= 0) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Puts every cell back on the lattice, for the CURRENT arrangement only. The
+-- one-click answer to "I nudged things about and want the neat row back", and
+-- it deliberately leaves the puzzle's own positions alone: straightening a
+-- grid must not throw away a layout you built on the other side.
+function Layout.ClearOffsets(cfg)
+    if not cfg.cellOpts then return end
+    local keyX, keyY = Layout.OffsetKeys(cfg)
+
+    for index, opts in pairs(cfg.cellOpts) do
+        opts[keyX], opts[keyY] = nil, nil
+        Layout.TidyCellOpts(cfg, index)
+    end
 end
 
 -- What one cell measures. kind can be overridden per cell, which is the whole
@@ -193,7 +258,10 @@ local function AutoRadius(step, cellW, spacing)
     return (cellW + spacing) / (2 * chord)
 end
 
-local function ArcSlot(cfg, index, cellW, cellH, spacing, count)
+-- No cell HEIGHT here on purpose: an arc is spaced along its circumference,
+-- and the chord that decides the radius is measured across the widest thing
+-- on it. Taking the height as well would make a ring of wide bars overlap.
+local function ArcSlot(cfg, index, cellW, spacing, count)
     local span = cfg.arcSpan or 180
     local closed = abs(span) >= 359.5
 
@@ -255,9 +323,12 @@ function Layout.Build(cfg, count, spacing, lineSpacing)
 
         local x, y
         if kind == "free" then
-            x, y = 0, 0
+            -- The puzzle's own numbers ARE the position, and it reads nothing
+            -- else. A cell nudged while it was in a grid must not arrive here
+            -- carrying that nudge - see the header.
+            x, y = (opts and opts.px) or 0, (opts and opts.py) or 0
         elseif kind == "arc" then
-            x, y = ArcSlot(cfg, index, baseW, baseH, spacing, count)
+            x, y = ArcSlot(cfg, index, baseW, spacing, count)
         elseif kind == "diagonal" then
             x, y = DiagonalSlot(cfg, index, baseW, baseH, spacing, lineSpacing)
         elseif kind == "stagger" then
@@ -268,9 +339,10 @@ function Layout.Build(cfg, count, spacing, lineSpacing)
                 columns, rows)
         end
 
-        -- The nudge, on every arrangement. See the header: this is what makes
-        -- "drag one icon out of the row" and "build a puzzle" the same edit.
-        if opts then
+        -- The nudge, on every arrangement that HAS a slot to nudge away from.
+        -- The puzzle is not one of them: there the position above is already
+        -- the answer, and adding the nudge would count it twice.
+        if opts and kind ~= "free" then
             x = x + (opts.x or 0)
             y = y + (opts.y or 0)
         end

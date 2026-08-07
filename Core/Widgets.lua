@@ -1532,23 +1532,37 @@ function UI.CellGrid(parent, cfg)
                     cell.icon:SetPoint("BOTTOM" .. side, cell, "BOTTOM" .. side, 0, 0)
                     cell.icon:SetWidth(h)
 
-                    -- The fill, so the texture you just picked is visible on
-                    -- the thing you picked it for.
+                    -- The fill, in the bar's OWN colour and texture, drawn at
+                    -- a part-full value so it reads as a bar rather than as a
+                    -- coloured block. It is the same settings the screen uses
+                    -- - a preview painted in the editor's accent colour tells
+                    -- you nothing about the bar you are actually building.
                     local inset = (place == "hidden") and 0 or h
+                    local area = math.max(1, w - inset)
+                    local start = (place == "right") and 0 or inset
+
                     cell.fill:ClearAllPoints()
-                    cell.fill:SetPoint("TOPLEFT", cell, "TOPLEFT",
-                        (place == "right") and 0 or inset, 0)
-                    cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT",
-                        (place == "right") and -inset or 0, 0)
+                    if style and style.fillReverse then
+                        cell.fill:SetPoint("TOPRIGHT", cell, "TOPLEFT",
+                            start + area, 0)
+                        cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMLEFT",
+                            start + area, 0)
+                    else
+                        cell.fill:SetPoint("TOPLEFT", cell, "TOPLEFT", start, 0)
+                        cell.fill:SetPoint("BOTTOMLEFT", cell, "BOTTOMLEFT", start, 0)
+                    end
+                    cell.fill:SetWidth(math.max(1, area * 0.7))
+
                     if style then
-                        local fill = style.backdropTexture
+                        local fill = style.fillTexture
                         if fill and ns.Media.IsKnown("statusbar", fill) then
                             cell.fill:SetTexture(ns.Media.Statusbar(fill))
                         else
                             cell.fill:SetTexture(ns.WHITE)
                         end
-                        cell.fill:SetVertexColor(C.accent[1], C.accent[2],
-                            C.accent[3], 0.5)
+                        local colour = style.fillColor
+                        cell.fill:SetVertexColor(colour[1], colour[2], colour[3],
+                            style.fillAlpha or 0.85)
                     end
                     cell.fill:Show()
 

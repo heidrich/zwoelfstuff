@@ -525,7 +525,11 @@ local function OpenCellMenu(handle)
         { text = "Back into line",
           onClick = function()
               local write = ns.Layout.EnsureCellOpts(cfg, cell)
-              write.x, write.y, write.scale = nil, nil, nil
+              -- Only the pair this arrangement uses. Straightening a cell in
+              -- a grid must not quietly demolish where it sits in the puzzle
+              -- on the other side of the pattern switch.
+              local keyX, keyY = ns.Layout.OffsetKeys(cfg)
+              write[keyX], write[keyY], write.scale = nil, nil, nil
               ns.Layout.TidyCellOpts(cfg, cell)
               ns.Bars:Changed(handle.barIndex)
           end },
@@ -617,15 +621,18 @@ local function CreateHandle(barIndex, cellIndex)
         local cell = ns.Screen:CellFrame(self.barIndex, self.cellIndex)
         if not (cfg and cell) then return end
 
-        local opts = ns.Layout.CellOpts(cfg, self.cellIndex)
         local cursorX, cursorY = CursorPosition()
         local point, _, relPoint, offsetX, offsetY = cell:GetPoint(1)
+
+        -- Which two fields a drag lands in is the arrangement's business, not
+        -- this file's - a puzzle's numbers are a position, a lattice's are an
+        -- offset from a slot. See the header of Core/Layout.lua.
+        local startX, startY = ns.Layout.GetOffset(cfg, self.cellIndex)
 
         cellDrag = {
             barIndex = self.barIndex, cellIndex = self.cellIndex,
             cursorX = cursorX, cursorY = cursorY,
-            startX = (opts and opts.x) or 0,
-            startY = (opts and opts.y) or 0,
+            startX = startX, startY = startY,
             cell = cell,
             point = point, relPoint = relPoint,
             frameX = offsetX or 0, frameY = offsetY or 0,
@@ -662,8 +669,7 @@ local function DragCell()
     local x = ns.Layout.SnapToRaster(cellDrag.startX + deltaX, raster)
     local y = ns.Layout.SnapToRaster(cellDrag.startY + deltaY, raster)
 
-    local opts = ns.Layout.EnsureCellOpts(cfg, cellDrag.cellIndex)
-    opts.x, opts.y = x, y
+    ns.Layout.SetOffset(cfg, cellDrag.cellIndex, x, y)
 
     local cell = cellDrag.cell
     cell:ClearAllPoints()
@@ -779,9 +785,9 @@ local function NudgeCell(where, direction, step)
     local cfg = ns.db.bars[where.bar]
     if not cfg then return end
 
-    local opts = ns.Layout.EnsureCellOpts(cfg, where.cell)
-    opts.x = (opts.x or 0) + direction[1] * step
-    opts.y = (opts.y or 0) + direction[2] * step
+    local x, y = ns.Layout.GetOffset(cfg, where.cell)
+    ns.Layout.SetOffset(cfg, where.cell,
+        x + direction[1] * step, y + direction[2] * step)
 
     ns.Layout.TidyCellOpts(cfg, where.cell)
     ns.Bars:Changed(where.bar)
@@ -1328,8 +1334,12 @@ function RefreshInspector()
 
     local details = {}
     if opts.scale then details[#details + 1] = string.format("%.0f%%", opts.scale * 100) end
-    if opts.x or opts.y then
-        details[#details + 1] = string.format("%+d, %+d", opts.x or 0, opts.y or 0)
+
+    -- Whichever pair this arrangement is actually using, so the readout can
+    -- never show a number that is not the one your drag is moving.
+    local offsetX, offsetY = ns.Layout.GetOffset(cfg, picked.cell)
+    if offsetX ~= 0 or offsetY ~= 0 then
+        details[#details + 1] = string.format("%+d, %+d", offsetX, offsetY)
     end
     if opts.kind then details[#details + 1] = opts.kind end
     if opts.hidden then details[#details + 1] = "hidden" end

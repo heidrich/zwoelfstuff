@@ -8,6 +8,25 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.7.0",
+        date = "2026-08-07",
+        lines = {
+            "FIXED, and it is the one that was reported: switching pattern scattered the bar and never gave it back. Entering the puzzle wrote each cell's spread-out POSITION into the same two fields a nudge uses - and every other arrangement adds a nudge on top of the slot it worked out. So coming back to a grid displaced every cell by wherever the puzzle had put it, for ever, with nothing anywhere that would take it off again.",
+            "The puzzle has two coordinate fields of its own now. Neither arrangement can see the other's, and the gain is not only that the grid comes back: you can move a bar into the puzzle, arrange it, go back to a grid and return - and find the puzzle exactly as you left it.",
+            "FIXED: the Columns slider destroyed the arrangement. Every change compacted every spell to the front, so a deliberate hole in a row was gone after one drag with no way back. Cells keep their index now: 6 to 12 and back to 6 gives you exactly what was there.",
+            "FIXED: the Columns slider DELETED spells. Shrinking a grid dropped whatever no longer had a cell. Anything that does not fit is parked now and comes back to its own slot the moment the bar is big enough again. A slider you drag to see what it looks like must not be able to lose your work.",
+            "FIXED: moving into the puzzle flattened every arrangement that was not a grid - an arc arrived as a line. It is seeded from where the cells actually are now. And coming back no longer re-shapes the lattice: a 3x2 grid used to return as a row of six.",
+            "FIXED: the Opacity slider moved half a bar. It reached the icons adopted from the Cooldown Manager and not the cells this addon draws itself, so a mixed bar faded unevenly.",
+            "FIXED: a swapped spell arrived lit up, with the previous spell's sweep still running and a flash for a transition that belonged to a spell no longer on the bar. A cell is reused for whatever ends up at its index; the clock and the effect state now go with it.",
+            "FIXED: effects were backwards on auras this addon draws. 'Ready' was read as 'the buff is NOT up', so the ready glow lit every proc that was down, and the ready flash fired when one ran out instead of when it landed.",
+            "FIXED: the editor named a reason the renderer did not apply. In a kind of instance this addon has never heard of, the visibility panel said 'not in this kind of place' while the bar was - correctly - on screen.",
+            "FIXED: turning one cell of an icon bar into a tracking bar hid the settings it needs. Width, height, the spell name and the fill were all on the other side of a test that asked about the BAR rather than about its cells.",
+            "NEW: tracking bars this addon draws have a fill. They had none - a bar-shaped aura was a square icon and a hole beside it. It is a real status bar, it wears any LibSharedMedia texture including the twenty shipped here, and it drains on the clock this addon owns. Colour, opacity, texture and a fill-up direction. Buff bars adopted from Blizzard bring their own and ignore all of it, which the panel now says.",
+            "NEW: /zs test. Forty-eight checks that can only be run inside the game, which is every check this addon has - arrangement geometry, the two coordinate systems, pattern round trips, the sliders, and the visibility rules against their own explanations. It runs on throwaway bars and never touches yours. Against the code as it stood this morning it reports eight failures, which is the entire point of it.",
+            "NEW: Straighten, under Arrangement, and only offered when there is something to undo. Puts every cell back where the pattern wants it - and leaves the puzzle's own positions alone, because those belong to the other pattern.",
+        },
+    },
+    {
         version = "4.6.0",
         date = "2026-08-07",
         lines = {
