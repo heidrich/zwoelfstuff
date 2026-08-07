@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.9.0"
+ns.version = "4.10.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -96,8 +96,11 @@ ns.DEFAULTS = {
     -- 5: the one fill setting becomes two - which END the fill sits at, and
     --    whether it grows or drains. They were shipped as one and the label
     --    described the half that was not implemented.
+    -- 6: the spells on a bar move to a per-class-and-spec table. The LAYOUT
+    --    stays shared by every character; the spells cannot be, because a
+    --    Paladin was being shown a row of Death Knight cooldowns.
     -- See Bars:Migrate.
-    dbVersion  = 5,
+    dbVersion  = 6,
 
     -- Bars: a grid of cells, each holding one spell from Blizzard's Cooldown
     -- Manager. Seeded once on first run and never re-seeded, so a deleted
@@ -211,6 +214,45 @@ end
 
 function ns.Print(...)
     print("|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r:", ...)
+end
+
+---------------------------------------------------------------------------
+-- Which class and spec is playing
+--
+-- "DEATHKNIGHT:250". The key everything per-character is filed under: the
+-- recorded procs, and since 4.10.0 the spells on each bar as well.
+--
+-- Returns the key AND whether the spec is really known. Right after login the
+-- API can answer 0 for a while, and filing anything under "DEATHKNIGHT:0" is
+-- how a character's picks end up somewhere nothing will ever look for them.
+-- Callers that WRITE have to check the second value; callers that read do not.
+---------------------------------------------------------------------------
+local specKey, specKnown
+
+function ns.SpecKey()
+    if specKnown then return specKey, true end
+
+    local _, class = UnitClass("player")
+    if not class then return nil, false end
+
+    local specID = 0
+    local info = C_SpecializationInfo
+    if info and info.GetSpecialization and info.GetSpecializationInfo then
+        local ok, index = pcall(info.GetSpecialization)
+        if ok and index then
+            local okID, id = pcall(info.GetSpecializationInfo, index)
+            if okID and id then specID = id end
+        end
+    end
+
+    specKey = class .. ":" .. specID
+    specKnown = specID ~= 0
+    return specKey, specKnown
+end
+
+-- A spec change makes the cached answer wrong, and nothing else does.
+function ns.ForgetSpecKey()
+    specKey, specKnown = nil, nil
 end
 
 function ns.SpellName(spellID)

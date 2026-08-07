@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.10.0",
+        date = "2026-08-07",
+        lines = {
+            "FIXED, reported: switch to another character and you were still looking at Death Knight cooldowns. The saved settings are account-wide, so every character got whatever the last one had picked.",
+            "Your rule, and it is the right one - the layout is saved, the spells are not. So a bar is two things now. Everything about how it LOOKS and where it sits - the arrangement, the sizes, the colours, the rules, the per-cell overrides - stays shared by every character, because that is a user interface you built once and want everywhere. What each cell HOLDS is filed per class and spec.",
+            "Two characters of the same class and spec share their picks. That is help rather than harm: they can cast the same things, and it is the same key the recorded procs have always used. Bars you already built are adopted by the first character that can identify its own spec - which is the character that built them.",
+            "CHANGED, and it follows from the rule: a cell's own look now belongs to the SLOT rather than to the spell sitting in it. A slot scaled to 150% is part of a layout every character sees, so dragging a spell on one of them must not rearrange the bar for the rest. Moving a cell moves the spell and leaves the slot alone.",
+            "REMOVED: the expanding proc ring. It went with the single-aura window back in 4.4.0 and nothing has called it since - 117 lines being loaded on every login for nothing.",
+        },
+    },
+    {
         version = "4.9.0",
         date = "2026-08-07",
         lines = {

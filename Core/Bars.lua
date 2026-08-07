@@ -31,7 +31,13 @@ ns.BAR_DEFAULTS = {
 
     rows    = 1,
     columns = 6,
-    cells   = {},              -- [index] = spellID; holes are empty cells
+    -- [index] = spellID; holes are empty cells.
+    --
+    -- NOT saved here. This field is pointed at cellsBySpec[class:spec] by
+    -- Bars:BindSpec, because the layout is shared by every character and the
+    -- spells are not - see the block above Bars:All. Reading and writing it
+    -- is unchanged everywhere else.
+    cells   = {},
 
     -- How the cells are arranged. See Core/Layout.lua - "grid" is rows and
     -- columns, "stagger" is the same lattice with every other line pushed
@@ -57,6 +63,10 @@ ns.BAR_DEFAULTS = {
     -- This is what lets one icon in a row be twice the size, one cell be a
     -- tracking bar among icons, and any of them sit where the lattice would
     -- not have put it. Absent for every cell nobody has touched.
+    --
+    -- SHARED by every character, because it describes the SLOT rather than
+    -- what is in it. That is why moving a spell no longer drags its cell's
+    -- look along - see Bars:MoveCell.
     cellOpts = {},
 
     -- Size
@@ -202,6 +212,71 @@ ns.BAR_DEFAULTS = {
 }
 
 ---------------------------------------------------------------------------
+-- WHAT IS SHARED, AND WHAT IS NOT
+--
+-- Owner, 2026-08-07: "das layout muss gespeichert werden, aber nicht die
+-- spells" - and the bug that prompted it: the saved variables are account
+-- wide, so a Paladin was shown a row of Death Knight cooldowns.
+--
+-- So a bar is two things. Everything about how it LOOKS and where it sits -
+-- the arrangement, the sizes, the colours, the rules, the per-cell overrides
+-- - is shared by every character, because that is a user interface you built
+-- once and want everywhere. What each cell HOLDS is per class and spec,
+-- because a spell is not portable.
+--
+-- HOW, without rewriting forty-five call sites. cfg.cells stays exactly what
+-- it was - the table of spells, read and written the same way everywhere -
+-- and BindSpec points it at the right per-spec table. One place decides who
+-- is playing; nothing else has to know the rule exists.
+--
+-- Two characters of the same class and spec share their picks. That is help
+-- rather than harm: they can cast the same things, and it is the same key the
+-- proc registry has always used.
+---------------------------------------------------------------------------
+local function SpecTable(cfg, field, key)
+    local store = field .. "BySpec"
+    cfg[store] = cfg[store] or {}
+    cfg[store][key] = cfg[store][key] or {}
+    return cfg[store][key]
+end
+
+-- Points every bar's cells and parked list at the current spec's own tables.
+-- Returns true when the answer changed, so callers know to redraw.
+function Bars:BindSpec()
+    local key, known = ns.SpecKey()
+    key = key or "unknown"
+    if self.boundSpec == key then return false end
+
+    for _, cfg in ipairs(ns.db.bars) do
+        -- Saved by a version that kept ONE set of spells for every character.
+        -- They belong to whoever was playing when it was written, and the
+        -- first spec that can identify itself is that character - so they are
+        -- adopted then, and never while the spec still reads as 0.
+        if known and cfg.cells and not cfg.cellsBySpec then
+            if next(cfg.cells) then
+                cfg.cellsBySpec = { [key] = cfg.cells }
+            end
+        end
+
+        cfg.cells  = SpecTable(cfg, "cells", key)
+        cfg.parked = SpecTable(cfg, "parked", key)
+
+        -- A set filed under an unknown spec - "DEATHKNIGHT:0", written in the
+        -- moment between login and the client being able to answer - is
+        -- dropped once it is empty, so the saved file does not collect one of
+        -- those per character for ever.
+        for other, set in pairs(cfg.cellsBySpec) do
+            if other ~= key and other:find(":0$") and not next(set) then
+                cfg.cellsBySpec[other] = nil
+            end
+        end
+    end
+
+    self.boundSpec = key
+    return true
+end
+
+---------------------------------------------------------------------------
 -- Access
 ---------------------------------------------------------------------------
 function Bars:All()
@@ -249,15 +324,12 @@ function Bars:RemoveCell(index, cell)
     local cfg = self:Get(index)
     if not cfg then return false end
 
+    -- The spells close up; the slots do not move. See MoveCell.
     local last = self:CellCount(cfg)
     for position = cell, last - 1 do
         cfg.cells[position] = cfg.cells[position + 1]
-        if cfg.cellOpts then
-            cfg.cellOpts[position] = cfg.cellOpts[position + 1]
-        end
     end
     cfg.cells[last] = nil
-    if cfg.cellOpts then cfg.cellOpts[last] = nil end
 
     -- A lattice keeps its shape - taking a cell out of a 2x3 grid would leave
     -- a grid that is no longer rectangular - so there the last slot simply
@@ -295,6 +367,14 @@ function Bars:Add(name, kind)
     cfg.y = ns.BAR_DEFAULTS.y - (#ns.db.bars * 70)
 
     ns.db.bars[#ns.db.bars + 1] = cfg
+
+    -- Straight into the per-spec scheme, or its cells table is detached and
+    -- nothing you put in it is ever saved. BindSpec skips a bar it has
+    -- already bound, so it is asked to do this one directly.
+    local key = ns.SpecKey() or "unknown"
+    cfg.cells  = SpecTable(cfg, "cells", key)
+    cfg.parked = SpecTable(cfg, "parked", key)
+
     self:Changed(#ns.db.bars)
     return #ns.db.bars
 end
@@ -330,18 +410,17 @@ end
 -- Drag and drop. Moving onto an occupied cell swaps, which is what dragging
 -- one icon onto another visibly looks like it should do.
 --
--- The per-cell settings travel WITH the spell. A cell that was scaled up and
--- nudged is that spell's presentation, not that position's - leaving the
--- overrides behind would silently apply them to whatever moved in.
+-- THE PER-CELL LOOK STAYS WITH THE SLOT, and that is a reversal. It used to
+-- travel with the spell, on the reasoning that a cell scaled up is that
+-- spell's presentation. That stopped being true when the layout became shared
+-- and the spells did not: a slot scaled to 150% is part of a bar every
+-- character sees, so dragging a spell on one of them must not rearrange it
+-- for the rest.
 function Bars:MoveCell(index, from, to)
     local cfg = self:Get(index)
     if not cfg or from == to then return false end
 
     cfg.cells[from], cfg.cells[to] = cfg.cells[to], cfg.cells[from]
-
-    if cfg.cellOpts then
-        cfg.cellOpts[from], cfg.cellOpts[to] = cfg.cellOpts[to], cfg.cellOpts[from]
-    end
 
     self:Changed(index)
     return true
@@ -390,26 +469,21 @@ end
 -- spell to a slider you were only dragging to see what it looked like is not
 -- something an addon gets to do.
 ---------------------------------------------------------------------------
+-- ONLY THE SPELL IS PARKED. The per-cell look - scale, offset, kind, hidden -
+-- belongs to the SLOT now, not to whatever is sitting in it: the layout is
+-- shared by every character and the spells are not, so a look that travelled
+-- with a spell would let one character rearrange another one's bar.
 local function Park(cfg, cell)
     local spellID = cfg.cells[cell]
     if not spellID then return end
 
     cfg.parked = cfg.parked or {}
-    cfg.parked[cell] = {
-        spell = spellID,
-        opts  = cfg.cellOpts and cfg.cellOpts[cell] or nil,
-    }
-
+    cfg.parked[cell] = spellID
     cfg.cells[cell] = nil
-    if cfg.cellOpts then cfg.cellOpts[cell] = nil end
 end
 
-local function Place(cfg, cell, record)
-    cfg.cells[cell] = record.spell
-    if record.opts then
-        cfg.cellOpts = cfg.cellOpts or {}
-        cfg.cellOpts[cell] = record.opts
-    end
+local function Place(cfg, cell, spellID)
+    cfg.cells[cell] = spellID
 end
 
 -- Anything parked that now has room again. Its own index first, so a bar that
@@ -418,9 +492,9 @@ local function Unpark(cfg, count)
     local parked = cfg.parked
     if not parked then return end
 
-    for cell, record in pairs(parked) do
+    for cell, spellID in pairs(parked) do
         if cell <= count and not cfg.cells[cell] then
-            Place(cfg, cell, record)
+            Place(cfg, cell, spellID)
             parked[cell] = nil
         end
     end
@@ -441,7 +515,9 @@ local function Unpark(cfg, count)
         end
     end
 
-    if not next(parked) then cfg.parked = nil end
+    -- The empty table is KEPT. It is the one BindSpec pointed cfg.parked at,
+    -- and dropping it here would leave the next park writing into a table
+    -- nothing saves.
 end
 
 -- Called after anything that changes how many cells a bar has. Walks what is
@@ -1119,7 +1195,14 @@ function Bars:Migrate()
         end
     end
 
-    ns.db.dbVersion = 5
+    -- 5 -> 6: the spells move to a per-class-and-spec table. Nothing is done
+    -- HERE, because the spec is not reliably known this early - the client
+    -- can still answer 0 at ADDON_LOADED, and filing a character's picks
+    -- under "DEATHKNIGHT:0" would hide them from the character that made
+    -- them. Bars:BindSpec adopts them the first time a real spec identifies
+    -- itself, which is that same character.
+
+    ns.db.dbVersion = 6
 end
 
 function Bars:Prepare()

@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.9.0
+## Version: 4.10.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -38,7 +38,6 @@ Core\Layout.lua
 Core\Visibility.lua
 Core\Effects.lua
 Core\Bars.lua
-Core\Glow.lua
 Core\Minimap.lua
 # Widgets defines ns.UI, and EditMode reads it while it loads. Anything that
 # takes a reference to the design system at file scope belongs BELOW this line.
@@ -52,6 +51,10 @@ Core\Options.lua
 # be run inside the game, which is every check this addon has.
 Core\SelfTest.lua
 
+# Deleted in 4.9.0: Core\Glow.lua, the expanding proc ring. It went with the
+# single-aura window in 4.4.0 and nothing has called it since - it was still
+# being loaded on every login for nothing. In the git history if wanted.
+#
 # Deleted in 4.4.0, and not coming back: Core\Display.lua and Core\Watcher.lua,
 # the single-aura window and the aura hunt behind it. An aura is a cell on a
 # bar now, so a second window showing one buff on its own was two answers to

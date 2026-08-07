@@ -121,27 +121,11 @@ end
 ---------------------------------------------------------------------------
 -- Cached: a glow event can fire several times a second in combat, and this
 -- only changes when the spec does.
+-- Moved to ns.SpecKey in 4.10.0, because the bars need the same answer: what
+-- each cell holds is per class and spec now, and two implementations of "who
+-- is playing" would eventually disagree about it.
 function Auras:SpecKey()
-    if self.specKey then return self.specKey end
-
-    local _, class = UnitClass("player")
-    if not class then return nil end
-
-    local specID = 0
-    local info = C_SpecializationInfo
-    if info and info.GetSpecialization and info.GetSpecializationInfo then
-        local ok, index = pcall(info.GetSpecialization)
-        if ok and index then
-            local okID, id = pcall(info.GetSpecializationInfo, index)
-            if okID and id then specID = id end
-        end
-    end
-
-    -- Not cached until a real spec is known: right after login the API can
-    -- answer 0, and caching that would file every proc under the wrong key.
-    local key = class .. ":" .. specID
-    if specID ~= 0 then self.specKey = key end
-    return key
+    return (ns.SpecKey())
 end
 
 -- The recorder registers on file load, the database only exists from
@@ -360,7 +344,7 @@ end
 
 function Auras:Invalidate()
     namers = nil
-    self.specKey = nil
+    ns.ForgetSpecKey()
 end
 
 ---------------------------------------------------------------------------

@@ -59,8 +59,13 @@ end
 -- setting added tomorrow is in the test the same day.
 local function Fresh(overrides)
     local cfg = ns.ApplyDefaults({}, ns.BAR_DEFAULTS)
-    cfg.cells = {}
     cfg.cellOpts = {}
+    -- Bound the way BindSpec binds a real one, so the throwaway bar has the
+    -- same shape as the thing under test rather than a simpler one.
+    cfg.cellsBySpec = { test = {} }
+    cfg.parkedBySpec = { test = {} }
+    cfg.cells = cfg.cellsBySpec.test
+    cfg.parked = cfg.parkedBySpec.test
     for key, value in pairs(overrides or {}) do cfg[key] = value end
     return cfg
 end
@@ -288,6 +293,39 @@ local function TestGridSliders()
 end
 
 ---------------------------------------------------------------------------
+-- What is shared between characters, and what is not
+--
+-- The layout is one user interface you built once; the spells are not
+-- portable. Getting this backwards showed a Paladin a row of Death Knight
+-- cooldowns, which is what prompted the split.
+---------------------------------------------------------------------------
+local function TestPerSpec()
+    local cfg = Fresh()
+    cfg.cellsBySpec = { ["DEATHKNIGHT:250"] = { 101, 102 }, ["PALADIN:66"] = {} }
+    cfg.parkedBySpec = { ["DEATHKNIGHT:250"] = {}, ["PALADIN:66"] = {} }
+
+    cfg.cells = cfg.cellsBySpec["DEATHKNIGHT:250"]
+    Check("A spec sees its own spells", cfg.cells[1] == 101)
+
+    cfg.cells = cfg.cellsBySpec["PALADIN:66"]
+    Check("Another class sees none of them", cfg.cells[1] == nil)
+
+    -- The other half of the rule: the LOOK is shared, so it must not be
+    -- filed per spec and must not travel when a spell is dragged.
+    local layout = Fresh({ layout = "grid", rows = 1, columns = 3 })
+    ns.Layout.SetOffset(layout, 2, 17, -9)
+    layout.cells[1], layout.cells[2] = 201, 202
+
+    -- The swap MoveCell performs, without needing a bar in the real list.
+    layout.cells[1], layout.cells[2] = layout.cells[2], layout.cells[1]
+    local x, y = ns.Layout.GetOffset(layout, 2)
+    Check("The per-cell look stays with the slot, not the spell",
+        Near(x, 17) and Near(y, -9))
+    Check("Nothing about the look is filed per spec",
+        layout.cellOptsBySpec == nil)
+end
+
+---------------------------------------------------------------------------
 -- The bar fill
 --
 -- Which END the fill sits at and whether it GROWS are two different things.
@@ -468,6 +506,7 @@ function Test:Run()
         { "Coordinates",   TestOffsets },
         { "Pattern switch", TestPatternRoundTrip },
         { "Rows and columns", TestGridSliders },
+        { "Per character", TestPerSpec },
         { "Bar fill",      TestFill },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },

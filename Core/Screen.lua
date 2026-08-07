@@ -1197,7 +1197,21 @@ function Screen:Start()
     -- Combat, a zone change, a group forming: everything that can change the
     -- answer to "should this bar be on screen". Event-driven, never polled.
     ns.Visibility:Start()
-    ns.Visibility:OnChanged(function() Screen:Render() end)
+
+    -- Which spells these bars hold, before anything is drawn with them.
+    ns.Bars:BindSpec()
+
+    ns.Visibility:OnChanged(function()
+        -- A spec change is one of the events that arrives here, and it changes
+        -- WHICH SPELLS every bar holds. The cached answer to "who is playing"
+        -- goes first: BindSpec compares against it, so leaving it in place
+        -- would have it compare the new spec against itself and do nothing.
+        ns.ForgetSpecKey()
+        if ns.Bars:BindSpec() and ns.Options and ns.Options.Refresh then
+            ns.Options:Refresh()
+        end
+        Screen:Render()
+    end)
 
     -- Media arrives late: an addon loading after this one registers its fonts
     -- and textures when IT is ready. Without this, a bar set to a texture

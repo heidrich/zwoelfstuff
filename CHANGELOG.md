@@ -4,6 +4,38 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.10.0] - 2026-08-07
+
+### Fixed
+
+- **A Paladin was shown a row of Death Knight cooldowns.** The saved variables
+  are account-wide, so every character got whatever the last one had picked.
+  Owner's rule, and it is the right one: *"das layout muss gespeichert werden,
+  aber nicht die spells"*. So a bar is two things now. Everything about how it
+  LOOKS and where it sits — the arrangement, sizes, colours, rules, per-cell
+  overrides — stays shared by every character, because that is a user
+  interface you built once and want everywhere. What each cell HOLDS is filed
+  per class and spec, the same key the proc registry has always used. Two
+  characters of the same class and spec share their picks, which is help
+  rather than harm.
+  Existing bars are adopted by the first character that can identify its own
+  spec, which is the character that made them — never while the client still
+  answers 0, because that would file them where nothing would look again.
+
+### Changed
+
+- **The per-cell look now belongs to the SLOT, not to the spell.** A reversal,
+  and it follows directly from the rule above: a slot scaled to 150% is part
+  of a layout every character sees, so dragging a spell on one of them must
+  not rearrange it for the rest. Moving and removing cells therefore move the
+  spells and leave the slots alone.
+
+### Removed
+
+- **`Core/Glow.lua`.** The expanding proc ring went with the single-aura
+  window in 4.4.0 and nothing has called it since — 117 lines loaded on every
+  login for nothing. In the git history if it is ever wanted.
+
 ## [4.9.0] - 2026-08-07
 
 Answering *"kann man nicht schauen wie das elle ui löst?"* — yes, and it
