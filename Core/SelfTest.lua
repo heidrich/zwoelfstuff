@@ -1440,7 +1440,19 @@ local function TestAnchors()
     -- that breaks: the vertical part is empty there, and an empty string is
     -- not a point - SetPoint("") is an error at layout time on every bar.
     for _, entry in ipairs(ns.TEXT_ANCHORS) do
-        local point, side, justify = ns.Layout.LabelAnchor(entry.value)
+        local point, side, justify, vertical = ns.Layout.LabelAnchor(entry.value)
+
+        -- The vertical half is a PREFIX, and the label hangs from both edges
+        -- of the band by concatenating it: vertical .. "LEFT" and
+        -- vertical .. "RIGHT". An unexpected value there is SetPoint on a
+        -- point that does not exist, which is an error at layout time on
+        -- every bar rather than something you notice later.
+        Check("'" .. entry.text .. "' has a usable vertical half",
+            vertical == "" or vertical == "TOP" or vertical == "BOTTOM",
+            tostring(vertical))
+        Check("'" .. entry.text .. "' spans the band from both edges",
+            (vertical .. "LEFT"):find("LEFT") ~= nil
+                and (vertical .. "RIGHT"):find("RIGHT") ~= nil)
         Check("'" .. entry.text .. "' names a real point",
             type(point) == "string" and point ~= "", tostring(point))
         Check("'" .. entry.text .. "' reads in a real direction",
@@ -1461,6 +1473,16 @@ local function TestAnchors()
         ns.Layout.LabelAnchor("BOTTOMRIGHT") == "BOTTOMRIGHT")
     Check("Nothing at all falls back to the left",
         ns.Layout.LabelAnchor(nil) == "LEFT")
+
+    -- The three rows, spelled out. These are the strings the label's two
+    -- points are built from, so a wrong one is an invalid SetPoint.
+    Check("The middle row has no vertical part",
+        ns.Layout.LabelVertical("RIGHT") == ""
+            and ns.Layout.LabelVertical("CENTER") == "")
+    Check("The top row prefixes TOP",
+        ns.Layout.LabelVertical("TOPRIGHT") == "TOP")
+    Check("The bottom row prefixes BOTTOM",
+        ns.Layout.LabelVertical("BOTTOM") == "BOTTOM")
 
     -- The band the name lives in, beside the icon.
     local left, right = ns.Layout.LabelBand("left", 22)

@@ -67,8 +67,46 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - THE SPELL NAME'S POSITION AND NUDGE WERE NEVER READ AT ALL. Both renderers
   anchored it hard to `LEFT`. All nine positions and both nudges now apply,
   inside the band the icon leaves - `Layout.LabelAnchor` and
-  `Layout.LabelBand`, shared by the drawn cells and the adopted ones so a name
-  cannot sit differently depending on which renderer drew it.
+  `Layout.LabelBand`, shared by the drawn cells, the adopted ones and the
+  editor preview so a name cannot sit differently depending on which renderer
+  drew it.
+
+- AND THE LABEL HANGS FROM BOTH EDGES OF THAT BAND rather than being given a
+  measured width. A width is a number taken once, so the box stayed the size
+  it was when the bar was that size: widen the bar and a right-aligned name
+  stayed at the old right edge. Two horizontal points need no measurement at
+  all, so the box follows the cell and there is no moment during layout where
+  an unsized frame reports zero.
+
+- THE COUNTDOWN ON A BAR-SHAPED CELL was not the `Cooldown` widget's number at
+  all. Such a cell takes its timing from Blizzard's bar, so it has no duration
+  of its own to give that widget and copies the text into a font string of
+  ours - which took font and colour from the countdown settings and was then
+  anchored hard to `RIGHT`.
+
+- STACKS HAD NO RENDERER ON A DRAWN CELL. Adopted icons wear Blizzard's
+  `Applications` frame; a cell this addon draws had nothing, so the whole
+  Stacks section drove something that did not exist. Its own font string now,
+  fed like the charge count: never read, only handed to `SetFormattedText`.
+  The "a single application is not worth a number" rule is applied when the
+  count is readable and skipped when it is secret - guessing it is 1 would
+  hide a real stack count for a whole fight.
+
+- THE CARD PREVIEW SHOWED THE BAR SHORTER THAN IT IS. Its fill is drawn
+  part-full so the card reads as a bar rather than a coloured block, which
+  needs a backdrop behind it to make sense - and with the backdrop off there
+  was nothing there, so the bar simply looked shorter. A faint track in the
+  bar's own fill colour now runs the whole length underneath.
+
+- PANEL NOTES MEASURE THEMSELVES AT LAYOUT TIME. A note's height is a wrapped
+  height and so depends on the font, and fonts arrive late - another addon
+  registering one, or the panel font being changed. Measured once when the
+  note was written, the page laid the next section out on top of it.
+
+- `/zs text` - what each text element's setting asks for, against the anchor
+  point the font string actually ended up on. Three fixes for "the position
+  does nothing" were made by reading the code and all three came back still
+  broken; this asks the frames instead.
 
 ### Added
 

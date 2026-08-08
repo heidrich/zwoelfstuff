@@ -319,31 +319,35 @@ end
 -- Deliberately not ns.TextOffset: that adds the 2px an outlined number needs
 -- to clear a border, and this label is already inset by the icon gap. Two
 -- insets stacked is a name that does not line up with anything.
--- `width` is the cell's width from the ARRANGEMENT, not parent:GetWidth().
--- This runs during the layout pass, where the frame may not have been sized
--- yet - and a label handed a width of zero collapses to the 10px floor and
--- ellipsises every name on the bar.
-local function PlaceLabel(label, parent, text, width, leftInset, rightInset)
+-- HUNG FROM BOTH EDGES, NEVER GIVEN A WIDTH.
+--
+-- It used to be measured: the band's width worked out from the arrangement
+-- and handed to SetWidth. That is a number taken once, so the box stayed the
+-- size it was when the bar was that size - "der container waechst nicht mit
+-- der bar breite mit, sondern ist fest". Widen the bar and a right-aligned
+-- name stays where the old right edge used to be.
+--
+-- Two horizontal points instead, and no measurement anywhere: the box IS the
+-- band, it follows the cell whatever happens to the bar's width, and there is
+-- no moment during layout when a frame that has not been sized yet reports
+-- zero. The position no longer decides the box at all - the box is always the
+-- whole band, and where the words sit inside it is the justification.
+local function PlaceLabel(label, parent, text, leftInset, rightInset)
     local x, y = (text and text.x) or 0, (text and text.y) or 0
-    local point, side, justify = ns.Layout.LabelAnchor(text and text.anchor)
-
-    local inset = 0
-    if side == "LEFT" then
-        inset = leftInset
-    elseif side == "RIGHT" then
-        inset = -rightInset
-    end
+    local _, _, justify, vertical = ns.Layout.LabelAnchor(text and text.anchor)
 
     label:ClearAllPoints()
-    label:SetWidth(math.max(10, (width or 0) - leftInset - rightInset))
-    label:SetPoint(point, parent, point, inset + x, y)
+    label:SetPoint(vertical .. "LEFT", parent, vertical .. "LEFT",
+        leftInset + x, y)
+    label:SetPoint(vertical .. "RIGHT", parent, vertical .. "RIGHT",
+        -rightInset + x, y)
     label:SetJustifyH(justify)
 end
 
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
 -- icon-shaped ones are just the icon.
 local function LayoutAuraVisual(aura, cfg, slot)
-    local width, height = slot.w, slot.h
+    local height = slot.h
     if slot.kind == "bar" then
         -- Square, wherever it sits. Same rule as an adopted icon: a spell
         -- icon stretched to the width of a bar is what a tracking bar must
@@ -373,7 +377,7 @@ local function LayoutAuraVisual(aura, cfg, slot)
         aura.fill:Show()
 
         local leftInset, rightInset = ns.Layout.LabelBand(placement, shown and height or 0)
-        PlaceLabel(aura.label, aura, cfg.spellName, width, leftInset, rightInset)
+        PlaceLabel(aura.label, aura, cfg.spellName, leftInset, rightInset)
         aura.label:SetShown((cfg.spellName or {}).show ~= false)
 
         -- THE COUNTDOWN ON A MIRRORED BAR, and its position was thrown away.
@@ -388,7 +392,7 @@ local function LayoutAuraVisual(aura, cfg, slot)
         -- It shares the band with the spell name, so it gets the same
         -- treatment: the position decides the end and the justification, and
         -- the two can be told apart by putting them at opposite ends.
-        PlaceLabel(aura.timer, aura, cfg.countdown, width, leftInset, rightInset)
+        PlaceLabel(aura.timer, aura, cfg.countdown, leftInset, rightInset)
 
         aura.cd:ClearAllPoints()
         if shown then
@@ -1251,7 +1255,6 @@ end
 -- frame carries - and a bar cell holding nothing but a square icon in one
 -- corner reads as broken rather than as deliberate.
 function Screen:PaintCaption(cell, cfg, spellID, slot, iconWidth, style)
-    local width = slot.w
     if slot.kind ~= "bar" or not style.spellName.show then
         if cell.caption then cell.caption:Hide() end
         return
@@ -1268,7 +1271,7 @@ function Screen:PaintCaption(cell, cfg, spellID, slot, iconWidth, style)
 
     local name = style.spellName
     local leftInset, rightInset = ns.Layout.LabelBand(cfg.iconPlacement or "left", iconWidth)
-    PlaceLabel(cell.caption, cell, name, width, leftInset, rightInset)
+    PlaceLabel(cell.caption, cell, name, leftInset, rightInset)
 
     ns.Media.ApplyFont(cell.caption, name.font, name.size, name.outline, name.color)
     cell.caption:SetText(ns.SpellName(spellID) or "")

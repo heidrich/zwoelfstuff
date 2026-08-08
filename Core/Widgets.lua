@@ -2083,6 +2083,21 @@ function UI.CellGrid(parent, cfg)
         -- The fill of a bar-shaped cell, beside its square icon. Without it a
         -- tracking bar in the editor is an icon and a hole, which tells you
         -- nothing about the texture you just picked.
+        -- THE TRACK: how long the bar actually is.
+        --
+        -- The fill is drawn part-full on purpose, so the card shows a BAR and
+        -- not a coloured block. With a backdrop behind it that reads correctly
+        -- - filled to here, empty to there. With the backdrop switched off
+        -- there was nothing behind it at all, so the bar simply looked shorter
+        -- than it is: "die vorschau sollte auch die richtigen dimensionen
+        -- zeigen, wie du siehst, ist die bar eigentlich laenger".
+        --
+        -- An editor affordance, under the fill and faint, and nothing to do
+        -- with what goes on screen. It carries the bar's own fill colour so it
+        -- reads as the rest of THIS bar rather than as a grey box.
+        cell.track = cell:CreateTexture(nil, "ARTWORK")
+        cell.track:Hide()
+
         cell.fill = cell:CreateTexture(nil, "ARTWORK", nil, 1)
         cell.fill:Hide()
 
@@ -2302,6 +2317,16 @@ function UI.CellGrid(parent, cfg)
                     end
                     cell.fill:SetWidth(math.max(1, area * 0.7))
 
+                    -- The whole run of the bar, under the part-full fill, so
+                    -- its LENGTH is visible whether or not there is a backdrop
+                    -- behind it. Anchored across the same area rather than
+                    -- given a width, so it follows the cell.
+                    cell.track:ClearAllPoints()
+                    cell.track:SetPoint("TOPLEFT", cell, "TOPLEFT",
+                        (place == "right") and 0 or inset, 0)
+                    cell.track:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT",
+                        (place == "right") and -inset or 0, 0)
+
                     if style then
                         local fill = style.fillTexture
                         if fill and ns.Media.IsKnown("statusbar", fill) then
@@ -2312,17 +2337,34 @@ function UI.CellGrid(parent, cfg)
                         local colour = style.fillColor
                         cell.fill:SetVertexColor(colour[1], colour[2], colour[3],
                             style.fillAlpha or 0.85)
+
+                        cell.track:SetTexture(ns.WHITE)
+                        cell.track:SetVertexColor(colour[1], colour[2], colour[3],
+                            0.16)
                     end
+                    cell.track:Show()
                     cell.fill:Show()
 
                     if style and style.spellName.show then
                         local name = style.spellName
                         ns.Media.ApplyFont(cell.caption, name.font, name.size,
                             name.outline, name.color)
+                        -- The SAME band and the same anchor the screen uses,
+                        -- from the same two functions. A preview that puts the
+                        -- name somewhere else is not a preview - and it drew
+                        -- it hard on the left while the bar itself had learned
+                        -- to follow the setting.
+                        local leftInset, rightInset =
+                            ns.Layout.LabelBand(place, (place == "hidden") and 0 or h)
+                        local _, _, justify, vertical =
+                            ns.Layout.LabelAnchor(name.anchor)
+
                         cell.caption:ClearAllPoints()
-                        cell.caption:SetPoint("LEFT", cell, "LEFT",
-                            ((place == "right") and 4 or (inset + 4)), 0)
-                        cell.caption:SetWidth(math.max(8, w - inset - 8))
+                        cell.caption:SetPoint(vertical .. "LEFT", cell,
+                            vertical .. "LEFT", leftInset + (name.x or 0), name.y or 0)
+                        cell.caption:SetPoint(vertical .. "RIGHT", cell,
+                            vertical .. "RIGHT", -rightInset + (name.x or 0), name.y or 0)
+                        cell.caption:SetJustifyH(justify)
                         cell.caption:SetText(ns.SpellName(spellID) or "")
                         cell.caption:Show()
                     else
@@ -2333,6 +2375,7 @@ function UI.CellGrid(parent, cfg)
                     cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 0, 0)
                     cell.icon:Show()
                     cell.fill:Hide()
+                    cell.track:Hide()
                     cell.caption:Hide()
                 end
 
@@ -2342,6 +2385,7 @@ function UI.CellGrid(parent, cfg)
             else
                 cell.icon:Hide()
                 cell.fill:Hide()
+                cell.track:Hide()
                 cell.caption:Hide()
                 cell.plus:Show()
                 cell.number:SetText("")

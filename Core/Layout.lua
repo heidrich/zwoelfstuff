@@ -460,11 +460,19 @@ function Layout.LabelAnchor(anchor)
 
     local side = anchor:find("LEFT") and "LEFT"
         or anchor:find("RIGHT") and "RIGHT" or nil
-    local vertical = anchor:find("TOP") and "TOP"
-        or anchor:find("BOTTOM") and "BOTTOM" or ""
+    local vertical = Layout.LabelVertical(anchor)
 
     if side then
-        return vertical .. side, side, side
+        return vertical .. side, side, side, vertical
     end
-    return (vertical ~= "" and vertical or "CENTER"), nil, "CENTER"
+    return (vertical ~= "" and vertical or "CENTER"), nil, "CENTER", vertical
+end
+
+-- The vertical half of one of the nine positions, as a PREFIX. Empty for the
+-- middle row, which is what makes "LEFT" and "RIGHT" come out of the same
+-- concatenation as "TOPLEFT" and "BOTTOMRIGHT".
+function Layout.LabelVertical(anchor)
+    anchor = anchor or "LEFT"
+    return anchor:find("TOP") and "TOP"
+        or anchor:find("BOTTOM") and "BOTTOM" or ""
 end
