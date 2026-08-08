@@ -46,6 +46,16 @@ local _, ns = ...
 local Screen = {}
 ns.Screen = Screen
 
+-- Long brackets: the path contains \A and \Z, neither of which is a legal Lua
+-- escape, and writing this in quotes takes the whole file down at load. That
+-- has now happened twice in this addon, both times via a script writing the
+-- line - see Core/Minimap.lua, which says the same thing about its discs.
+local SPARK = [[Interface\AddOns\ZwoelfStuff\Media\spark]]
+
+-- How wide the spark is, across the bar. The height is the bar's own, so this
+-- is the only number it needs.
+local SPARK_THICKNESS = 12
+
 ---------------------------------------------------------------------------
 -- Where a cell sits, and how big it is
 --
@@ -132,8 +142,19 @@ local function BuildAuraVisual(cell)
     -- per-frame work at all: the engine moves the texture, and anything
     -- anchored to it moves with it. Anchoring to the frame instead would mean
     -- computing a position every tick, for the same picture.
+    -- OUR OWN SPARK FILE, not Blizzard's.
+    --
+    -- UI-CastingBar-Spark carries its glow in the middle of a lot of
+    -- transparent padding, so a frame stretched to the bar's height shows a
+    -- bright core covering about a third of it: "sehr klein und auch nicht so
+    -- hoch wie die bar". The frame was the right size; the picture inside it
+    -- was not. Ours is a bright core in a soft halo that does not vary down
+    -- its height, so it fills whatever frame it is given.
+    --
+    -- The addon this project reads for these answers ships its own for the
+    -- same reason (EllesmereUI/media/cast_spark.tga).
     aura.spark = aura.fill:CreateTexture(nil, "OVERLAY")
-    aura.spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+    aura.spark:SetTexture(SPARK)
     aura.spark:SetBlendMode("ADD")
     aura.spark:Hide()
 
@@ -605,33 +626,48 @@ local function ApplySpark(cell)
         return
     end
 
-    aura.spark:ClearAllPoints()
-    -- Anchored to the END the fill grows towards, so it sits on the moving
-    -- edge rather than on the fixed one - and on a vertical bar that end is a
-    -- top or a bottom, not a left or a right. The spark also has to lie ACROSS
-    -- the bar, so its 10 pixels are its width one way round and its height the
-    -- other.
+    -- ONE POINT AND AN EXPLICIT SIZE, not two points and a derived one.
     --
-    -- TO THE TWO CORNERS OF THAT EDGE, NOT TWICE TO ITS MIDDLE.
+    -- It hung by its own top AND its own bottom, and twice from the same
+    -- place: the texture's "RIGHT", which is the MIDDLE of that edge. Both of
+    -- its edges landed on one line, so it was drawn ten pixels wide and
+    -- nothing tall - never once on screen, on any bar, in any direction.
     --
-    -- This used to anchor the spark's top AND its bottom to the texture's
-    -- "RIGHT" - one point, which is the middle of the right edge. Both of the
-    -- spark's own edges therefore landed on the same y and it was drawn ten
-    -- pixels wide and NOTHING tall. It was never on screen, on any bar, in
-    -- any direction: "die funktion spark geht auch nicht", and it was not the
-    -- setting or the texture, it was a rectangle with no height.
+    -- Corner-to-corner would fix the height and is what this tried next. The
+    -- shape that actually works, in two places in the addon this project
+    -- reads for these answers, is simpler: the spark's CENTRE on the middle of
+    -- the moving edge, sized outright. Nothing to get backwards, and it does
+    -- not care what the fill texture's own geometry does at value zero
+    -- (EllesmereUINameplates.lua:3206-3208, EllesmereUIRaidFrames.lua:2073).
+    --
+    -- It lies ACROSS the bar, so the thickness is its width one way round and
+    -- its height the other, and the bar's own measurement is the other axis.
     local orientation = aura.fill:GetOrientation()
     local reverse = aura.fill:GetReverseFill()
-    if orientation == "VERTICAL" then
-        aura.spark:SetHeight(10)
-    else
-        aura.spark:SetWidth(10)
+
+    -- The bar's own measurement, with the CELL as the fallback. The fill is
+    -- anchored to the cell rather than sized, so on a pass where the cell has
+    -- not been given its size yet this reads zero - and a spark sized zero is
+    -- invisible, which is the bug this whole function has already had once.
+    local function Across(measure)
+        local value = measure(aura.fill) or 0
+        if value > 0 then return value end
+        return measure(aura) or 0
     end
 
-    local mineA, theirsA, mineB, theirsB =
-        ns.Layout.SparkPoints(orientation, reverse)
-    aura.spark:SetPoint(mineA, texture, theirsA, 0, 0)
-    aura.spark:SetPoint(mineB, texture, theirsB, 0, 0)
+    local edge = ns.Layout.SparkEdge(orientation, reverse)
+    if orientation == "VERTICAL" then
+        aura.spark:SetSize(Across(aura.fill.GetWidth), SPARK_THICKNESS)
+        -- The picture is a bright line down a wide texture. Turned a quarter
+        -- so it lies across a vertical bar instead of along it.
+        aura.spark:SetRotation(math.pi / 2)
+    else
+        aura.spark:SetSize(SPARK_THICKNESS, Across(aura.fill.GetHeight))
+        aura.spark:SetRotation(0)
+    end
+
+    aura.spark:ClearAllPoints()
+    aura.spark:SetPoint("CENTER", texture, edge, 0, 0)
     aura.spark:Show()
 end
 

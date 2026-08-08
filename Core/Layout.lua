@@ -417,22 +417,21 @@ end
 -- /zs test can say whether a spark has any height before anybody logs in.
 ---------------------------------------------------------------------------
 
--- The two anchor pairs a spark spans: its own point, and the point on the
--- fill texture it attaches to, twice.
+-- Which end of the fill the spark rides: the one the fill GROWS TOWARDS, so
+-- it sits on the moving edge and not on the fixed one. On a vertical bar that
+-- end is a top or a bottom rather than a left or a right - four answers, and
+-- any of them backwards parks the spark on the end that never moves, where it
+-- reads as a stray line rather than as a setting gone wrong.
 --
--- THE TWO TARGETS MUST BE THE CORNERS OF THE MOVING EDGE, NOT ITS MIDDLE
--- TWICE. The spark used to attach both its top and its bottom to the
--- texture's "RIGHT" - one point, the middle of that edge - so both of its own
--- edges landed on the same line and it was drawn with no height at all. It
--- was never visible, on any bar, in any direction.
-function Layout.SparkPoints(orientation, reverse)
+-- The spark hangs its own CENTRE on that point and is sized outright. It used
+-- to hang by its top AND its bottom, twice from the texture's "RIGHT" - which
+-- is the MIDDLE of that edge, so both of its own edges landed on one line and
+-- it was drawn with no height at all. Never once visible, on any bar.
+function Layout.SparkEdge(orientation, reverse)
     if orientation == "VERTICAL" then
-        local edge = reverse and "BOTTOM" or "TOP"
-        return "LEFT", edge .. "LEFT", "RIGHT", edge .. "RIGHT"
+        return reverse and "BOTTOM" or "TOP"
     end
-
-    local edge = reverse and "LEFT" or "RIGHT"
-    return "TOP", "TOP" .. edge, "BOTTOM", "BOTTOM" .. edge
+    return reverse and "LEFT" or "RIGHT"
 end
 
 -- The gap the icon leaves on each side of a bar cell, for the spell name to

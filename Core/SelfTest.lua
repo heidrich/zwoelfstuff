@@ -1402,40 +1402,39 @@ end
 -- and those are what is checked here.
 ---------------------------------------------------------------------------
 local function TestAnchors()
-    -- THE SPARK. The two points it attaches to must be the two CORNERS of the
-    -- edge the fill grows towards. Both used to be that edge's middle, so the
-    -- spark's own top and bottom landed on one line: ten pixels wide, nothing
-    -- tall, never once visible.
-    local mineA, theirsA, mineB, theirsB =
-        ns.Layout.SparkPoints("HORIZONTAL", false)
-    Check("The spark spans two DIFFERENT points", theirsA ~= theirsB,
-        theirsA .. " and " .. theirsB)
-    Check("Both sit on the edge the fill grows towards",
-        theirsA == "TOPRIGHT" and theirsB == "BOTTOMRIGHT",
-        theirsA .. "/" .. theirsB)
-    Check("And it spans them top to bottom",
-        mineA == "TOP" and mineB == "BOTTOM")
+    -- THE SPARK rides the end the fill GROWS TOWARDS. On the other end it
+    -- never moves, and a spark that does not move is not a spark.
+    local Edge = ns.Layout.SparkEdge
+    Check("A left-to-right fill carries it on the right",
+        Edge("HORIZONTAL", false) == "RIGHT", Edge("HORIZONTAL", false))
+    Check("A right-to-left fill carries it on the left",
+        Edge("HORIZONTAL", true) == "LEFT", Edge("HORIZONTAL", true))
+    Check("A bottom-to-top fill carries it on the top",
+        Edge("VERTICAL", false) == "TOP", Edge("VERTICAL", false))
+    Check("A top-to-bottom fill carries it on the bottom",
+        Edge("VERTICAL", true) == "BOTTOM", Edge("VERTICAL", true))
 
-    local _, revA, _, revB = ns.Layout.SparkPoints("HORIZONTAL", true)
-    Check("A reversed fill puts it on the other end",
-        revA == "TOPLEFT" and revB == "BOTTOMLEFT", revA .. "/" .. revB)
-
-    local vMine, vA, _, vB = ns.Layout.SparkPoints("VERTICAL", false)
-    Check("A vertical bar's spark lies ACROSS it",
-        vMine == "LEFT" and vA == "TOPLEFT" and vB == "TOPRIGHT",
-        vA .. "/" .. vB)
-    Check("And on the bottom when that one is reversed",
-        select(2, ns.Layout.SparkPoints("VERTICAL", true)) == "BOTTOMLEFT")
-
-    -- All four directions, so no combination is left drawing a line with no
-    -- extent. This is the check that would have caught it.
+    -- The four answers must be four DIFFERENT edges. Two directions sharing
+    -- one is how a spark ends up parked on the fixed end of half the bars.
+    local edges = {}
     for _, orientation in ipairs({ "HORIZONTAL", "VERTICAL" }) do
         for _, reverse in ipairs({ true, false }) do
-            local _, a, _, b = ns.Layout.SparkPoints(orientation, reverse)
-            Check("A " .. orientation .. " spark has an extent either way",
-                a ~= b, orientation .. " " .. tostring(reverse))
+            local edge = Edge(orientation, reverse)
+            Check("'" .. edge .. "' is claimed only once", not edges[edge],
+                orientation .. " " .. tostring(reverse))
+            edges[edge] = true
         end
     end
+
+    -- And a horizontal spark must never ride a horizontal edge - that is the
+    -- axis the fill runs along, so it would lie ALONG the bar rather than
+    -- across it. The mistake the charge marks made in 4.27.0, one file over.
+    Check("A horizontal fill's edge is a side, not a top or a bottom",
+        Edge("HORIZONTAL", false):find("LEFT")
+            or Edge("HORIZONTAL", false):find("RIGHT"))
+    Check("A vertical fill's edge is a top or a bottom, not a side",
+        Edge("VERTICAL", false):find("TOP")
+            or Edge("VERTICAL", false):find("BOTTOM"))
 
     -- THE SPELL NAME. Nine positions, and the middle of the middle is the one
     -- that breaks: the vertical part is empty there, and an empty string is

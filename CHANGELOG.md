@@ -30,8 +30,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - THE SPARK WAS NEVER DRAWN, on any bar, in any direction, since it shipped.
   It anchored its own `TOP` and its own `BOTTOM` both to the fill texture's
   `RIGHT` - one point, the middle of that edge - so both of its edges landed
-  on the same line: ten pixels wide, zero tall. It spans `TOPRIGHT` to
-  `BOTTOMRIGHT` now (and the mirrored pairs for the other three directions).
+  on the same line: ten pixels wide, zero tall. It now hangs its CENTRE on the
+  middle of the moving edge and is sized outright, which is the shape that
+  works in shipping code (`EllesmereUINameplates.lua:3206-3208`,
+  `EllesmereUIRaidFrames.lua:2073`) and has nothing to get backwards.
+
+- AND IT SHIPS ITS OWN TEXTURE, `Media/spark.tga`. Corner anchoring fixed the
+  frame's height and the spark still read as "sehr klein und auch nicht so
+  hoch wie die bar": `UI-CastingBar-Spark` carries its glow inside a lot of
+  transparent padding, so a frame stretched to bar height shows a bright core
+  covering about a third of it. Ours is a bright line in a soft halo that does
+  not vary down its height, so it fills whatever frame it is given, and
+  `SetRotation` turns it a quarter for a vertical bar.
 
 - THE COUNTDOWN'S POSITION AND NUDGE WERE APPLIED TO A FONT STRING THAT DID
   NOT EXIST YET. A `Cooldown` widget's number is drawn by the engine, which
