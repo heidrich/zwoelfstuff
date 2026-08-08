@@ -64,6 +64,26 @@ characters and what is not, and the visibility rules against their own
 explanations. That is not the same as "seen working" and is not listed as such
 — it is the difference between "the maths is right" and "it looks right".
 
+**Written, never run — and 2026-08-08 added a LOT to this list**
+
+Nothing from 4.12.0 onwards has been seen by anybody. That is nine releases
+of model work and one whole UI restructure resting on `/zs test` and the
+static check. The FIRST thing next session should do is ask the owner to look,
+in this order, because each one is cheap to check and expensive to have wrong:
+
+1. **The spell list** — is it in the order the icons are on screen, and are
+   the spells you hid in Blizzard's own Cooldown Manager settings gone from
+   it? (4.12.0)
+2. **The card header** — do three tabs plus two actions FIT? The title was
+   clamped to 140px to make room, and a long bar name may now be cut. (4.20.0)
+3. **Typing in a slider** — click the number, type, Enter. (4.19.0)
+4. **Stack colours on Bone Shield** — red fill, a band at 5. (4.13.0)
+5. **Active for** on a trinket or potion. (4.14.0)
+6. **Pandemic glow** — needs Blizzard's own pandemic alerts switched on for
+   that spell first, which is the one thing we cannot do for the user.
+   (4.15.0)
+7. Spark and charge marks on a tracking bar. (4.16.0)
+
 **Written, never run**
 
 - Build mode as a whole: cell handles, dragging, wheel-scaling, the spell
@@ -110,6 +130,62 @@ Everything else, in one line each: the puzzle got its own coordinate fields
 picker now reaches adopted buff bars (4.8.0); "Fill up" was split from "which
 end" (4.9.0); the spell list sorts in Blizzard's own order (4.11.1). All twenty-odd
 fixes are in CHANGELOG.md with the reasoning.
+
+## What changed on 2026-08-08 — the UI session
+
+Four releases, all owner-reported, and the last two were about the SHAPE of
+the window rather than about cooldowns.
+
+**4.17.0 — dragging a spell SORTS the bar.** The owner asked for drag and drop
+in the bar cards. It was already built and had been all along — `UI.CellGrid`
+carries the marker, the hit test and both handlers, and the cell tooltip said
+so. It SWAPPED, and swapping cannot sort: every swap disturbs a second cell
+nobody pointed at, so ordering four spells took six drags. Plain drag reorders
+now; Shift on the drop still swaps. A hole travels with the sequence rather
+than being filled.
+
+**4.18.0 — every cell can wear its own look.** `cellOpts[i].look` holds any of
+`ns.CELL_LOOK_KEYS`, resolved by `Bars:CellStyle` as a proxy over the bar.
+See the lesson below; the rules are not obvious and the failure is silent.
+
+**4.19.0 — sliders can be typed into, and Edit Mode joined the nav.** Both
+reported. `UI.Slider` and `UI.MiniSlider` carry an EditBox instead of a label,
+and a new `scale` on the slider config reconciles what is DISPLAYED with what
+is STORED: a percentage shows 85 and stores 0.85, so a typed 85 must be
+divided. Without it the box would either read 0.85 or store 8500%. "Unlock
+Mode" became "Edit Mode" and moved from a lone button at the bottom of the
+rail into the first entry of the list.
+
+**4.20.0 — the navigation, straightened out.** The owner: *"das ist komplett
+wirr, also wo welche buttons sind, wie die das benannt wird"*. He was right,
+and the diagnosis is in the lessons below. Each card now carries three tabs
+(Spells / Bar / the picked cell, named after its spell); the panel carries a
+clickable path showing only the way BACK; `Options` and `Just this one` are
+gone. Cell settings also live in the edit-mode tool panel, because a colour is
+judged against the screen it will live on rather than in a preview.
+
+### The owner's UI brief, so it is not re-derived
+
+Asked for and written on 2026-08-08 — what a design proposal has to respect.
+Everything below was VERIFIED against the installed addons, not remembered:
+
+- **No layout engine.** Absolute anchors only. No flex, no grid, no auto
+  height, no margin collapsing. `UI.Page` is a top-to-bottom flow and nothing
+  more.
+- **No border radius, no shadow, no blur.** Those arrive as ART: WoW's
+  nine-slice strips are **256x32** (eight 32x32 tiles), and `edgeSize` values
+  in the wild are 1, 8, 10, 12, 14, 16, 32.
+- **But gradients, rotation and masks DO exist** — `SetGradient` (29 addons),
+  `SetRotation` (34), `SetMask`/`AddMaskTexture` (21/47), `SetTexCoord` (363).
+  Do not tell the owner these are impossible; they are how round icons and
+  gradient fills are done.
+- Window is fixed **1360x760**, columns **168 / flexible / 400**, header band
+  **62**.
+- The palette is `C` at the top of `Core/Widgets.lua`. Green means "already on
+  the selected bar" and nothing else.
+- **A design is only usable here if it is expressed in pixels, anchor
+  relationships, image specs and tokens** — because it cannot be seen from
+  here, only built from a description.
 
 ## The 4.7.0 bug hunt, and the one root cause under it
 
@@ -920,6 +996,12 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **Check whether the thing already exists before building it.** The owner
+  asked for drag and drop in the bar cards; it had been there since the grid
+  was written, tooltip and all. It simply answered a different question
+  (swap, not sort), and a feature that does the wrong thing reads exactly like
+  a missing one. Cost: nothing this time, because the check was two greps —
+  but only because it was the first thing done.
 - **Two buttons that share one position and swap by mode read as a broken
   window.** `Done` and `Just this one` were both anchored TOPRIGHT and shown
   by opposite conditions, so they never overlapped and it still felt wrong:
@@ -1065,6 +1147,14 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 lands on **11 Aug** and the 12.1 features go in after that, not instead of the
 basics.
 
+0. **GET EYES ON IT.** Nine releases and a UI restructure have shipped
+   unseen — the checklist is at the top under *Written, never run*. This
+   outranks everything below, because two of the items on it (do the card's
+   three tabs FIT, and is the spell list finally in the right order) can only
+   be answered by looking, and both would change what is worth doing next.
+   Wednesday 12 Aug is the deadline for the basics; a bug found on Tuesday is
+   a very different thing from one found on Sunday.
+
 1. **PARK THE BUFF-BAR VIEWER, or confirm it is not needed.** The first
    finding out of the reference (see *Taking the reference apart*) predicts a
    bug in what shipped in 4.9.0: alpha 0 does not hold on that viewer, because
@@ -1076,8 +1166,12 @@ basics.
    HIDDEN viewer would freeze our mirror rather than empty it — that half needs
    handling either way.
 
-2. **CARRY ON TAKING THE REFERENCE APART.** The owner's instruction, and the
-   reasoning is proven: every time this session stopped guessing and read
+2. **THE REFERENCE IS MOSTLY READ NOW.** The spell picker, the settings
+   vocabulary, the stack-threshold trick, the pandemic hook and the buff-bar
+   architecture are all done and shipped. What is genuinely left: the bodies
+   behind `EUI_CooldownManager_Options.lua` (19764 lines - labels and
+   structure extracted, code not read) and five marked sections of
+   `EllesmereUICooldownManager.lua`. The reasoning that made it worth doing: every time this session stopped guessing and read
    `C:\Games\World of Warcraft\_retail_\Interface\AddOns\EllesmereUICooldownManager\`
    it produced a better answer than anything reasoned from first principles.
    It settled the bar architecture (4.9.0), the fill semantics (4.9.0) and the
