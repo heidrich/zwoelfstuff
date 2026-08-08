@@ -1008,6 +1008,31 @@ end
 -- an addon that has just said it let go.
 local counterAnchor = setmetatable({}, { __mode = "k" })
 
+-- IS BLIZZARD SHOWING ITS OWN COUNTER?
+--
+-- This is the comparison an addon may not make, made by the game. A stack
+-- count is a secret on this patch, so "is it more than one" cannot be asked
+-- here at all - but Blizzard asks it inside the engine and answers by HIDING
+-- the counter frame rather than by clearing the font string. So the frame's
+-- own visibility IS the answer, and reading it touches no secret.
+--
+-- The reference gates on exactly this before it reads a counter:
+-- `if blzChild.Applications and blzChild.Applications:IsShown()`
+-- (EllesmereUICdmBuffBars.lua:3322), and the hide behaviour is stated at
+-- EllesmereUICooldownManager.lua:5998 ("Blizzard manages show/hide based on
+-- whether stacks exist").
+--
+-- nil means "there is no such counter to ask", which is not the same as false
+-- and must not be treated as one - a cell with no Blizzard frame at all has
+-- to fall back to its own judgement rather than being silenced.
+function CDM:CounterShown(item, key)
+    local widget = Counter(item, key)
+    if not widget then return nil end
+    local ok, shown = pcall(widget.IsShown, widget)
+    if not ok then return nil end
+    return shown and true or false
+end
+
 -- The font string inside one of Blizzard's counter frames, for the diagnostic
 -- in Screen:DumpNumbers. Published rather than re-derived there: WHERE these
 -- frames live is the thing Counter above exists to know, and a second finder

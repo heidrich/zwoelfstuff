@@ -281,8 +281,10 @@ local function BuildCard(parent, width)
                 return { { x = 0, y = 0, w = 40, h = 40, kind = "icon" } },
                     { width = 40, height = 40, centreX = 0, centreY = 0 }
             end
+            -- SCALED, the same way the screen scales them. Raw gaps here
+            -- meant the card drew a scaled bar with unscaled spacing.
             return ns.Layout.Build(cfg, Bars:CellCount(cfg),
-                cfg.spacing or 4, cfg.lineSpacing or 4)
+                ns.Layout.Gaps(cfg))
         end,
         -- The bar's real look, from the same function the screen calls. This
         -- is what makes the card a preview of what you built rather than a

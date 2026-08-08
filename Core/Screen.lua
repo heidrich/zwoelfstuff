@@ -67,9 +67,11 @@ local SPARK_THICKNESS = 12
 -- SetScale, because adopted frames are not our children - see the header.
 ---------------------------------------------------------------------------
 local function Metrics(cfg)
-    local scale = cfg.scale or 1
     local width, height = ns.Layout.CellSize(cfg, nil)
-    return width, height, (cfg.spacing or 4) * scale, (cfg.lineSpacing or 4) * scale
+    -- Through ns.Layout.Gaps, so the preview card cannot space a bar
+    -- differently from the screen. It did, at any scale but 1.
+    local spacing, lineSpacing = ns.Layout.Gaps(cfg)
+    return width, height, spacing, lineSpacing
 end
 
 -- Which point of a frame sits where, in screen coordinates. Needed because a
@@ -602,7 +604,22 @@ local function ApplyStackCount(cell)
         if ns.CanCompute(count) and type(count) == "number" then
             if count > 1 then value, show = count, true end
         elseif ns.CanDisplay(count) then
-            value, show = count, true
+            -- THE SECRET ARM, AND WHERE THE EXTRA "0" CAME FROM.
+            --
+            -- ns.CanDisplay is true for ANY secret, so a protected stack count
+            -- of nought printed exactly like a real one - and it cannot be
+            -- compared to 1 to find out, which is the whole reason this arm
+            -- exists. The owner: a charge count that was fine, and "wenn ich
+            -- eine aufladung verbrauche noch zusaetzlich eine 0".
+            --
+            -- So ASK BLIZZARD, which can compare and does: it hides its own
+            -- counter frame when there is nothing worth showing. That answer
+            -- is a plain boolean and touching it is legal. nil means there is
+            -- no counter to ask - a cell we draw entirely ourselves - and
+            -- then the number is shown as before, because guessing it is 1
+            -- would hide a real stack count for a whole fight.
+            local blizzard = ns.CDM:CounterShown(item, "Applications")
+            if blizzard ~= false then value, show = count, true end
         end
     end
 

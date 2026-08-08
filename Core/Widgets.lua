@@ -2305,8 +2305,17 @@ function UI.CellGrid(parent, cfg)
                     local area = math.max(1, w - inset)
                     local start = (place == "right") and 0 or inset
 
+                    -- WHICH END THE FILL STARTS FROM, read off the same
+                    -- one-of-four the screen uses. It was still asking
+                    -- `style.fillSide` - the boolean that fillDirection
+                    -- REPLACED in 4.29.0. Nothing writes it any more, so the
+                    -- card ignored the Direction control entirely and drew
+                    -- every bar left-to-right while the screen drew it the way
+                    -- you asked. ApplyDefaults still seeds fillSide = false on
+                    -- every bar, which is why it looked deliberate.
                     cell.fill:ClearAllPoints()
-                    if style and style.fillSide then
+                    local runs = ns.Layout.FillDirection(style and style.fillDirection)
+                    if runs.reverse then
                         cell.fill:SetPoint("TOPRIGHT", cell, "TOPLEFT",
                             start + area, 0)
                         cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMLEFT",
@@ -2334,10 +2343,22 @@ function UI.CellGrid(parent, cfg)
                         else
                             cell.fill:SetTexture(ns.WHITE)
                         end
+                        -- THROUGH ns.Tint, like everything else that can
+                        -- ramp. 4.31.0 made it the one sink and rewired the
+                        -- fill, the backdrop, the border and every stack band
+                        -- through it - and missed the card, so the editor drew
+                        -- a gradient backdrop under a flat fill while the
+                        -- screen drew both. A preview that disagrees with the
+                        -- thing it previews is the fault this card has now had
+                        -- three times.
                         local colour = style.fillColor
-                        cell.fill:SetVertexColor(colour[1], colour[2], colour[3],
-                            style.fillAlpha or 0.85)
+                        ns.Tint(cell.fill, colour, style.fillAlpha,
+                            style.fillGradient)
 
+                        -- The track stays FLAT on purpose: it is the bar's
+                        -- own colour at 16% standing in for the part that is
+                        -- not filled, and ramping it would draw a second
+                        -- gradient nobody asked for behind the first.
                         cell.track:SetTexture(ns.WHITE)
                         cell.track:SetVertexColor(colour[1], colour[2], colour[3],
                             0.16)

@@ -455,6 +455,28 @@ end
 -- for more than looks: the unlock overlay, snapping and attaching one bar to
 -- another all measure the frame.
 ---------------------------------------------------------------------------
+-- THE GAPS BETWEEN CELLS, SCALED, in one place.
+--
+-- Layout.CellSize already applies the bar's scale to the CELLS. The gaps are
+-- passed in, so whoever draws has to scale them too - and the screen did
+-- while the preview card did not. A bar at 150% therefore drew correctly
+-- sized cells separated by unscaled gaps in the editor, and its measured
+-- height came out short by (rows-1) x lineSpacing x (scale-1) - which the
+-- card's own fit-scale then divided, so the well was sized off the wrong
+-- number as well.
+--
+-- NOT applied inside Build itself, which was the obvious-looking fix and is
+-- wrong twice over: the screen already multiplies before it calls, so it
+-- would double, and the model callers below want unscaled numbers.
+--   Bars:Resized  works out where a cell WAS, in model terms, and draws
+--                 nothing
+--   the self test passes its own numbers to check the arithmetic
+function Layout.Gaps(cfg)
+    local scale = (cfg and cfg.scale) or 1
+    return ((cfg and cfg.spacing) or 4) * scale,
+           ((cfg and cfg.lineSpacing) or 4) * scale
+end
+
 function Layout.Build(cfg, count, spacing, lineSpacing)
     count = max(1, count or 1)
     spacing = spacing or 0

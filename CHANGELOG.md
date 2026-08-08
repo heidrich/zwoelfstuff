@@ -40,6 +40,39 @@ found twenty more, and seven of its findings were refuted and dropped.
   `RowCount` ANSWER. With the feature off, the last Refresh had hidden every
   row and returned before the panel was ever given a size.
 
+### Fixed - the owner's four reports, each diagnosed on its own
+
+Four reports arriving together are usually four unrelated faults; a previous
+session had five that looked identical and were five separate defects. Each of
+these was traced end to end and then adversarially verified.
+
+- **The extra "0" beside a charge count was the STACK count.**
+  `ApplyStackCount`'s secret arm prints whatever comes back, because
+  `ns.CanDisplay` is true for any secret and "is it more than one" cannot be
+  asked of one. **So ask Blizzard**, which can compare and answers by HIDING
+  its own counter frame - a plain boolean, legal to read.
+  `CDM:CounterShown`. `nil` (no counter to ask) is deliberately not `false`.
+- **The preview card disagreed with the screen, three ways.** It read
+  `style.fillSide`, the boolean `fillDirection` replaced in 4.29.0 and which
+  nothing writes any more, so it ignored the Direction control entirely; it
+  painted the fill with a flat `SetVertexColor`, so a gradient showed on the
+  backdrop and not on the bar; and it passed **raw** gaps to `Layout.Build`
+  while the screen passed scaled ones, so at any scale but 1 the cells were
+  spaced wrong and the measured height came out short - which the card's own
+  fit-scale then divided. `Layout.Gaps` is the one rule now, and it is tested.
+
+### Known and NOT fixed
+
+- **"Fill up" does nothing on a bar the Cooldown Manager times**, which is
+  nearly all of them: `RefreshFill`'s mirror branch returns six lines before
+  `aura.grow` is read. It DOES work on a bar this addon times itself. It is
+  also not the same question as Direction - that is geometry, this is time.
+  Making it work everywhere means driving our StatusBar off the engine's
+  duration handle (`SetTimerDuration` with `ElapsedTime`, verified in shipping
+  code on this client) instead of copying Blizzard's draining value, because
+  inverting a secret is arithmetic on a secret and forbidden. That is a change
+  to the clock every bar runs on and it is the owner's call.
+
 ### Added - the owner's list
 
 - **The co-tank panel is placed in EDIT MODE**, with its own mover, the same

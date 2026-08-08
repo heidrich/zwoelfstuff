@@ -11,6 +11,10 @@ ns.CHANGELOG = {
         version = "4.32.0",
         date = "2026-08-08",
         lines = {
+            "THE EXTRA 0 BESIDE A CHARGE COUNT IS GONE. It was the STACK count, not the charge count. On this patch a stack count arrives as a protected number that an addon may not compare to anything - so \"is it more than one\" could not be asked, and a nought printed exactly like a real count. The game CAN ask it, and answers by hiding its own counter; the addon now reads that answer instead of trying to make the comparison itself.",
+            "",
+            "THE CARD IN THE EDITOR AND THE BAR ON SCREEN DISAGREED, three ways. It ignored the Direction setting entirely - it was still reading a switch that was replaced two versions ago and that nothing writes any more, so every bar in the card filled left to right whatever you picked. It drew a flat fill under a gradient backdrop, because the gradient work rewired everything except the card. And at any scale other than 100% it spaced the cells wrong and measured the bar short, which then made the whole card scale itself off a wrong number.",
+            "",
             "THE CO-TANK PANEL IS MOVED IN EDIT MODE NOW, like everything else this addon draws. The button on the settings page is gone: a display you move from a button in a window is moved blind, because the window is sitting over the place you are trying to put it. It comes out while you are in edit mode even when it is switched off, it drags like a bar, and it snaps to your bars and to the middle of the screen - hold Alt to put it exactly where you want it instead.",
             "",
             "FOUR THINGS WERE BADLY BROKEN AND ARE NOT ANY MORE.",

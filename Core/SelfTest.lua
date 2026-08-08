@@ -1192,6 +1192,36 @@ end
 -- swapped pair is invisible on two similar colours and upside down on every
 -- other one, which is the worst kind of bug to have to see.
 ---------------------------------------------------------------------------
+-- THE PREVIEW CARD AND THE SCREEN MUST SPACE A BAR THE SAME WAY.
+--
+-- They did not, at any scale but 1: the screen multiplied its gaps by the
+-- bar's scale and the card passed them raw, so a bar at 150% drew correctly
+-- sized cells with unscaled spacing in the editor and measured short. One
+-- exported rule now, and this is the check that keeps it one.
+local function TestGaps()
+    local cfg = {}
+    ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
+
+    cfg.spacing, cfg.lineSpacing, cfg.scale = 6, 8, 1
+    local across, down = ns.Layout.Gaps(cfg)
+    Check("At 100% the gaps are what was typed", across == 6 and down == 8,
+        across .. "," .. down)
+
+    cfg.scale = 1.5
+    across, down = ns.Layout.Gaps(cfg)
+    Check("At 150% both gaps scale with the cells",
+        across == 9 and down == 12, across .. "," .. down)
+
+    -- A bar with nothing set must still answer, because the card asks before
+    -- the user has touched anything.
+    across, down = ns.Layout.Gaps({})
+    Check("An empty bar still has gaps", across == 4 and down == 4,
+        across .. "," .. down)
+    across, down = ns.Layout.Gaps(nil)
+    Check("So does no bar at all", across == 4 and down == 4,
+        across .. "," .. down)
+end
+
 local function TestGradients()
     local seen = {}
     for _, entry in ipairs(ns.GRADIENT_DIRECTIONS) do
@@ -1978,6 +2008,7 @@ function Test:Run()
         { "Menu filter",   TestMenuFilter },
         { "Fill direction", TestFillDirection },
         { "Gradients",     TestGradients },
+        { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
