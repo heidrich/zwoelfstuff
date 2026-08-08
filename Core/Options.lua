@@ -609,23 +609,34 @@ function Options:Create()
         self:Refresh()
     end
 
-    for index, entry in ipairs(PAGES) do
-        local item = UI.NavItem(rail, entry.title, entry.glyph,
-            function() ShowPage(index) end)
-        item:SetPoint("TOPLEFT", rail, "TOPLEFT", 8, -76 - (index - 1) * 34)
-        item:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -8, -76 - (index - 1) * 34)
-        navItems[index] = item
-    end
-
-    -- Unlock sits at the bottom of the rail rather than among the pages: it
-    -- is not a place you go, it is a thing you do, and it closes the window
-    -- to do it. Same shape as EllesmereUI's, because that is the gesture
-    -- people already have in their hands.
-    local unlockBtn = UI.Button(rail, "Unlock Mode", SIDEBAR_W - 36, function()
+    -- EDIT MODE IS THE FIRST ENTRY IN THE LIST, not a button in the corner.
+    --
+    -- It was a lone button at the bottom of the rail, on the argument that it
+    -- is a thing you DO rather than a place you go. True, and beside the
+    -- point: it is the thing this window exists to get you to, and it was the
+    -- one item on the left that did not look like the others. An entry among
+    -- the entries is where the eye already is.
+    --
+    -- It still closes the window, which is why it is the only entry that does
+    -- not stay lit afterwards - there is nothing to come back to until you
+    -- leave edit mode again.
+    local editItem = UI.NavItem(rail, "Edit Mode", "move", function()
         frame:Hide()
         ns.EditMode:SetUnlocked(true)
-    end, "soft")
-    unlockBtn:SetPoint("BOTTOMLEFT", rail, "BOTTOMLEFT", 18, 42)
+    end)
+    editItem:SetPoint("TOPLEFT", rail, "TOPLEFT", 8, -76)
+    editItem:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -8, -76)
+
+    -- The pages start one row below it.
+    local FIRST_PAGE_ROW = 1
+    for index, entry in ipairs(PAGES) do
+        local row = FIRST_PAGE_ROW + index - 1
+        local item = UI.NavItem(rail, entry.title, entry.glyph,
+            function() ShowPage(index) end)
+        item:SetPoint("TOPLEFT", rail, "TOPLEFT", 8, -76 - row * 34)
+        item:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -8, -76 - row * 34)
+        navItems[index] = item
+    end
 
     ---------------------------------------------------------------------
     -- Painting

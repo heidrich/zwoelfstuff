@@ -415,9 +415,22 @@ function UI.Slider(row, cfg)
     local boxEdge = ns.CreateBorder(box, 1, "BORDER")
     boxEdge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
-    local value = UI.Label(box, "", 11, C.text)
-    value:SetPoint("CENTER", box, "CENTER", 0, 0)
+    -- AN EDIT BOX, NOT A LABEL. The number was read-only, which meant an exact
+    -- value could only be reached by dragging until the display agreed - and
+    -- for a 0.05 step that is a game of patience. Click it and type.
+    --
+    -- What is TYPED is a plain number. What is SHOWN may carry a unit, and the
+    -- two are kept apart by cfg.scale: a percentage displays 85 and stores
+    -- 0.85, so typing 85 has to divide. Without that the box would either show
+    -- 0.85 (unreadable) or take 85 and store it (a bar at 8500% opacity).
+    local value = CreateFrame("EditBox", nil, box)
+    value:SetAllPoints(box)
+    value:SetAutoFocus(false)
     value:SetJustifyH("CENTER")
+    value:SetNumeric(false)   -- decimals and a minus sign are both legal
+    value:SetMaxLetters(8)
+    ns.StyleFont(value, 11)
+    value:SetTextColor(C.text[1], C.text[2], C.text[3], 1)
 
     local bar = CreateFrame("Frame", nil, slider)
     bar:SetPoint("LEFT", slider, "LEFT", 0, 0)
@@ -474,10 +487,35 @@ function UI.Slider(row, cfg)
     bar:SetScript("OnMouseWheel", function(_, delta) Commit(cfg.get() + delta * cfg.step) end)
     bar:EnableMouseWheel(true)
 
+    -- Typing. The unit and any decoration the format added are stripped, so
+    -- "85%", "85" and " 85 s" all mean the same thing - people re-type over a
+    -- value they can see, and what they can see has a unit on it.
+    value:SetScript("OnEnterPressed", function(self)
+        local typed = tonumber((self:GetText() or ""):match("%-?%d+%.?%d*"))
+        if typed then Commit(typed / (cfg.scale or 1)) end
+        self:ClearFocus()
+    end)
+    -- Escape means "I did not mean that", so the box goes back to the value.
+    value:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        slider.Refresh()
+    end)
+    -- Clicking away is not a decision either way; treat it as Enter, because
+    -- typing a number and then clicking the next control is what people do.
+    value:SetScript("OnEditFocusLost", function(self)
+        local typed = tonumber((self:GetText() or ""):match("%-?%d+%.?%d*"))
+        if typed then Commit(typed / (cfg.scale or 1)) else slider.Refresh() end
+    end)
+    value:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+
     slider.Refresh = function()
         local current = cfg.get()
         if type(current) ~= "number" then current = cfg.min end
-        value:SetText(cfg.format and cfg.format(current) or tostring(current))
+        -- Never overwrite what is being typed: a refresh from somewhere else
+        -- would delete the half-finished number under the cursor.
+        if not value:HasFocus() then
+            value:SetText(cfg.format and cfg.format(current) or tostring(current))
+        end
 
         local span = cfg.max - cfg.min
         local pct = span > 0 and ((current - cfg.min) / span) or 0
@@ -2003,6 +2041,8 @@ local GLYPHS = {
     pulse   = { {0,8,2,4}, {3,4,2,8}, {6,0,2,12}, {9,6,2,6} },
     info    = { {5,0,3,3}, {5,5,3,7} },
     log     = { {0,0,12,2}, {0,5,9,2}, {0,10,6,2} },
+    -- Four arrows off a centre: "pick it up and put it somewhere".
+    move    = { {5,0,2,12}, {0,5,12,2}, {3,2,2,2}, {7,2,2,2} },
 }
 
 function UI.Glyph(parent, kind, size, colour)
@@ -2139,10 +2179,16 @@ function UI.MiniSlider(parent, cfg)
     label:SetWidth(labelWidth)
     label:SetWordWrap(false)
 
-    local value = UI.Label(slider, "", 12, C.text)
+    -- Typeable, same as the big slider. Rows and Columns are exactly the two
+    -- numbers somebody wants to set exactly rather than aim at.
+    local value = CreateFrame("EditBox", nil, slider)
     value:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
-    value:SetWidth(VALUE_W)
+    value:SetSize(VALUE_W, 18)
+    value:SetAutoFocus(false)
     value:SetJustifyH("RIGHT")
+    value:SetMaxLetters(8)
+    ns.StyleFont(value, 12)
+    value:SetTextColor(C.text[1], C.text[2], C.text[3], 1)
 
     local bar = CreateFrame("Frame", nil, slider)
     bar:SetPoint("LEFT", label, "RIGHT", 8, 0)
@@ -2211,10 +2257,31 @@ function UI.MiniSlider(parent, cfg)
     end)
     bar:SetScript("OnLeave", function() knob:SetScale(1) end)
 
+    local function Typed(self)
+        return tonumber((self:GetText() or ""):match("%-?%d+%.?%d*"))
+    end
+    value:SetScript("OnEnterPressed", function(self)
+        local typed = Typed(self)
+        if typed then Commit(typed / (cfg.scale or 1)) end
+        self:ClearFocus()
+    end)
+    value:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        slider.Refresh()
+    end)
+    value:SetScript("OnEditFocusLost", function(self)
+        local typed = Typed(self)
+        if typed then Commit(typed / (cfg.scale or 1)) else slider.Refresh() end
+    end)
+    value:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+
     slider.Refresh = function()
         local current = cfg.get()
         if type(current) ~= "number" then current = cfg.min end
-        value:SetText(cfg.format and cfg.format(current) or tostring(current))
+        -- Not while it is being typed into.
+        if not value:HasFocus() then
+            value:SetText(cfg.format and cfg.format(current) or tostring(current))
+        end
 
         local span = cfg.max - cfg.min
         local pct = span > 0 and ((current - cfg.min) / span) or 0

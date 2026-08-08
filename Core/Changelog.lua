@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.19.0",
+        date = "2026-08-08",
+        lines = {
+            "EVERY SLIDER CAN BE TYPED INTO. Click the number, type it, press Enter. It was read-only, which meant an exact value could only be reached by dragging until the display agreed - and on a 0.05 step that is a game of patience, not a setting.",
+            "The unit comes off what you type: \"85%\", \"85\" and \"85 s\" all mean the same thing, because people re-type over a value they can see and what they can see has a unit on it. Escape puts it back. Both kinds of slider - the big ones in the settings and the small Rows and Columns ones on the cards.",
+            "The \"x\" is gone from the size sliders. 1.00 says it.",
+            "",
+            "EDIT MODE IS THE FIRST ENTRY IN THE LEFT COLUMN. It was called Unlock Mode and it was a lone button at the bottom of the rail, on the argument that it is a thing you DO rather than a place you go. True, and beside the point - it is the thing this window exists to get you to, and it was the one item on the left that did not look like the others.",
+        },
+    },
+    {
         version = "4.18.0",
         date = "2026-08-08",
         lines = {

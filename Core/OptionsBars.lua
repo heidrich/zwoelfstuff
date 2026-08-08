@@ -829,10 +829,13 @@ function Workspace:BuildOptionsPane(parent, width)
         end
     end
 
-    local function Slide(label, key, min, max, step, format)
+    -- scale: what the DISPLAY multiplies by, so a typed number can be
+    -- divided back. A percentage shows 85 and stores 0.85.
+    local function Slide(label, key, min, max, step, format, scale)
         return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
             get = Get(key), set = Set(key),
-            min = min, max = max, step = step, format = format, apply = Apply,
+            min = min, max = max, step = step, format = format,
+            scale = scale, apply = Apply,
         })
     end
     local function Switch(label, key, sublabel)
@@ -1007,12 +1010,12 @@ function Workspace:BuildOptionsPane(parent, width)
     -- work under the knobs.
     grid:Section("Icon", "look-icon")
 
-    Slide("Opacity", "alpha", 0.1, 1, 0.05, Percent)
-    Slide("Crop", "iconZoom", 0, 0.2, 0.01, Percent)
+    Slide("Opacity", "alpha", 0.1, 1, 0.05, Percent, 100)
+    Slide("Crop", "iconZoom", 0, 0.2, 0.01, Percent, 100)
     grid:Note("Blizzard's icon art has a border baked into the file. Cropping "
         .. "cuts it off; at 0 you see the whole thing, frame and all.")
 
-    Slide("While inactive", "inactiveAlpha", 0, 1, 0.05, Percent)
+    Slide("While inactive", "inactiveAlpha", 0, 1, 0.05, Percent, 100)
     Switch("Grey out while inactive", "inactiveDesaturate")
     grid:Note("Auras this addon draws itself stay in place while they are "
         .. "down, so the bar does not re-flow under your eye. At 0 they "
@@ -1032,7 +1035,7 @@ function Workspace:BuildOptionsPane(parent, width)
 
     Switch("Show", "backdrop", "A plate behind the icon")
     Colour("Colour", "backdropColor")
-    Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent)
+    Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent, 100)
     UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
         Get("backdropTexture"), Set("backdropTexture"), Apply)
     -- Said out loud, because "I picked a texture and nothing happened" is
@@ -1053,7 +1056,7 @@ function Workspace:BuildOptionsPane(parent, width)
     local fillRows = {
         grid:Section("Bar fill", "look-fill"),
         Colour("Colour", "fillColor"),
-        Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent),
+        Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent, 100),
     }
     fillRows[#fillRows + 1] = UI.MediaPicker(
         grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
@@ -1158,7 +1161,7 @@ function Workspace:BuildOptionsPane(parent, width)
     grid:Section("Cooldown sweep", "look-sweep")
 
     Colour("Colour", "swipeColor")
-    Slide("Opacity", "swipeAlpha", 0, 1, 0.05, Percent)
+    Slide("Opacity", "swipeAlpha", 0, 1, 0.05, Percent, 100)
     Switch("Leading edge", "showEdge", "The bright line the sweep drags")
 
     -- Text ------------------------------------------------------------------
@@ -1239,10 +1242,13 @@ function Workspace:BuildOptionsPane(parent, width)
         return UI.Toggle(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }),
             FxGet(key), function(value) FxSet(key)(value); Apply() end)
     end
-    local function FxSlide(label, key, min, max, step, format)
+    -- scale: what the DISPLAY multiplies by, so a typed number can be
+    -- divided back. A percentage shows 85 and stores 0.85.
+    local function FxSlide(label, key, min, max, step, format, scale)
         return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
             get = FxGet(key), set = FxSet(key),
-            min = min, max = max, step = step, format = format, apply = Apply,
+            min = min, max = max, step = step, format = format,
+            scale = scale, apply = Apply,
         })
     end
     local function FxColour(label, key)
@@ -1301,9 +1307,9 @@ function Workspace:BuildOptionsPane(parent, width)
         .. "So it only lights for the spells you have switched pandemic alerts "
         .. "on for in Blizzard's own Cooldown Manager settings.")
     FxSwitch("Grey out on cooldown", "dimOnCooldown")
-    FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent)
+    FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent, 100)
     FxSlide("Pulse speed", "pulseSpeed", 0.4, 2.5, 0.1,
-        function(v) return string.format("%.1fx", v) end)
+        function(v) return string.format("%.1f", v) end)
 
     -- Visibility ------------------------------------------------------------
     local function RuleGet(key)
@@ -1593,10 +1599,13 @@ function Workspace:BuildCellPane(parent, width)
         end
     end
 
-    local function Slide(label, key, min, max, step, format)
+    -- scale: what the DISPLAY multiplies by, so a typed number can be
+    -- divided back. A percentage shows 85 and stores 0.85.
+    local function Slide(label, key, min, max, step, format, scale)
         return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
             get = Get(key, min), set = Set(key),
-            min = min, max = max, step = step, format = format, apply = Apply,
+            min = min, max = max, step = step, format = format,
+            scale = scale, apply = Apply,
         })
     end
     local function Switch(label, key, sublabel)
@@ -1634,7 +1643,7 @@ function Workspace:BuildCellPane(parent, width)
             ns.Layout.TidyCellOpts(cfg, index)
         end,
         min = 0.5, max = 3, step = 0.05, apply = Apply,
-        format = function(v) return string.format("%.2fx", v) end,
+        format = function(v) return string.format("%.2f", v) end,
     })
 
     UI.Dropdown(grid:FullRow("Shape", { controlWidth = 160 }), {
@@ -1654,7 +1663,7 @@ function Workspace:BuildCellPane(parent, width)
 
     grid:Section("Bar fill", "cell-fill")
     Colour("Colour", "fillColor")
-    Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent)
+    Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent, 100)
     UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
         Get("fillTexture", ""), Set("fillTexture"), Apply)
     Switch("Start on the right", "fillSide", "Which end the fill sits at")
@@ -1666,7 +1675,7 @@ function Workspace:BuildCellPane(parent, width)
     Slide("Thickness", "borderSize", 0, 4, 1)
     Colour("Border colour", "borderColor")
     Colour("Backdrop colour", "backdropColor")
-    Slide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05, Percent)
+    Slide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05, Percent, 100)
 
     -- Stack colours per cell, because this is the setting that most obviously
     -- belongs to ONE spell: Bone Shield wants bands and the two bars under it
