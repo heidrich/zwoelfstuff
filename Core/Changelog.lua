@@ -8,7 +8,7 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
-        version = "4.28.0",
+        version = "4.29.0",
         date = "2026-08-08",
         lines = {
             "DISCORD IS IN THE LEFT COLUMN, above the version. Clicking it opens the invite in a box with the whole link already selected - one Ctrl+C and it goes in your browser. No addon can open a browser for you; the client has no call for it, on purpose, and a row that looked like a link and did nothing would be worse than no row at all.",

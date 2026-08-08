@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- ZwoelfStuff - your own cooldown bars, built on Blizzard's Cooldown Manager.
 --
 -- Spells go in a grid you arrange, and every bar is styled on its own. What
@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.28.0"
+ns.version = "4.29.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -472,7 +472,7 @@ end
 ---------------------------------------------------------------------------
 -- WHOSE SETTINGS THESE ARE
 --
--- Owner, 2026-08-07: "mach ich eine änderung am ui oder egal was, muss das
+-- Owner, 2026-08-07: "mach ich eine Ã¤nderung am ui oder egal was, muss das
 -- unter dem charakter namen und server gespeichert werden".
 --
 -- So the file holds one profile per character, keyed "Name - Realm" - the
@@ -487,7 +487,7 @@ end
 -- would make every alt start the recording again from nothing.
 --
 -- The owner's own reason for the split, verbatim: "sonst wird das pro klasse
--- oder spec ja jedes mal überschrieben". Two characters of one class were
+-- oder spec ja jedes mal Ã¼berschrieben". Two characters of one class were
 -- writing over each other, and no keying by class or spec can fix that -
 -- only keying by the character.
 ---------------------------------------------------------------------------
