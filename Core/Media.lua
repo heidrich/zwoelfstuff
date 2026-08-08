@@ -99,6 +99,34 @@ function Media.IsKnown(kind, key)
     return LSM:IsValid(kind, key)
 end
 
+-- Ours, or somebody else's?
+--
+-- Asked of the PATH, not of the name. The textures this addon ships all carry
+-- a "ZS " prefix so they sort together, but a prefix is a convention and this
+-- has to be right for fonts and borders too - where we ship none today and
+-- might tomorrow. The registry knows where every file actually lives.
+function Media.IsOurs(kind, key)
+    if not (LSM and key) then return false end
+    local path = LSM:Fetch(kind, key, true)
+    if type(path) ~= "string" then return false end
+    return path:lower():find("addons\\zwoelfstuff\\", 1, true) ~= nil
+end
+
+-- The same list, in the two groups the picker shows it in: what we shipped
+-- first, then what the user's other addons brought.
+--
+-- Deliberately NOT alphabetical across the two. At forty-odd entries that is
+-- the difference between finding and searching: the twenty you can rely on
+-- being there sit together at the top, and everything else follows.
+function Media.Grouped(kind)
+    local ours, theirs = {}, {}
+    for _, name in ipairs(Media.List(kind)) do
+        local into = Media.IsOurs(kind, name) and ours or theirs
+        into[#into + 1] = name
+    end
+    return ours, theirs
+end
+
 ---------------------------------------------------------------------------
 -- Staying current
 --

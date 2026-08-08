@@ -8,6 +8,21 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.26.0",
+        date = "2026-08-08",
+        lines = {
+            "THE TEXTURE LIST IS THE ONE FROM THE DESIGN NOW. Wider, with a search box at the top and the keys explained at the bottom, and it groups: everything this addon ships first, everything your other addons brought after. Deliberately not alphabetical across the two - at forty-odd entries that is the difference between finding and searching.",
+            "",
+            "TYPE TO FILTER. Any part of a name, upper or lower case. A group whose entries have all been filtered away loses its heading with them.",
+            "",
+            "THE PREVIEW STRIPS ARE IN THE BAR'S OWN FILL COLOUR. They were orange - the addon's accent - which tells you nothing about the bar you are actually setting up. And they are the full 132 by 14 the design draws, instead of a 76-wide chip.",
+            "",
+            "AND THE ONE YOU ARE ON IS OBVIOUS. It had orange text, which in a list of grey text is a difference you have to look for. Now it has a raised ground, an orange bar down its left edge and a tick on the right.",
+            "",
+            "The list fades out at the bottom instead of being cut off mid-row, so it is clear there is more below.",
+        },
+    },
+    {
         version = "4.25.0",
         date = "2026-08-08",
         lines = {

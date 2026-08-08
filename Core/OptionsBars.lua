@@ -1260,9 +1260,18 @@ function Workspace:BuildOptionsPane(parent, width)
         Colour("Colour", "fillColor"),
         Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent, 100),
     }
+    -- The preview strips in the list are painted in THIS bar's fill colour.
+    -- You open the list to see what this bar will look like, and a column of
+    -- orange strips answers a question nobody asked.
     fillRows[#fillRows + 1] = UI.MediaPicker(
-        grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
-        Get("fillTexture"), Set("fillTexture"), Apply)
+        grid:FullRow("Texture",
+            { controlWidth = 190, icon = "media-texture" }), "statusbar",
+        Get("fillTexture"), Set("fillTexture"), Apply, nil,
+        function()
+            local colour = Get("fillColor")()
+            if type(colour) ~= "table" then return end
+            return colour[1], colour[2], colour[3]
+        end)
     fillRows[#fillRows + 1] = Switch("Start on the right", "fillSide",
         "Which end the fill sits at")
     fillRows[#fillRows + 1] = Switch("Fill up", "fillGrow",

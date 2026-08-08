@@ -8,6 +8,40 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.26.0] - 2026-08-08
+
+### Changed
+
+- THE TEXTURE LIST IS THE ONE FROM THE DESIGN NOW (screen 3a). 368 wide, with
+  a search box at the top and the keys explained at the bottom, and it groups:
+  `SHIPPED WITH ZWOELFSTUFF` first, `FROM YOUR OTHER ADDONS` after.
+  Deliberately not alphabetical across the two - at forty-odd entries that is
+  the difference between finding and searching. Which group a name belongs to
+  is decided by its PATH, not by its prefix, so it stays right for fonts and
+  borders too.
+
+- THE PREVIEW STRIPS ARE IN THE BAR'S OWN FILL COLOUR, and the full 132 x 14
+  the design draws instead of a 76-wide chip. They were painted in the addon's
+  accent, which tells you nothing about the bar you are setting up.
+
+- THE CHOSEN ENTRY IS SAID THREE WAYS - a raised ground, a 2px accent bar on
+  the left edge, a tick on the right. It was orange text, which in a list of
+  grey text is a difference you have to look for.
+
+- The list fades out at the bottom rather than being cut off mid-row.
+
+### Added
+
+- TYPE TO FILTER. Case-insensitive substring on any part of a name. A group
+  whose entries are all filtered away loses its heading with them - `/zs test`
+  covers that case specifically, because it is the one that looks fine until
+  you try it. The rule is `UI.FilterMenuItems`, pure and testable, for the
+  same reason the snapping arithmetic is. 154 checks, up from 146.
+
+- The desktop harness opens menus now: a plain one, the media list, and the
+  media list mid-filter. Nothing in it opened a popup before, which is the
+  largest single piece of the widget layer.
+
 ## [4.25.0] - 2026-08-08
 
 ### Changed

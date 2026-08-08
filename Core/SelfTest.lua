@@ -1143,6 +1143,45 @@ local function TestSnapping()
     Check("A zero grid step is ignored", noStep == 137, tostring(noStep))
 end
 
+---------------------------------------------------------------------------
+-- The menu filter
+--
+-- Pure, for the same reason the snapping arithmetic is: the rule that is easy
+-- to get wrong - a group heading kept only when something under it survived -
+-- is invisible in a screenshot and obvious in a test.
+---------------------------------------------------------------------------
+local function TestMenuFilter()
+    local Filter = ns.UI.FilterMenuItems
+
+    local items = {
+        { heading = true, text = "Shipped with ZwoelfStuff" },
+        { text = "ZS Flat" }, { text = "ZS Smooth" },
+        { heading = true, text = "From your other addons" },
+        { text = "Blizzard" }, { text = "Details Flat" },
+    }
+
+    Check("No filter returns everything", #Filter(items, nil) == 6)
+    Check("An empty filter returns everything", #Filter(items, "") == 6)
+
+    -- Two hits, in two different groups, so both headings stay.
+    local flat = Filter(items, "flat")
+    Check("It matches anywhere in the name, not just the start",
+        #flat == 4, tostring(#flat))
+    Check("Both groups keep their heading",
+        flat[1].heading and flat[3].heading)
+
+    -- One hit, in the SECOND group: the first heading must not survive on its
+    -- own. This is the case that looks fine until you try it.
+    local one = Filter(items, "blizz")
+    Check("A group with no survivors loses its heading",
+        #one == 2 and one[1].text == "From your other addons",
+        tostring(#one) .. " " .. tostring(one[1] and one[1].text))
+
+    Check("Filtering is case-insensitive", #Filter(items, "ZS ") == 3)
+    Check("No hits at all is an empty list", #Filter(items, "zzz") == 0)
+    Check("A nil list is not a crash", #Filter(nil, "flat") == 0)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -1160,6 +1199,7 @@ function Test:Run()
         { "Spell identity", TestSpellIdentity },
         { "Design system",  TestDesignSystem },
         { "Snapping",      TestSnapping },
+        { "Menu filter",   TestMenuFilter },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

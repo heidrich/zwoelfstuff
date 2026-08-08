@@ -769,6 +769,69 @@ local function GetPopup()
     popup.grip:SetWidth(4)
     popup.grip:Hide()
 
+    -- THE HEAD, 38 high: a filter box, and ESC on the right.
+    --
+    -- Only shown for the lists long enough to need it. A search field over a
+    -- two-item overflow menu is furniture, and furniture on a menu you open
+    -- forty times a day is worse than nothing.
+    popup.head = CreateFrame("Frame", nil, popup)
+    popup.head:SetHeight(38)
+    popup.head:SetPoint("TOPLEFT", popup, "TOPLEFT", 0, 0)
+    popup.head:SetPoint("TOPRIGHT", popup, "TOPRIGHT", 0, 0)
+    popup.head:Hide()
+
+    popup.search = UI.Input(popup.head, 200, function() end, false, "Search")
+    popup.search:SetPoint("LEFT", popup.head, "LEFT", 10, 0)
+    popup.search:SetPoint("RIGHT", popup.head, "RIGHT", -46, 0)
+    popup.search:SetHeight(24)
+    popup.search:SetIcon("ui-search")
+
+    popup.escape = UI.Label(popup.head, "ESC", UI.FS.eyebrow, C.textGhost)
+    popup.escape:SetPoint("RIGHT", popup.head, "RIGHT", -10, 0)
+
+    popup.headRule = Tex(popup.head, "ARTWORK", C.separator[1], C.separator[2],
+        C.separator[3], 1)
+    popup.headRule:SetHeight(1)
+    popup.headRule:SetPoint("BOTTOMLEFT", popup.head, "BOTTOMLEFT", 0, 0)
+    popup.headRule:SetPoint("BOTTOMRIGHT", popup.head, "BOTTOMRIGHT", 0, 0)
+
+    -- THE RUN-OUT, 16 high. A gradient on ALPHA over the popup's own ground,
+    -- not a blur - there is no blur here - so the last row fades instead of
+    -- being cut in half by the edge.
+    popup.fade = popup:CreateTexture(nil, "OVERLAY")
+    popup.fade:SetHeight(16)
+    popup.fade:SetColorTexture(C.well[1], C.well[2], C.well[3], 1)
+    -- VERTICAL runs bottom to top, so the OPAQUE end is the first colour: the
+    -- fade is solid where it meets the popup's edge and gone where the list
+    -- still has to be readable.
+    if CreateColor then
+        popup.fade:SetGradient("VERTICAL",
+            CreateColor(C.well[1], C.well[2], C.well[3], 1),
+            CreateColor(C.well[1], C.well[2], C.well[3], 0))
+    end
+    popup.fade:Hide()
+
+    -- THE FOOT, 32: what the keys do. It is the only place the wheel and the
+    -- filter are mentioned at all.
+    popup.foot = CreateFrame("Frame", nil, popup)
+    popup.foot:SetHeight(32)
+    popup.foot:SetPoint("BOTTOMLEFT", popup, "BOTTOMLEFT", 0, 0)
+    popup.foot:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", 0, 0)
+    popup.foot:Hide()
+
+    popup.footRule = Tex(popup.foot, "ARTWORK", C.separator[1], C.separator[2],
+        C.separator[3], 1)
+    popup.footRule:SetHeight(1)
+    popup.footRule:SetPoint("TOPLEFT", popup.foot, "TOPLEFT", 0, 0)
+    popup.footRule:SetPoint("TOPRIGHT", popup.foot, "TOPRIGHT", 0, 0)
+
+    popup.footHint = UI.Label(popup.foot, "Scroll or type to filter",
+        UI.FS.eyebrow, C.textGhost)
+    popup.footHint:SetPoint("LEFT", popup.foot, "LEFT", 10, 0)
+
+    popup.footKeys = UI.Label(popup.foot, "ENTER", UI.FS.eyebrow, C.textGhost)
+    popup.footKeys:SetPoint("RIGHT", popup.foot, "RIGHT", -10, 0)
+
     -- Click-away catcher: a full-screen button one level below the popup.
     local catcher = CreateFrame("Button", nil, UIParent)
     catcher:SetAllPoints(UIParent)
@@ -819,6 +882,20 @@ local function MenuEntry(menu, index)
     -- unreadable. This way both are legible and neither is a compromise.
     -- Its own frame, because the outline has to go around the SWATCH and a
     -- border built on the row would frame the whole row instead.
+    -- The one thing that says "you are on this one": a raised ground, an
+    -- accent bar down the left edge and a tick on the right. Orange TEXT alone
+    -- was the whole signal before, and orange text in a list of grey text is a
+    -- difference you have to look for rather than one you see.
+    entry.pick = Tex(entry, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+    entry.pick:SetWidth(2)
+    entry.pick:SetPoint("TOPLEFT", entry, "TOPLEFT", 0, 0)
+    entry.pick:SetPoint("BOTTOMLEFT", entry, "BOTTOMLEFT", 0, 0)
+    entry.pick:Hide()
+
+    entry.tick = UI.Glyph(entry, "ui-check", 12, C.accent)
+    entry.tick:SetPoint("RIGHT", entry, "RIGHT", -8, 0)
+    entry.tick:Hide()
+
     entry.swatchHost = CreateFrame("Frame", nil, entry)
     entry.swatchHost:SetPoint("RIGHT", entry, "RIGHT", -8, 0)
     entry.swatchHost:SetSize(76, ENTRY_H - 8)
@@ -859,8 +936,39 @@ local function MenuEntry(menu, index)
     return entry
 end
 
+-- WHICH ITEMS SURVIVE THE FILTER. Pure, and exported so it can be tested.
+--
+-- The rule that is easy to get wrong is the heading: a group title is kept
+-- only if something under it survived. A title over nothing is worse than no
+-- title, and it is the state a list spends most of its time in while somebody
+-- is typing.
+--
+-- Case-insensitive substring, not fuzzy. For forty names the plain answer is
+-- the predictable one, and predictable beats clever on a list you filter
+-- twenty times a day.
+function UI.FilterMenuItems(items, filter)
+    items = items or {}
+    if not filter or filter == "" then return items end
+
+    local needle = filter:lower()
+    local out, pending = {}, nil
+    for _, item in ipairs(items) do
+        if item.heading then
+            pending = item
+        elseif (item.text or ""):lower():find(needle, 1, true) then
+            if pending then
+                out[#out + 1] = pending
+                pending = nil
+            end
+            out[#out + 1] = item
+        end
+    end
+    return out
+end
+
 -- spec = { width, items = {{text, value, onClick, onDelete}}, actions = {...},
---          current, anchor = {point, relPoint, x, y} }
+--          current, anchor = {point, relPoint, x, y},
+--          search, foot, rowHeight, previewWidth/Height/Colour }
 local function ShowMenu(owner, spec)
     local menu = GetPopup()
     if menu:IsShown() and menu.owner == owner then
@@ -880,7 +988,21 @@ local function ShowMenu(owner, spec)
     menu:SetPoint(anchor[1], owner, anchor[2], anchor[3], anchor[4])
     menu:SetWidth(math.max(owner:GetWidth(), spec.width or 0))
 
-    local y, index = -4, 0
+    -- THE LIST DOES NOT OWN THE WHOLE POPUP ANY MORE.
+    --
+    -- A head with the filter box and a foot with the key hints each take a
+    -- band, and the scrolling arithmetic below runs on what is left. Both are
+    -- opt-in: an overflow menu with two entries in it gets neither, because a
+    -- search field over two rows is furniture.
+    local ROW = spec.rowHeight or ENTRY_H
+    local HEAD = spec.search and 38 or 4
+    local FOOT = spec.foot and 32 or 4
+
+    -- Laid out as a FUNCTION, because the filter box re-runs it on every
+    -- keystroke. The rows are positioned by hand from a running y, so
+    -- filtering is the same walk over a shorter list rather than a second
+    -- code path that has to agree with this one.
+    local y, index
 
     local function AddEntry(item, isAction)
         index = index + 1
@@ -889,10 +1011,62 @@ local function ShowMenu(owner, spec)
         entry:SetPoint("TOPLEFT", menu, "TOPLEFT", 0, y)
         entry:SetPoint("TOPRIGHT", menu, "TOPRIGHT", 0, y)
 
+        -- A GROUP HEADING is a row that is not an entry: no hover, no click,
+        -- upper case at the smallest size. It exists because the media lists
+        -- are forty-odd names long and the twenty this addon ships are the
+        -- ones you can rely on being there.
+        if item.heading then
+            entry:SetHeight(24)
+            entry:EnableMouse(false)
+            entry.hl:Hide()
+            entry.pick:Hide()
+            entry.tick:Hide()
+            entry.del:Hide()
+            entry.mark:Hide()
+            entry.swatchHost:Hide()
+            entry.swatchEdge:Hide()
+            entry.label:SetText(item.text:upper())
+            entry.label:ClearAllPoints()
+            entry.label:SetPoint("LEFT", entry, "LEFT", 10, -3)
+            entry.label:SetPoint("RIGHT", entry, "RIGHT", -10, -3)
+            ns.StyleUIFont(entry.label, UI.FS.eyebrow)
+            entry.label:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+            entry:SetScript("OnClick", nil)
+            entry:Show()
+            y = y - 24
+            return
+        end
+
+        entry:SetHeight(ROW)
+        entry:EnableMouse(true)
+
         entry.label:SetText(item.text)
         local active = (not isAction) and item.value ~= nil and item.value == spec.current
         local colour = isAction and C.accent or (active and C.accent or C.text)
         entry.label:SetTextColor(colour[1], colour[2], colour[3])
+
+        -- The chosen one, said three ways because one was not enough: a raised
+        -- ground, an accent bar on the left edge and a tick on the right.
+        entry.pick:SetShown(active)
+        entry.tick:SetShown(active and spec.search and true or false)
+        if active then
+            entry.hl:SetColorTexture(C.surface[1], C.surface[2], C.surface[3], 1)
+            entry.hl:Show()
+        else
+            entry.hl:SetColorTexture(C.accentSoft[1], C.accentSoft[2],
+                C.accentSoft[3], 1)
+            entry.hl:Hide()
+        end
+        -- A row that is already the answer must not lose its ground when the
+        -- cursor leaves it, and a row that is not must not keep one.
+        entry:SetScript("OnEnter", function(self)
+            if active then return end
+            self.hl:Show()
+        end)
+        entry:SetScript("OnLeave", function(self)
+            if active then return end
+            self.hl:Hide()
+        end)
 
         -- Back to the panel font unless this row asks for its own. Rows are
         -- reused, so a font left on one from a previous menu would turn up on
@@ -920,13 +1094,21 @@ local function ShowMenu(owner, spec)
             -- will not load leaves the row in the panel font.
             ns.Media.ApplyFont(entry.label, item.value, 12, "")
         elseif preview == "statusbar" and ns.Media.IsKnown("statusbar", item.value) then
+            entry.swatchHost:SetSize(spec.previewWidth or 76,
+                spec.previewHeight or (ROW - 8))
             entry.swatch:SetTexture(ns.Media.Statusbar(item.value))
-            entry.swatch:SetVertexColor(C.accent[1], C.accent[2], C.accent[3], 1)
+            -- IN THE BAR'S OWN FILL COLOUR, not in the accent. You open this
+            -- list to find out what THIS bar will look like, and every strip
+            -- painted orange answers a question nobody asked.
+            local tint = spec.previewColour or C.accent
+            entry.swatch:SetVertexColor(tint[1], tint[2], tint[3], 1)
             entry.swatchHost:Show()
         elseif preview == "border" and ns.Media.IsKnown("border", item.value) then
             -- An edge file has to be drawn as an EDGE to mean anything, so
             -- the swatch is a small framed box rather than the strip itself -
             -- which on its own is eight tiles in a row and reads as noise.
+            entry.swatchHost:SetSize(spec.previewWidth or 76,
+                spec.previewHeight or (ROW - 8))
             entry.swatch:SetTexture(ns.WHITE)
             entry.swatch:SetVertexColor(C.canvasBg[1], C.canvasBg[2], C.canvasBg[3], 1)
             entry.swatchHost:Show()
@@ -945,6 +1127,9 @@ local function ShowMenu(owner, spec)
         elseif entry.swatchHost:IsShown() then
             entry.label:SetPoint("RIGHT", entry.swatchHost, "LEFT", -8, 0)
             entry.del:Hide()
+        elseif entry.tick:IsShown() then
+            entry.label:SetPoint("RIGHT", entry.tick, "LEFT", -6, 0)
+            entry.del:Hide()
         else
             entry.label:SetPoint("RIGHT", entry, "RIGHT", -10, 0)
             entry.del:Hide()
@@ -955,11 +1140,18 @@ local function ShowMenu(owner, spec)
             item.onClick()
         end)
         entry:Show()
-        y = y - ENTRY_H
+        y = y - ROW
     end
 
-    for _, item in ipairs(spec.items or {}) do AddEntry(item, false) end
+local function Build(filter)
+    y, index = -HEAD, 0
 
+    for _, item in ipairs(UI.FilterMenuItems(spec.items, filter)) do
+        AddEntry(item, false)
+    end
+
+    -- The actions are what the menu can DO rather than what it can pick, so
+    -- they are not filtered away by a search for a texture name.
     if spec.actions and #spec.actions > 0 then
         y = y - 5
         menu.divider:ClearAllPoints()
@@ -984,21 +1176,41 @@ local function ShowMenu(owner, spec)
     -- entries are already positioned by hand from a running y, so scrolling is
     -- the same arithmetic with an offset added, and a scroll frame would mean
     -- reparenting every row.
-    local full = -y + 4
+    -- The list runs from -HEAD down to wherever y ended up. Everything below
+    -- is in those terms rather than in the popup's, because the head and the
+    -- foot are outside the scrolling area and must not move with it.
+    local full = -y - HEAD + 4
     local limit = math.min(MENU_MAX_H, full)
-    menu:SetHeight(limit)
+    menu:SetHeight(HEAD + limit + FOOT)
 
     menu.dkFull, menu.dkLimit, menu.dkScroll = full, limit, 0
     menu.dkCount = index
+    menu.dkHead = HEAD
+
+    menu.head:SetShown(spec.search and true or false)
+    if spec.search then
+        menu.search:SetText("")
+        menu.search.UpdateGhost()
+    end
+
+    menu.foot:SetShown(spec.foot and true or false)
+    if spec.foot then menu.footHint:SetText(spec.foot) end
 
     local scrollable = full > limit
     menu.grip:SetShown(scrollable)
     menu:EnableMouseWheel(scrollable)
+    -- The run-out only means anything over a list that continues past it.
+    menu.fade:SetShown(scrollable)
     if scrollable then
+        menu.fade:ClearAllPoints()
+        menu.fade:SetPoint("BOTTOMLEFT", menu, "BOTTOMLEFT", 1, FOOT)
+        menu.fade:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", -1, FOOT)
+
         menu:SetScript("OnMouseWheel", function(self, delta)
             local span = self.dkFull - self.dkLimit
+            local head = self.dkHead or 0
             local next_ = math.max(0, math.min(span,
-                (self.dkScroll or 0) - delta * ENTRY_H * 3))
+                (self.dkScroll or 0) - delta * ROW * 3))
             if next_ == self.dkScroll then return end
             self.dkScroll = next_
             for position = 1, self.dkCount do
@@ -1009,14 +1221,15 @@ local function ShowMenu(owner, spec)
                         (entry.dkY or 0) + next_)
                     entry:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0,
                         (entry.dkY or 0) + next_)
-                    -- An entry scrolled past the top or bottom edge would
-                    -- otherwise still be drawn, outside the popup.
-                    entry:SetShown((entry.dkY or 0) + next_ <= 0
-                        and (entry.dkY or 0) + next_ > -self.dkLimit)
+                    -- An entry scrolled past either edge of the LIST would
+                    -- otherwise still be drawn - over the head, or over the
+                    -- foot, both of which sit outside it.
+                    local at = (entry.dkY or 0) + next_
+                    entry:SetShown(at <= -head and at > -(head + self.dkLimit))
                 end
             end
             self.grip:SetPoint("TOP", self, "TOP", 0,
-                -4 - (next_ / span) * (self.dkLimit - 8 - self.grip:GetHeight()))
+                -head - 4 - (next_ / span) * (self.dkLimit - 8 - self.grip:GetHeight()))
         end)
 
         -- The grip says how far down the list this is. Four pixels wide, one
@@ -1024,18 +1237,37 @@ local function ShowMenu(owner, spec)
         menu.grip:SetHeight(math.max(20,
             (limit / full) * (limit - 8)))
         menu.grip:ClearAllPoints()
-        menu.grip:SetPoint("TOP", menu, "TOP", 0, -4)
+        menu.grip:SetPoint("TOP", menu, "TOP", 0, -HEAD - 4)
         menu.grip:SetPoint("RIGHT", menu, "RIGHT", -2, 0)
 
         for position = 1, index do
             local entry = menu.rows[position]
             if entry then
-                entry:SetShown((entry.dkY or 0) > -limit)
+                entry:SetShown((entry.dkY or 0) > -(HEAD + limit))
             end
         end
     else
         menu:SetScript("OnMouseWheel", nil)
     end
+end
+
+    Build(nil)
+
+    -- The filter box is wired to THIS menu's Build, and unwired when the menu
+    -- closes: the popup is shared, so a handler left behind would filter the
+    -- next menu through a closure over the last one's items.
+    if spec.search then
+        menu.search.input:SetScript("OnTextChanged", function(self)
+            menu.search.UpdateGhost()
+            Build(self:GetText())
+        end)
+        menu.search.input:SetScript("OnEscapePressed", function()
+            menu:Hide()
+        end)
+    else
+        menu.search.input:SetScript("OnTextChanged", menu.search.UpdateGhost)
+    end
+
     menu.catcher:Show()
     menu:SetFrameLevel(menu.catcher:GetFrameLevel() + 10)
     menu:Show()
@@ -1121,7 +1353,10 @@ end
 -- is the empty string: "use whatever the global setting says". The global
 -- itself is the one picker that does NOT offer it, or it would point at
 -- itself.
-function UI.MediaPicker(row, kind, get, set, apply, inheritLabel)
+-- tint, when given, is a function returning r, g, b: the colour the preview
+-- strips are drawn in. You open this list to find out what THIS bar will look
+-- like, so the strips are in the bar's own fill colour and not in the accent.
+function UI.MediaPicker(row, kind, get, set, apply, inheritLabel, tint)
     local button = UI.MenuButton(row.slot, row.slot:GetWidth())
     button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
 
@@ -1171,17 +1406,37 @@ function UI.MediaPicker(row, kind, get, set, apply, inheritLabel)
             }
         end
 
-        for _, name in ipairs(ns.Media.List(kind)) do
-            items[#items + 1] = {
-                text = name, value = name, preview = kind,
-                onClick = function()
-                    set(name)
-                    if apply then apply() end
-                    ns.Options:Refresh()
-                end,
-            }
+        -- OURS FIRST, THEN EVERYTHING ELSE - deliberately not alphabetical
+        -- across the two. A full UI setup registers forty to sixty textures,
+        -- and at that length grouping is the difference between finding and
+        -- searching: the twenty that are always there sit together at the top.
+        local ours, theirs = ns.Media.Grouped(kind)
+        local function AddGroup(heading, names)
+            if #names == 0 then return end
+            items[#items + 1] = { heading = true, text = heading }
+            for _, name in ipairs(names) do
+                items[#items + 1] = {
+                    text = name, value = name, preview = kind,
+                    onClick = function()
+                        set(name)
+                        if apply then apply() end
+                        ns.Options:Refresh()
+                    end,
+                }
+            end
         end
-        UI.ShowMenu(button, { items = items, current = get(), width = 190 })
+        AddGroup("Shipped with ZwoelfStuff", ours)
+        AddGroup("From your other addons", theirs)
+
+        local previewR, previewG, previewB
+        if tint then previewR, previewG, previewB = tint() end
+
+        UI.ShowMenu(button, {
+            items = items, current = get(), width = 368,
+            search = true, foot = "Scroll or type to filter",
+            rowHeight = 28, previewWidth = 132, previewHeight = 14,
+            previewColour = previewR and { previewR, previewG, previewB } or nil,
+        })
     end)
 
     button.Refresh = Paint

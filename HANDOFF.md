@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.25.0**. Read this first.
+State as of **2026-08-08**, version **4.26.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~146 checks in
+**Run `/zs test` before you believe anything below.** ~154 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -28,6 +28,33 @@ what, and why none of them can reach the others.
 Version 4.22.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
+
+## 4.26.0 — screen 3a, and the harness opens popups now
+
+The texture dropdown is the design's: 368 wide, a filter box in a 38 head, the
+key hints in a 32 foot, rows of 28 with a **132 × 14** preview strip, the run-out
+gradient at the bottom, and two groups — ours, then everyone else's.
+
+Three things worth keeping:
+
+- **Which group a name belongs to is decided by its PATH.** `Media.IsOurs`
+  asks LibSharedMedia where the file lives rather than trusting the "ZS"
+  prefix, so it stays right for fonts and borders, where we ship none today.
+- **The preview strips are in the bar's own fill colour.** `UI.MediaPicker`
+  takes an optional `tint` function for that. Orange strips answer a question
+  nobody asked — you opened the list to see what *this* bar will look like.
+- **`ShowMenu` no longer owns the whole popup.** `HEAD` and `FOOT` are bands
+  outside the scrolling area, and every piece of the scroll arithmetic is in
+  list terms. Both are opt-in: an overflow menu with two rows gets neither.
+
+**`UI.FilterMenuItems` is pure and tested**, same reasoning as `SnapAxis`. The
+rule that is easy to get wrong is the heading — kept only when something under
+it survived — and that is a state a list is in for most of the time somebody is
+typing. Seven checks.
+
+**The harness opens popups now.** It never did, and the popup is the largest
+single piece of the widget layer: a plain menu, the media list, and the media
+list mid-filter.
 
 ## 4.25.0 — snapping is not a setting, and the maths is testable
 
