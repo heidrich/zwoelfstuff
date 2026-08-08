@@ -206,7 +206,10 @@ local function StyleAuraVisual(aura, style, isBar)
     aura.cd:SetDrawEdge(style.showEdge)
     aura.cd:SetHideCountdownNumbers(not style.countdown.show)
     if style.countdown.show then
-        ns.StyleNumbers(aura.cd, style.countdown)
+        -- The same trap as an adopted icon's, and for the same reason: the
+        -- engine has not made the font string yet on a cell that is not
+        -- counting down. See ns.StyleCountdown.
+        ns.StyleCountdown(aura.cd, style.countdown)
     end
 
     -- The fill wears a real LibSharedMedia texture, so the twenty this addon
@@ -266,6 +269,43 @@ local function StyleAuraVisual(aura, style, isBar)
     aura.showCharges = style.charges.show
 end
 
+-- WHERE THE SPELL NAME SITS ON A BAR CELL.
+--
+-- Its nine positions and its nudge were being ignored outright: both
+-- renderers anchored it hard to LEFT and threw the setting away. The panel
+-- offered a control that could not do anything, which is not a limitation -
+-- it is a broken control, and the owner found it by trying it.
+--
+-- The name is the one text element with a WIDTH. It is a word rather than a
+-- number, so it has to be told where to stop or it runs across the timer at
+-- the other end. That is why the band beside the icon is worked out first and
+-- the position is applied INSIDE it, instead of the plain point-and-nudge the
+-- numbers get.
+--
+-- Deliberately not ns.TextOffset: that adds the 2px an outlined number needs
+-- to clear a border, and this label is already inset by the icon gap. Two
+-- insets stacked is a name that does not line up with anything.
+-- `width` is the cell's width from the ARRANGEMENT, not parent:GetWidth().
+-- This runs during the layout pass, where the frame may not have been sized
+-- yet - and a label handed a width of zero collapses to the 10px floor and
+-- ellipsises every name on the bar.
+local function PlaceLabel(label, parent, text, width, leftInset, rightInset)
+    local x, y = (text and text.x) or 0, (text and text.y) or 0
+    local point, side, justify = ns.Layout.LabelAnchor(text and text.anchor)
+
+    local inset = 0
+    if side == "LEFT" then
+        inset = leftInset
+    elseif side == "RIGHT" then
+        inset = -rightInset
+    end
+
+    label:ClearAllPoints()
+    label:SetWidth(math.max(10, (width or 0) - leftInset - rightInset))
+    label:SetPoint(point, parent, point, inset + x, y)
+    label:SetJustifyH(justify)
+end
+
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
 -- icon-shaped ones are just the icon.
 local function LayoutAuraVisual(aura, cfg, slot)
@@ -298,14 +338,8 @@ local function LayoutAuraVisual(aura, cfg, slot)
             (placement == "right") and -gap or 0, 0)
         aura.fill:Show()
 
-        local inset = shown and (height + 5) or 5
-        aura.label:ClearAllPoints()
-        if shown and placement == "right" then
-            aura.label:SetPoint("LEFT", aura, "LEFT", 5, 0)
-        else
-            aura.label:SetPoint("LEFT", aura, "LEFT", inset, 0)
-        end
-        aura.label:SetWidth(math.max(10, width - inset - 5))
+        local leftInset, rightInset = ns.Layout.LabelBand(placement, shown and height or 0)
+        PlaceLabel(aura.label, aura, cfg.spellName, width, leftInset, rightInset)
         aura.label:SetShown((cfg.spellName or {}).show ~= false)
 
         aura.timer:ClearAllPoints()
@@ -577,18 +611,27 @@ local function ApplySpark(cell)
     -- top or a bottom, not a left or a right. The spark also has to lie ACROSS
     -- the bar, so its 10 pixels are its width one way round and its height the
     -- other.
+    --
+    -- TO THE TWO CORNERS OF THAT EDGE, NOT TWICE TO ITS MIDDLE.
+    --
+    -- This used to anchor the spark's top AND its bottom to the texture's
+    -- "RIGHT" - one point, which is the middle of the right edge. Both of the
+    -- spark's own edges therefore landed on the same y and it was drawn ten
+    -- pixels wide and NOTHING tall. It was never on screen, on any bar, in
+    -- any direction: "die funktion spark geht auch nicht", and it was not the
+    -- setting or the texture, it was a rectangle with no height.
+    local orientation = aura.fill:GetOrientation()
     local reverse = aura.fill:GetReverseFill()
-    if aura.fill:GetOrientation() == "VERTICAL" then
+    if orientation == "VERTICAL" then
         aura.spark:SetHeight(10)
-        local edge = reverse and "BOTTOM" or "TOP"
-        aura.spark:SetPoint("LEFT", texture, edge, 0, 0)
-        aura.spark:SetPoint("RIGHT", texture, edge, 0, 0)
     else
         aura.spark:SetWidth(10)
-        local edge = reverse and "LEFT" or "RIGHT"
-        aura.spark:SetPoint("TOP", texture, edge, 0, 0)
-        aura.spark:SetPoint("BOTTOM", texture, edge, 0, 0)
     end
+
+    local mineA, theirsA, mineB, theirsB =
+        ns.Layout.SparkPoints(orientation, reverse)
+    aura.spark:SetPoint(mineA, texture, theirsA, 0, 0)
+    aura.spark:SetPoint(mineB, texture, theirsB, 0, 0)
     aura.spark:Show()
 end
 
@@ -1126,19 +1169,10 @@ function Screen:PaintCaption(cell, cfg, spellID, slot, iconWidth, style)
         cell.caption:SetWordWrap(false)
     end
 
-    local placement = cfg.iconPlacement or "left"
-    local inset = iconWidth > 0 and (iconWidth + 5) or 5
-
-    cell.caption:ClearAllPoints()
-    if placement == "right" and iconWidth > 0 then
-        cell.caption:SetPoint("LEFT", cell, "LEFT", 5, 0)
-        cell.caption:SetWidth(math.max(10, width - inset - 5))
-    else
-        cell.caption:SetPoint("LEFT", cell, "LEFT", inset, 0)
-        cell.caption:SetWidth(math.max(10, width - inset - 5))
-    end
-
     local name = style.spellName
+    local leftInset, rightInset = ns.Layout.LabelBand(cfg.iconPlacement or "left", iconWidth)
+    PlaceLabel(cell.caption, cell, name, width, leftInset, rightInset)
+
     ns.Media.ApplyFont(cell.caption, name.font, name.size, name.outline, name.color)
     cell.caption:SetText(ns.SpellName(spellID) or "")
     cell.caption:Show()

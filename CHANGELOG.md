@@ -10,6 +10,41 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [4.30.0] - 2026-08-08
 
+### Fixed
+
+- THE SPARK WAS NEVER DRAWN, on any bar, in any direction, since it shipped.
+  It anchored its own `TOP` and its own `BOTTOM` both to the fill texture's
+  `RIGHT` - one point, the middle of that edge - so both of its edges landed
+  on the same line: ten pixels wide, zero tall. It spans `TOPRIGHT` to
+  `BOTTOMRIGHT` now (and the mirrored pairs for the other three directions).
+
+- THE COUNTDOWN'S POSITION AND NUDGE WERE APPLIED TO A FONT STRING THAT DID
+  NOT EXIST YET. A `Cooldown` widget's number is drawn by the engine, which
+  does not create the font string until a cooldown is actually running on that
+  widget - and styling happens on a render pass, when almost nothing is on
+  cooldown. `GetRegions` found nothing, styled nothing, and the engine later
+  made its own. New `ns.StyleCountdown` remembers the style against the widget
+  and re-applies it from a hook on `SetCooldown` and
+  `SetCooldownFromDurationObject`, one frame later - the engine builds the
+  number during the draw that follows the call, so an inline pass would still
+  find nothing.
+
+- THE STACK AND CHARGE COUNTS NOW MOVE AS FRAMES, not as the font strings
+  inside them. Blizzard's own layout owns that text and rewrites its anchor;
+  the counter frame around it is anchored once and stays put. And they are
+  looked up in both places they live: `item.ChargeCount` and, on frames whose
+  `Icon` is a container, `item.Icon.ChargeCount`
+  (`EllesmereUICdmHooks.lua:2225-2228`). Looking in one place meant the
+  setting silently did nothing on half the frames. Original anchors are
+  recorded and restored in `CDM:Release`, the same rule the stripped
+  decorations follow.
+
+- THE SPELL NAME'S POSITION AND NUDGE WERE NEVER READ AT ALL. Both renderers
+  anchored it hard to `LEFT`. All nine positions and both nudges now apply,
+  inside the band the icon leaves - `Layout.LabelAnchor` and
+  `Layout.LabelBand`, shared by the drawn cells and the adopted ones so a name
+  cannot sit differently depending on which renderer drew it.
+
 ### Added
 
 - THE CHARGE COUNT IS ITS OWN TEXT ELEMENT, with the same seven controls as
@@ -64,7 +99,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   sharing `stacks`' colour would make the two settings one setting again, one
   indirection further down where it is much harder to see.
 
-- 199 checks in `/zs test`, up from 166. Two new suites. `GameMenu.TwoLowest`
+- `Layout.SparkPoints`, `Layout.LabelAnchor` and `Layout.LabelBand` are pure
+  and exported. Both of the anchor bugs above were invisible in a static check
+  and needed a bar on screen with a running cooldown to see; the naming is now
+  done by functions that take strings and return strings, and reverting
+  `SparkPoints` to its old form turns five checks red.
+
+- 243 checks in `/zs test`, up from 166. Three new suites. `GameMenu.TwoLowest`
   and `GameMenu.GapBetween` are pure and exported for exactly the reason
   `EditMode.SnapAxis` is: both fail silently, both need the pause menu open to
   look at, and a rule that cannot be run gets diagnosed by reading.

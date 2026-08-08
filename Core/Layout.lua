@@ -406,3 +406,66 @@ function Layout.SnapToRaster(value, step)
     if not step or step <= 0 then return value end
     return floor(value / step + 0.5) * step
 end
+
+---------------------------------------------------------------------------
+-- Anchor arithmetic, kept away from the frames
+--
+-- Both of the rules below were WRONG on screen and correct-looking in the
+-- source, and neither could be seen without the game running. That is the
+-- same shape as the snapping bug, and it gets the same answer: the naming is
+-- worked out here, in functions that take strings and return strings, so
+-- /zs test can say whether a spark has any height before anybody logs in.
+---------------------------------------------------------------------------
+
+-- The two anchor pairs a spark spans: its own point, and the point on the
+-- fill texture it attaches to, twice.
+--
+-- THE TWO TARGETS MUST BE THE CORNERS OF THE MOVING EDGE, NOT ITS MIDDLE
+-- TWICE. The spark used to attach both its top and its bottom to the
+-- texture's "RIGHT" - one point, the middle of that edge - so both of its own
+-- edges landed on the same line and it was drawn with no height at all. It
+-- was never visible, on any bar, in any direction.
+function Layout.SparkPoints(orientation, reverse)
+    if orientation == "VERTICAL" then
+        local edge = reverse and "BOTTOM" or "TOP"
+        return "LEFT", edge .. "LEFT", "RIGHT", edge .. "RIGHT"
+    end
+
+    local edge = reverse and "LEFT" or "RIGHT"
+    return "TOP", "TOP" .. edge, "BOTTOM", "BOTTOM" .. edge
+end
+
+-- The gap the icon leaves on each side of a bar cell, for the spell name to
+-- live in. One function, because the drawn cells and the adopted ones both
+-- ask - and a name sitting five pixels differently depending on which
+-- renderer drew it is the kind of difference nobody can name and everybody
+-- sees.
+function Layout.LabelBand(placement, iconWidth)
+    iconWidth = iconWidth or 0
+    if iconWidth <= 0 then return 5, 5 end
+    if placement == "right" then return 5, iconWidth + 5 end
+    return iconWidth + 5, 5
+end
+
+-- Which point a spell name hangs from, and which way it reads, for one of the
+-- nine positions. Returns the point, the side the inset applies to (or nil
+-- for the middle column), and the justification.
+--
+-- The middle column is why this is a function: "TOP" and "BOTTOM" are whole
+-- points on their own, but the centre of the centre has no vertical part at
+-- all, and the empty string is not a point. Building the name by
+-- concatenation without that case gives SetPoint("") - an error, at layout
+-- time, on every bar.
+function Layout.LabelAnchor(anchor)
+    anchor = anchor or "LEFT"
+
+    local side = anchor:find("LEFT") and "LEFT"
+        or anchor:find("RIGHT") and "RIGHT" or nil
+    local vertical = anchor:find("TOP") and "TOP"
+        or anchor:find("BOTTOM") and "BOTTOM" or ""
+
+    if side then
+        return vertical .. side, side, side
+    end
+    return (vertical ~= "" and vertical or "CENTER"), nil, "CENTER"
+end

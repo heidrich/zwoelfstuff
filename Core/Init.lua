@@ -401,22 +401,100 @@ function ns.PlaceText(fontString, parent, text)
     fontString:SetPoint(text.anchor, parent, text.anchor, x, y)
 end
 
-function ns.StyleNumbers(widget, text)
+-- Just the FONT on every font string inside a widget. Used where the position
+-- is set on the widget itself rather than on the text inside it - the stack
+-- and charge counters, which are frames of their own.
+function ns.StyleNumberFont(widget, text)
     if not (widget and text) then return end
 
     for _, region in ipairs({ widget:GetRegions() }) do
         if region.GetObjectType and region:GetObjectType() == "FontString" then
             ns.Media.ApplyFont(region, text.font, text.size, text.outline,
                 text.color)
+        end
+    end
+end
 
-            -- Left alone at CENTER with no offset: that is already where
-            -- Blizzard's engine puts its countdown, and re-anchoring it can
-            -- only go wrong. Anywhere else we have to say so ourselves.
-            if text.anchor ~= "CENTER" or text.x ~= 0 or text.y ~= 0 then
-                local x, y = ns.TextOffset(text)
-                region:ClearAllPoints()
-                region:SetPoint(text.anchor, widget, text.anchor, x, y)
-            end
+function ns.StyleNumbers(widget, text)
+    if not (widget and text) then return end
+
+    ns.StyleNumberFont(widget, text)
+
+    -- Left alone at CENTER with no offset: that is already where Blizzard's
+    -- engine puts its countdown, and re-anchoring it can only go wrong.
+    -- Anywhere else we have to say so ourselves.
+    if text.anchor == "CENTER" and text.x == 0 and text.y == 0 then return end
+
+    local x, y = ns.TextOffset(text)
+    for _, region in ipairs({ widget:GetRegions() }) do
+        if region.GetObjectType and region:GetObjectType() == "FontString" then
+            -- NOT reparented, only re-anchored. Moving one of these font
+            -- strings to another parent makes the engine re-centre it and
+            -- ignore both the position and the offset
+            -- (EllesmereUICooldownManager.lua:5934-5941).
+            region:ClearAllPoints()
+            region:SetPoint(text.anchor, widget, text.anchor, x, y)
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- The countdown number, which is not there when you go looking for it
+--
+-- A Cooldown widget's number is drawn by the engine, and the font string it
+-- draws into DOES NOT EXIST until a cooldown is actually running on that
+-- widget. Styling happens on a render pass, and on a render pass almost
+-- nothing is on cooldown - so the walk above found no font string, styled
+-- nothing, and the moment a cooldown started the engine made one with its own
+-- font in its own place.
+--
+-- That is the whole of "the countdown position and the nudges do nothing".
+-- Not the arithmetic, not the setting, not the panel: the thing being styled
+-- had not been created yet.
+--
+-- So the style is REMEMBERED against the widget and re-applied every time a
+-- cooldown is set on it. A frame later, deliberately: the engine builds the
+-- number during the draw that follows the call, so doing it inline would
+-- still find nothing on the first cooldown of the session.
+---------------------------------------------------------------------------
+
+-- Weak keys throughout: these hold Blizzard's frames, and a strong reference
+-- from an addon is how a pooled frame never gets collected.
+local countdownStyle = setmetatable({}, { __mode = "k" })
+local countdownQueued = setmetatable({}, { __mode = "k" })
+
+-- Both ways a cooldown can be armed on this patch. The second takes a secret
+-- duration object and is what the Cooldown Manager uses for anything whose
+-- timing is protected - hooking only the first would miss exactly the frames
+-- this addon adopts.
+local COOLDOWN_SETTERS = { "SetCooldown", "SetCooldownFromDurationObject" }
+
+function ns.StyleCountdown(cooldown, text)
+    if not (cooldown and text) then return end
+
+    local first = countdownStyle[cooldown] == nil
+    countdownStyle[cooldown] = text
+
+    -- Now, for the case where a cooldown is already running on it.
+    ns.StyleNumbers(cooldown, text)
+
+    if not first then return end
+
+    for _, setter in ipairs(COOLDOWN_SETTERS) do
+        if type(cooldown[setter]) == "function" then
+            hooksecurefunc(cooldown, setter, function(self)
+                -- One queued pass per widget. A refresh can arm the same
+                -- cooldown several times in a row, and one timer each would
+                -- be a queue that grows with the fight.
+                if countdownQueued[self] then return end
+                countdownQueued[self] = true
+
+                C_Timer.After(0, function()
+                    countdownQueued[self] = nil
+                    local wanted = countdownStyle[self]
+                    if wanted then ns.StyleNumbers(self, wanted) end
+                end)
+            end)
         end
     end
 end

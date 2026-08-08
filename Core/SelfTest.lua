@@ -1392,6 +1392,90 @@ local function TestGameMenu()
     Check("A missing measurement falls back", Menu.GapBetween(nil, nil) == 12)
 end
 
+---------------------------------------------------------------------------
+-- Anchors that were wrong on screen and right-looking in the source
+--
+-- The spark was drawn with no height for its whole life, and the spell name
+-- ignored its position outright. Neither throws, neither shows up in a static
+-- check, and both need a bar on screen with a running cooldown on it to see.
+-- So the naming is done by functions that take strings and return strings,
+-- and those are what is checked here.
+---------------------------------------------------------------------------
+local function TestAnchors()
+    -- THE SPARK. The two points it attaches to must be the two CORNERS of the
+    -- edge the fill grows towards. Both used to be that edge's middle, so the
+    -- spark's own top and bottom landed on one line: ten pixels wide, nothing
+    -- tall, never once visible.
+    local mineA, theirsA, mineB, theirsB =
+        ns.Layout.SparkPoints("HORIZONTAL", false)
+    Check("The spark spans two DIFFERENT points", theirsA ~= theirsB,
+        theirsA .. " and " .. theirsB)
+    Check("Both sit on the edge the fill grows towards",
+        theirsA == "TOPRIGHT" and theirsB == "BOTTOMRIGHT",
+        theirsA .. "/" .. theirsB)
+    Check("And it spans them top to bottom",
+        mineA == "TOP" and mineB == "BOTTOM")
+
+    local _, revA, _, revB = ns.Layout.SparkPoints("HORIZONTAL", true)
+    Check("A reversed fill puts it on the other end",
+        revA == "TOPLEFT" and revB == "BOTTOMLEFT", revA .. "/" .. revB)
+
+    local vMine, vA, _, vB = ns.Layout.SparkPoints("VERTICAL", false)
+    Check("A vertical bar's spark lies ACROSS it",
+        vMine == "LEFT" and vA == "TOPLEFT" and vB == "TOPRIGHT",
+        vA .. "/" .. vB)
+    Check("And on the bottom when that one is reversed",
+        select(2, ns.Layout.SparkPoints("VERTICAL", true)) == "BOTTOMLEFT")
+
+    -- All four directions, so no combination is left drawing a line with no
+    -- extent. This is the check that would have caught it.
+    for _, orientation in ipairs({ "HORIZONTAL", "VERTICAL" }) do
+        for _, reverse in ipairs({ true, false }) do
+            local _, a, _, b = ns.Layout.SparkPoints(orientation, reverse)
+            Check("A " .. orientation .. " spark has an extent either way",
+                a ~= b, orientation .. " " .. tostring(reverse))
+        end
+    end
+
+    -- THE SPELL NAME. Nine positions, and the middle of the middle is the one
+    -- that breaks: the vertical part is empty there, and an empty string is
+    -- not a point - SetPoint("") is an error at layout time on every bar.
+    for _, entry in ipairs(ns.TEXT_ANCHORS) do
+        local point, side, justify = ns.Layout.LabelAnchor(entry.value)
+        Check("'" .. entry.text .. "' names a real point",
+            type(point) == "string" and point ~= "", tostring(point))
+        Check("'" .. entry.text .. "' reads in a real direction",
+            justify == "LEFT" or justify == "RIGHT" or justify == "CENTER",
+            tostring(justify))
+        -- The inset only belongs to the two columns that have an edge to be
+        -- inset from. A centred name pushed in by the icon gap is off centre.
+        Check("'" .. entry.text .. "' insets only where there is an edge",
+            (side == nil) == (not entry.value:find("LEFT")
+                and not entry.value:find("RIGHT")))
+    end
+
+    Check("The centre of the centre is CENTER",
+        ns.Layout.LabelAnchor("CENTER") == "CENTER")
+    Check("Top centre is a point of its own",
+        ns.Layout.LabelAnchor("TOP") == "TOP")
+    Check("A corner keeps both halves",
+        ns.Layout.LabelAnchor("BOTTOMRIGHT") == "BOTTOMRIGHT")
+    Check("Nothing at all falls back to the left",
+        ns.Layout.LabelAnchor(nil) == "LEFT")
+
+    -- The band the name lives in, beside the icon.
+    local left, right = ns.Layout.LabelBand("left", 22)
+    Check("An icon on the left pushes the name past it",
+        left == 27 and right == 5, left .. "/" .. right)
+
+    left, right = ns.Layout.LabelBand("right", 22)
+    Check("An icon on the right keeps the name off it",
+        left == 5 and right == 27, left .. "/" .. right)
+
+    left, right = ns.Layout.LabelBand("hidden", 0)
+    Check("No icon leaves the whole width", left == 5 and right == 5)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -1413,6 +1497,7 @@ function Test:Run()
         { "Fill direction", TestFillDirection },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
+        { "Anchors",       TestAnchors },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

@@ -983,6 +983,57 @@ end
 -- FOUND RATHER THAN ASSUMED. The field name is tried first and the children
 -- are walked for a StatusBar if it is not there, so a member Blizzard renames
 -- in a patch costs the fill and never an error.
+-- The stack or charge counter on an item, which is in one of two places.
+--
+-- "frame.ChargeCount and frame.Applications are siblings of the icon, and on
+-- the frames whose Icon is a container the stack text lives at
+-- Icon.Applications" (EllesmereUICdmHooks.lua:2225-2228). Looking in the first
+-- place only meant the setting silently did nothing on the other kind of
+-- frame - which from the outside is indistinguishable from the setting being
+-- broken, and was reported as exactly that.
+--
+-- Indexing a plain texture with a field name is nil, not an error, so the
+-- second lookup is safe on the frames whose Icon is just an icon.
+local function Counter(item, key)
+    if not item then return nil end
+    return item[key] or (item.Icon and item.Icon[key]) or nil
+end
+
+-- Where each counter sat before we moved it, so releasing the frame puts it
+-- back. Weak keys: these are Blizzard's frames, and a strong reference from
+-- an addon is how a pooled frame never gets collected.
+--
+-- The same rule the stripped decorations already follow. Handing a frame back
+-- with its stack count still parked in the corner WE chose is a mark left by
+-- an addon that has just said it let go.
+local counterAnchor = setmetatable({}, { __mode = "k" })
+
+local function MoveCounter(widget, item, text)
+    if not counterAnchor[widget] then
+        local point, relativeTo, relativePoint, x, y = widget:GetPoint(1)
+        -- Recorded even when there is no point to read: the entry is what
+        -- says "we have touched this one", and without it a frame moved on a
+        -- build that answers nil would be measured again next time and the
+        -- original lost for good.
+        counterAnchor[widget] = { point, relativeTo, relativePoint, x, y }
+    end
+
+    local x, y = ns.TextOffset(text)
+    widget:ClearAllPoints()
+    widget:SetPoint(text.anchor, item, text.anchor, x, y)
+end
+
+local function RestoreCounter(widget)
+    local saved = counterAnchor[widget]
+    if not saved then return end
+    counterAnchor[widget] = nil
+
+    widget:ClearAllPoints()
+    if saved[1] then
+        widget:SetPoint(saved[1], saved[2], saved[3], saved[4] or 0, saved[5] or 0)
+    end
+end
+
 local function BarFill(item)
     if not item then return nil end
 
@@ -1122,7 +1173,10 @@ function CDM:Skin(item, style, shape)
         pcall(cooldown.SetHideCountdownNumbers, cooldown, not style.countdown.show)
 
         if style.countdown.show then
-            ns.StyleNumbers(cooldown, style.countdown)
+            -- Not StyleNumbers directly: the number does not exist until a
+            -- cooldown runs, so the style has to be remembered and re-applied
+            -- when it appears. See ns.StyleCountdown.
+            ns.StyleCountdown(cooldown, style.countdown)
         end
     end
 
@@ -1135,13 +1189,22 @@ function CDM:Skin(item, style, shape)
     -- any single icon. It was not invisible across a screen: "charges top
     -- left, stacks bottom right" was simply not expressible.
     for _, pair in ipairs({
-        { item.ChargeCount,  style.charges },
-        { item.Applications, style.stacks },
+        { "ChargeCount",  style.charges },
+        { "Applications", style.stacks },
     }) do
-        local widget, text = pair[1], pair[2]
+        local widget, text = Counter(item, pair[1]), pair[2]
         if widget then
             pcall(widget.SetAlpha, widget, text.show and 1 or 0)
-            ns.StyleNumbers(widget, text)
+
+            -- THE FRAME MOVES, NOT THE TEXT INSIDE IT.
+            --
+            -- These counters are frames Blizzard anchors once, and the font
+            -- string inside is written by its own layout - re-anchoring that
+            -- is a fight, and the engine wins it every time the count
+            -- changes. Moving the frame is one call that stays put, and it
+            -- takes the number with it whatever Blizzard does inside.
+            ns.StyleNumberFont(widget, text)
+            pcall(MoveCounter, widget, item, text)
         end
     end
 end
@@ -1165,6 +1228,13 @@ function CDM:Release(item)
     -- Blizzard back a Cooldown Manager with no borders and no range veil,
     -- from an addon that had just said it was letting go.
     for _, key in ipairs(DECORATIONS) do Undim(item[key]) end
+    -- And the counters go back where Blizzard had them. Same rule as the
+    -- decorations above: a frame handed back still wearing our layout is a
+    -- mark left by an addon that has just said it let go.
+    for _, key in ipairs({ "ChargeCount", "Applications" }) do
+        local widget = Counter(item, key)
+        if widget then pcall(RestoreCounter, widget) end
+    end
     for _, region in ipairs({ item:GetRegions() }) do Undim(region) end
     if item.Cooldown then
         for _, region in ipairs({ item.Cooldown:GetRegions() }) do Undim(region) end
