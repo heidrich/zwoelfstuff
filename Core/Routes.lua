@@ -58,6 +58,11 @@ ns.Routes = Routes
 -- MDT while you stand there.
 local SWEEP = 0.25
 
+-- How often the route itself is re-read from MDT. Slower than the sweep: MDT
+-- announces nothing when you open it, switch dungeon or edit a pull, so this
+-- is the only way any of that reaches the badges.
+local RESYNC = 2.0
+
 ---------------------------------------------------------------------------
 -- Reaching MDT
 --
@@ -81,10 +86,10 @@ function Routes:UnavailableReason()
         return "Mythic Dungeon Tools is not loaded"
     end
     if not self.dungeonIdx then
-        return "MDT has no dungeon open"
+        return "MDT has no route for where you are standing"
     end
     if #self.pulls == 0 then
-        return "the open MDT route has no pulls in it"
+        return "the route MDT has open here has no pulls in it"
     end
     return nil
 end
@@ -93,6 +98,69 @@ Routes.pulls = {}
 Routes.byNpc = {}          -- npcID -> { pull = index, want = how many }
 Routes.killed = {}         -- npcID -> how many have died this run
 Routes.index = 1
+
+---------------------------------------------------------------------------
+-- WHICH DUNGEON THE ROUTE IS READ FOR
+--
+-- Not MDT's db.currentDungeonIdx on its own, and this is the whole reason
+-- nothing was being badged.
+--
+-- That field is the dungeon MDT'S WINDOW is showing, and MDT only follows you
+-- into a zone when the window is OPENED: MDT:CheckCurrentZone is called from
+-- ShowInterface and from MDT's own init, and from nowhere else - there is no
+-- zone event behind it. So: log in, walk into a dungeon, never open MDT, and
+-- MDT is still holding whichever dungeon it had last.
+--
+-- Reading that blindly is the quiet way to be wrong. A route for ANOTHER
+-- dungeon parses perfectly, has pulls, has colours - and its npcIDs match
+-- nothing standing in front of you. Nothing is badged and there is no error
+-- to see, which is exactly what "I see no badges" looked like.
+--
+-- So the ZONE decides. MDT's own choice is the fallback, for standing outside
+-- a dungeon with the planner open on one.
+---------------------------------------------------------------------------
+function Routes:DungeonIdx()
+    local addon = Planner()
+    if not addon then return nil, nil end
+
+    local map = C_Map and C_Map.GetBestMapForUnit
+        and C_Map.GetBestMapForUnit("player") or nil
+    if map and type(addon.zoneIdToDungeonIdx) == "table" then
+        -- MDT keys this by uiMapID and registers every sublevel of a dungeon,
+        -- which is why the floor you are on resolves as well as the entrance.
+        -- Read off MDT:CheckCurrentZone, which uses the same two calls.
+        local zoneIdx = addon.zoneIdToDungeonIdx[map]
+        if zoneIdx then return zoneIdx, "zone" end
+    end
+
+    local ok, db = pcall(function() return addon.GetDB and addon:GetDB() end)
+    if ok and type(db) == "table" and db.currentDungeonIdx then
+        return db.currentDungeonIdx, "mdt"
+    end
+    return nil, nil
+end
+
+-- The route MDT has chosen FOR THAT DUNGEON. MDT:GetCurrentPreset() would
+-- answer for the open one instead, so the same lookup is done by hand:
+-- db.presets[idx][db.currentPreset[idx]].
+function Routes:PresetFor(dungeonIdx)
+    local addon = Planner()
+    if not (addon and dungeonIdx) then return nil end
+    local ok, db = pcall(function() return addon.GetDB and addon:GetDB() end)
+    if not (ok and type(db) == "table") then return nil end
+
+    local presets = db.presets and db.presets[dungeonIdx]
+    local chosen = db.currentPreset and db.currentPreset[dungeonIdx]
+    if type(presets) ~= "table" or not chosen then return nil end
+    return presets[chosen]
+end
+
+function Routes:DungeonName(dungeonIdx)
+    local addon = Planner()
+    local list = addon and addon.dungeonList
+    if type(list) ~= "table" then return nil end
+    return list[dungeonIdx or self.dungeonIdx or 0]
+end
 
 ---------------------------------------------------------------------------
 -- Reading the route
@@ -112,26 +180,25 @@ function Routes:Sync()
     wipe(self.pulls)
     wipe(self.byNpc)
     self.dungeonIdx = nil
+    self.dungeonFrom = nil
+    self.presetName = nil
     if not addon then return false end
 
-    -- Which dungeon MDT is showing. Asked rather than assumed: MDT keeps
-    -- whatever was open last, and a route for another dungeon marked on these
-    -- mobs would be confidently wrong.
-    local ok, db = pcall(function() return addon.GetDB and addon:GetDB() end)
-    if not (ok and type(db) == "table" and db.currentDungeonIdx) then return false end
-    local dungeonIdx = db.currentDungeonIdx
+    -- The zone first, MDT's open window second. See Routes:DungeonIdx.
+    local dungeonIdx, from = self:DungeonIdx()
+    if not dungeonIdx then return false end
 
     local enemies = addon.dungeonEnemies and addon.dungeonEnemies[dungeonIdx]
     if type(enemies) ~= "table" then return false end
 
-    local gotPreset, preset = pcall(function()
-        return addon.GetCurrentPreset and addon:GetCurrentPreset()
-    end)
-    if not (gotPreset and type(preset) == "table") then return false end
+    local preset = self:PresetFor(dungeonIdx)
+    if type(preset) ~= "table" then return false end
     local pulls = preset.value and preset.value.pulls
     if type(pulls) ~= "table" then return false end
 
     self.dungeonIdx = dungeonIdx
+    self.dungeonFrom = from
+    self.presetName = preset.text
 
     for order, pull in ipairs(pulls) do
         local entry = {
@@ -248,6 +315,11 @@ end
 -- hostile unit that is.
 ---------------------------------------------------------------------------
 function Routes.NpcFromGUID(guid)
+    -- ASKED BEFORE ANYTHING IS DONE WITH IT. A secret value may not be
+    -- compared, and the line below compares - so on a patch where anything
+    -- read off a unit can come back secret, the type test is not the guard,
+    -- this is. MDT's own public API opens with the same question.
+    if not ns.CanCompute(guid) then return nil end
     if type(guid) ~= "string" then return nil end
     local kind, _, _, _, _, id = strsplit("-", guid)
     -- Players have a GUID too and it has no npcID worth reading.
@@ -290,6 +362,15 @@ function Routes:HideAll()
     for _, badge in pairs(badges) do badge:Hide() end
 end
 
+-- Test mode is deliberately NOT saved. It draws over every nameplate in the
+-- world, which is fine for ten seconds in front of a pack and wrong for
+-- anything else, and a switch that survives a reload would be found again by
+-- accident three days later.
+function Routes:SetTesting(on)
+    self.testing = on and true or false
+    self:Sweep()
+end
+
 ---------------------------------------------------------------------------
 -- One pass over every nameplate on screen
 ---------------------------------------------------------------------------
@@ -297,7 +378,14 @@ function Routes:Sweep()
     local db = ns.db and ns.db.routes
     if not db then return end
 
-    if not (db.enabled and self:Available() and #self.pulls > 0) then
+    self.drawn = 0
+    self.plateCount = 0
+
+    -- TEST MODE ignores the route on purpose. "Nothing is marked" is two
+    -- questions wearing one face - is the drawing working, and did the route
+    -- match anything - and this separates them in one click: every nameplate
+    -- gets a badge, route or no route.
+    if not (self.testing or (db.enabled and self:Available() and #self.pulls > 0)) then
         self:HideAll()
         return
     end
@@ -305,6 +393,7 @@ function Routes:Sweep()
     local plates = C_NamePlate and C_NamePlate.GetNamePlates
         and C_NamePlate.GetNamePlates() or nil
     if not plates then return end
+    self.plateCount = #plates
 
     local seen = {}
     for _, plate in ipairs(plates) do
@@ -317,6 +406,11 @@ function Routes:Sweep()
         -- it is the difference between a hint and a wall of badges.
         if standing == "next" and not db.showNext then standing = nil end
 
+        if self.testing and not standing then
+            standing = "current"
+            pullIndex = nil
+        end
+
         if standing then
             local badge = badges[plate]
             if not badge then
@@ -325,17 +419,19 @@ function Routes:Sweep()
             end
             seen[badge] = true
 
-            local pull = self:Get(pullIndex)
+            local pull = pullIndex and self:Get(pullIndex)
             local colour = pull and pull.color or { 1, 1, 1 }
             local dim = standing == "next" and (db.nextAlpha or 0.45) or 1
 
             badge.bg:SetColorTexture(colour[1], colour[2], colour[3],
                 (db.alpha or 0.9) * dim)
             badge.edge:SetColor(0, 0, 0, dim)
-            badge.label:SetText(db.showNumber ~= false and tostring(pullIndex) or "")
+            badge.label:SetText(db.showNumber ~= false
+                and tostring(pullIndex or "?") or "")
             badge.label:SetAlpha(dim)
             PlaceBadge(badge, plate, db)
             badge:Show()
+            self.drawn = self.drawn + 1
         end
     end
 
@@ -404,6 +500,10 @@ function Routes:Start()
         "COMBAT_LOG_EVENT_UNFILTERED",
         "PLAYER_ENTERING_WORLD",
         "CHALLENGE_MODE_START",
+        -- Walking through the door of the dungeon, and between its floors.
+        -- MDT has no zone event of its own, so this is where the route for
+        -- the place you are actually standing in gets picked up.
+        "ZONE_CHANGED_NEW_AREA",
     }) do
         pcall(self.events.RegisterEvent, self.events, event)
     end
@@ -431,12 +531,33 @@ function Routes:Start()
             return
         end
 
+        if event == "ZONE_CHANGED_NEW_AREA" then
+            -- Re-read, but the RUN IS NOT RESET: a floor change mid-dungeon
+            -- fires this too, and losing which pull you are on halfway down
+            -- would be worse than any route it could pick up.
+            Routes:Sync()
+            Routes:Sweep()
+            return
+        end
+
         Routes:Sweep()
     end)
 
     -- The sweep catches what the events do not: a pull advanced by hand, a
     -- route edited in MDT while you stand in front of the pack.
     self.events:SetScript("OnUpdate", function(_, elapsed)
+        -- The route itself is re-read on a slower beat than the badges are
+        -- drawn. MDT is a live thing on the other monitor: you open it, pick
+        -- the dungeon, edit a pull - and none of that fires an event anyone
+        -- outside MDT can hear. Two seconds is below noticing and well above
+        -- walking a whole preset four times a second.
+        Routes.reread = (Routes.reread or 0) + elapsed
+        if Routes.reread >= RESYNC then
+            Routes.reread = 0
+            local db = ns.db and ns.db.routes
+            if db and (db.enabled or Routes.testing) then Routes:Sync() end
+        end
+
         Routes.accum = (Routes.accum or 0) + elapsed
         if Routes.accum < SWEEP then return end
         Routes.accum = 0
@@ -451,19 +572,63 @@ end
 -- the mobs in front of you resolved to - because "it is not marking anything"
 -- has three different causes and they look identical on screen.
 ---------------------------------------------------------------------------
+local function Yes(value) return value and "|cff40ff40yes|r" or "|cffff4040no|r" end
+
 function Routes:Dump()
     ns.Print("|cffffd100----------------------------------------|r")
+
+    -- THE SWITCH FIRST, AND ALWAYS. The old version of this printed a
+    -- flawless report - route read, pulls listed, mobs resolved - while the
+    -- feature was switched off, and said nothing about the one fact that
+    -- explained the empty screen. A diagnostic that can be right and useless
+    -- at the same time is not a diagnostic.
+    local db = ns.db and ns.db.routes or {}
+    ns.Print("Switched on: " .. Yes(db.enabled)
+        .. (self.testing and "   |cffffd100TEST MODE|r" or ""))
+    if not db.enabled and not self.testing then
+        ns.Print("|cffffd100That is the answer|r - |cffffd100/zs|r, Tank stuff, "
+            .. "Routes, |cffffd100Show them|r.")
+    end
+
+    -- Enemy nameplates. The badge hangs off one; with them off there is
+    -- nothing in the world to hang it from, and no amount of route is going
+    -- to help.
+    local plateCVar = type(GetCVarBool) == "function"
+        and GetCVarBool("nameplateShowEnemies") or nil
+    if plateCVar ~= nil then
+        ns.Print("Enemy nameplates on: " .. Yes(plateCVar))
+    end
+
+    if not self:Available() then
+        ns.Print("|cffff4040Mythic Dungeon Tools is not loaded.|r")
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- WHICH DUNGEON, AND WHO DECIDED. The silent wrong answer lives here:
+    -- MDT keeps the dungeon its window last showed and only follows you when
+    -- it is opened, so a route can be read perfectly and be for somewhere
+    -- else entirely.
+    ---------------------------------------------------------------------
+    local zoneIdx, from = self:DungeonIdx()
+    ns.Print(string.format("Dungeon: |cffffd100%s|r |cff888888(%s, %s)|r",
+        self:DungeonName(zoneIdx) or ("index " .. tostring(zoneIdx or "-")),
+        tostring(zoneIdx or "-"),
+        from == "zone" and "from where you are standing"
+            or from == "mdt" and "|cffff8040MDT's open window - you are not in a "
+                .. "dungeon MDT knows|r"
+            or "unknown"))
 
     local why = self:UnavailableReason()
     if why then
         ns.Print("|cffff4040No route|r - " .. why .. ".")
-        if self:Available() then
-            ns.Print("Open the dungeon and the route in MDT, then |cffffd100/zs route|r again.")
-        end
+        ns.Print("Open MDT, pick this dungeon and the route, then "
+            .. "|cffffd100/zs route|r again.")
         return
     end
 
-    ns.Print(string.format("|cff40ff40Route read.|r %d pulls, on |cffffd100%d|r.",
+    ns.Print(string.format("|cff40ff40Route read.|r |cffffd100%s|r - %d pulls, "
+        .. "on |cffffd100%d|r.", self.presetName or "unnamed",
         #self.pulls, self.index))
 
     local pull = self:Current()
@@ -476,13 +641,32 @@ function Routes:Dump()
 
     local plates = C_NamePlate and C_NamePlate.GetNamePlates
         and C_NamePlate.GetNamePlates() or {}
-    ns.Print(string.format("Nameplates on screen: |cffffd100%d|r", #plates))
+    ns.Print(string.format("Nameplates on screen: |cffffd100%d|r, badges drawn: "
+        .. "|cffffd100%d|r", #plates, self.drawn or 0))
     for _, plate in ipairs(plates) do
         local unit = plate.namePlateUnitToken
-        local npcID = unit and Routes.NpcFromGUID(UnitGUID(unit))
+        local guid = unit and UnitGUID(unit)
+        local npcID = Routes.NpcFromGUID(guid)
         local pullIndex = npcID and self:PullForNpc(npcID)
+        -- "could not be read" is its own answer, and a different one from
+        -- "not in the route": it means the GUID came back as something this
+        -- patch will not let an addon look at.
+        local verdict
+        if pullIndex then
+            verdict = "pull " .. pullIndex
+        elseif npcID then
+            verdict = "|cff888888not in the route|r"
+        elseif guid ~= nil then
+            verdict = "|cffff8040GUID could not be read|r"
+        else
+            verdict = "|cff888888no unit|r"
+        end
         ns.Print(string.format("   %s |cff888888%s|r - %s",
-            unit and UnitName(unit) or "?", tostring(npcID or "-"),
-            pullIndex and ("pull " .. pullIndex) or "|cff888888not in the route|r"))
+            unit and UnitName(unit) or "?", tostring(npcID or "-"), verdict))
+    end
+
+    if #plates == 0 then
+        ns.Print("|cffffd100No nameplates|r - stand in front of a pack, in "
+            .. "combat or not, and run this again.")
     end
 end

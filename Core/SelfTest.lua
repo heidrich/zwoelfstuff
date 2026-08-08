@@ -2069,6 +2069,32 @@ local function TestRoutes()
     Check("A route with no MDT is empty", type(Routes.pulls) == "table")
     Check("And it says why", (Routes:UnavailableReason() or "") ~= ""
         or Routes:Available())
+
+    -- WHICH DUNGEON. Both lookups have to survive MDT being absent, because
+    -- they now run on a two-second beat and a raise there would repeat for as
+    -- long as the game is open.
+    if not Routes:Available() then
+        Check("No MDT gives no dungeon", Routes:DungeonIdx() == nil)
+        Check("No MDT gives no preset", Routes:PresetFor(1) == nil)
+        Check("No MDT gives no dungeon name", Routes:DungeonName(1) == nil)
+    end
+
+    -- TEST MODE. It draws over every nameplate, so the two facts that matter
+    -- are that it starts off and that switching it off again really does.
+    local wasTesting = Routes.testing
+    Check("Test mode is off unless asked for", not wasTesting)
+    Routes:SetTesting(true)
+    Check("Test mode switches on", Routes.testing == true)
+    Routes:SetTesting(false)
+    Check("And off again", Routes.testing == false)
+
+    -- The sweep counts what it drew rather than what it meant to. That number
+    -- is the whole of the answer to "is the badge being drawn at all", so it
+    -- has to exist after a sweep that drew nothing, not only after one that
+    -- drew something.
+    Routes:Sweep()
+    Check("A sweep reports how many badges it drew",
+        type(Routes.drawn) == "number", tostring(Routes.drawn))
 end
 
 local function TestTextElements()

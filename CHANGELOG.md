@@ -8,6 +8,61 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.37.0] - 2026-08-09
+
+### Fixed
+
+- **Routes marked nothing, and there were three reasons at once.** The
+  headline one: the route was read for **the dungeon MDT's window was last
+  showing**, not the one you are standing in.
+
+  MDT only follows you into a zone when its window is *opened* -
+  `MDT:CheckCurrentZone` is called from `ShowInterface` and from MDT's own
+  init, and from nowhere else; there is no zone event behind it. So logging
+  in, walking into a dungeon and never opening MDT leaves MDT holding
+  whichever dungeon it had last. Reading that is the quiet way to be wrong: a
+  route for somewhere else parses perfectly, has pulls, has colours, and its
+  npcIDs match nothing in front of you. Nothing gets badged and there is no
+  error to see.
+
+  **The zone decides now.** `C_Map.GetBestMapForUnit` through MDT's own
+  `zoneIdToDungeonIdx`, with MDT's open window only as the fallback for
+  standing outside a dungeon - and the route read is `db.presets[idx]
+  [db.currentPreset[idx]]` by hand rather than `GetCurrentPreset()`, which
+  would answer for the open one again.
+
+- **The route is re-read on a two-second beat, and on walking through a door.**
+  MDT announces nothing when you open it, switch dungeon or edit a pull -
+  there is no event outside MDT to hear - so before this, picking the right
+  dungeon in MDT while standing in it changed nothing on screen.
+  `ZONE_CHANGED_NEW_AREA` re-reads too, without resetting which pull you are
+  on, because a floor change fires it as well.
+
+- **A GUID is checked for being readable before it is compared.** On this
+  patch anything read off a unit can come back as a value an addon may not
+  look at, and the comparison was what would have raised. MDT's own public API
+  opens with the same question.
+
+### Added
+
+- **Test the badges.** A button on the Routes page that badges every nameplate
+  on screen, route or no route. "Nothing is marked" is two questions wearing
+  one face - is the badge being drawn at all, and did the route match anything
+  - and this answers the first on its own. It is not saved and does not
+  outlive the window it was switched on from.
+
+- **`/zs route` says whether the feature is switched on.** The old version
+  could print a flawless report - route read, pulls listed, mobs resolved -
+  while the switch was off, and say nothing about the one fact that explained
+  the empty screen. It now leads with the switch, then whether enemy
+  nameplates are on at all, then **which dungeon the route is for and who
+  decided that**, then how many badges were actually drawn. A nameplate whose
+  GUID could not be read is reported as its own answer rather than as "not in
+  the route".
+
+- The panel says the same: the dungeon name, and a warning in orange when it
+  came from MDT's window rather than from where you are standing.
+
 ## [4.36.0] - 2026-08-09
 
 ### Added

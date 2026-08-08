@@ -81,6 +81,29 @@ function OptionsRoutes:BuildPage(page, width)
     grid:Wide(stepRow, 28, 0, 14)
 
     ---------------------------------------------------------------------
+    -- TEST. "Nothing is marked" is two questions wearing one face: is the
+    -- badge being drawn at all, and did the route match anything standing in
+    -- front of you. This answers the first on its own - every nameplate gets
+    -- a badge, route or no route - so the second is the only one left.
+    ---------------------------------------------------------------------
+    local testRow = CreateFrame("Frame", nil, grid.content)
+    testRow:SetHeight(28)
+
+    local test
+    test = UI.Button(testRow, "Test the badges", 150, function()
+        Routes:SetTesting(not Routes.testing)
+        OptionsRoutes:Refresh()
+    end)
+    test:SetPoint("LEFT", testRow, "LEFT", 0, 0)
+
+    local testNote = UI.Label(testRow,
+        "Badges every nameplate on screen, ignoring the route.",
+        UI.FS.meta, C.textFaint)
+    testNote:SetPoint("LEFT", test, "RIGHT", 10, 0)
+
+    grid:Wide(testRow, 28, 0, 14)
+
+    ---------------------------------------------------------------------
     grid:Section("The badges")
 
     local function Switch(label, key, sublabel)
@@ -141,14 +164,18 @@ function OptionsRoutes:BuildPage(page, width)
         .. "with.")
 
     local function Paint()
+        test:SetText(Routes.testing and "Stop testing" or "Test the badges")
+
         local why = Routes:UnavailableReason()
         if why then
             headline:SetText("|cffff8040No route.|r")
             detail:SetText(why:sub(1, 1):upper() .. why:sub(2) .. ".")
         else
             local pull = Routes:Current()
-            headline:SetText(string.format("Pull |cffffd100%d|r of %d",
-                Routes.index, Routes:Count()))
+            headline:SetText(string.format("Pull |cffffd100%d|r of %d  "
+                .. "|cff888888%s|r", Routes.index, Routes:Count(),
+                Routes.presetName or ""))
+
             local parts = {}
             if pull then
                 for npcID, want in pairs(pull.npcs) do
@@ -157,8 +184,18 @@ function OptionsRoutes:BuildPage(page, width)
                 end
             end
             table.sort(parts)
-            detail:SetText(#parts > 0 and table.concat(parts, ", ")
-                or "This pull is empty in MDT.")
+
+            -- WHICH DUNGEON, AND WHO DECIDED IT. Said on the panel because a
+            -- route read for the wrong dungeon looks exactly like a working
+            -- one right up until nothing gets marked.
+            local place = Routes:DungeonName() or "?"
+            if Routes.dungeonFrom ~= "zone" then
+                place = place .. " |cffff8040(MDT's window, not where you "
+                    .. "are standing)|r"
+            end
+            detail:SetText(place .. "  |cff888888-|r  "
+                .. (#parts > 0 and table.concat(parts, ", ")
+                    or "this pull is empty in MDT"))
         end
         back:SetEnabled(Routes:Count() > 0)
         forward:SetEnabled(Routes:Count() > 0)
@@ -167,6 +204,10 @@ function OptionsRoutes:BuildPage(page, width)
     grid:Layout()
     self.Paint = Paint
     page.Refresh = function() OptionsRoutes:Refresh() end
+    -- Test mode draws over every nameplate in the world. It does not outlive
+    -- the page it was switched on from - closing the window is the same as
+    -- switching it off, which is the behaviour anybody would assume.
+    page:SetScript("OnHide", function() Routes:SetTesting(false) end)
     self.grid = grid
     Paint()
     grid:Layout()

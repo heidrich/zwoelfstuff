@@ -8,6 +8,19 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.37.0",
+        date = "2026-08-09",
+        lines = {
+            "ROUTES MARKED NOTHING, AND THERE WERE THREE REASONS AT ONCE. The big one: the route was read for the dungeon MDT'S WINDOW was last showing, not the one you are standing in.",
+            "MDT only follows you into a zone when its window is OPENED - there is no zone event behind it. Log in, walk into a dungeon, never open MDT, and MDT is still holding whatever it had last. A route for somewhere else parses perfectly, has pulls, has colours - and matches nothing in front of you. Nothing gets badged and there is no error to see.",
+            "The ZONE decides now, and MDT's own window is only the fallback for standing outside a dungeon.",
+            "The route is also re-read every two seconds and when you walk through a door. MDT announces nothing when you open it, switch dungeon or edit a pull, so before this, fixing it in MDT changed nothing on screen. Walking between floors no longer loses which pull you are on.",
+            "TEST THE BADGES. A button on the Routes page that badges every nameplate on screen, route or no route. \"Nothing is marked\" is two questions wearing one face - is it being drawn at all, and did the route match anything - and this answers the first on its own.",
+            "|cffffd100/zs route|r NOW SAYS WHETHER THE FEATURE IS SWITCHED ON. The old one could print a flawless report while the switch was off. It leads with the switch, then your enemy nameplates, then which dungeon the route is for AND WHO DECIDED THAT, then how many badges were really drawn.",
+            "A GUID is checked for being readable before it is compared, which is what would have raised on this patch.",
+        },
+    },
+    {
         version = "4.36.0",
         date = "2026-08-09",
         lines = {
