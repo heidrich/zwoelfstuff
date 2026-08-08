@@ -2981,6 +2981,24 @@ function UI.TabStrip(parent, names, onPick)
     end
 
     strip:Select(names[1])
+
+    -- IT LAYS ITSELF OUT, and re-does it whenever it is resized.
+    --
+    -- A tab is created with no width and no x — Layout is what divides the
+    -- strip between them — so a strip whose Layout was never called has four
+    -- tabs that exist, answer to clicks nobody can aim at, and are INVISIBLE.
+    -- That shipped once, on the co-tank inspector: the open tab looked like
+    -- the whole page and three tabs of settings simply could not be reached.
+    --
+    -- The caller was at fault and the caller should not have been ABLE to be.
+    -- A widget that needs a follow-up call to be visible at all is a widget
+    -- that will eventually be built without it — the same reasoning that took
+    -- the snapping switch out of the tools panel. OnSizeChanged is the honest
+    -- moment for it too: the strip does not know its width until its parent
+    -- has been sized, which is exactly why this was a separate step.
+    strip:SetScript("OnSizeChanged", function(self) self:Layout() end)
+    strip:Layout()
+
     return strip
 end
 

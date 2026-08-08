@@ -1525,6 +1525,32 @@ local function TestCoTanks()
         Check("The co-tank panel builds and paints", ok, tostring(err))
     end
 
+    -- A PAGE MUST BE BUILT AT THE WIDTH IT IS SHOWN AT.
+    --
+    -- This is the only check in this file that exists because the HARNESS
+    -- cannot help: its frame stub answers GetWidth with a fixed number
+    -- whatever was set, so a page built four hundred units too wide for the
+    -- column it lives in builds, paints, and passes every check - while every
+    -- control on it sits off the side of the window. It shipped exactly that
+    -- way, on two pages, and only a screenshot found it.
+    local NARROW, WIDE = 750, 1150
+    local carried = 0
+    for _, entry in ipairs(ns.Options.PAGES) do
+        local third = entry.side or entry.explain or entry.tanks
+        local width = ns.Options.PageWidth(entry, NARROW, WIDE)
+        if third then
+            carried = carried + 1
+            Check("Page '" .. entry.key .. "' carries a third column, so it is "
+                .. "built narrow", width == NARROW, tostring(width))
+        else
+            Check("Page '" .. entry.key .. "' has the middle to itself",
+                width == WIDE, tostring(width))
+        end
+    end
+    -- If nothing declares a third column the loop above asserts nothing, and
+    -- would go green on a PAGES table that had lost the flags entirely.
+    Check("Some page does carry a third column", carried >= 2, tostring(carried))
+
     -- The rail's own mark. PAGES names icons and was NOT among the data
     -- tables this file walks - which is the same gap that let four wrong
     -- icons ship, because an unknown name never throws: it falls back to four

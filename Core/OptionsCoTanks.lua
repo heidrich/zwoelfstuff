@@ -61,22 +61,20 @@ local function BuildStage(parent, width)
     local caption = UI.Eyebrow(card, "Preview")
     caption:SetPoint("TOPLEFT", card, "TOPLEFT", 14, -12)
 
-    local note = UI.Hint(card, "This is the real panel, not a drawing of it - "
-        .. "it is borrowed from the screen while you are on this page and put "
-        .. "back when you leave.")
-    note:SetPoint("TOPLEFT", caption, "BOTTOMLEFT", 0, -4)
-    note:SetWidth(width - 28)
-    note:SetJustifyH("LEFT")
+    -- NO EXPLANATION UNDER THE HEADING. There was one, describing how the
+    -- preview is implemented - that the panel is borrowed rather than drawn.
+    -- That is a fact about the code, not about the user's display, and the
+    -- owner's verdict was exactly right: nobody cares, and nobody would
+    -- understand it if this were NOT a preview. Three lines of text at the top
+    -- of the card also pushed the thing you came to look at down the page.
 
-    -- Where the borrowed panel sits. Its own frame so the panel can be
-    -- anchored to something whose size this file controls, rather than to the
-    -- card, whose height changes with the note above it.
+    -- Where the borrowed panel sits. Its own frame so the panel is anchored to
+    -- something whose size this file controls rather than to the card.
     local slot = CreateFrame("Frame", nil, card)
-    slot:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -10)
+    slot:SetPoint("TOPLEFT", caption, "BOTTOMLEFT", 0, -10)
     slot:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -14, 14)
 
     card.slot = slot
-    card.note = note
 
     -- The panel is only borrowed while the page is on screen AND the window
     -- is. Both conditions, because hiding the window does not hide a page.
@@ -271,6 +269,12 @@ function OptionsCoTanks:BuildSide(parent, pad)
 
     grid.tab = "Look"
     grid:Layout()
+    -- LAY THE STRIP OUT. Its tabs are created with no width and no x - Layout
+    -- is what divides the strip between them - so without this the four tabs
+    -- exist, answer to clicks nobody can aim at, and are invisible. Look was
+    -- the open tab, so the page LOOKED complete and Text, Auras and Rules
+    -- simply could not be reached: "rechts fehlt auch einiges".
+    strip:Layout()
     strip:Select("Look")
     grid:ShowTab("Look")
 
@@ -411,9 +415,18 @@ function OptionsCoTanks:BuildLook(grid)
         { value = "custom", text = "One colour" },
         { value = "health", text = "By remaining health" },
     }, Get("healthColor"), function(value) DB().healthColor = value end,
-        { apply = Apply })
+        { apply = function()
+            Apply()
+            -- Rows come and go under this control, so the page has to be
+            -- measured again - a repaint alone leaves them in their old places.
+            grid:Refresh()
+            grid:Layout()
+        end })
 
-    Colour(grid, "Custom colour", "healthCustom")
+    -- SHOWN ONLY WHEN THE MODE USES IT. A colour picker sitting under
+    -- "By class" is a control that does nothing, which is the one thing this
+    -- panel is not allowed to have.
+    local customRow = Colour(grid, "Custom colour", "healthCustom")
     GradientRows(grid, "healthGradient", gradients)
     Slide(grid, "Opacity", "healthAlpha", 0, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
@@ -442,10 +455,15 @@ function OptionsCoTanks:BuildLook(grid)
         .. "always right either way - it is handed the number without reading "
         .. "it, which is the whole trick.")
 
-    grid:Section("Colour by health", "ct-ramp")
-    Colour(grid, "Full", "healthHigh")
-    Colour(grid, "Half", "healthMid")
-    Colour(grid, "Nearly dead", "healthLow")
+    -- Same for the three-colour ramp: it is the whole of one mode and nothing
+    -- at all in the other two, so it goes away rather than sitting folded
+    -- shut and inert.
+    local rampRows = {
+        grid:Section("Colour by health", "ct-ramp"),
+        Colour(grid, "Full", "healthHigh"),
+        Colour(grid, "Half", "healthMid"),
+        Colour(grid, "Nearly dead", "healthLow"),
+    }
 
     grid:Section("Plate", "ct-plate")
     Colour(grid, "Colour", "bgColor")
@@ -474,7 +492,20 @@ function OptionsCoTanks:BuildLook(grid)
 
     self.lookGradients = gradients
     grid.widgets[#grid.widgets + 1] = {
-        Refresh = function() ApplyGradientVisibility(gradients) end,
+        Refresh = function()
+            ApplyGradientVisibility(gradients)
+
+            -- Recomputed from the mode every pass, never read back off
+            -- dkSkip: a flag left over from the last refresh is how a row
+            -- hidden once stays hidden for the rest of the session.
+            local mode = DB().healthColor
+            customRow.dkSkip = mode ~= "custom"
+            customRow:SetShown(mode == "custom")
+            for _, row in ipairs(rampRows) do
+                row.dkSkip = mode ~= "health"
+                row:SetShown(mode == "health")
+            end
+        end,
     }
 end
 

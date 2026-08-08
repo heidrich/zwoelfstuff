@@ -491,6 +491,36 @@ local PAGES = {
       build = BuildChangelogPage },
 }
 
+-- The three pages that carry a THIRD COLUMN, published so the rule below can
+-- be checked without building a window.
+Options.PAGES = PAGES
+
+-- A PAGE IS BUILT AT THE WIDTH IT WILL BE SHOWN AT, not at the widest one
+-- there is.
+--
+-- Every page used to be built at the WIDE middle column - the one you get when
+-- there is no third column. A page that DECLARES a third column is shown in
+-- the NARROW middle instead, so its rows were 1136 units wide inside 750: the
+-- labels showed, the rule lines ran to the edge and were clipped, and every
+-- control - which sits at the RIGHT end of its row - was four hundred units
+-- off the side of the window.
+--
+-- The whole Co-Tanks page looked like a list of headings with nothing to set,
+-- and Settings has had the same hole in it since the explain column was added:
+-- its font pickers are full-width rows and have never been on screen.
+-- Half-width rows fit either way, which is why it survived so long and why it
+-- was invisible - the page was half working, which reads as a design.
+--
+-- Pure and exported for the same reason SnapAxis and SparkEdge are: the whole
+-- rule is one table entry in and one number out, and the desktop harness
+-- CANNOT see the bug it prevents - its frame stub answers GetWidth with a
+-- fixed number whatever was set, so a page built at the wrong width looks
+-- exactly like one built at the right one.
+function Options.PageWidth(entry, narrow, wide)
+    if entry.side or entry.explain or entry.tanks then return narrow end
+    return wide
+end
+
 function Options:Create()
     if self.frame then return end
 
@@ -769,6 +799,8 @@ function Options:Create()
     local listWidth = NARROW_W - PAD * 2
     local pageWidth = WIDE_W - PAD * 2
 
+
+
     local barList = ns.OptionsBars:BuildList(body, listWidth)
     local side = ns.OptionsBars:BuildSide(sideHost, PAD)
     local tankSide = ns.OptionsCoTanks:BuildSide(sideHost, PAD)
@@ -797,7 +829,7 @@ function Options:Create()
         local entry = PAGES[index]
         if entry.build and not entry.built then
             entry.built = true
-            entry.build(pageFrames[index], pageWidth)
+            entry.build(pageFrames[index], Options.PageWidth(entry, listWidth, pageWidth))
         end
         self:Refresh()
     end
