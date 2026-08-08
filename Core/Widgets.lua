@@ -3058,6 +3058,13 @@ local ICON_FILES = {
     log     = "nav-changelog",
     bars    = "kind-bar",
 
+    -- Co-tanks has no nav-* mark of its own: the design's rail predates the
+    -- page. cond-group is two people and it is the drawing this entry wants,
+    -- so it is aliased under a semantic name here for the same reason the six
+    -- above are - the rail names a FUNCTION, and what stays put when the
+    -- drawing is eventually replaced is the function.
+    tanks   = "cond-group",
+
     caretUP    = "ui-chevron-up",
     caretDOWN  = "ui-chevron-down",
     caretRIGHT = "ui-chevron-right",

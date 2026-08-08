@@ -177,8 +177,17 @@ Media.OUTLINES = {
 -- which is often enough that CreateColor here would be two tables of garbage
 -- each time. Read off EllesmereUIUnitFrames.lua:1171-1179, which says the
 -- same thing about the same call.
-local gradA = CreateColor and CreateColor(1, 1, 1, 1) or nil
-local gradB = CreateColor and CreateColor(1, 1, 1, 1) or nil
+--
+-- The plain-table fallback is not defensiveness for its own sake: it is what
+-- makes this file loadable in the desktop harness, where there is no client
+-- and therefore no CreateColor. A colour object IS four fields, and the four
+-- fields are all SetGradient reads.
+local function ColourObject()
+    if CreateColor then return CreateColor(1, 1, 1, 1) end
+    return { r = 1, g = 1, b = 1, a = 1 }
+end
+
+local gradA, gradB = ColourObject(), ColourObject()
 
 -- Colour a texture, solid or as a gradient. THE ONE SINK, so the fill, the
 -- backdrop and every threshold overlay cannot end up doing it three ways.
@@ -197,7 +206,7 @@ function ns.Tint(texture, colour, alpha, gradient)
     local r, g, b = colour[1], colour[2], colour[3]
     alpha = alpha or 1
 
-    if not (gradient and gradient.on and texture.SetGradient and gradA) then
+    if not (gradient and gradient.on and texture.SetGradient) then
         texture:SetVertexColor(r, g, b, alpha)
         return
     end
@@ -209,12 +218,17 @@ function ns.Tint(texture, colour, alpha, gradient)
     -- out is a separate wish from a gradient that changes colour, and there
     -- is no control for it - so it must not happen by accident because a
     -- swatch handed back three numbers and a nil.
+    -- The four fields directly, not SetRGBA. Same thing - that method only
+    -- assigns them - and it is what the reference does when it reuses a pair
+    -- of colour objects (EllesmereUICdmBuffBars.lua:3945-3948). It also keeps
+    -- the static check quiet, which otherwise reports SetRGBA as undefined on
+    -- every build because CreateColor's return type is not declared anywhere.
     if swap then
-        gradA:SetRGBA(second[1], second[2], second[3], alpha)
-        gradB:SetRGBA(r, g, b, alpha)
+        gradA.r, gradA.g, gradA.b, gradA.a = second[1], second[2], second[3], alpha
+        gradB.r, gradB.g, gradB.b, gradB.a = r, g, b, alpha
     else
-        gradA:SetRGBA(r, g, b, alpha)
-        gradB:SetRGBA(second[1], second[2], second[3], alpha)
+        gradA.r, gradA.g, gradA.b, gradA.a = r, g, b, alpha
+        gradB.r, gradB.g, gradB.b, gradB.a = second[1], second[2], second[3], alpha
     end
 
     texture:SetVertexColor(1, 1, 1, 1)

@@ -467,6 +467,17 @@ local PAGES = {
       subtitle = "Applies to every bar.",
       explain = true, build = BuildGeneralPage },
 
+    -- The one page that is about somebody ELSE. It carries its own right-hand
+    -- column - not the bar inspector and not the explain panel - because what
+    -- belongs beside a co-tank preview is the co-tank settings and nothing in
+    -- the other two is about this page at all.
+    { key = "cotanks", title = "Co-Tanks", glyph = "tanks", tanks = true,
+      subtitle = "Every tank in the group, with their health and their auras.",
+      -- Through the namespace, not a local: the builder lives in
+      -- Core/OptionsCoTanks.lua, which loads BEFORE this file but after this
+      -- table would have captured a local upvalue that was still nil.
+      build = function(page, width) return ns.OptionsCoTanks:BuildPage(page, width) end },
+
     { key = "diagnostics", title = "Diagnostics", glyph = "pulse",
       subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
       build = BuildDiagnosticsPage },
@@ -760,6 +771,7 @@ function Options:Create()
 
     local barList = ns.OptionsBars:BuildList(body, listWidth)
     local side = ns.OptionsBars:BuildSide(sideHost, PAD)
+    local tankSide = ns.OptionsCoTanks:BuildSide(sideHost, PAD)
 
     local pageFrames = {}
     for index, entry in ipairs(PAGES) do
@@ -814,6 +826,8 @@ function Options:Create()
         end },
         { eyebrow = "Bars" },
         { page = "cooldowns" },
+        { eyebrow = "Tank stuff" },
+        { page = "cotanks" },
         { eyebrow = "System" },
         { page = "settings" },
         { page = "diagnostics" },
@@ -862,13 +876,16 @@ function Options:Create()
         local entry = PAGES[self.pageIndex] or PAGES[1]
         local withSide = entry.side and true or false
         local withExplain = entry.explain and true or false
+        local withTanks = entry.tanks and true or false
 
         -- The middle column narrows for either of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
-        SetStageWidth(withSide or withExplain)
-        sideHost:SetShown(withSide or withExplain)
+        SetStageWidth(withSide or withExplain or withTanks)
+        sideHost:SetShown(withSide or withExplain or withTanks)
         side:SetShown(withSide)
         explain:SetShown(withExplain)
+        tankSide:SetShown(withTanks)
+        if withTanks then ns.OptionsCoTanks:Refresh() end
 
         pageTitle:SetText(entry.title)
         if entry.status then
@@ -897,7 +914,7 @@ function Options:Create()
 
         -- The subtitle stops at the buttons rather than at the column edge,
         -- or a long one runs underneath them.
-        local room = ((withSide or withExplain) and NARROW_W or WIDE_W) - PAD * 2
+        local room = ((withSide or withExplain or withTanks) and NARROW_W or WIDE_W) - PAD * 2
         if withSide then room = room - (MOVE_W + BUILD_W + 6 + UI.PAD) end
         pageSubtitle:SetWidth(room)
 

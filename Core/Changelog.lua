@@ -8,6 +8,30 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.31.0",
+        date = "2026-08-08",
+        lines = {
+            "CO-TANKS. A new section in the window, and the first thing in this addon that is about somebody other than you: a row for every tank in your group, with their health, their name, their shields, and - once patch 12.1 lands on Monday - everything on them and everything they have running.",
+            "It answers the four things you actually need from the other tank, at a glance: are they alive, are they low, are they in range, and do they still have a cooldown. Blizzard's raid frames answer none of them quickly, because the other tank is one box among twenty and looks exactly like the other nineteen.",
+            "",
+            "THERE IS A TEST MODE, and it is the second control on the page rather than something buried at the bottom. Nobody sits in a raid to line up a panel. Switch it on and the display fills with tanks that do not exist - five classes, one dead, one disconnected, one out of range, one that is your target - and their health MOVES, so the texture, the fill direction, the colour ramp and the shield overlay can all actually be judged. It survives a reload, and it is off again from the same switch or with /zs tanks test.",
+            "",
+            "It is not a drawing of the display. It IS the display, with invented numbers going in - one renderer, two sources. Every preview in this addon that drew itself has ended up disagreeing with the thing it was previewing, twice in one session, and the only fix that holds is to have nothing that can drift.",
+            "",
+            "THE PREVIEW IN THE MIDDLE OF THE PAGE IS THE PANEL ITSELF, borrowed from your screen while you are looking at it and put back when you leave.",
+            "",
+            "WHAT YOU CAN SET: the bar's texture; whether it is coloured by class, by one colour of your choosing, or by how much health is left; which way it fills, in all four directions; the plate behind it, its border, and the faint track under the fill. Shields are drawn over the health where they actually sit rather than as a separate strip somewhere else, and healing that has been taken away is drawn inside it. Name and health text each get the same nine positions, two nudges, font, size, colour, outline and a class-colour switch - and the health text can read a percent, what is left, both, or what is missing.",
+            "Plus a ring when that tank is your target, the raid marker, the leader crown, the role mark, and a fade each for out of range, dead and disconnected. One fade wins rather than all three multiplying together - a dead, disconnected tank who is out of range came out invisible, which is exactly when you want to see that there is one.",
+            "",
+            "THE AURA STRIPS NEED PATCH 12.1, AND THE PAGE SAYS SO INSTEAD OF SHOWING YOU AN EMPTY ROW. On this client an aura on another player is a protected value: no addon may read its icon, its stacks or its time left, and there is no way round that. Blizzard's own aura engine can, it arrives on Monday, and this addon already speaks to it. Until then the strips draw in test mode - so every one of those fourteen settings can be set up now and will be right the moment the patch lands.",
+            "",
+            "EVERY COLOUR THAT CAN BE A GRADIENT NOW OFFERS ONE. The bar fill, the backdrop, the border and each stack band: a second colour and one of four directions. A new look, Deep, uses two of them, so it can be seen without being built first.",
+            "The three that cannot are not offered, and that is deliberate. The cooldown sweep takes exactly one colour, a charge mark is a single pixel wide, and a line of text has no gradient at all - the game does not provide one. A control that silently did nothing would be the fourth of those found in two days, and three missing rows are better than three lies.",
+            "",
+            "EDIT MODE MOVED TO THE TOP OF THE LEFT-HAND LIST, on its own, above everything. It was filed under Bars, which reads as one of the bar pages - and it is not a page. Every other entry opens something inside the window; that one closes the window and puts you on the screen with your bars in your hands.",
+        },
+    },
+    {
         version = "4.30.0",
         date = "2026-08-08",
         lines = {

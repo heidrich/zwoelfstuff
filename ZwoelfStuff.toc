@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.30.0
+## Version: 4.31.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -38,6 +38,14 @@ Core\Layout.lua
 Core\Visibility.lua
 Core\Effects.lua
 Core\Bars.lua
+# The aura engine and the co-tank frames.
+#
+# Engine.lua probes for AuraContainer by BUILDING one and seeing, so it is
+# safe on a client that predates it - it simply reports itself unavailable
+# and names the build in the reason. CoTanks then draws everything it can
+# without it and says why the aura strips are empty.
+Core\Engine.lua
+Core\CoTanks.lua
 Core\Minimap.lua
 # The other two ways in: the minimap button above, and an entry in the pause
 # menu. Both only call ns.Options at click time, so neither needs the window
@@ -50,6 +58,7 @@ Core\Screen.lua
 Core\EditMode.lua
 Core\Changelog.lua
 Core\OptionsBars.lua
+Core\OptionsCoTanks.lua
 Core\Options.lua
 # Last, because it reads all of the above. /zs test - the checks that can only
 # be run inside the game, which is every check this addon has.

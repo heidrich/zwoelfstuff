@@ -1,0 +1,755 @@
+---------------------------------------------------------------------------
+-- OptionsCoTanks - the Co-Tanks page and its inspector.
+--
+-- The middle column is the PREVIEW and the handful of settings you change
+-- while looking at it. The right-hand column is everything else, in tabs.
+-- That split is the owner's, and it is the right one: a preview is only worth
+-- the space if the controls that change what it shows are next to it, and the
+-- forty that you set once are not those controls.
+--
+-- THE PREVIEW IS THE REAL DISPLAY, MOVED.
+--
+-- There is no second renderer in this file. The card in the middle holds the
+-- actual co-tank panel, reparented into it and put back when you leave.
+-- Every preview in this addon that drew itself has drifted from the thing it
+-- was previewing - the bar card did it twice in one session - and the only
+-- fix that holds is to have nothing to drift.
+---------------------------------------------------------------------------
+local _, ns = ...
+
+local OptionsCoTanks = {}
+ns.OptionsCoTanks = OptionsCoTanks
+
+local UI = ns.UI
+local C = UI.C
+
+local function DB() return ns.db.coTanks end
+
+-- Everything on this page changes what is on screen, so every control ends
+-- here. ApplyLayout restyles the rows and rebuilds the aura containers;
+-- Refresh only repaints. Which one a control needs is the difference between
+-- a slider that stutters and one that does not.
+local function Apply()
+    ns.CoTanks:ApplyLayout()
+end
+
+local function Repaint()
+    ns.CoTanks:Refresh()
+end
+
+---------------------------------------------------------------------------
+-- The preview
+--
+-- The panel itself, borrowed. It goes home on hide, and it goes home whatever
+-- happens: a display left parented to a closed window is a display that has
+-- vanished, and the user's only clue would be that their co-tanks stopped
+-- appearing after they looked at the settings once.
+---------------------------------------------------------------------------
+local STAGE_H = 260
+
+local function BuildStage(parent, width)
+    local card = UI.Card(parent, width)
+    -- A card sets its own width and nothing else; the grid only positions it.
+    -- Left without a height it is zero pixels tall and everything in it draws
+    -- somewhere nobody can see - which is how a section header once shipped
+    -- laid out perfectly and invisible.
+    card:SetHeight(STAGE_H)
+
+    local caption = UI.Eyebrow(card, "Preview")
+    caption:SetPoint("TOPLEFT", card, "TOPLEFT", 14, -12)
+
+    local note = UI.Hint(card, "This is the real panel, not a drawing of it - "
+        .. "it is borrowed from the screen while you are on this page and put "
+        .. "back when you leave.")
+    note:SetPoint("TOPLEFT", caption, "BOTTOMLEFT", 0, -4)
+    note:SetWidth(width - 28)
+    note:SetJustifyH("LEFT")
+
+    -- Where the borrowed panel sits. Its own frame so the panel can be
+    -- anchored to something whose size this file controls, rather than to the
+    -- card, whose height changes with the note above it.
+    local slot = CreateFrame("Frame", nil, card)
+    slot:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -10)
+    slot:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -14, 14)
+
+    card.slot = slot
+    card.note = note
+
+    -- The panel is only borrowed while the page is on screen AND the window
+    -- is. Both conditions, because hiding the window does not hide a page.
+    card:SetScript("OnHide", function() OptionsCoTanks:ReleasePanel() end)
+
+    return card
+end
+
+function OptionsCoTanks:BorrowPanel()
+    local panel = ns.CoTanks.panel
+    if not (panel and self.stage) then return end
+    if self.borrowed then return end
+
+    -- Remembered so it can be put back exactly, rather than dropped at a
+    -- default that would quietly move the user's panel every time they looked
+    -- at this page.
+    local db = DB()
+    self.homePoint = { db.point, db.relPoint, db.x, db.y }
+    self.homeScale = panel:GetScale()
+
+    self.borrowed = true
+    -- Read by CoTanks:ApplyLayout and ShouldShow: while this is set the panel
+    -- takes its position from the card and shows whether or not the feature
+    -- is switched on.
+    ns.CoTanks.hosted = true
+    panel:SetParent(self.stage.slot)
+    panel:ClearAllPoints()
+    panel:SetPoint("TOP", self.stage.slot, "TOP", 0, 0)
+    -- Scaled to fit the card rather than shown at its real size: a 240-wide
+    -- panel of five rows is taller than the card, and a preview you have to
+    -- scroll is not one.
+    panel:SetScale(math.min(1, (self.stage.slot:GetWidth() - 8) / math.max(1, db.width)))
+    panel:Show()
+end
+
+function OptionsCoTanks:ReleasePanel()
+    local panel = ns.CoTanks.panel
+    if not (panel and self.borrowed) then return end
+    self.borrowed = false
+    ns.CoTanks.hosted = nil
+
+    panel:SetParent(UIParent)
+    panel:SetScale(self.homeScale or 1)
+    panel:ClearAllPoints()
+    local home = self.homePoint
+    if home then
+        panel:SetPoint(home[1], UIParent, home[2], home[3], home[4])
+    end
+    ns.CoTanks:ApplyLayout()
+end
+
+---------------------------------------------------------------------------
+-- The middle column
+---------------------------------------------------------------------------
+function OptionsCoTanks:BuildPage(page, width)
+    local grid = UI.Page(page, width)
+
+    self.stage = BuildStage(grid.content, grid.width)
+    grid:Wide(self.stage, STAGE_H, 0, 14)
+
+    grid:Section("Switch it on")
+
+    UI.Toggle(grid:FullRow("Show co-tanks", {
+        controlWidth = 124,
+        sublabel = "A row for every tank in your group",
+    }), function() return DB().enabled end,
+        function(value) DB().enabled = value; Apply() end)
+
+    -- TEST MODE IS THE POINT OF THIS PAGE ON A NORMAL EVENING. Nobody sits in
+    -- a raid to adjust a panel, and every other setting here is unjudgeable
+    -- without one - so this is not a debugging aid tucked away at the bottom,
+    -- it is the second control on the page.
+    UI.Toggle(grid:FullRow("Test mode", {
+        controlWidth = 124,
+        sublabel = "Invented tanks, so it can be set up without a raid",
+    }), function() return DB().testMode end,
+        function(value) ns.CoTanks:SetTestMode(value) end)
+
+    grid:Note("Test mode fills the panel with tanks that do not exist - five "
+        .. "classes, one dead, one disconnected, one out of range, and health "
+        .. "that moves so the bar, the texture and the absorb overlay can "
+        .. "actually be judged. It survives a reload and it is switched off "
+        .. "from here or with |cffffd100/zs tanks test|r.")
+
+    local moveRow = grid:FullRow("Position", { controlWidth = 190 })
+    local moveBtn = UI.Button(moveRow.slot, "Move it on screen", 190, function()
+        -- The window closes FIRST. Hiding it is what hands the panel back to
+        -- UIParent (the page's OnHide releases it), and unlocking a panel
+        -- that is still parented into a card would let the user drag a
+        -- preview around inside a window.
+        if ns.Options.frame then ns.Options.frame:Hide() end
+        ns.CoTanks:SetUnlocked(true)
+    end)
+    moveBtn:SetPoint("RIGHT", moveRow.slot, "RIGHT", 0, 0)
+
+    grid:Section("The basics")
+
+    UI.Slider(grid:FullRow("Width", { controlWidth = 124 }), {
+        get = function() return DB().width end,
+        set = function(value) DB().width = value end,
+        min = 100, max = 480, step = 5, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Row height", { controlWidth = 124 }), {
+        get = function() return DB().rowHeight end,
+        set = function(value) DB().rowHeight = value end,
+        min = 12, max = 60, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Gap", { controlWidth = 124 }), {
+        get = function() return DB().spacing end,
+        set = function(value) DB().spacing = value end,
+        min = 0, max = 30, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Scale", { controlWidth = 124 }), {
+        get = function() return DB().scale end,
+        set = function(value) DB().scale = value end,
+        min = 0.5, max = 2.0, step = 0.05, apply = Apply,
+        format = function(v) return string.format("%.2f", v) end,
+    })
+
+    grid:Note("Everything else - colours, texts, indicators and the aura "
+        .. "strips - is in the column on the right.")
+
+    grid:Layout()
+    page.Refresh = function() grid:Refresh() end
+    self.pageGrid = grid
+    return grid
+end
+
+---------------------------------------------------------------------------
+-- The right-hand column
+---------------------------------------------------------------------------
+function OptionsCoTanks:BuildSide(parent, pad)
+    local side = CreateFrame("Frame", nil, parent)
+    side:SetAllPoints(parent)
+    side:Hide()
+
+    local width = parent:GetWidth() - pad * 2
+
+    local title = UI.Label(side, "Co-tank rows", UI.FS.card, C.text)
+    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -16)
+    title:SetWidth(width - 96)
+    title:SetWordWrap(false)
+
+    local subtitle = UI.Eyebrow(side, "EVERY SETTING")
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    subtitle:SetWidth(width - 96)
+    subtitle:SetWordWrap(false)
+
+    local host = CreateFrame("Frame", nil, side)
+    host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
+    host:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
+
+    -- The tab strip on top, the page under it. Both edges anchored, never a
+    -- measured width - the column is a fixed 400 today and that is exactly
+    -- the kind of number that moves once and breaks something nobody looks at.
+    local body = CreateFrame("Frame", nil, host)
+    local strip
+    local grid
+
+    strip = UI.TabStrip(host, { "Look", "Text", "Auras", "Rules" },
+        function(name)
+            grid:ShowTab(name)
+            strip:Select(name)
+        end)
+    strip:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    strip:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+
+    body:SetPoint("TOPLEFT", strip, "BOTTOMLEFT", 0, -UI.PAD)
+    body:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+
+    grid = UI.Page(body, width)
+
+    self:BuildLook(grid)
+    self:BuildText(grid)
+    self:BuildAuras(grid)
+    self:BuildRules(grid)
+
+    grid.tab = "Look"
+    grid:Layout()
+    strip:Select("Look")
+    grid:ShowTab("Look")
+
+    side.Refresh = function()
+        grid:Refresh()
+        OptionsCoTanks:BorrowPanel()
+    end
+
+    side:SetScript("OnShow", function() OptionsCoTanks:BorrowPanel() end)
+    side:SetScript("OnHide", function() OptionsCoTanks:ReleasePanel() end)
+
+    self.side = side
+    self.grid = grid
+    return side
+end
+
+function OptionsCoTanks:Refresh()
+    if self.side and self.side.Refresh then self.side:Refresh() end
+    if self.pageGrid then self.pageGrid:Refresh() end
+end
+
+---------------------------------------------------------------------------
+-- Control helpers
+--
+-- The same four shapes the bar inspector uses, pointed at ns.db.coTanks
+-- instead of at a bar. Written out rather than shared with OptionsBars
+-- because that one resolves through a SELECTION - which bar, which cell - and
+-- there is exactly one co-tank panel. Threading a selection that is always
+-- the same thing through forty call sites buys nothing.
+---------------------------------------------------------------------------
+local function Get(key) return function() return DB()[key] end end
+local function Set(key, after)
+    return function(value) DB()[key] = value; (after or Apply)() end
+end
+
+local function Slide(grid, label, key, min, max, step, format, scale, sublabel)
+    return UI.Slider(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }), {
+        get = Get(key), set = function(value) DB()[key] = value end,
+        min = min, max = max, step = step, format = format, scale = scale,
+        apply = Apply,
+    })
+end
+
+local function Switch(grid, label, key, sublabel)
+    return UI.Toggle(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }),
+        Get(key), Set(key))
+end
+
+local function Colour(grid, label, key)
+    return UI.Swatch(grid:FullRow(label, { controlWidth = 124 }),
+        function()
+            local colour = DB()[key] or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) DB()[key] = { r, g, b } end,
+        Apply)
+end
+
+-- The gradient trio, exactly as the bars have it: a switch, a second colour
+-- and a direction, with the last two hidden until the switch is on. Same
+-- three colours can ramp here as there, and for the same reasons.
+local function GradientRows(grid, key, collect)
+    local function Read()
+        local grad = DB()[key]
+        return type(grad) == "table" and grad or nil
+    end
+    local function Write(field, value)
+        if type(DB()[key]) ~= "table" then DB()[key] = {} end
+        DB()[key][field] = value
+    end
+    local function Field(field, fallback)
+        return function()
+            local grad = Read()
+            if not grad then return fallback end
+            local value = grad[field]
+            if value == nil then return fallback end
+            return value
+        end
+    end
+
+    local rows = {}
+
+    UI.Toggle(grid:FullRow("Gradient", { controlWidth = 124 }),
+        Field("on", false),
+        function(value)
+            Write("on", value)
+            Apply()
+            grid:Layout()
+        end)
+
+    rows[#rows + 1] = UI.Swatch(
+        grid:FullRow("Second colour", { controlWidth = 124 }),
+        function()
+            local colour = Field("color", { 1, 1, 1 })()
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) Write("color", { r, g, b }) end,
+        Apply)
+
+    rows[#rows + 1] = UI.Dropdown(
+        grid:FullRow("Runs", { controlWidth = 150 }),
+        ns.GRADIENT_DIRECTIONS, Field("direction", "right"),
+        function(value) Write("direction", value) end, { apply = Apply })
+
+    collect[#collect + 1] = { on = Field("on", false), rows = rows }
+end
+
+-- Recomputed from scratch every refresh, never read back off dkSkip: a flag
+-- left over from the last pass is how a row hidden once stays hidden for the
+-- rest of the session.
+local function ApplyGradientVisibility(groups)
+    for _, group in ipairs(groups) do
+        local shown = group.on() and true or false
+        for _, row in ipairs(group.rows) do
+            row.dkSkip = not shown
+            row:SetShown(shown)
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- Look
+---------------------------------------------------------------------------
+function OptionsCoTanks:BuildLook(grid)
+    local gradients = {}
+
+    grid:Tab("Look")
+    grid:Section("Health bar")
+
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-texture" }), "statusbar",
+        Get("healthTexture"), function(value) DB().healthTexture = value end,
+        Apply)
+
+    UI.Dropdown(grid:FullRow("Colour", { controlWidth = 150 }), {
+        { value = "class",  text = "By class" },
+        { value = "custom", text = "One colour" },
+        { value = "health", text = "By remaining health" },
+    }, Get("healthColor"), function(value) DB().healthColor = value end,
+        { apply = Apply })
+
+    Colour(grid, "Custom colour", "healthCustom")
+    GradientRows(grid, "healthGradient", gradients)
+    Slide(grid, "Opacity", "healthAlpha", 0, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+    Slide(grid, "Empty part", "trackAlpha", 0, 0.6, 0.02,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100,
+        "The bar's own colour, faint, behind the fill")
+
+    UI.Dropdown(grid:FullRow("Runs", { controlWidth = 150 }),
+        ns.FILL_DIRECTIONS,
+        function()
+            if DB().healthVertical then
+                return DB().healthReverse and "down" or "up"
+            end
+            return DB().healthReverse and "left" or "right"
+        end,
+        function(value)
+            local entry = ns.Layout.FillDirection(value)
+            DB().healthVertical = entry.orientation == "VERTICAL"
+            DB().healthReverse = entry.reverse
+        end, { apply = Apply })
+
+    grid:Note("\"By remaining health\" needs numbers this client will let an "
+        .. "addon read. On this patch another player's health can arrive "
+        .. "protected mid-fight, and then it falls back to the class colour "
+        .. "rather than freezing on the last one it could work out. The BAR is "
+        .. "always right either way - it is handed the number without reading "
+        .. "it, which is the whole trick.")
+
+    grid:Section("Colour by health", "ct-ramp")
+    Colour(grid, "Full", "healthHigh")
+    Colour(grid, "Half", "healthMid")
+    Colour(grid, "Nearly dead", "healthLow")
+
+    grid:Section("Plate", "ct-plate")
+    Colour(grid, "Colour", "bgColor")
+    GradientRows(grid, "bgGradient", gradients)
+    Slide(grid, "Opacity", "bgAlpha", 0, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+
+    grid:Section("Border", "ct-border")
+    Slide(grid, "Thickness", "borderSize", 0, 4, 1)
+    Colour(grid, "Colour", "borderColor")
+    GradientRows(grid, "borderGradient", gradients)
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-border" }), "border",
+        Get("borderTexture"), function(value) DB().borderTexture = value end,
+        Apply)
+
+    grid:Section("Absorbs", "ct-absorb")
+    Switch(grid, "Shield", "absorbShow", "Drawn over the health, where it sits")
+    Colour(grid, "Shield colour", "absorbColor")
+    Slide(grid, "Shield opacity", "absorbAlpha", 0, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+    Switch(grid, "Healing taken away", "healAbsorbShow")
+    Colour(grid, "Its colour", "healAbsorbColor")
+    Slide(grid, "Its opacity", "healAbsorbAlpha", 0, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+
+    self.lookGradients = gradients
+    grid.widgets[#grid.widgets + 1] = {
+        Refresh = function() ApplyGradientVisibility(gradients) end,
+    }
+end
+
+---------------------------------------------------------------------------
+-- Text
+---------------------------------------------------------------------------
+local TEXT_ANCHORS = {
+    { value = "TOPLEFT",     text = "Top left" },
+    { value = "TOP",         text = "Top" },
+    { value = "TOPRIGHT",    text = "Top right" },
+    { value = "LEFT",        text = "Left" },
+    { value = "CENTER",      text = "Centre" },
+    { value = "RIGHT",       text = "Right" },
+    { value = "BOTTOMLEFT",  text = "Bottom left" },
+    { value = "BOTTOM",      text = "Bottom" },
+    { value = "BOTTOMRIGHT", text = "Bottom right" },
+}
+
+-- Both texts get THE SAME SEVEN CONTROLS, generated rather than written out
+-- twice. "The name can be moved but the health cannot" is exactly the kind of
+-- arbitrary limit that sends people looking for another addon, and it is
+-- always the result of a second copy that nobody finished.
+local function TextSection(grid, key, label)
+    local function El() return DB()[key] end
+    local function ElSet(field)
+        return function(value) El()[field] = value; Apply() end
+    end
+    local function ElGet(field, fallback)
+        return function()
+            local value = El()[field]
+            if value == nil then return fallback end
+            return value
+        end
+    end
+
+    grid:Section(label, "ct-text-" .. key)
+
+    UI.Toggle(grid:FullRow("Show", { controlWidth = 124 }),
+        ElGet("show", true), ElSet("show"))
+
+    UI.MediaPicker(grid:FullRow("Font",
+        { controlWidth = 190, icon = "media-font" }), "font",
+        ElGet("font", ""), ElSet("font"), Apply)
+
+    UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
+        get = ElGet("size", 0), set = function(v) El().size = v end,
+        min = 0, max = 32, step = 1, apply = Apply,
+        format = function(v)
+            if v <= 0 then return "auto" end
+            return string.format("%d", v)
+        end,
+    })
+
+    UI.Swatch(grid:FullRow("Colour", { controlWidth = 124 }),
+        function()
+            local colour = El().color or { 1, 1, 1 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) El().color = { r, g, b } end, Apply)
+
+    UI.Toggle(grid:FullRow("Class colour", {
+        controlWidth = 124,
+        sublabel = "Wins over the colour above",
+    }), ElGet("classColor", false), ElSet("classColor"))
+
+    UI.Dropdown(grid:FullRow("Outline", { controlWidth = 150 }),
+        ns.Media.OUTLINES, ElGet("outline", "OUTLINE"), ElSet("outline"),
+        { apply = Apply })
+
+    UI.Dropdown(grid:FullRow("Position", { controlWidth = 150 }),
+        TEXT_ANCHORS, ElGet("anchor", "LEFT"), ElSet("anchor"), { apply = Apply })
+
+    UI.Slider(grid:FullRow("Nudge across", { controlWidth = 124 }), {
+        get = ElGet("x", 0), set = function(v) El().x = v end,
+        min = -40, max = 40, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Nudge up", { controlWidth = 124 }), {
+        get = ElGet("y", 0), set = function(v) El().y = v end,
+        min = -40, max = 40, step = 1, apply = Apply,
+    })
+end
+
+function OptionsCoTanks:BuildText(grid)
+    grid:Tab("Text")
+
+    TextSection(grid, "name", "Name")
+    UI.Slider(grid:FullRow("Cut the name to", { controlWidth = 124 }), {
+        get = function() return DB().name.maxLength or 0 end,
+        set = function(value) DB().name.maxLength = value end,
+        min = 0, max = 12, step = 1, apply = Apply,
+        format = function(v)
+            if v <= 0 then return "whole name" end
+            return string.format("%d letters", v)
+        end,
+    })
+
+    TextSection(grid, "health", "Health")
+    UI.Dropdown(grid:FullRow("Shows", { controlWidth = 150 }), {
+        { value = "percent", text = "Percent" },
+        { value = "current", text = "How much is left" },
+        { value = "both",    text = "Both" },
+        { value = "deficit", text = "How much is missing" },
+    }, function() return DB().health.format end,
+        function(value) DB().health.format = value end, { apply = Apply })
+
+    grid:Note("On this patch another player's health can arrive as a protected "
+        .. "number that no addon may do arithmetic on. When that happens the "
+        .. "text goes BLANK rather than printing a zero - a row that reads 0% "
+        .. "because the number could not be read is worse than one that says "
+        .. "nothing. The bar itself keeps working throughout.")
+end
+
+---------------------------------------------------------------------------
+-- Auras
+---------------------------------------------------------------------------
+local function StripSection(grid, key, label, note)
+    local function El() return DB()[key] end
+    local function ElGet(field, fallback)
+        return function()
+            local value = El()[field]
+            if value == nil then return fallback end
+            return value
+        end
+    end
+    local function ElSet(field)
+        return function(value) El()[field] = value; Apply() end
+    end
+
+    grid:Section(label, "ct-strip-" .. key)
+    if note then grid:Note(note) end
+
+    UI.Toggle(grid:FullRow("Show", { controlWidth = 124 }),
+        ElGet("show", true), ElSet("show"))
+
+    UI.Slider(grid:FullRow("How many", { controlWidth = 124 }), {
+        get = ElGet("max", 8), set = function(v) El().max = v end,
+        min = 0, max = 20, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Icon size", { controlWidth = 124 }), {
+        get = ElGet("size", 22), set = function(v) El().size = v end,
+        min = 8, max = 48, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Spacing", { controlWidth = 124 }), {
+        get = ElGet("spacing", 1), set = function(v) El().spacing = v end,
+        min = 0, max = 12, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Per row", { controlWidth = 124 }), {
+        get = ElGet("perRow", 8), set = function(v) El().perRow = v end,
+        min = 1, max = 20, step = 1, apply = Apply,
+    })
+
+    UI.Dropdown(grid:FullRow("Corner", { controlWidth = 150 }), {
+        { value = "TOPLEFT",     text = "Top left" },
+        { value = "TOPRIGHT",    text = "Top right" },
+        { value = "BOTTOMLEFT",  text = "Bottom left" },
+        { value = "BOTTOMRIGHT", text = "Bottom right" },
+    }, ElGet("anchor", "BOTTOMLEFT"), ElSet("anchor"), { apply = Apply })
+
+    UI.Dropdown(grid:FullRow("Grows", { controlWidth = 150 }), {
+        { value = "right", text = "To the right", icon = "dir-left-right" },
+        { value = "left",  text = "To the left",  icon = "dir-right-left" },
+    }, ElGet("growth", "right"), ElSet("growth"), { apply = Apply })
+
+    UI.Slider(grid:FullRow("Nudge across", { controlWidth = 124 }), {
+        get = ElGet("x", 0), set = function(v) El().x = v end,
+        min = -60, max = 60, step = 1, apply = Apply,
+    })
+    UI.Slider(grid:FullRow("Nudge up", { controlWidth = 124 }), {
+        get = ElGet("y", 0), set = function(v) El().y = v end,
+        min = -60, max = 60, step = 1, apply = Apply,
+    })
+
+    UI.Slider(grid:FullRow("Border", { controlWidth = 124 }), {
+        get = ElGet("borderSize", 1), set = function(v) El().borderSize = v end,
+        min = 0, max = 4, step = 1, apply = Apply,
+    })
+    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
+        function()
+            local colour = El().borderColor or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) El().borderColor = { r, g, b } end, Apply)
+
+    UI.Toggle(grid:FullRow("Countdown", { controlWidth = 124 }),
+        ElGet("countdown", true), ElSet("countdown"))
+    UI.Slider(grid:FullRow("Countdown size", { controlWidth = 124 }), {
+        get = ElGet("countdownSize", 0),
+        set = function(v) El().countdownSize = v end,
+        min = 0, max = 24, step = 1, apply = Apply,
+        format = function(v)
+            if v <= 0 then return "auto" end
+            return string.format("%d", v)
+        end,
+    })
+    UI.Toggle(grid:FullRow("Stacks", { controlWidth = 124 }),
+        ElGet("stacks", true), ElSet("stacks"))
+    UI.Slider(grid:FullRow("Stack size", { controlWidth = 124 }), {
+        get = ElGet("stacksSize", 0),
+        set = function(v) El().stacksSize = v end,
+        min = 0, max = 24, step = 1, apply = Apply,
+        format = function(v)
+            if v <= 0 then return "auto" end
+            return string.format("%d", v)
+        end,
+    })
+end
+
+function OptionsCoTanks:BuildAuras(grid)
+    grid:Tab("Auras")
+
+    -- THE NOTE THAT MUST NOT BE SOFTENED. Live aura strips need patch 12.1,
+    -- and a page that let the user set fourteen things and then showed them
+    -- nothing, with no explanation, is the exact defect this addon spent a
+    -- whole session removing. The reason is asked of the engine rather than
+    -- written here, so it names the actual client build.
+    local reason = grid:Note("")
+    reason.Refresh = function()
+        local why = ns.CoTanks:AuraReason()
+        if why then
+            reason:SetText("|cffffd100Live auras need patch 12.1.|r An aura on "
+                .. "another player is a protected value on this client - no "
+                .. "addon may read its icon, its stacks or its time left, and "
+                .. "there is no way round that. Blizzard's own aura engine can, "
+                .. "and it arrives with 12.1; this addon already speaks to it "
+                .. "and will simply start working. Until then the strips draw "
+                .. "in |cffffd100test mode|r, so everything below can be set up "
+                .. "now and will be right the moment the patch lands.\n\n"
+                .. "|cff888888" .. why .. "|r")
+        else
+            reason:SetText("Your client has Blizzard's aura engine, so these "
+                .. "strips show real auras on the real tanks.")
+        end
+    end
+    grid.widgets[#grid.widgets + 1] = reason
+
+    StripSection(grid, "debuffs", "Debuffs",
+        "What is on them - the boss's stacking debuff, the thing you swap on.")
+    StripSection(grid, "buffs", "Their own buffs",
+        "Their cooldowns, so you can see whether the other tank still has one.")
+end
+
+---------------------------------------------------------------------------
+-- Rules
+---------------------------------------------------------------------------
+function OptionsCoTanks:BuildRules(grid)
+    grid:Tab("Rules")
+    grid:Section("Who appears")
+
+    Switch(grid, "Include yourself", "includeSelf",
+        "Your own frame is already on your screen")
+    Slide(grid, "At most", "maxRows", 1, 8, 1,
+        function(v) return string.format("%d rows", v) end)
+
+    UI.Dropdown(grid:FullRow("Order", { controlWidth = 150 }), {
+        { value = "group",  text = "Raid order" },
+        { value = "name",   text = "By name" },
+        { value = "health", text = "Lowest first" },
+    }, Get("sortBy"), function(value) DB().sortBy = value end, { apply = Repaint })
+
+    UI.Dropdown(grid:FullRow("Stack grows", { controlWidth = 150 }),
+        ns.GROW_Y, Get("growth"), function(value) DB().growth = value end,
+        { apply = Apply })
+
+    grid:Note("\"Lowest first\" needs health numbers this client will let an "
+        .. "addon compare. When it will not, the raid order stands - which is "
+        .. "the order it was in a moment ago, so the rows do not shuffle under "
+        .. "your eye mid-pull.")
+
+    grid:Section("When it appears")
+    Switch(grid, "Only in a group", "onlyInGroup")
+    Switch(grid, "Only in a dungeon or raid", "onlyInInstance")
+
+    grid:Section("Indicators", "ct-marks")
+    Switch(grid, "Target ring", "targetHighlight",
+        "A ring when that tank is your target")
+    Colour(grid, "Ring colour", "targetColor")
+    Switch(grid, "Raid marker", "raidMarker")
+    Slide(grid, "Marker size", "raidMarkerSize", 8, 32, 1)
+    Switch(grid, "Leader crown", "leaderIcon")
+    Slide(grid, "Crown size", "leaderIconSize", 8, 24, 1)
+    Switch(grid, "Role mark", "roleIcon")
+    Slide(grid, "Role size", "roleIconSize", 8, 24, 1)
+
+    grid:Section("Fading", "ct-fade")
+    Switch(grid, "Fade out of range", "rangeFade")
+    Slide(grid, "Out of range", "rangeAlpha", 0.1, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+    Slide(grid, "Dead", "deadFade", 0.1, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+    Slide(grid, "Disconnected", "offlineFade", 0.1, 1, 0.05,
+        function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+
+    grid:Note("One alpha for the whole row, decided by the worst thing true "
+        .. "about it. Multiplying the three together made a dead, disconnected "
+        .. "tank who is out of range invisible - which is precisely the moment "
+        .. "you want to see that there is one.")
+end

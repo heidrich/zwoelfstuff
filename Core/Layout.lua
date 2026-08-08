@@ -147,6 +147,118 @@ function Layout.GradientOrder(value)
     return first.orientation, first.swap
 end
 
+---------------------------------------------------------------------------
+-- Aura strips
+--
+-- Where the Nth icon of a strip sits, as two numbers. Pure for the usual
+-- reason and for one extra: on this client the LIVE strip is laid out by
+-- Blizzard's aura engine and only the TEST strip is laid out by us, so these
+-- are the numbers that have to agree with the engine's own flow. A preview
+-- that arranges its icons differently from the thing it previews is worse
+-- than no preview, and the only way to keep the two honest is to be able to
+-- check one of them without a client.
+--
+-- The offsets are measured FROM THE STRIP'S ANCHOR CORNER, and both axes run
+-- away from it: a strip anchored bottom-left growing right puts icon 1 at
+-- 0,0 and stacks any second line downwards.
+---------------------------------------------------------------------------
+-- A STRIP HANGS OFF THE ROW, IT DOES NOT SIT IN IT.
+--
+-- The setting names the corner of the ROW the strip attaches to. The strip's
+-- own anchor is that corner flipped vertically, so a strip attached to the
+-- row's bottom-left hangs its TOP-left there and grows downwards, away from
+-- the health bar. Anchored corner-to-same-corner instead, twenty-two pixel
+-- icons sit on top of a twenty-six pixel row and the bar is gone.
+--
+-- Pure, and tested, because "which corner is the other one" is a sentence
+-- that is easy to write down wrong and impossible to spot in a screenshot
+-- taken with one strip switched off.
+function Layout.StripCorner(rowAnchor)
+    rowAnchor = rowAnchor or "BOTTOMLEFT"
+    local side = rowAnchor:find("RIGHT") and "RIGHT"
+        or rowAnchor:find("LEFT") and "LEFT" or ""
+    if rowAnchor:find("BOTTOM") then return "TOP" .. side end
+    return "BOTTOM" .. side
+end
+
+-- The strip's own corner, not the row's: see StripCorner. Passing the row's
+-- would send every overflow line back across the health bar.
+function Layout.StripSlot(index, size, spacing, perRow, growth, anchor)
+    perRow = math.max(1, math.floor(perRow or 1))
+    size = size or 0
+    spacing = spacing or 0
+
+    local column = (index - 1) % perRow
+    local line = math.floor((index - 1) / perRow)
+    local step = size + spacing
+
+    local dx = column * step
+    if growth == "left" then dx = -dx end
+
+    -- Extra lines stack AWAY from the row, which is whichever way the anchor
+    -- is not. A strip hung under the bar that grew upwards on its second line
+    -- would draw its overflow across the health bar.
+    local dy = line * step
+    if not (anchor and anchor:find("BOTTOM")) then dy = -dy end
+
+    return dx, dy
+end
+
+-- How much room a strip of N icons takes. Used to keep the two strips on a
+-- row from meeting in the middle, and to size the test strip's own frame.
+function Layout.StripSize(count, size, spacing, perRow)
+    if not count or count < 1 then return 0, 0 end
+    perRow = math.max(1, math.floor(perRow or 1))
+    size = size or 0
+    spacing = spacing or 0
+
+    local across = math.min(count, perRow)
+    local lines = math.ceil(count / perRow)
+    return across * size + (across - 1) * spacing,
+           lines * size + (lines - 1) * spacing
+end
+
+-- Which edge of a fill its overlays hang off.
+--
+-- THE SAME QUESTION AS THE SPARK'S, and the same answer for the same reason:
+-- the leading edge is the one that moves with the clock, so anything that
+-- belongs to "the end of the health you have" has to hang off the TEXTURE
+-- there rather than off a fixed side of the frame. Hard-coded to RIGHT, a
+-- shield overlay on a right-to-left bar sits at the wrong end of the bar and
+-- an absorb on a vertical one is a line across the middle.
+--
+-- Returns the edge and whether the strip runs vertically, which is what
+-- decides whether the span is a width or a height.
+function Layout.FillEdge(orientation, reverse)
+    if orientation == "VERTICAL" then
+        return reverse and "BOTTOM" or "TOP", true
+    end
+    return reverse and "LEFT" or "RIGHT", false
+end
+
+-- Green at full, through amber, to red. Two straight ramps rather than one
+-- across all three, because a single interpolation from green to red passes
+-- through grey-brown at the halfway point and reads as "something is wrong
+-- with the addon" rather than "this tank is at half".
+--
+-- The fraction is only ever called with a number the caller has already
+-- established it may compute on - see ns.CanCompute. Clamped here anyway,
+-- because a health value above maximum is a real thing during an absorb.
+function Layout.HealthTint(fraction, high, mid, low)
+    fraction = math.max(0, math.min(1, fraction or 1))
+
+    local from, to, t
+    if fraction >= 0.5 then
+        from, to, t = mid, high, (fraction - 0.5) * 2
+    else
+        from, to, t = low, mid, fraction * 2
+    end
+
+    return from[1] + (to[1] - from[1]) * t,
+           from[2] + (to[2] - from[2]) * t,
+           from[3] + (to[3] - from[3]) * t
+end
+
 ns.GROW_Y = {
     { value = "down", text = "Top to bottom", icon = "dir-top-bottom" },
     { value = "up",   text = "Bottom to top", icon = "dir-bottom-top" },

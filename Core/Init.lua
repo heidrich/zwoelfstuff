@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.30.0"
+ns.version = "4.31.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -180,27 +180,143 @@ ns.DEFAULTS = {
     -- one line in a menu you open by choice is not clutter.
     gameMenu = true,
 
-    -- Co-tank panel: one row per tank in the group.
+    -- CO-TANKS: a unit frame per tank in the group.
+    --
+    -- The one display in this addon that is about somebody ELSE. As a Blood
+    -- DK you need to know whether the other tank is alive, low, out of range
+    -- and holding their cooldowns - and the raid frames answer none of that
+    -- at a glance because the other tank is one of twenty boxes.
+    --
+    -- The vocabulary follows EllesmereUI's unit frames, which is ~200 keys per
+    -- frame, cut to what a CO-TANK row needs. Deliberately not carried over:
+    -- power bars (a tank's mana is not your problem), cast bars (theirs is not
+    -- yours to interrupt), portraits (a name reads faster in a stack of five),
+    -- class-power bars and the whole bottom-text-bar apparatus. Every one of
+    -- those is a real feature on a PLAYER frame and noise on this one.
     coTanks = {
-        enabled     = true,
-        includeSelf = true,
-        onlyInGroup = true,   -- hide when playing solo
+        -- OFF until asked for. A panel that appears on screen unbidden after
+        -- an update is worse than one nobody has found yet - and this one
+        -- draws over the middle of the screen by default.
+        enabled     = false,
+        testMode    = false,
+        includeSelf = false,      -- your own frame is already on your screen
+        onlyInGroup = true,
+        onlyInInstance = false,
         locked      = true,
 
+        -- The frame
         width       = 240,
-        rowHeight   = 22,
-        iconSize    = 22,
+        rowHeight   = 26,
         spacing     = 6,
-        maxDebuffs  = 8,
-        maxBuffs    = 8,
         scale       = 1.0,
-
-        accent      = { 0.36, 0.62, 0.86 },
+        maxRows     = 5,          -- more tanks than any raid actually fields
+        growth      = "down",     -- which way the stack grows: down | up
+        sortBy      = "group",    -- group | name | health
 
         point       = "CENTER",
         relPoint    = "CENTER",
         x           = -340,
         y           = 140,
+
+        -- Health
+        healthTexture = "",
+        healthColor   = "class",  -- class | custom | health
+        healthCustom  = { 0.36, 0.62, 0.86 },
+        healthAlpha   = 1.00,
+        healthGradient = { on = false, color = { 0.10, 0.20, 0.30 }, direction = "right" },
+        healthReverse = false,
+        healthVertical = false,
+        -- Colour by REMAINING HEALTH rather than by class: green at full,
+        -- through amber, to red. Only reachable when the numbers are readable
+        -- - see ns.CanCompute - so it falls back to the class colour rather
+        -- than to a bar that stops changing colour mid-fight.
+        healthHigh    = { 0.16, 0.75, 0.28 },
+        healthMid     = { 0.90, 0.72, 0.16 },
+        healthLow     = { 0.80, 0.14, 0.14 },
+
+        -- The plate behind the bar, and the empty part of the bar itself
+        bgColor       = { 0.05, 0.05, 0.06 },
+        bgAlpha       = 0.85,
+        bgGradient    = { on = false, color = { 0.10, 0.10, 0.12 }, direction = "down" },
+        trackAlpha    = 0.12,     -- the unfilled part, in the bar's own colour
+
+        borderSize    = 1,
+        borderColor   = { 0.00, 0.00, 0.00 },
+        borderTexture = "None",
+        borderGradient = { on = false, color = { 0.35, 0.35, 0.35 }, direction = "right" },
+
+        -- Absorbs, drawn over the health rather than beside it: a shield is
+        -- health you have, and a separate strip somewhere else is a second
+        -- thing to look at during the two seconds you have to look.
+        absorbShow    = true,
+        absorbColor   = { 0.85, 0.90, 1.00 },
+        absorbAlpha   = 0.45,
+        healAbsorbShow  = true,
+        healAbsorbColor = { 0.78, 0.11, 0.11 },
+        healAbsorbAlpha = 0.55,
+
+        -- Text. The same seven controls per element as a bar's, from the same
+        -- shape, so the panel generator and the anchor rules are shared.
+        name = {
+            show = true, font = "", size = 0, color = { 1, 1, 1 },
+            outline = "OUTLINE", anchor = "LEFT", x = 0, y = 0,
+            classColor = true,
+            maxLength = 0,       -- 0 keeps the whole name
+        },
+        health = {
+            show = true, font = "", size = 0, color = { 1, 1, 1 },
+            outline = "OUTLINE", anchor = "RIGHT", x = 0, y = 0,
+            classColor = false,
+            -- percent | current | both | deficit
+            -- On this patch a health value may arrive protected, and then
+            -- NONE of these can be computed. The renderer blanks the text
+            -- rather than printing a zero, and the bar keeps working because
+            -- a StatusBar takes the number without reading it.
+            format = "percent",
+        },
+
+        -- Indicators
+        roleIcon      = false,
+        roleIconSize  = 14,
+        leaderIcon    = true,
+        leaderIconSize = 12,
+        raidMarker    = true,
+        raidMarkerSize = 16,
+        -- A ring in your own accent when that tank is your target. Cheap, and
+        -- it answers "am I taunting the right one" without moving your eyes.
+        targetHighlight = true,
+        targetColor   = { 1.00, 0.82, 0.20 },
+
+        deadFade      = 0.45,
+        offlineFade   = 0.45,
+        rangeFade     = true,
+        rangeAlpha    = 0.45,
+
+        -- Aura strips. One per polarity, growing away from opposite ends of
+        -- the row so they cannot collide in the middle.
+        --
+        -- LIVE DATA NEEDS PATCH 12.1. Auras on another player are secret on
+        -- this client and no addon may read them at all; the sanctioned route
+        -- is Blizzard's AuraContainer, which arrives with 12.1. Until then the
+        -- strips draw in TEST MODE only - so every setting here is adjustable
+        -- today and correct the moment the patch lands. The panel says this in
+        -- as many words rather than showing an empty strip.
+        debuffs = {
+            show = true, max = 8, size = 22, spacing = 1, perRow = 8,
+            anchor = "BOTTOMLEFT", growth = "right",
+            x = 0, y = 0,
+            borderSize = 1, borderColor = { 0.75, 0.15, 0.15 },
+            countdown = true, countdownSize = 0,
+            stacks = true, stacksSize = 0,
+        },
+        buffs = {
+            show = true, max = 8, size = 22, spacing = 1, perRow = 8,
+            anchor = "BOTTOMRIGHT", growth = "left",
+            x = 0, y = 0,
+            borderSize = 1, borderColor = { 0.25, 0.55, 0.30 },
+            countdown = true, countdownSize = 0,
+            stacks = true, stacksSize = 0,
+        },
     },
 }
 
@@ -399,6 +515,37 @@ function ns.PlaceText(fontString, parent, text)
     local x, y = ns.TextOffset(text)
     fontString:ClearAllPoints()
     fontString:SetPoint(text.anchor, parent, text.anchor, x, y)
+end
+
+-- A LABEL HUNG FROM BOTH EDGES OF A BAND, never given a width.
+--
+-- The counterpart to PlaceText above: that one is for a NUMBER, which sits in
+-- a corner and is nudged from it; this is for a WORD, which needs a box to be
+-- left, centred or right in.
+--
+-- A width is a number taken once. Measured from the arrangement and handed to
+-- SetWidth, the box stayed the size it was when the bar was that size - widen
+-- the bar and a right-aligned name sat at the old right edge, which is the
+-- owner's "der container waechst nicht mit der bar breite mit, sondern ist
+-- fest". Two horizontal points instead: the box IS the band, it follows
+-- whatever it is anchored to, and there is no moment during layout when a
+-- frame that has not been sized yet reports zero. The position no longer
+-- decides the box at all - the box is always the whole band, and where the
+-- words sit inside it is the justification.
+--
+-- Shared rather than copied, because the co-tank rows need exactly this and a
+-- second implementation would have started out right and drifted.
+function ns.PlaceLabel(label, parent, text, leftInset, rightInset)
+    if not (label and parent) then return end
+    local x, y = (text and text.x) or 0, (text and text.y) or 0
+    local _, _, justify, vertical = ns.Layout.LabelAnchor(text and text.anchor)
+
+    label:ClearAllPoints()
+    label:SetPoint(vertical .. "LEFT", parent, vertical .. "LEFT",
+        (leftInset or 0) + x, y)
+    label:SetPoint(vertical .. "RIGHT", parent, vertical .. "RIGHT",
+        -(rightInset or 0) + x, y)
+    label:SetJustifyH(justify)
 end
 
 -- Just the FONT on every font string inside a widget. Used where the position
@@ -768,6 +915,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- Blizzard's item frames, and there is nothing to claim until its
         -- pools have been walked once.
         Boot("Bars", function() ns.Screen:Start() end)
+        -- Built even when switched off, because the panel's preview and
+        -- test mode both need the frames to exist before anybody turns
+        -- it on. Create() draws nothing until Refresh decides to.
+        Boot("Co-tanks", function() ns.CoTanks:Create() end)
         Boot("Minimap button", function() ns.MinimapButton:Create() end)
         Boot("Game menu entry", function() ns.GameMenu:Create() end)
     end
@@ -857,6 +1008,27 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- setting says against where the font string actually ended up.
     elseif cmd == "text" then
         ns.Screen:DumpText()
+
+    -- Co-tanks. The panel owns the settings; these three are the ones worth
+    -- reaching without opening a window - move it, fake a raid, put it away.
+    elseif cmd == "tanks" or cmd == "cotanks" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "test" then
+            ns.CoTanks:SetTestMode(not db.coTanks.testMode)
+            ns.Print("Co-tank test mode",
+                db.coTanks.testMode and "|cff40ff40on|r" or "|cff888888off|r")
+        elseif sub == "unlock" or sub == "move" then
+            ns.CoTanks:SetUnlocked(true)
+            ns.Print("Co-tank panel unlocked - drag it, then |cffffd100/zs tanks lock|r.")
+        elseif sub == "lock" then
+            ns.CoTanks:SetUnlocked(false)
+            ns.Print("Co-tank panel locked.")
+        else
+            db.coTanks.enabled = not db.coTanks.enabled
+            ns.CoTanks:Refresh()
+            ns.Print("Co-tanks",
+                db.coTanks.enabled and "|cff40ff40on|r" or "|cff888888off|r")
+        end
 
     elseif cmd == "test" then
         ns.SelfTest:Run()

@@ -329,30 +329,11 @@ end
 -- Deliberately not ns.TextOffset: that adds the 2px an outlined number needs
 -- to clear a border, and this label is already inset by the icon gap. Two
 -- insets stacked is a name that does not line up with anything.
--- HUNG FROM BOTH EDGES, NEVER GIVEN A WIDTH.
---
--- It used to be measured: the band's width worked out from the arrangement
--- and handed to SetWidth. That is a number taken once, so the box stayed the
--- size it was when the bar was that size - "der container waechst nicht mit
--- der bar breite mit, sondern ist fest". Widen the bar and a right-aligned
--- name stays where the old right edge used to be.
---
--- Two horizontal points instead, and no measurement anywhere: the box IS the
--- band, it follows the cell whatever happens to the bar's width, and there is
--- no moment during layout when a frame that has not been sized yet reports
--- zero. The position no longer decides the box at all - the box is always the
--- whole band, and where the words sit inside it is the justification.
-local function PlaceLabel(label, parent, text, leftInset, rightInset)
-    local x, y = (text and text.x) or 0, (text and text.y) or 0
-    local _, _, justify, vertical = ns.Layout.LabelAnchor(text and text.anchor)
-
-    label:ClearAllPoints()
-    label:SetPoint(vertical .. "LEFT", parent, vertical .. "LEFT",
-        leftInset + x, y)
-    label:SetPoint(vertical .. "RIGHT", parent, vertical .. "RIGHT",
-        -rightInset + x, y)
-    label:SetJustifyH(justify)
-end
+-- Hung from both edges of the band, never given a width. The body is
+-- ns.PlaceLabel in Init.lua, beside PlaceText, because the co-tank rows
+-- place their name and health text exactly the same way and a second copy
+-- of this reasoning would have drifted from the first.
+local PlaceLabel = ns.PlaceLabel
 
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
 -- icon-shaped ones are just the icon.

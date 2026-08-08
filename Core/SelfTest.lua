@@ -1296,6 +1296,240 @@ local function TestGradients()
 end
 
 ---------------------------------------------------------------------------
+-- Co-tanks
+--
+-- The arithmetic first, because it is the part that can be wrong without
+-- looking wrong: a strip whose second line stacks the wrong way draws over
+-- the health bar, and a colour ramp that passes through grey-brown at half
+-- reads as a broken addon rather than as a tank at half.
+---------------------------------------------------------------------------
+local function TestCoTanks()
+    local Layout = ns.Layout
+
+    -- Slot 1 is always the anchor corner itself. Everything else is measured
+    -- from there, so an offset on the first icon means the whole strip has
+    -- moved and nothing on screen says which end it moved from.
+    local dx, dy = Layout.StripSlot(1, 20, 2, 4, "right", "BOTTOMLEFT")
+    Check("The first icon of a strip sits on the anchor",
+        dx == 0 and dy == 0, dx .. "," .. dy)
+
+    dx = Layout.StripSlot(3, 20, 2, 4, "right", "BOTTOMLEFT")
+    Check("Icons step by size plus spacing", dx == 44, tostring(dx))
+
+    dx = Layout.StripSlot(3, 20, 2, 4, "left", "BOTTOMRIGHT")
+    Check("Growing left steps the other way", dx == -44, tostring(dx))
+
+    -- The wrap, and the direction the second line takes. A strip hung under
+    -- the bar must overflow DOWNWARDS; upwards it draws across the health.
+    dx, dy = Layout.StripSlot(5, 20, 2, 4, "right", "BOTTOMLEFT")
+    Check("The fifth of four per row starts a new line", dx == 0, tostring(dx))
+    Check("A bottom-anchored strip overflows downwards", dy == 22, tostring(dy))
+
+    dx, dy = Layout.StripSlot(5, 20, 2, 4, "right", "TOPLEFT")
+    Check("A top-anchored strip overflows upwards", dy == -22, tostring(dy))
+
+    -- THE CORNER FLIP. A strip attached to the row's bottom-left hangs its
+    -- TOP-left there, so it falls away from the health bar instead of sitting
+    -- on it. Same corner both ends and a 22px icon covers a 26px row.
+    Check("A bottom strip hangs by its top",
+        Layout.StripCorner("BOTTOMLEFT") == "TOPLEFT",
+        Layout.StripCorner("BOTTOMLEFT"))
+    Check("A top strip hangs by its bottom",
+        Layout.StripCorner("TOPRIGHT") == "BOTTOMRIGHT",
+        Layout.StripCorner("TOPRIGHT"))
+    Check("The side never changes, only the top and bottom",
+        Layout.StripCorner("BOTTOMRIGHT") == "TOPRIGHT",
+        Layout.StripCorner("BOTTOMRIGHT"))
+
+    -- Which edge the shield hangs off - the one the clock moves. Hard-coded
+    -- to RIGHT it sits at the wrong end of a right-to-left bar and across the
+    -- middle of a vertical one, which is the fault the spark had for months.
+    local edge, vertical = Layout.FillEdge("HORIZONTAL", false)
+    Check("A left-to-right bar leads on the right",
+        edge == "RIGHT" and vertical == false, tostring(edge))
+    edge = Layout.FillEdge("HORIZONTAL", true)
+    Check("A right-to-left bar leads on the left", edge == "LEFT", tostring(edge))
+    edge, vertical = Layout.FillEdge("VERTICAL", false)
+    Check("A bottom-to-top bar leads at the top",
+        edge == "TOP" and vertical == true, tostring(edge))
+    edge = Layout.FillEdge("VERTICAL", true)
+    Check("A top-to-bottom bar leads at the bottom", edge == "BOTTOM", tostring(edge))
+
+    local w, h = Layout.StripSize(4, 20, 2, 4)
+    Check("Four in a row measure four icons and three gaps", w == 86, tostring(w))
+    Check("One line is one icon tall", h == 20, tostring(h))
+
+    w, h = Layout.StripSize(5, 20, 2, 4)
+    Check("Five over two lines are still four wide", w == 86, tostring(w))
+    Check("Two lines are two icons and one gap tall", h == 42, tostring(h))
+
+    w = Layout.StripSize(0, 20, 2, 4)
+    Check("An empty strip takes no room", w == 0, tostring(w))
+
+    -- The ramp. Two straight halves, and the ends are exactly the colours
+    -- that were picked rather than something near them.
+    local high, mid, low = { 0, 1, 0 }, { 1, 1, 0 }, { 1, 0, 0 }
+    local r, g, b = Layout.HealthTint(1, high, mid, low)
+    Check("Full health is exactly the full colour",
+        r == 0 and g == 1 and b == 0, r .. "," .. g .. "," .. b)
+
+    r, g, b = Layout.HealthTint(0, high, mid, low)
+    Check("Empty is exactly the empty colour",
+        r == 1 and g == 0 and b == 0, r .. "," .. g .. "," .. b)
+
+    r, g, b = Layout.HealthTint(0.5, high, mid, low)
+    Check("Half is exactly the middle colour",
+        r == 1 and g == 1 and b == 0, r .. "," .. g .. "," .. b)
+
+    -- Above maximum is a real state during an absorb, and below zero should
+    -- not be reachable but must not produce a colour outside the ramp.
+    r = Layout.HealthTint(1.4, high, mid, low)
+    Check("Over-full clamps to the full colour", r == 0, tostring(r))
+    r = Layout.HealthTint(-1, high, mid, low)
+    Check("Under-empty clamps to the empty colour", r == 1, tostring(r))
+
+    -- The text, and the one case that matters most: a number this client
+    -- will not let an addon compute on must produce NOTHING, not a zero.
+    local CoTanks = ns.CoTanks
+    Check("Percent reads as a percent",
+        CoTanks:HealthText("percent", 500, 1000) == "50%",
+        tostring(CoTanks:HealthText("percent", 500, 1000)))
+    Check("A full bar shows no deficit",
+        CoTanks:HealthText("deficit", 1000, 1000) == "",
+        tostring(CoTanks:HealthText("deficit", 1000, 1000)))
+    Check("An unreadable health gives no text at all",
+        CoTanks:HealthText("percent", nil, 1000) == nil)
+    Check("A zero maximum gives no text rather than dividing by it",
+        CoTanks:HealthText("percent", 0, 0) == nil)
+
+    -- Cutting a name. The limit is in CHARACTERS, and a name shorter than the
+    -- limit comes back whole rather than padded or truncated to it.
+    Check("Zero keeps the whole name",
+        CoTanks:CutName("Sunwarden", 0) == "Sunwarden")
+    Check("A short name is left alone",
+        CoTanks:CutName("Zwoelf", 10) == "Zwoelf")
+    local cut = CoTanks:CutName("Sunwarden", 4)
+    Check("A long name is cut to the limit", cut == "Sunw", tostring(cut))
+
+    -- Every setting the panel reads has a default. Two lists of the same
+    -- thing drift - that is written down in this file already, from the time
+    -- it cost a whole feature - so this walks the defaults rather than a
+    -- second hand-typed list.
+    local defaults = ns.DEFAULTS.coTanks
+    for _, key in ipairs({
+        "enabled", "testMode", "includeSelf", "onlyInGroup", "onlyInInstance",
+        "width", "rowHeight", "spacing", "scale", "maxRows", "growth", "sortBy",
+        "healthTexture", "healthColor", "healthCustom", "healthAlpha",
+        "healthGradient", "healthHigh", "healthMid", "healthLow",
+        "bgColor", "bgAlpha", "bgGradient", "trackAlpha",
+        "borderSize", "borderColor", "borderTexture", "borderGradient",
+        "absorbShow", "absorbColor", "healAbsorbShow",
+        "name", "health", "debuffs", "buffs",
+        "targetHighlight", "raidMarker", "leaderIcon", "roleIcon",
+        "deadFade", "offlineFade", "rangeFade", "rangeAlpha",
+    }) do
+        Check("Co-tanks default for '" .. key .. "'", defaults[key] ~= nil)
+    end
+
+    -- The two text elements carry the same seven fields, because the panel
+    -- generates the same seven controls for both. One missing field is a
+    -- control that reads nil and writes into a table nothing else looks at.
+    for _, key in ipairs({ "name", "health" }) do
+        for _, field in ipairs({ "show", "font", "size", "color", "outline",
+            "anchor", "x", "y" }) do
+            Check("Co-tank text '" .. key .. "' has " .. field,
+                defaults[key][field] ~= nil)
+        end
+        -- Every anchor the panel offers has to be one LabelAnchor understands,
+        -- or SetPoint is called with a point that does not exist.
+        local point = ns.Layout.LabelVertical(defaults[key].anchor)
+        Check("Co-tank text '" .. key .. "' anchors to a real point",
+            point == "" or point == "TOP" or point == "BOTTOM", point)
+    end
+
+    for _, key in ipairs({ "debuffs", "buffs" }) do
+        for _, field in ipairs({ "show", "max", "size", "spacing", "perRow",
+            "anchor", "growth", "x", "y", "borderSize", "borderColor",
+            "countdown", "stacks" }) do
+            Check("Co-tank strip '" .. key .. "' has " .. field,
+                defaults[key][field] ~= nil)
+        end
+    end
+
+    -- The strips grow away from OPPOSITE ends, or the two meet in the middle
+    -- of a narrow row and draw on top of each other.
+    Check("The two strips grow apart, not into each other",
+        defaults.debuffs.growth ~= defaults.buffs.growth,
+        defaults.debuffs.growth .. " / " .. defaults.buffs.growth)
+
+    -- The gradients the co-tank frame offers are the same three the bars
+    -- offer, for the same reason: those are the three the engine can draw.
+    for _, key in ipairs({ "healthGradient", "bgGradient", "borderGradient" }) do
+        Check("Co-tank " .. key .. " starts off", defaults[key].on == false)
+        Check("Co-tank " .. key .. " carries a direction",
+            type(defaults[key].direction) == "string")
+    end
+
+    -- A row's block is the bar PLUS whatever hangs off it, or every row's
+    -- aura strips draw across the next row down. Checked against the setting
+    -- rather than a fixed number, because it is the relationship that matters.
+    local db = ns.db.coTanks
+    local extent, above, below = ns.CoTanks:RowExtent(db)
+    Check("A row's block is at least its bar", extent >= db.rowHeight,
+        tostring(extent))
+    Check("The block is the bar plus what hangs off it",
+        extent == db.rowHeight + above + below,
+        string.format("%d vs %d+%d+%d", extent, db.rowHeight, above, below))
+
+    -- With both strips switched off the block IS the bar, and with one on it
+    -- is taller. A block that ignored its strips would pass the first of
+    -- those and fail this one.
+    local saved = { db.debuffs.show, db.buffs.show }
+    db.debuffs.show, db.buffs.show = false, false
+    local bare = ns.CoTanks:RowExtent(db)
+    Check("With no strips the block is exactly the bar", bare == db.rowHeight,
+        tostring(bare))
+    db.debuffs.show = true
+    local withStrip = ns.CoTanks:RowExtent(db)
+    Check("A strip makes the block taller", withStrip > bare,
+        withStrip .. " vs " .. bare)
+    db.debuffs.show, db.buffs.show = saved[1], saved[2]
+
+    -- And it can actually be built and painted. Test mode invents its own
+    -- roster, so this runs the whole renderer without a group, a raid or a
+    -- second player - which is the entire point of test mode existing.
+    if ns.CoTanks.Create then
+        local ok, err = pcall(function()
+            ns.CoTanks:Create()
+            local was = ns.db.coTanks.testMode
+            ns.db.coTanks.testMode = true
+            ns.CoTanks:ApplyLayout()
+            ns.CoTanks:Refresh()
+            ns.db.coTanks.testMode = was
+            ns.CoTanks:Refresh()
+        end)
+        Check("The co-tank panel builds and paints", ok, tostring(err))
+    end
+
+    -- The rail's own mark. PAGES names icons and was NOT among the data
+    -- tables this file walks - which is the same gap that let four wrong
+    -- icons ship, because an unknown name never throws: it falls back to four
+    -- rectangles in the shape of a grid and looks like a deliberate choice.
+    for _, glyph in ipairs({ "grid", "move", "sliders", "pulse", "info", "log",
+        "tanks" }) do
+        Check("The rail mark '" .. glyph .. "' resolves to a file",
+            ns.UI.HasIcon(glyph))
+    end
+
+    -- Why the aura strips are empty, when they are. It must always be a
+    -- sentence or nothing - never a nil that the panel would concatenate.
+    local reason = ns.CoTanks:AuraReason()
+    Check("The aura reason is a sentence or nothing",
+        reason == nil or (type(reason) == "string" and #reason > 0),
+        tostring(reason))
+end
+
+---------------------------------------------------------------------------
 -- The menu filter
 --
 -- Pure, for the same reason the snapping arithmetic is: the rule that is easy
@@ -1628,6 +1862,7 @@ function Test:Run()
         { "Menu filter",   TestMenuFilter },
         { "Fill direction", TestFillDirection },
         { "Gradients",     TestGradients },
+        { "Co-tanks",      TestCoTanks },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
         { "Anchors",       TestAnchors },

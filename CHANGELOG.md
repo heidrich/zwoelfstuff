@@ -8,6 +8,101 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.31.0] - 2026-08-08
+
+### Added
+
+- **CO-TANKS - a unit frame per tank in the group.** A new rail section, a new
+  page, and the first display in this addon that is about somebody else. Health
+  bar, name, health text, shields, raid marker, leader crown, role mark, a ring
+  when that tank is your target, and one aura strip per polarity.
+  `Core/CoTanks.lua`, `Core/OptionsCoTanks.lua`.
+
+- **ONE RENDERER, TWO SOURCES.** Nothing in `CoTanks.lua` asks a unit token a
+  question. Every row is painted from a SNAPSHOT - a plain table of numbers and
+  strings - and the only difference between the live display and test mode is
+  which function filled that table in. That is what makes test mode
+  trustworthy: it is not a second drawing of the same idea, it is the same
+  drawing with invented input.
+
+- **Test mode**, the second control on the page rather than a debugging aid at
+  the bottom. Five invented tanks across five class colours, one dead, one
+  disconnected, one out of range, one targeted, and health that MOVES on a
+  different period per row - a still bar says nothing about the texture, the
+  fill direction, the colour ramp or the absorb overlay, which are four of the
+  settings on the page. Saved, so it survives a reload; `/zs tanks test`.
+
+- **The preview IS the panel**, reparented into the card while the page is up
+  and put back on leaving. `CoTanks.hosted` suppresses the position and the
+  scale in `ApplyLayout` while it is borrowed, or every control on the page
+  would throw the preview back to its place on screen.
+
+- **Gradients for every colour that can carry one**: `fillColor`,
+  `backdropColor`, `borderColor` and each `stackThresholds[].color` on a bar,
+  plus the health bar, plate and border on a co-tank row. A second colour and
+  one of four directions. `ns.GRADIENT_DIRECTIONS` + `Layout.GradientOrder` are
+  the pure half; `ns.Tint` is the single sink. A sixth built-in look, **Deep**,
+  turns two of them on.
+
+- Sample icons for the test strips come from spells this installation has
+  already resolved - the user's own bars, then the Cooldown Manager catalogue -
+  and **never from a hardcoded spell ID**. Two wrong ones have cost this project
+  a day; the rule in `KnownProcs.lua` applies to decoration too. With nothing to
+  resolve the strip draws flat squares, which still shows size, spacing, growth
+  and border.
+
+### Changed
+
+- **Edit mode is the first entry in the rail**, above the groups and under no
+  heading. It was filed under Bars, which reads as one of the bar pages, and it
+  is not a page at all: every other entry opens something inside the window and
+  this one closes the window.
+
+- `ns.PlaceLabel` moved from a local in `Core/Screen.lua` to `Core/Init.lua`.
+  The co-tank rows place their name and health text exactly the same way, and a
+  second copy of that reasoning would have started out right and drifted.
+
+- `ns.PaintSurface` no longer bakes the colour into the texture with
+  `SetColorTexture(r, g, b)`. **A gradient MULTIPLIES the vertex colour**, so a
+  texture already carrying its tint comes out as the tint times the ramp -
+  darker at both ends and never the colours that were picked. Both calls
+  succeed, so nothing says so.
+
+- Every built-in look now declares all three gradients even when it uses none.
+  `ApplyStyle` only copies what a look names, so a silent omission left the
+  previous look's ramp on a bar meant to be flat - the same rule, and the same
+  bug, as the empty `effects` table beside it.
+
+### Not built, deliberately
+
+- **A gradient for the cooldown sweep, the charge marks or any text.**
+  `SetSwipeColor` takes one colour, a charge mark is a one-pixel line, and a
+  `FontString` has no `SetGradient`. Three missing rows are better than three
+  controls that silently do nothing.
+
+- **Live aura strips on this client.** An aura on another player is a secret
+  value on 12.0: no addon may read its icon, its stacks or its duration. The
+  sanctioned route is Blizzard's `AuraContainer`, which arrives with 12.1 - the
+  engine binding is written (`CoTanks:BuildAuraContainers`) and gated on
+  `ns.Engine:IsAvailable()`, which probes by building one. Until then the strips
+  draw in test mode only and the panel prints the client build as the reason.
+
+### Fixed
+
+- **An aura strip would have been drawn ON the health bar.** The setting names
+  the corner of the ROW a strip attaches to; anchored corner-to-same-corner, a
+  22px icon sits on a 26px row and the bar is gone. `Layout.StripCorner` flips
+  it vertically so the strip hangs OFF the row, and `CoTanks:RowExtent` is the
+  one answer to "how much room does a row take" that the row's position, the
+  panel's height and the preview's scale all read - three places working it out
+  for themselves is three chances to disagree.
+
+- **The absorb overlays hang off the fill's leading edge**, the one that moves
+  with the clock, rather than off a fixed side. Hard-coded to RIGHT, a shield on
+  a right-to-left bar sits at the wrong end of the bar and an absorb on a
+  vertical one is a line across the middle - the same fault the spark carried
+  for months. `Layout.FillEdge`.
+
 ## [4.30.0] - 2026-08-08
 
 ### Fixed
