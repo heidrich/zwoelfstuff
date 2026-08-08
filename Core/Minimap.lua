@@ -120,14 +120,22 @@ function MinimapButton:Create()
     end)
 
     button:SetScript("OnClick", function(_, mouseButton)
-        -- Right click used to toggle the co-tank panel. That module is parked
-        -- until 12.1, so ns.CoTanks is nil and calling it is a crash. Guarded
-        -- rather than removed: the binding returns with the module.
-        if mouseButton == "RightButton" and ns.CoTanks then
-            ns.db.coTanks.enabled = not ns.db.coTanks.enabled
-            ns.CoTanks:Refresh()
-            ns.Print("Co-tank panel",
-                ns.db.coTanks.enabled and "|cff40ff40on|r" or "|cffff4040off|r")
+        -- RIGHT CLICK GOES STRAIGHT INTO EDIT MODE.
+        --
+        -- It used to toggle the co-tank panel, a module parked until 12.1 - so
+        -- the branch was guarded, ns.CoTanks was nil, and right click quietly
+        -- did the same thing as left click. Moving the bars is the thing you
+        -- come to this button for that is not "open the window", and edit mode
+        -- is two clicks deep otherwise. Co-tanks needs another home when it
+        -- comes back; the minimap has two buttons and this is the better use
+        -- of the second one.
+        if mouseButton == "RightButton" then
+            -- The window would sit on top of what you are about to drag, and
+            -- the rail entry that does this closes it for the same reason.
+            if ns.Options.frame and ns.Options.frame:IsShown() then
+                ns.Options.frame:Hide()
+            end
+            ns.EditMode:SetUnlocked(true)
         else
             ns.Options:Toggle()
         end
@@ -137,6 +145,7 @@ function MinimapButton:Create()
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r")
         GameTooltip:AddLine("|cffffffffClick|r  open the window", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("|cffffffffRight click|r  move the bars", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("|cffffffffDrag|r  move around the minimap", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)

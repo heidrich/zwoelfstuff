@@ -12,6 +12,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- RIGHT CLICK THE MINIMAP BUTTON TO MOVE THE BARS. It used to toggle the
+  co-tank panel - a module parked until 12.1, so the branch was switched off
+  and right click quietly did the same thing as left click. Moving the bars is
+  the one thing you come to that button for that is not "open the window", and
+  it was two clicks deep. Co-tanks needs another home when it returns.
+
 - SNAPPING IS NOT A SETTING ANY MORE. It is what dragging does. The switch is
   gone from the tools panel, because a switch whose off position makes a
   feature silently do nothing is the switch that gets left off by accident and
