@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.36.0",
+        date = "2026-08-09",
+        lines = {
+            "ROUTES. The pull you are on, badged onto the mobs themselves, in the colour that pull already has in Mythic Dungeon Tools. Plan the route in MDT the way you always do - this reads it. The next pull gets the same badge, dimmed.",
+            "It is not tied to a keystone. A normal dungeon has the same mobs, and MDT has raid data too; all that matters is that MDT is holding a route for where you are standing.",
+            "|cffffd100/zs route|r says what MDT is holding, which pull it thinks you are on, and what every mob in front of you resolved to. |cffffd100next|r, |cffffd100prev|r and |cffffd100reset|r step it by hand, and it steps on by itself when a pull is down.",
+            "WHAT IT CANNOT KNOW: a badge marks a mob TYPE, not one particular mob. MDT plans per pack - \"these two of the four over there\" - and the game only ever tells an addon what KIND a mob is, never where it is standing. So all four wear the badge and the number tells you how many to take.",
+            "Nothing here writes to your nameplates. The badge is a frame of ours hung above them, so whatever else is decorating them has nothing to fight over.",
+        },
+    },
+    {
         version = "4.35.0",
         date = "2026-08-09",
         lines = {

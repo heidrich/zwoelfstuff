@@ -8,6 +8,41 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.36.0] - 2026-08-09
+
+### Added
+
+- **Routes.** The pull you are on, badged onto the mobs themselves, in the
+  colour that pull already has in Mythic Dungeon Tools. Plan the route in MDT
+  as you always do; this reads it. The pull after it gets the same badge,
+  dimmed, so you can see what is coming without the room filling up.
+
+  **Not gated on a keystone.** A normal dungeon holds the same mobs with the
+  same npcIDs, and MDT has raid data too - the only thing that has to be true
+  is that MDT is holding a route for where you are standing.
+
+  `/zs route` prints what MDT is holding, which pull it thinks you are on, and
+  what every nameplate in front of you resolved to. `next`, `prev` and `reset`
+  step it by hand; it also steps on by itself when everything a pull wanted is
+  down.
+
+  **What it can and cannot know, said on the page rather than discovered:** a
+  badge marks a mob TYPE, not one particular mob. MDT plans per pack - "these
+  two of the four over there" - and the game only tells an addon what kind a
+  mob is, never where it stands. So all four wear the badge and the count says
+  how many to take.
+
+  **Nothing here writes to a nameplate.** The badge is our own frame hung above
+  it, so the nameplate addons that decorate the same frames have nothing to
+  fight over - the lesson from the Cooldown Manager, applied before it cost
+  anything this time.
+
+  Why a badge and not a marker in the world: MDT's positions are in MDT's own
+  map space, it never converts them because it never shows where you are
+  standing, and a large part of any route is patrolling mobs that are not
+  where their dot is. A badge on the nameplate is on the mob wherever the mob
+  actually is.
+
 ## [4.35.0] - 2026-08-09
 
 ### Fixed

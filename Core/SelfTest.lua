@@ -2030,6 +2030,47 @@ local function TestReminders()
         tostring(Reminders:Count()))
 end
 
+---------------------------------------------------------------------------
+-- THE ROUTES.
+--
+-- Two pure rules decide everything this feature does, and both fail silently
+-- if they are wrong - a badge on the wrong mob looks exactly like a badge on
+-- the right one.
+---------------------------------------------------------------------------
+local function TestRoutes()
+    local Routes = ns.Routes
+
+    -- THE GUID. Field six, and nothing else in the string may be mistaken for
+    -- it. A player's GUID has no npcID worth reading and must come back nil,
+    -- or every party member would wear a badge.
+    Check("An npc GUID gives its id",
+        Routes.NpcFromGUID("Creature-0-1465-2769-16906-224656-00003AB9D2") == 224656,
+        tostring(Routes.NpcFromGUID("Creature-0-1465-2769-16906-224656-00003AB9D2")))
+    Check("A vehicle counts as one too",
+        Routes.NpcFromGUID("Vehicle-0-1465-2769-16906-198932-00003AB9D2") == 198932)
+    Check("A player GUID gives nothing",
+        Routes.NpcFromGUID("Player-1084-0A1B2C3D") == nil)
+    Check("Rubbish gives nothing", Routes.NpcFromGUID("nonsense") == nil)
+    Check("Nothing gives nothing", Routes.NpcFromGUID(nil) == nil)
+
+    -- THE BADGE RULE. Only the pull you are on and the one after it are
+    -- marked. Marking everything ahead would badge half the room, which says
+    -- nothing at all.
+    Check("The pull you are on is current",
+        Routes.Standing(3, 3) == "current")
+    Check("The one after it is next",
+        Routes.Standing(4, 3) == "next")
+    Check("Two ahead is unmarked", Routes.Standing(5, 3) == nil)
+    Check("A pull already done is unmarked", Routes.Standing(2, 3) == nil)
+    Check("No pull is unmarked", Routes.Standing(nil, 3) == nil)
+
+    -- The store survives being asked before MDT exists, which is the state on
+    -- every login and the one that must not raise.
+    Check("A route with no MDT is empty", type(Routes.pulls) == "table")
+    Check("And it says why", (Routes:UnavailableReason() or "") ~= ""
+        or Routes:Available())
+end
+
 local function TestTextElements()
     local byKey = {}
     for _, element in ipairs(ns.TEXT_ELEMENTS) do byKey[element.key] = element end
@@ -2314,6 +2355,7 @@ function Test:Run()
         { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },
         { "Reminders",     TestReminders },
+        { "Routes",        TestRoutes },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
         { "Anchors",       TestAnchors },
