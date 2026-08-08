@@ -5,13 +5,23 @@ works on this patch: **Blizzard's own Cooldown Manager does the hard part, and
 this addon arranges it.**
 
 1. **Bars** — your own bars, as many as you like. A bar is a grid of cells; you
-   set the rows and columns and put a spell in each cell.
-2. **Isolated aura display** — a single buff in its own movable frame, for auras
-   the Cooldown Manager does not carry. Ships tracking **spell 1265968**
-   (Boiling Point).
+   set the rows and columns and put a spell in each cell. Grid, staggered, or a
+   puzzle where every cell sits exactly where you dragged it.
+2. **Arranged on screen, not in a preview.** Bars are placed in edit mode and
+   taken apart cell by cell in build mode, with snapping to the other bars, the
+   screen edges and a grid.
+3. **Per bar and per cell**: size, textures, colours, the cooldown sweep, the
+   effects that fire when something comes back up, and rules for when the bar
+   is on screen at all.
 
-> **Status:** the bar editor works; bars do not render on screen yet. See
-> `HANDOFF.md`.
+Auras the Cooldown Manager does not carry are handled on the bars like anything
+else. The separate single-aura window that used to be point 2 here was removed
+in 4.4.0 — a second window showing one buff was two answers to one question.
+
+> **Status:** in use, and being tested. `/zs test` runs 166 checks on the model
+> and the rules; what it cannot check is how it looks.
+> `/zs report` hands back the procs it has recorded on your class and spec —
+> that is the thing worth sending back.
 
 ## Why it works this way
 

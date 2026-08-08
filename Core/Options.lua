@@ -562,21 +562,21 @@ function Options:Create()
     discord:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 6)
     discord:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 6)
 
-    local discordMark = UI.Glyph(discord, "brand-discord", 14, C.textDim)
-    -- The same 16 the rail's own heading uses, past where the active row's
-    -- accent bar sits, so it lines up with the nav above it.
-    discordMark:SetPoint("LEFT", discord, "LEFT", 15, 0)
-
+    -- THE WORD, AND NO MARK. There was a mark here for one version and it was
+    -- not Discord's - drawn from memory, and a brand mark you have traced
+    -- yourself is worse than none, because it claims to be the real thing. The
+    -- word says it exactly.
+    --
+    -- Aligned on the same 16 as the rail's own headings, past where an active
+    -- row's accent bar sits, so it lines up with the nav above it.
     local discordLabel = UI.Label(discord, "Discord", UI.FS.row, C.textDim)
-    discordLabel:SetPoint("LEFT", discord, "LEFT", 40, 0)
+    discordLabel:SetPoint("LEFT", discord, "LEFT", 16, 0)
 
     discord:SetScript("OnEnter", function()
         discordLabel:SetTextColor(C.text[1], C.text[2], C.text[3])
-        discordMark:SetColor(C.accentCool[1], C.accentCool[2], C.accentCool[3])
     end)
     discord:SetScript("OnLeave", function()
         discordLabel:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
-        discordMark:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
     end)
     discord:SetScript("OnClick", function()
         UI.CopyBox("Discord", DISCORD_URL,

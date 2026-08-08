@@ -5,3 +5,15 @@ Thumbs.db
 
 # lua-language-server --check writes its logs here
 .lscheck/
+
+# NOT THE ADDON, and this repo is public.
+#
+# HANDOFF.md is the working memory - what went wrong, what was decided, and
+# a lot of it quoted from conversations that are nobody else's business. It
+# lives in ../ZwoelfStuff-internal/ now.
+#
+# The design board is the source the icons were rendered from: 82 files of
+# HTML, SVG and a 40 MB contact sheet that no player has any use for. Kept on
+# disk, out of the history.
+HANDOFF.md
+design_handoff_zwoelfstuff_ui/

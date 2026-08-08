@@ -3009,16 +3009,6 @@ local ICON_FILES = {
 -- because the nav table names a FUNCTION ("settings"), not a drawing, and the
 -- function is what stays put when the drawing changes.
 for _, name in ipairs({
-    -- NOT from the design set, and NOT Discord's brand mark: it is a chat
-    -- blob drawn here, and the word next to it is what actually says Discord.
-    -- Solid rather than a 1.4 stroke like everything else, because a brand
-    -- mark is solid and because an outlined blob is mush at 14 pixels.
-    --
-    -- To use the real one: drop Discord's own SVG into the design icons folder
-    -- as brand-discord.svg and run the same pipeline the rest of the set went
-    -- through. Nothing else changes - the name is already wired up.
-    "brand-discord",
-
     "action-build", "action-build-on-screen", "action-delete",
     "action-duplicate", "action-eye", "action-grip", "action-move-bars",
     "action-overflow",

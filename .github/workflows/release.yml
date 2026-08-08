@@ -1,0 +1,36 @@
+name: Package and release
+
+# Tag it, and CurseForge gets the build. Nothing is uploaded on an ordinary
+# push - a release is a decision, not a side effect of committing.
+#
+#   git tag 4.29.0 && git push origin 4.29.0
+#
+# The repo does NOT need to be public for this: the action runs inside it.
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The packager reads the tag history to build the changelog, and a
+          # shallow clone has none of it.
+          fetch-depth: 0
+
+      # Nothing is uploaded until /zs test can be run headlessly here as well;
+      # for now the gate is the tag. The desktop harness needs a Lua runtime
+      # that is not on this runner - see ../ZwoelfStuff-internal/HANDOFF.md,
+      # "the harness", which is deliberately not in this repo.
+
+      - name: Package and upload
+        uses: BigWigsMods/packager@v2
+        env:
+          # Settings, Secrets and variables, Actions:
+          #   CF_API_KEY   from CurseForge, Account, API Tokens
+          # GITHUB_TOKEN is provided by Actions itself.
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}

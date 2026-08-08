@@ -1,0 +1,30 @@
+# What the packager builds.
+#
+# CurseForge does not build a repo by itself: the BigWigs packager runs as a
+# GitHub Action on a tag, reads this file, and uploads the result. See
+# .github/workflows/release.yml.
+#
+# The libraries are EMBEDDED on purpose and there is no `externals:` block for
+# them - LibSharedMedia is a registry the user's other addons write into, so it
+# has to be the copy that ships, not one fetched at build time and possibly a
+# different revision than the one this was tested against.
+package-as: ZwoelfStuff
+
+# The addon has no -nolib variant to make: nothing here is optional.
+enable-nolib-creation: no
+
+# CHANGELOG.md is written by hand and is what a player reads on the project
+# page. Left as-is rather than generated from commit messages, which are
+# written for whoever picks the code up next and read like it.
+manual-changelog: CHANGELOG.md
+
+ignore:
+    # Build machinery, not the addon.
+    - .github
+    - .pkgmeta
+    - .gitignore
+
+    # Editor and linter configuration. Useful in a checkout, meaningless in an
+    # AddOns folder.
+    - .luarc.json
+    - .markdownlint.json
