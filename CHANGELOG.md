@@ -8,6 +8,61 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.31.1] - 2026-08-08
+
+### Fixed
+
+- **EVERY CONTROL ON THE CO-TANKS PAGE WAS OFF THE SIDE OF THE WINDOW.** Pages
+  were built with `pageWidth` - the WIDE middle column - regardless of whether
+  that page declares a third column and is therefore shown in the NARROW one.
+  Rows were 1136 units wide inside 750: labels visible on the left, rule lines
+  clipped at the edge, and every control - which sits at the RIGHT end of its
+  row - four hundred units past the window. `Options.PageWidth(entry, narrow,
+  wide)` is pure and exported, and `/zs test` asserts it per page; reverting it
+  turns three checks red.
+
+- **Settings had the same fault**, and had had it since the explain column was
+  added: its two `MediaPicker` font rows are full-width and have never been on
+  screen. Half-width rows fit either way, which is why it survived - the page
+  was *half* working, which reads as a design.
+
+- **Three of the four tabs in the co-tank inspector were invisible.**
+  `UI.TabStrip` creates its tabs with no width and no x; `Layout()` is what
+  divides the strip between them, and `OptionsCoTanks:BuildSide` never called
+  it. Fixed at the root rather than at the call site: **the strip lays itself
+  out at the end of construction and again on `OnSizeChanged`.** A widget that
+  needs a follow-up call to be visible at all is a widget that will eventually
+  be built without it - the same reasoning that removed the snapping switch in
+  4.25.0.
+
+- **`Apply` on the co-tank page never refreshed the page.** The rows that
+  appear and disappear with a setting (the gradient's second colour and
+  direction) are decided in a `Refresh` hook, and `Grid:Refresh` is what runs
+  it. Calling only `Layout` moved the rows that were already showing and never
+  asked whether a different set should be, so switching a gradient on left its
+  two rows hidden. `OptionsBars`' `Apply` ends in `ns.Options:Refresh` for
+  exactly this reason.
+
+### Changed
+
+- **The preview card lost its explanatory paragraph.** It described the
+  implementation - that the panel is borrowed rather than drawn - which is a
+  fact about the code, not about the display, and it pushed the picture down
+  the page. Owner: *"noone cares or understand if this is not a preview"*.
+
+- **Custom colour** and the **three-colour health ramp** appear only in the
+  mode that reads them. A colour picker under "By class" is a control that
+  does nothing.
+
+### Note for anyone working on this
+
+**The desktop harness is blind to geometry.** It builds the whole window
+outside the game, and its frame stub answers `GetWidth`/`GetHeight` with fixed
+plausible numbers *no matter what was set*. A page built four hundred units too
+wide builds, paints, and passes every one of the 464 checks. "The harness is
+green" is a statement about logic and never about layout - anything positional
+has to be a pure function with a test, or be seen.
+
 ## [4.31.0] - 2026-08-08
 
 ### Added

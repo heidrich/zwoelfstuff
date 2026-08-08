@@ -31,9 +31,20 @@ local function DB() return ns.db.coTanks end
 -- a slider that stutters and one that does not.
 local function Apply()
     ns.CoTanks:ApplyLayout()
-    -- The panel may have changed size, and while it is in the preview card
-    -- that changes how far it has to be scaled down to fit.
-    OptionsCoTanks:FitPanel()
+    -- AND THE PAGE IS RE-READ, not just the display repainted.
+    --
+    -- Rows on this page appear and disappear with the settings above them -
+    -- the gradient's second colour and direction, the custom colour, the
+    -- three-colour ramp. That decision lives in a Refresh hook, and
+    -- Grid:Refresh is what runs it (and lays out afterwards). Calling only
+    -- Layout, as this did, moved the rows that were already showing and never
+    -- asked whether a different set should be: switch a gradient on and its
+    -- two rows stayed hidden until something else happened to refresh.
+    --
+    -- Same shape as OptionsBars, whose Apply ends in ns.Options:Refresh for
+    -- exactly this reason. It also re-fits the borrowed preview, which may
+    -- have changed size.
+    OptionsCoTanks:Refresh()
 end
 
 local function Repaint()
@@ -363,7 +374,6 @@ local function GradientRows(grid, key, collect)
         function(value)
             Write("on", value)
             Apply()
-            grid:Layout()
         end)
 
     rows[#rows + 1] = UI.Swatch(
@@ -415,13 +425,7 @@ function OptionsCoTanks:BuildLook(grid)
         { value = "custom", text = "One colour" },
         { value = "health", text = "By remaining health" },
     }, Get("healthColor"), function(value) DB().healthColor = value end,
-        { apply = function()
-            Apply()
-            -- Rows come and go under this control, so the page has to be
-            -- measured again - a repaint alone leaves them in their old places.
-            grid:Refresh()
-            grid:Layout()
-        end })
+        { apply = Apply })
 
     -- SHOWN ONLY WHEN THE MODE USES IT. A colour picker sitting under
     -- "By class" is a control that does nothing, which is the one thing this

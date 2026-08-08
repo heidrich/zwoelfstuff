@@ -8,6 +8,24 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.31.1",
+        date = "2026-08-08",
+        lines = {
+            "THE CO-TANKS PAGE HAD NO CONTROLS ON IT. Labels, lines between them, and nothing to set. They were all there - four hundred units off the right-hand side of the window, where you could not see them.",
+            "Every page in this window was being built at the width of the WIDE middle column - the one you get when a page has no third column beside it. A page that HAS a third column is shown in the narrower middle instead, so its rows were built half again as wide as the space they were put in. The labels sit on the left, so those showed. Every control sits at the right-hand end of its row, so none of them did.",
+            "",
+            "SETTINGS HAD THE SAME HOLE, and has had it for a long time: its two font pickers are full-width rows and have never once been on screen. Half-width rows fit either way, which is why nobody caught it - the page was half working, and half working reads as a design rather than as a fault.",
+            "",
+            "AND THREE OF THE FOUR TABS ON THE RIGHT WERE INVISIBLE. Look, Text, Auras and Rules all existed; only Look could be reached, because the strip that holds them was never told to divide itself between them, so all four had no width. The strip does that itself now, and again whenever it is resized - a thing that needs to be reminded to be visible will eventually be built without the reminder.",
+            "",
+            "THE PREVIEW LOST ITS PARAGRAPH OF EXPLANATION. It described how the preview works rather than what you are looking at, and it pushed the picture down the page.",
+            "",
+            "CUSTOM COLOUR AND THE THREE HEALTH COLOURS now only appear when the mode that uses them is picked. A colour picker sitting under \"By class\" changes nothing, and this panel is not allowed to have controls that do nothing.",
+            "",
+            "AND SWITCHING A GRADIENT ON NOW SHOWS ITS TWO ROWS IMMEDIATELY, rather than on the next thing that happened to redraw the page.",
+        },
+    },
+    {
         version = "4.31.0",
         date = "2026-08-08",
         lines = {
