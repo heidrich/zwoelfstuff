@@ -8,6 +8,40 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.33.0] - 2026-08-08
+
+### Added
+
+- **The preview bars run.** A bar-shaped cell in a bar card drains over four
+  seconds and starts again, each cell offset along the same clock so they do
+  not march in lockstep. `Fill up` runs the other way, so that setting is
+  visible in the card too - a bar the Cooldown Manager times still ignores it
+  on screen, and that remains the open question, but the editor previewing the
+  SETTING is right either way.
+
+  This is what a still preview could never do. Drawn full it could show
+  neither the fill direction nor the backdrop; drawn part-full it read as a
+  bar of the wrong length, which was reported three times. Running, it is at
+  every length in turn. `Layout.PreviewFill` is back with its checks - the
+  rule was never the fault, the still picture was.
+
+  One `OnUpdate` on the grid, doing the drag marker as well: the drag used to
+  install its own and clear it on drop, which would have torn the animation
+  off the card the first time anybody sorted a bar. A hidden frame gets no
+  `OnUpdate`, so the card costs nothing while the window is shut.
+
+### Changed
+
+- **The Co-Tanks preview card invents its tank whether or not test mode is
+  on** (`CoTanks:Invented`). With real data it showed whoever happened to be
+  tanking, which on a normal evening is nobody - a row reading "No tanks in
+  the group" and no aura strips at all, because `PaintStrip` refuses to draw
+  an invented aura onto a frame claiming to be a real player. Both sections
+  that set those strips up previewed as empty space. That rule still holds
+  where it matters; a preview card is not claiming to be anybody.
+
+- **"Their own buffs" is now "Player buffs"** - what the game calls them.
+
 ## [4.32.3] - 2026-08-08
 
 ### Changed

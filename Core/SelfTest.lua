@@ -1187,12 +1187,73 @@ end
 ---------------------------------------------------------------------------
 -- THE PREVIEW CARD MUST DRAW THE BAR THE SCREEN WOULD DRAW.
 --
--- Nothing pure left to check here: the card draws a bar-shaped cell's fill at
--- FULL length now, so there is no fraction to place and no unfilled run to
--- decide about. The pair of functions that used to live in Layout and be
--- checked here got the short version exactly right, and the short version was
--- the fault. Left as a marker so the next person to reach for a part-full
--- preview reads the note in Core/Widgets.lua first.
+-- The card's bars RUN, so the fill is at every fraction in turn and where it
+-- hangs from has to be right for all four directions. The harness cannot see
+-- any of it - its frame stub answers GetWidth and GetHeight with fixed
+-- numbers whatever was set - so the placement is a pure function and it is
+-- checked here.
+---------------------------------------------------------------------------
+local function TestPreviewBar()
+    local Layout = ns.Layout
+
+    -- Every direction the settings page offers must place the fill somewhere.
+    -- Left and right were once the whole of it, so up and down previewed lying
+    -- down while the bar on screen stood up.
+    local corners, axes = {}, {}
+    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
+        local corner, pad, w, h = Layout.PreviewFill(entry, 20, 0, 100, 24, 0.5)
+        Check("Preview places the '" .. entry.value .. "' fill",
+            corner and w and h, tostring(corner))
+
+        -- The corner alone does not separate them and must not be asked to:
+        -- left-to-right and top-to-bottom BOTH hang off the top left, and
+        -- rightly so. What has to be its own is the corner together with the
+        -- axis the fraction goes on.
+        local key = corner .. ":" .. entry.orientation
+        Check("Preview '" .. entry.value .. "' draws unlike the others",
+            not corners[key], key .. " already used by "
+            .. tostring(corners[key]))
+        corners[key] = entry.value
+        axes[entry.orientation] = (axes[entry.orientation] or 0) + 1
+
+        -- The fraction goes on the axis the bar runs along and the other
+        -- dimension stays full. The wrong way round is a bar that drains
+        -- downwards while it is meant to be draining sideways.
+        if entry.orientation == "VERTICAL" then
+            Check("Preview '" .. entry.value .. "' shortens, not narrows",
+                w == 100 and h < 24, tostring(w) .. "x" .. tostring(h))
+        else
+            Check("Preview '" .. entry.value .. "' narrows, not shortens",
+                h == 24 and w < 100, tostring(w) .. "x" .. tostring(h))
+        end
+        Check("Preview '" .. entry.value .. "' clears the icon",
+            pad ~= nil, tostring(pad))
+    end
+    Check("Both axes are previewed", (axes.VERTICAL or 0) == 2
+        and (axes.HORIZONTAL or 0) == 2)
+
+    -- A right-hand icon is cleared from the right, and the reversed fill is
+    -- the one that has to know it.
+    local corner, pad = Layout.PreviewFill(Layout.FillDirection("left"),
+        0, -24, 100, 24, 0.5)
+    Check("A reversed fill starts at the right edge", corner == "TOPRIGHT",
+        tostring(corner))
+    Check("...inside the icon on that side", pad == -24, tostring(pad))
+
+    -- A bar at the very end of its run must still be a bar. A texture sized to
+    -- nothing is not drawn at all, and the last frame of every cooldown would
+    -- flicker out rather than finish.
+    local _, _, w = Layout.PreviewFill(Layout.FillDirection("right"),
+        0, 0, 100, 24, 0)
+    Check("An empty bar is still one pixel wide", w >= 1, tostring(w))
+
+    -- Full is the default, because the first paint happens before the clock
+    -- has ticked once.
+    local _, _, full = Layout.PreviewFill(Layout.FillDirection("right"),
+        0, 0, 100, 24)
+    Check("With no fraction the bar is full", full == 100, tostring(full))
+end
+
 ---------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------
@@ -1359,6 +1420,16 @@ local function TestCoTanks()
     ns.CoTanks.hosted = true
     Check("The preview card shows one tank", ns.CoTanks:RowCount() == 1,
         tostring(ns.CoTanks:RowCount()))
+    -- The card invents its tank whether or not test mode is on, or the two
+    -- sections that set up the aura strips preview as empty space - PaintStrip
+    -- refuses to draw an invented aura on anything claiming to be a real
+    -- player, and on a normal evening there is no real tank to be.
+    ctdb.testMode = false
+    Check("The preview card invents its tank either way",
+        ns.CoTanks:Invented() == true)
+    ns.CoTanks.hosted = nil
+    Check("Off the card it does not", ns.CoTanks:Invented() == false)
+
     ns.CoTanks.hosted, ctdb.testMode, ctdb.maxRows = hosted, testing, rows
 
     -- Slot 1 is always the anchor corner itself. Everything else is measured
@@ -2032,6 +2103,7 @@ function Test:Run()
         { "Snapping",      TestSnapping },
         { "Menu filter",   TestMenuFilter },
         { "Fill direction", TestFillDirection },
+        { "Preview bar",   TestPreviewBar },
         { "Gradients",     TestGradients },
         { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },

@@ -1080,6 +1080,21 @@ function CoTanks:Testing()
     return ns.db.coTanks.testMode and true or false
 end
 
+-- INVENTED DATA IS ALWAYS RIGHT IN THE PREVIEW CARD, whether or not test mode
+-- is on. The card is a picture of the settings, not a window onto the raid:
+-- with real data it shows whoever happens to be tanking, and on a normal
+-- evening that is nobody - a row saying "No tanks in the group" and, because
+-- PaintStrip refuses to invent auras on a live frame, no aura strips at all.
+-- Then the two whole sections of this page that set those strips up preview
+-- as empty space. "sollte ja im preview auch gehen".
+--
+-- PaintStrip's rule still holds where it matters: it will not draw an aura
+-- somebody does not have onto a frame that is claiming to be a real player.
+-- The card is not claiming that.
+function CoTanks:Invented()
+    return self.hosted and true or self:Testing()
+end
+
 function CoTanks:RowCount()
     local db = ns.db.coTanks
     local limit = math.max(1, math.min(MAX_ROWS, db.maxRows or 5))
@@ -1132,7 +1147,7 @@ end
 function CoTanks:Refresh()
     if not self.panel then return end
     local db = ns.db.coTanks
-    local testing = self:Testing()
+    local testing = self:Invented()
 
     if not testing then self:CollectTanks(self.tanks) else wipe(self.tanks) end
 
@@ -1210,7 +1225,7 @@ function CoTanks:StartEvents()
         if not (CoTanks.panel and CoTanks.panel:IsShown()) then return end
 
         local db = ns.db.coTanks
-        local testing = CoTanks:Testing()
+        local testing = CoTanks:Invented()
         for index, row in ipairs(CoTanks.rows) do
             if row:IsShown() then
                 local snap = CoTanks.snapshots[index]

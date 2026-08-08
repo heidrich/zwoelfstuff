@@ -8,6 +8,19 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.33.0",
+        date = "2026-08-08",
+        lines = {
+            "THE BARS IN THE PREVIEW RUN NOW. They drain like a real cooldown, each one on its own offset so they are not all in step, and the whole card stops the moment the window is shut.",
+            "This is the answer to something the card could never do. A still bar says nothing about which way the fill goes, what is behind it, where the leading edge sits, or how a colour ramp reads while it moves - and all of those are controls on the page next to it. Drawn full it showed none of them; drawn part-full it just looked like a bar of the wrong length. Running, it is at every length in turn and there is nothing left to be wrong about.",
+            "Fill up runs the other way in the card, so that setting can be seen too.",
+            "",
+            "THE CO-TANK PREVIEW SHOWS THE AURA STRIPS WHETHER OR NOT TEST MODE IS ON. The card invents its tank now, always. With real data it showed whoever happened to be tanking - on a normal evening nobody, so a row saying \"No tanks in the group\" and no strips at all, because an aura we made up must never be drawn onto a frame claiming to be a real player. A preview card is not claiming that.",
+            "",
+            "\"Their own buffs\" is called PLAYER BUFFS.",
+        },
+    },
+    {
         version = "4.32.3",
         date = "2026-08-08",
         lines = {

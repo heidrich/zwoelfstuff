@@ -796,7 +796,10 @@ function OptionsCoTanks:BuildAuras(grid)
 
     StripSection(grid, "debuffs", "Debuffs",
         "What is on them - the boss's stacking debuff, the thing you swap on.")
-    StripSection(grid, "buffs", "Their own buffs",
+    -- "Player buffs" is what the game calls these and what the owner asked for.
+    -- "Their own buffs" was mine, and it made a reader work out which of the
+    -- two strips they were looking at from a possessive pronoun.
+    StripSection(grid, "buffs", "Player buffs",
         "Their cooldowns, so you can see whether the other tank still has one.")
 end
 

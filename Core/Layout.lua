@@ -236,11 +236,41 @@ function Layout.FillEdge(orientation, reverse)
     return reverse and "LEFT" or "RIGHT", false
 end
 
--- There is deliberately NO "where does the part-full preview fill sit" rule
--- here any more. The card draws its bar at FULL length: three separate
--- reports came out of drawing it short, and the last of them arrived after
--- this pair of functions had been written to get the short version exactly
--- right. Getting a thing right is not the same as it being the right thing.
+-- WHERE A PART-FULL PREVIEW FILL SITS.
+--
+-- Back, and worth saying why. A version ago this described a bar drawn at a
+-- STATIC 70%, which was wrong three separate times: the bar read as shorter
+-- than it is, and no amount of marking the rest of the run fixed that. So the
+-- card drew a full bar, and could then show neither which way the fill runs
+-- nor the backdrop behind it.
+--
+-- Now the preview MOVES. A bar that drains is at every fraction in turn, so
+-- there is no single length to be wrong about - and the settings that a full
+-- bar could not show are all visible again while it runs. The rule was never
+-- the fault; the still picture was.
+--
+-- ONE anchor and both sizes, never two opposing anchors plus a size: those
+-- two rules fight, and which of them wins is not worth having to remember.
+--
+-- leftPad and rightPad are the room the icon takes at either end (rightPad
+-- negative, as an inset from the right edge); area and height are what is
+-- left over for the bar itself. portion is how full it is right now.
+function Layout.PreviewFill(direction, leftPad, rightPad, area, height, portion)
+    portion = portion or 1
+
+    if direction.orientation == "VERTICAL" then
+        -- Downwards hangs from the TOP: the fill starts at the end it grows
+        -- away from, which is the reverse flag read the same way the
+        -- StatusBar reads it.
+        local corner = direction.reverse and "TOPLEFT" or "BOTTOMLEFT"
+        return corner, leftPad, area, math.max(1, height * portion)
+    end
+
+    if direction.reverse then
+        return "TOPRIGHT", rightPad, math.max(1, area * portion), height
+    end
+    return "TOPLEFT", leftPad, math.max(1, area * portion), height
+end
 
 -- Green at full, through amber, to red. Two straight ramps rather than one
 -- across all three, because a single interpolation from green to red passes

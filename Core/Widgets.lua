@@ -1984,6 +1984,35 @@ end
 -- idea a drag is happening - this is the one thing that has to know both.
 local grids = {}
 
+---------------------------------------------------------------------------
+-- THE PREVIEW BARS RUN.
+--
+-- A still bar in an editor is a lie by omission: it says nothing about which
+-- way the fill goes, what is behind it, where the leading edge sits or how
+-- the ramp reads while it moves - and every one of those is a control on the
+-- page beside it. Drawn full it showed none of them; drawn part-full it read
+-- as a bar that was the wrong length, which was reported three times.
+-- Running, it is at every length in turn and there is nothing to be wrong
+-- about. My own standing rule, written down after the co-tank test mode:
+-- invented data has to move.
+--
+-- One clock for the whole card, and each cell offset along it so the bars do
+-- not march in lockstep - real cooldowns are not in step either.
+---------------------------------------------------------------------------
+local PREVIEW_CYCLE = 4.0
+local PREVIEW_STAGGER = 0.43
+
+local function ApplyPreviewFill(cell, portion)
+    local run = cell.run
+    if not run then return end
+
+    local corner, pad, w, h = ns.Layout.PreviewFill(run.direction,
+        run.leftPad, run.rightPad, run.area, run.height, portion)
+    cell.fill:ClearAllPoints()
+    cell.fill:SetPoint(corner, cell, corner, pad, 0)
+    cell.fill:SetSize(w, h)
+end
+
 -- The cell under the cursor across ALL of them, or nothing. Walked backwards
 -- so the most recently built card wins where two overlap.
 function UI.CellUnderCursor()
@@ -2170,17 +2199,18 @@ function UI.CellGrid(parent, cfg)
             end
         end)
 
+        -- THE DRAG DOES NOT OWN OnUpdate. It used to install its own handler
+        -- here and clear it on drop, which would have torn the running
+        -- preview off the card the first time anybody sorted a bar. There is
+        -- one handler on the grid and it reads `dragFrom` - see the end of
+        -- UI.CellGrid.
         cell:SetScript("OnDragStart", function(self)
             if not self.dkSpellID then return end
             grid.dragFrom = self.dkIndex
             self.icon:SetAlpha(0.3)
-            grid:SetScript("OnUpdate", function()
-                grid.ShowMarker(CellUnderCursor())
-            end)
         end)
 
         cell:SetScript("OnDragStop", function(self)
-            grid:SetScript("OnUpdate", nil)
             marker:Hide()
             self.icon:SetAlpha(1)
 
@@ -2292,30 +2322,28 @@ function UI.CellGrid(parent, cfg)
                     local leftPad = (place == "right") and 0 or inset
                     local rightPad = (place == "right") and -inset or 0
 
-                    -- THE BAR IS DRAWN AT ITS FULL LENGTH.
+                    -- WHAT THE BAR NEEDS IN ORDER TO RUN, remembered on the
+                    -- cell rather than worked out again sixty times a second.
+                    -- The direction is the same one-of-four the screen fills
+                    -- along, both ends and both axes: at 100% those look
+                    -- identical, which is exactly why a still preview could
+                    -- not show the setting at all.
                     --
-                    -- It used to be drawn at 70% so that the card read as a
-                    -- bar rather than as a block of colour, and that single
-                    -- choice came back three times. First the bar looked
-                    -- shorter than it is ("die vorschau sollte auch die
-                    -- richtigen dimensionen zeigen, wie du siehst, ist die bar
-                    -- eigentlich laenger"). Then the faint track put behind it
-                    -- to show the true length wore the bar's OWN colour and
-                    -- read as a second setting somebody had chosen ("das
-                    -- scheint immer noch nicht zu passen"). Then, with the
-                    -- track gone and a black backdrop invisible against a
-                    -- black card, the gap at the end was simply back - circled
-                    -- in a screenshot, "nope".
-                    --
-                    -- A settings card is asked how big the bar is and what it
-                    -- looks like, and the honest answer to that is the whole
-                    -- bar. The cost is that fill DIRECTION cannot be seen here
-                    -- - it is a full bar either way - which the four arrows in
-                    -- the Direction picker already say, and the bar on screen
-                    -- shows for real.
-                    cell.fill:ClearAllPoints()
-                    cell.fill:SetPoint("TOPLEFT", cell, "TOPLEFT", leftPad, 0)
-                    cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", rightPad, 0)
+                    -- `grow` is the Fill-up switch, honoured here even though
+                    -- a bar the Cooldown Manager times ignores it on screen.
+                    -- The card previews the SETTINGS; that this one does not
+                    -- reach a mirrored bar is a fault to fix, not a reason for
+                    -- the editor to quietly agree with it.
+                    cell.run = {
+                        direction = ns.Layout.FillDirection(
+                            style and style.fillDirection),
+                        grow = style and style.fillGrow and true or false,
+                        leftPad = leftPad,
+                        rightPad = rightPad,
+                        area = math.max(1, w - inset),
+                        height = h,
+                    }
+                    ApplyPreviewFill(cell, 1)
 
                     if style then
                         local fill = style.fillTexture
@@ -2369,6 +2397,11 @@ function UI.CellGrid(parent, cfg)
                     cell.icon:Show()
                     cell.fill:Hide()
                     cell.caption:Hide()
+                    -- An icon cell has no fill to run. Cleared rather than
+                    -- left behind: cells are reused, and a cell that turns
+                    -- from a bar into an icon would otherwise go on being
+                    -- resized every frame.
+                    cell.run = nil
                 end
 
                 cell.plus:Hide()
@@ -2378,6 +2411,7 @@ function UI.CellGrid(parent, cfg)
                 cell.icon:Hide()
                 cell.fill:Hide()
                 cell.caption:Hide()
+                cell.run = nil
                 cell.plus:Show()
                 cell.number:SetText("")
                 cell.edge:SetColor(C.control[1], C.control[2], C.control[3], 1)
@@ -2398,6 +2432,29 @@ function UI.CellGrid(parent, cfg)
         grid:SetSize(math.max(box.width, 1), math.max(box.height, 1))
         return box.height
     end
+
+    -- THE ONE HANDLER ON THIS FRAME, doing both jobs. A hidden frame gets no
+    -- OnUpdate, so the card costs nothing while the window is shut and there
+    -- is nothing to start or stop.
+    grid:SetScript("OnUpdate", function(self, elapsed)
+        if self.dragFrom then self.ShowMarker(CellUnderCursor()) end
+
+        local phase = (self.phase or 0) + elapsed
+        if phase >= PREVIEW_CYCLE then phase = phase % PREVIEW_CYCLE end
+        self.phase = phase
+
+        for index, cell in ipairs(self.cells) do
+            local run = cell.run
+            if run and cell:IsShown() then
+                -- Draining is what a cooldown does, so that is the default and
+                -- Fill up is the one that runs the other way.
+                local own = (phase + index * PREVIEW_STAGGER) % PREVIEW_CYCLE
+                local portion = 1 - own / PREVIEW_CYCLE
+                if run.grow then portion = 1 - portion end
+                ApplyPreviewFill(cell, portion)
+            end
+        end
+    end)
 
     return grid
 end
