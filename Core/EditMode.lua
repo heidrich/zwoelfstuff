@@ -461,6 +461,54 @@ local function CreateMover(index)
     end)
     mover.cog:SetScript("OnClick", function() OpenMenu(mover) end)
 
+    -- FOUR ARROWS ON THE ELEMENT ITSELF, one pixel a click.
+    --
+    -- The keyboard already nudged, and the keyboard is the wrong hand: you are
+    -- holding the mouse, you have just dragged the bar to nearly the right
+    -- place, and the last three pixels are the whole point of nudging. Reaching
+    -- for the arrow keys means letting go of what you are aiming.
+    --
+    -- Shift is the same multiplier the keys use, so the two are one behaviour
+    -- with two ways in rather than two features.
+    local pad = CreateFrame("Frame", nil, mover)
+    pad:SetSize(46, 32)
+    pad:SetPoint("TOPRIGHT", mover.cog, "TOPLEFT", -2, 0)
+    pad:SetFrameLevel(mover:GetFrameLevel() + 4)
+    mover.pad = pad
+
+    -- x, y in a 16-box, and which way the bar goes. The glyph is a triangle
+    -- built the way the disclosure marker is - two bars - because an arrow
+    -- character is a different width and baseline in every font.
+    local NUDGERS = {
+        { key = "UP",    dx = 0,  dy = 1,  x = 16, y = 0  },
+        { key = "DOWN",  dx = 0,  dy = -1, x = 16, y = 16 },
+        { key = "LEFT",  dx = -1, dy = 0,  x = 0,  y = 8  },
+        { key = "RIGHT", dx = 1,  dy = 0,  x = 32, y = 8  },
+    }
+
+    for _, spec in ipairs(NUDGERS) do
+        local button = CreateFrame("Button", nil, pad)
+        button:SetSize(14, 14)
+        button:SetPoint("TOPLEFT", pad, "TOPLEFT", spec.x, -spec.y)
+
+        local glyph = UI.Glyph(button, "caret" .. spec.key, 10, C.textDim)
+        glyph:SetPoint("CENTER", button, "CENTER", 0, 0)
+
+        button:SetScript("OnEnter", function()
+            glyph:SetColor(C.accent[1], C.accent[2], C.accent[3])
+        end)
+        button:SetScript("OnLeave", function()
+            glyph:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        end)
+        button:SetScript("OnClick", function()
+            local step = IsShiftKeyDown() and NUDGE_FAST or NUDGE
+            local cfg = BarConfig(mover.index)
+            if not cfg then return end
+            local x, y = Origin(cfg)
+            ApplyMove(mover, x + spec.dx * step, y + spec.dy * step)
+        end)
+    end
+
     mover:SetScript("OnMouseDown", function(self, button)
         if button == "RightButton" then
             -- The one gesture that is not about moving: get the overlay out
@@ -1085,7 +1133,12 @@ local function BuildTools()
         local slider = UI.MiniSlider(tools, cfg)
         slider:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
         slider:SetWidth(WIDTH)
-        y = y - 23
+        -- ASK THE WIDGET how tall it is. This stepped down by a hardcoded 23
+        -- while the control was 20 tall, and the moment the control became a
+        -- 28-tall stepper every row in this panel overlapped the next one.
+        -- A layout that repeats a number the widget already knows is a layout
+        -- that breaks the next time the widget changes.
+        y = y - (slider:GetHeight() + 3)
         refreshers[#refreshers + 1] = slider
         return slider
     end
@@ -1098,7 +1151,7 @@ local function BuildTools()
         button = UI.Button(tools, text, width or WIDTH, function()
             set(not get())
             if button.Refresh then button.Refresh() end
-        end, "soft")
+        end)
         button:SetHeight(21)
 
         if sameLine then
@@ -1201,7 +1254,7 @@ local function BuildTools()
         end
         local next_ = ns.LAYOUTS[(at % #ns.LAYOUTS) + 1]
         ns.Bars:SetLayout(index, next_.value)
-    end, "soft")
+    end)
     patternBtn:SetHeight(21)
     patternBtn:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
     y = y - 25
@@ -1263,7 +1316,7 @@ local function BuildTools()
             local index, cfg = CurrentBar()
             if not (cfg and movers[index]) then return end
             fn(movers[index], cfg)
-        end, "soft")
+        end)
         button:SetHeight(21)
         button:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER + offset * (third + 6), y)
         return button
@@ -1344,12 +1397,22 @@ local function BuildTools()
         end,
     })
 
-    local cellColour = UI.Swatch({ slot = tools },
+    -- UI.Swatch returns the ROW it was given, and the row here is a bare
+    -- table standing in for one. The control is what needs anchoring, and it
+    -- comes back on row.control.
+    --
+    -- Calling ClearAllPoints on the table instead threw, and a throw here
+    -- takes the whole tool panel with it - grid, grid size, everything below
+    -- this line simply never got built.
+    local cellRow = { slot = tools }
+    UI.Swatch(cellRow,
         function()
             local colour = CellGet("fillColor", { 1, 1, 1 })()
             return colour[1], colour[2], colour[3]
         end,
         function(r, g, b) CellSet("fillColor")({ r, g, b }) end)
+
+    local cellColour = cellRow.control
     cellColour:ClearAllPoints()
     cellColour:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
     local colourLabel = UI.Label(tools, "Colour", 11, C.textFaint)
@@ -1369,7 +1432,7 @@ local function BuildTools()
         ns.Bars:ClearCellLook(cfg, cell)
         ns.Bars:Changed(barIndex)
         tools.Refresh()
-    end, "soft")
+    end)
     cellReset:SetHeight(21)
     cellReset:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
     y = y - 25
@@ -1521,7 +1584,7 @@ local function BuildToolbar()
         else
             ns.Print("Pick a bar first.")
         end
-    end, "soft")
+    end)
     addBtn:SetPoint("LEFT", buildBtn, "RIGHT", 6, 0)
 
     local rule = UI.Separator(toolbar, true)
@@ -1536,7 +1599,7 @@ local function BuildToolbar()
 
     local gridBtn = UI.Button(toolbar, "Grid", 68, function()
         EditMode:SetGridShown(not (gridLines and gridLines:IsShown()))
-    end, "soft")
+    end)
     gridBtn:SetPoint("BOTTOMLEFT", toolbar, "BOTTOMLEFT", 12, 12)
 
     -- The label follows the state, because this button is the ONLY way back:
@@ -1548,7 +1611,7 @@ local function BuildToolbar()
         EditMode:SetOverlayShown(not EditMode.overlayShown)
         overlayBtn:SetText(EditMode.overlayShown and "Hide overlay"
             or "Show overlay")
-    end, "soft")
+    end)
     EditMode.overlayButton = overlayBtn
     overlayBtn:SetPoint("LEFT", gridBtn, "RIGHT", 6, 0)
 
@@ -1560,7 +1623,7 @@ local function BuildToolbar()
             tools.Refresh()
             tools:Show()
         end
-    end, "soft")
+    end)
     toolsBtn:SetPoint("LEFT", overlayBtn, "RIGHT", 6, 0)
 
     local spellsBtn = UI.Button(toolbar, "Spells", 72, function()
@@ -1572,7 +1635,7 @@ local function BuildToolbar()
             palette.Refresh()
             palette:Show()
         end
-    end, "soft")
+    end)
     spellsBtn:SetPoint("LEFT", toolsBtn, "RIGHT", 6, 0)
 
     local doneBtn = UI.Button(toolbar, "Done", 72, function()
@@ -1757,11 +1820,21 @@ function EditMode:Mode()
     return mode
 end
 
-function EditMode:SetUnlocked(state)
+-- wanted, when given, says which mode to land in ("bars" or "build"). The
+-- window's header offers both as separate buttons, and arriving in the wrong
+-- one means the first thing anybody does after opening edit mode is change
+-- the mode - which is a step the button already knew the answer to.
+function EditMode:SetUnlocked(state, wanted)
     state = state and true or false
-    if state == unlocked then return end
+    if state == unlocked then
+        -- Already open. The mode is still worth honouring: this is also the
+        -- path a second click on the other header button takes.
+        if state and wanted then SetMode(wanted) end
+        return
+    end
 
     Build()
+    if state and wanted then mode = wanted end
     unlocked = state
     self.overlayShown = true
     dragging, cellDrag, selected = nil, nil, nil

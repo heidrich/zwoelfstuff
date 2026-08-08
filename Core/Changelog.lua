@@ -8,6 +8,34 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.21.0",
+        date = "2026-08-08",
+        lines = {
+            "THE WINDOW WAS REDRAWN, PROPERLY. You had it designed - colours, sizes, spacing, every screen - and this is that design built. The complaint it answers is the one you started with: \"unuebersichtlich, sieht altbacken aus\".",
+            "",
+            "THE SIDE COLUMNS ARE NOW DARKER THAN THE MIDDLE, not lighter. That one inversion is most of it: the thing you are working on sits on TOP of the window instead of in a trench between two raised walls. The whole palette went deeper with it, and orange now appears at most once per column - so when it does appear, it means something.",
+            "",
+            "THERE ARE NO SLIDERS LEFT. Every number is a stepper: minus, the value, plus. A slider standing in for a range is only as precise as the pixels it happens to be wide, and on a 0-to-1 opacity in a narrow column no exact value was reachable by hand. You can still type into the box, and the wheel over it still steps.",
+            "",
+            "THE LEFT COLUMN IS GROUPED - Bars, System, Info - under the addon's mark and wordmark, with the version and your client build along the bottom. Seven flat entries is a list you read from the top every time.",
+            "",
+            "THE CARDS SAY WHAT THEY ARE. A numbered chip, the name, and a badge for the kind. Rows, Columns and Arrangement moved into a column BESIDE the preview instead of a strip under it, so two cards fit where one and a half did. Delete moved into the overflow menu, where an action with no undo belongs.",
+            "",
+            "THE RIGHT COLUMN HAS THREE TABS - Look, Behaviour, Reuse - instead of nine sections in one long scroll. And on Settings it is never empty any more: point at a setting and the third column explains it. That text used to be a wrapped grey paragraph under every single row, which was the largest single consumer of space on the page.",
+            "",
+            "THE PANEL HAS ITS OWN FONT, and that was the single biggest reason it did not look like the design. Every string in the window took the CLIENT's face - wide and round - while the design is drawn in a narrow grotesk and Settings had a font picker that only ever reached the bars. Panel font and bar text are now two settings, because a face that is right over a moving 3D scene is rarely right for forty rows of settings.",
+            "",
+            "THE SPELL LIST IS ONE LINE PER SPELL. The grey second line carrying \"on this bar, cell 2\" and the spell ID is gone; what an entry has to say on the right is one short thing - which cell it sits in, how long its cooldown is, or that your build does not have it. The ID is in the tooltip, where you look when you are asking about one of them rather than scanning all of them.",
+            "",
+            "THE ICONS ARE THE DESIGN'S OWN NOW. Every mark in the window used to be built from filled rectangles, which is why they never matched: the design draws OUTLINES at 1.4 pixels with round ends - four EMPTY squares for Cooldowns, a real circle for About, real diagonals for Edit mode. Rectangles cannot draw a circle.",
+            "The client loads neither SVG nor PNG, so the design's 68 drawings are rasterised and shipped as TGA - and rendered at the size they are shown at rather than scaled between sizes, because a 1.4 pixel stroke does not survive being resized. They are white and tinted where they are used, so one file serves the dim, the bright and the accent state.",
+            "",
+            "AND THEY ARE SHARP AT YOUR INTERFACE SCALE. Your interface is not at 1:1 - one unit is closer to 1.8 real pixels - so a mark drawn at 14 was being stretched to 25 and every fine stroke went soft. Each one now exists at the design size AND at double, and the client picks the nearer one and scales DOWN instead of up.",
+            "",
+            "NEW LOGO, and the minimap button wears it.",
+        },
+    },
+    {
         version = "4.20.0",
         date = "2026-08-08",
         lines = {

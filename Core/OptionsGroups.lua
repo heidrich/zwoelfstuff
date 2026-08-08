@@ -362,7 +362,7 @@ function Page:Build(page, width)
     body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -8)
     body:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
 
-    local grid = UI.Page(body, width)
+    local grid = UI.Page(body, width, { tooltipNotes = true })
 
     -- Field accessors bound to whichever group is selected right now.
     local function Get(key)

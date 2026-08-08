@@ -4,6 +4,386 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+<!-- 4.12.0 through 4.20.0 shipped without an entry here. The in-game
+     changelog in Core/Changelog.lua carried them throughout and is the
+     source these were written back from. -->
+
+## [4.21.0] - 2026-08-08
+
+### Changed
+
+- THE WINDOW WAS REDRAWN, PROPERLY. You had it designed - colours, sizes,
+  spacing, every screen - and this is that design built. The complaint it
+  answers is the one you started with: "unuebersichtlich, sieht altbacken
+  aus".
+
+- THE SIDE COLUMNS ARE NOW DARKER THAN THE MIDDLE, not lighter. That one
+  inversion is most of it: the thing you are working on sits on TOP of the
+  window instead of in a trench between two raised walls. The whole palette
+  went deeper with it, and orange now appears at most once per column - so
+  when it does appear, it means something.
+
+- THERE ARE NO SLIDERS LEFT. Every number is a stepper: minus, the value,
+  plus. A slider standing in for a range is only as precise as the pixels it
+  happens to be wide, and on a 0-to-1 opacity in a narrow column no exact
+  value was reachable by hand. You can still type into the box, and the wheel
+  over it still steps.
+
+- THE LEFT COLUMN IS GROUPED - Bars, System, Info - under the addon's mark and
+  wordmark, with the version and your client build along the bottom. Seven
+  flat entries is a list you read from the top every time.
+
+- THE CARDS SAY WHAT THEY ARE. A numbered chip, the name, and a badge for the
+  kind. Rows, Columns and Arrangement moved into a column BESIDE the preview
+  instead of a strip under it, so two cards fit where one and a half did.
+  Delete moved into the overflow menu, where an action with no undo belongs.
+
+- THE RIGHT COLUMN HAS THREE TABS - Look, Behaviour, Reuse - instead of nine
+  sections in one long scroll. And on Settings it is never empty any more:
+  point at a setting and the third column explains it. That text used to be a
+  wrapped grey paragraph under every single row, which was the largest single
+  consumer of space on the page.
+
+- THE PANEL HAS ITS OWN FONT, and that was the single biggest reason it did
+  not look like the design. Every string in the window took the CLIENT's face
+  - wide and round - while the design is drawn in a narrow grotesk and
+  Settings had a font picker that only ever reached the bars. Panel font and
+  bar text are now two settings, because a face that is right over a moving 3D
+  scene is rarely right for forty rows of settings.
+
+- THE SPELL LIST IS ONE LINE PER SPELL. The grey second line carrying "on this
+  bar, cell 2" and the spell ID is gone; what an entry has to say on the right
+  is one short thing - which cell it sits in, how long its cooldown is, or
+  that your build does not have it. The ID is in the tooltip, where you look
+  when you are asking about one of them rather than scanning all of them.
+
+- THE ICONS ARE THE DESIGN'S OWN NOW. Every mark in the window used to be
+  built from filled rectangles, which is why they never matched: the design
+  draws OUTLINES at 1.4 pixels with round ends - four EMPTY squares for
+  Cooldowns, a real circle for About, real diagonals for Edit mode. Rectangles
+  cannot draw a circle.
+
+- The client loads neither SVG nor PNG, so the design's 68 drawings are
+  rasterised and shipped as TGA - and rendered at the size they are shown at
+  rather than scaled between sizes, because a 1.4 pixel stroke does not
+  survive being resized. They are white and tinted where they are used, so one
+  file serves the dim, the bright and the accent state.
+
+- AND THEY ARE SHARP AT YOUR INTERFACE SCALE. Your interface is not at 1:1 -
+  one unit is closer to 1.8 real pixels - so a mark drawn at 14 was being
+  stretched to 25 and every fine stroke went soft. Each one now exists at the
+  design size AND at double, and the client picks the nearer one and scales
+  DOWN instead of up.
+
+- NEW LOGO, and the minimap button wears it.
+
+
+## [4.20.0] - 2026-08-08
+
+### Changed
+
+- THE NAVIGATION IS STRAIGHTENED OUT. You said it was a muddle - where the
+  buttons are, what they are called - and you were right. It had grown rather
+  than been designed.
+
+- What was wrong, plainly: "Done" and "Just this one" sat on the SAME spot in
+  the top right and swapped places depending on what you were doing, which
+  reads as the window moving under your hand. "Options" meant this bar, "Just
+  this one" meant this cell, and nothing said how the two were related. And
+  from a cell you could not get to its bar at all - Done always threw you back
+  to the spell list.
+
+- EACH CARD NOW CARRIES ITS OWN THREE TABS: Spells, Bar, and the cell's own
+  name. The thing you are looking at chooses what is being edited, and the
+  answer appears beside it. Only the card you are working on lights a tab,
+  because three lit cards would claim three things are being edited at once.
+  The Cell tab shows the spell it would edit, so you know what it means before
+  you press it.
+
+- "Options" is gone - the tab replaced it. Build on screen and Delete stay on
+  the right of the header, so a click that changes the view and a click that
+  changes the bar are never neighbours.
+
+- A PATH UNDER THE HEADING shows the way back: Spells > Bars 2. Every part is
+  clickable, so a cell can reach its bar without going through the spell list.
+  It shows only where you can GO, never where you already are - the heading
+  below says that, and printing the same word twice one line apart is how the
+  old one got confusing.
+
+- AND THE CELL SETTINGS ARE IN EDIT MODE TOO. Colour, size and the fill
+  direction now sit in the tool panel, where you are looking at the real bar
+  instead of a preview - a colour is something you judge against the screen it
+  will live on. Both places write the same setting through the same code, so
+  neither can know a value the other does not. A star next to the name means
+  that cell wears something of its own.
+
+
+## [4.19.0] - 2026-08-08
+
+### Changed
+
+- EVERY SLIDER CAN BE TYPED INTO. Click the number, type it, press Enter. It
+  was read-only, which meant an exact value could only be reached by dragging
+  until the display agreed - and on a 0.05 step that is a game of patience,
+  not a setting.
+
+- The unit comes off what you type: "85%", "85" and "85 s" all mean the same
+  thing, because people re-type over a value they can see and what they can
+  see has a unit on it. Escape puts it back. Both kinds of slider - the big
+  ones in the settings and the small Rows and Columns ones on the cards.
+
+- The "x" is gone from the size sliders. 1.00 says it.
+
+- EDIT MODE IS THE FIRST ENTRY IN THE LEFT COLUMN. It was called Unlock Mode
+  and it was a lone button at the bottom of the rail, on the argument that it
+  is a thing you DO rather than a place you go. True, and beside the point -
+  it is the thing this window exists to get you to, and it was the one item on
+  the left that did not look like the others.
+
+
+## [4.18.0] - 2026-08-08
+
+### Changed
+
+- NEW: EVERY CELL CAN BE EDITED ON ITS OWN. Click a cell in a bar card and
+  press "Just this one" - colour, opacity, texture, which end the fill starts
+  at, whether it fills up, border, backdrop, spark, charge marks, size, shape,
+  and its own stack colours. So Bone Shield can be red with bands at five and
+  ten while the two bars under it stay exactly as they were.
+
+- EVERYTHING FOLLOWS THE BAR UNTIL YOU TOUCH IT. Change the bar's colour and
+  every cell that has not been given its own follows along, including cells
+  you edited something ELSE on - a cell that owns its colour still follows the
+  bar for everything it does not own. "Follow the bar again" at the bottom
+  hands the whole cell back.
+
+- There is no per-setting inherit switch on purpose. Twenty rows each with two
+  states to read is a panel nobody can use; one clear way back is better.
+
+- The overrides belong to the SLOT, not to the spell sitting in it - the same
+  rule as the size and the nudge. Drag Bone Shield to the top of the bar and
+  the red stays where it was, because that is what lets a layout be handed to
+  another character at all.
+
+- The card previews it. A cell wearing its own colour is drawn in that colour
+  in the editor, not just on screen.
+
+- Text is deliberately not per-cell yet: three elements times seven controls
+  each is a panel that cannot be read, and a bar whose cells use four fonts is
+  not a design. If one cell needs its own countdown, say so and it gets added.
+
+
+## [4.17.0] - 2026-08-08
+
+### Changed
+
+- DRAG A SPELL TO SORT A BAR. You asked for drag and drop in the bar cards -
+  it was already there, and it was doing the wrong thing, which is very likely
+  why it did not feel like sorting.
+
+- It SWAPPED the two cells. Drag the third spell onto the first and you got
+  third, second, first: the spell you never touched had moved as well. That is
+  right for 'these two are in each other's places' and useless for putting a
+  list in order - sorting four spells that way takes six drags and a plan.
+
+- It reorders now. The spell you drag lands where you dropped it and
+  everything else keeps its own order, one place along. Sorting a bar is one
+  drag per spell.
+
+- Hold SHIFT while dropping for the old swap. Both are worth having; only one
+  of them can be the plain drag, and sorting is what you asked for.
+
+- A gap in a bar counts as a position and travels with the sequence rather
+  than being quietly filled, so a deliberate hole stays a hole.
+
+- The cell's LOOK does not travel. Scale, nudge and kind belong to the slot,
+  so a spell dragged to the front wears the front slot's look - which is the
+  whole point of a slot having one.
+
+- The tooltip on a filled cell now says all of this, since a drag nobody knows
+  about is a drag nobody uses.
+
+
+## [4.16.0] - 2026-08-07
+
+### Changed
+
+- NEW: SPARK. A bright line riding the moving edge of a tracking bar's fill.
+  Under Bar fill.
+
+- It costs nothing per frame, which is the small nice part: it is anchored to
+  the fill's TEXTURE rather than positioned by hand, so the game moves it
+  along with the clock and this addon never touches it again.
+
+- NEW: CHARGE MARKS. One line across the fill per boundary between charges -
+  three charges get two lines, at a third and two thirds. Its own colour,
+  under Bar fill.
+
+- They only appear on a spell that actually HAS more than one charge, so you
+  can leave the setting on for a whole bar without marking everything on it.
+  And they are anchored to the bar rather than to the fill, so they stay where
+  they are while the fill moves past them - the exact opposite of the spark,
+  on purpose.
+
+- NOT BUILT, and here is why: keybind text on an icon. It reads like a small
+  thing next to these two and it is not. Getting the key for a spell means
+  walking every action bar and every binding name, resolving each slot to a
+  spell - through macros as well - and then following the bar PAGE as it
+  changes with your stance, your form and any vehicle you sit in. That is a
+  subsystem, not a setting, and it is the wrong thing to start two days before
+  the basics are due. Say the word and it gets built properly after.
+
+- That is all four you picked out of the reference addon.
+
+
+## [4.15.0] - 2026-08-07
+
+### Changed
+
+- NEW: GLOW IN THE REFRESH WINDOW. The tail of an aura where recasting it
+  wastes nothing - pandemic, if you know the word. Under Effects, with its own
+  colour.
+
+- THIS ADDON DOES NOT WORK THE WINDOW OUT, and that is the interesting part.
+  Doing so means dividing the time left by the full duration, and on this
+  patch both of those numbers can be protected - dividing one protected number
+  by another is exactly the thing that taints an addon and breaks it. So it is
+  not calculated. Blizzard already knows where the window is, because its own
+  Cooldown Manager marks it, and this addon simply asks. The question stops
+  being arithmetic and becomes a fact somebody else worked out inside the
+  game, where the numbers are readable.
+
+- The catch is honest and the panel says it: it only lights for the spells you
+  have switched pandemic alerts on for in Blizzard's own Cooldown Manager
+  settings. Nothing here can turn that on for you.
+
+- It outranks the plain glows, because it is the one that means press this
+  now, and gives way to the last-seconds warning, which is more urgent still.
+
+- Third of the four you picked. The small ones - charge marks, keybind text,
+  the spark - are what is left.
+
+
+## [4.14.0] - 2026-08-07
+
+### Changed
+
+- NEW: ACTIVE FOR. Some things the Cooldown Manager only ever shows as a
+  cooldown - a trinket's use effect, a potion, a racial. It knows exactly when
+  they come back and nothing at all about how long they LAST, so the one
+  number you actually want mid-fight is on screen nowhere. Say how long it
+  lasts once, and the cell runs that window every time you press it: our
+  sweep, our fill, our timer.
+
+- Settings, under Auras. The list offers the spells that are on your bars,
+  because those are the only ones where declaring a window changes anything
+  you can see. Zero switches it off.
+
+- It is remembered for the whole ACCOUNT rather than the character, for the
+  same reason the recorded procs are: how long a trinket lasts is a fact about
+  the trinket, identical on every alt. It is not a piece of user interface.
+
+- A spell the Cooldown Manager already tracks as a buff is left alone. Its own
+  clock is measured inside the game and beats a number somebody typed, every
+  time.
+
+- The window follows a spell into its other form, so a state set before a
+  talent transforms the spell still fires afterwards.
+
+- BLIZZARD'S ICON IS NEVER TOUCHED - not its transparency, not its cooldown,
+  not its parent. The window is drawn on a layer above it and taken away
+  again, so if this addon is ever unloaded mid-window what is left behind is
+  Blizzard's display exactly as it was. That is the reference addon's
+  arrangement and it is the only one that cannot leave a mess.
+
+- Second of the four you picked. Pandemic glow and the small ones - charge
+  marks, keybind text, the spark - are still to come.
+
+
+## [4.13.0] - 2026-08-07
+
+### Changed
+
+- NEW: STACK COLOURS. A tracking bar changes colour once the stack count
+  reaches a number you pick, with three bands. This is the Bone Shield
+  setting, and it is the thing the reference addon has that was worth having
+  most.
+
+- Below the lowest band the bar wears its normal Bar fill colour - so the way
+  to say 'warn me under five' is a red fill with a band at 5 in your usual
+  colour. There is no separate 'below' mode to get the wrong way round. Set a
+  band's count to 0 to switch it off.
+
+- WHY THIS WORKS AT ALL, because it is not obvious and it is the reason nobody
+  else's addon does it on this patch: since 12.0 the stack count can arrive as
+  a protected value. An addon may pass one along but may never compare it, add
+  to it, or even test it for true - doing so taints the addon. So this addon
+  does not compare it. Each band is a bar whose range is set to exactly the
+  number you chose, the count is handed to the game, and the GAME decides
+  whether it has been crossed. The comparison happens where it is allowed to
+  happen.
+
+- With several bands crossed at once, which colour wins cannot be decided by
+  an if - there is nothing an addon may look at. It is decided by what is
+  painted last: each band sits on top of the one below it, so the highest one
+  you have crossed covers the rest. The approach is EllesmereUI's and it is
+  the only legal way to do this.
+
+- This is the first of four things you picked out of that addon. Custom active
+  states, pandemic glow and the small ones - charge marks, keybind text, the
+  spark - are next.
+
+
+## [4.12.0] - 2026-08-07
+
+### Changed
+
+- You asked us to take the reference addon's Cooldown Manager apart instead of
+  guessing. Its spell picker turned out to describe both of the things you
+  reported - the list being wrong and the tracking being wrong - and it names
+  five separate causes. All five are fixed here.
+
+- FIXED, reported: the list mixed the groups together. Every group was
+  numbered from 1, so the first Cooldown and the first Utility both scored 1
+  and the tie fell through to the name - which interleaved them
+  alphabetically. Each group owns its own range now, and can never reach into
+  the next one.
+
+- FIXED, and this is the bigger half: the icons actually on your screen
+  contributed no order at all. Their order was taken from a static list
+  instead, when every one of those frames carries its own layout position -
+  the number Blizzard lays the row out by. That number is now what the picker
+  sorts by, so the list reads in the order you are looking at.
+
+- FIXED: the list offered spells you had already removed. Spells dragged to
+  'Not Displayed' in Blizzard's own Cooldown Manager settings stay in the
+  static category list forever, so they kept turning up here. The arrangement
+  is read from Blizzard's settings directly now - what you hid stays hidden,
+  and the order you dragged things into is the order you get.
+
+- FIXED, reported: 'so many tracking errors'. A spell that a talent replaces
+  changes the ID its frame reports - Frostbolt becoming Glacial Spike is the
+  everyday case - and a cell holding the old ID simply stopped finding it. The
+  spell was on screen and the cell went blank. A spell is now indexed under
+  every form of itself, so a cell keeps it through the transform.
+
+- FIXED: an override left behind by a talent you no longer have was still
+  believed. Blizzard keeps reporting one after the talent is gone, so a cell
+  would show a spell you cannot cast, with the wrong name and the wrong icon.
+  It is only taken now when the game agrees you actually have it.
+
+- FIXED, and this one was invisible until you knew where to look: while a buff
+  was UP, its frame answers with a protected value that no addon may read - so
+  resolution fell through to a generic entry for your spec. The icon changed
+  into something unrecognisable for exactly as long as the buff lasted, then
+  changed back. The last readable answer is remembered per cooldown and
+  reused, which also means it corrects itself the moment you respec.
+
+- The self test grew a 'Spell identity' section covering all of it - twenty
+  more checks, two of which read your live Cooldown Manager without touching
+  it. They were confirmed by putting the old bugs back and watching the suite
+  go red.
+
 ## [4.11.1] - 2026-08-07
 
 ### Fixed

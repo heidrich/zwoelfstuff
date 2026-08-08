@@ -64,11 +64,25 @@ end
 -- Settings
 ---------------------------------------------------------------------------
 local function BuildGeneralPage(page, width)
-    local grid = UI.Page(page, width)
+    local grid = UI.Page(page, width, { explain = true })
 
     grid:Section("Text")
 
-    UI.MediaPicker(grid:FullRow("Font", { controlWidth = 220 }), "font",
+    -- Two fonts, two jobs. Panel text is read in rows in a window; bar text is
+    -- read at a glance over a moving scene. The design draws the window in a
+    -- narrow grotesk, and the client's own face is not one.
+    UI.MediaPicker(grid:FullRow("Panel font", { controlWidth = 220 }), "font",
+        function() return ns.db.panelFont or ns.Media.PanelFont() end,
+        function(value) ns.db.panelFont = value end,
+        function() ns.Print("Panel font set. |cffffd100/reload|r to redraw the window in it.") end)
+
+    grid:Note("The window you are looking at - its labels, values and headings. "
+        .. "It is a separate setting from the bars on purpose: a face that is "
+        .. "right over a moving 3D scene is rarely the one that is right for "
+        .. "forty rows of settings. The list is whatever your other addons have "
+        .. "registered.")
+
+    UI.MediaPicker(grid:FullRow("Bar text", { controlWidth = 220 }), "font",
         function() return ns.db.font end,
         function(value) ns.db.font = value end,
         function() ns.Screen:Render() end)
@@ -430,13 +444,16 @@ end
 -- than the shell hardcoding an index.
 ---------------------------------------------------------------------------
 local PAGES = {
+    -- No subtitle text of its own: this page's second line is a STATUS, not
+    -- an instruction. "Your bars, in the order you built them" is true on the
+    -- first visit and noise on every one after it, whereas how many cells are
+    -- still empty is the one thing worth knowing at a glance.
     { key = "cooldowns", title = "Cooldowns", glyph = "grid", side = true,
-      subtitle = "Your bars, in the order you built them. Click a cell, then pick "
-              .. "a cooldown on the right." },
+      status = true },
 
     { key = "settings", title = "Settings", glyph = "sliders",
-      subtitle = "How the bars sit next to Blizzard's own, the minimap button, and resetting.",
-      build = BuildGeneralPage },
+      subtitle = "Applies to every bar.",
+      explain = true, build = BuildGeneralPage },
 
     { key = "diagnostics", title = "Diagnostics", glyph = "pulse",
       subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
@@ -488,14 +505,48 @@ function Options:Create()
     railEdge:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, 0)
     railEdge:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", 0, 0)
 
-    local brand = UI.Label(rail, "|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r", 19, C.text)
-    brand:SetPoint("TOPLEFT", rail, "TOPLEFT", 18, -18)
+    -- The rail head, on the same 62 as every other column's header band.
+    --
+    -- The mark is the addon's own icon, at 26. The wordmark is lower case and
+    -- carries the split in COLOUR rather than in weight: `zwoelf` in text and
+    -- `stuff` a step back. There is no weight axis on a FontString - the panel
+    -- font is whatever LibSharedMedia handed over and it may ship one cut - so
+    -- a design that asks for 600 against 400 gets contrast it can actually
+    -- have.
+    local mark = rail:CreateTexture(nil, "ARTWORK")
+    mark:SetSize(26, 26)
+    mark:SetPoint("TOPLEFT", rail, "TOPLEFT", UI.PAD, -18)
+    mark:SetTexture(ns.ICON_TEXTURE)
 
-    local brandSub = UI.Label(rail, "by Zwoelf - EU Destromath", 11, C.textDim)
-    brandSub:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -5)
+    local brand = UI.Label(rail, "zwoelf", UI.FS.card, C.text)
+    brand:SetPoint("TOPLEFT", mark, "TOPRIGHT", 10, -1)
 
-    local versionLabel = UI.Label(rail, "v" .. ns.version, 11, C.textFaint)
-    versionLabel:SetPoint("BOTTOMLEFT", rail, "BOTTOMLEFT", 18, 16)
+    local brandTail = UI.Label(rail, "stuff", UI.FS.card, C.textFaint)
+    brandTail:SetPoint("LEFT", brand, "RIGHT", 0, 0)
+
+    local brandSub = UI.Eyebrow(rail, "EU Destromath")
+    brandSub:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -3)
+
+    -- The foot: what version this is, and what it is running on. Both are the
+    -- first thing anybody is asked for when something is wrong, and neither
+    -- belongs anywhere the eye goes while working.
+    local foot = CreateFrame("Frame", nil, rail)
+    foot:SetHeight(38)
+    foot:SetPoint("BOTTOMLEFT", rail, "BOTTOMLEFT", 0, 0)
+    foot:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", 0, 0)
+
+    local footLine = UI.Separator(foot, true)
+    footLine:SetPoint("TOPLEFT", foot, "TOPLEFT", 0, 0)
+    footLine:SetPoint("TOPRIGHT", foot, "TOPRIGHT", 0, 0)
+
+    local versionLabel = UI.Label(rail, "v" .. ns.version, UI.FS.eyebrow, C.textGhost)
+    versionLabel:SetPoint("LEFT", foot, "LEFT", UI.PAD, 0)
+
+    -- GetBuildInfo returns version, build, date, tocversion. The first is the
+    -- one people quote.
+    local clientVersion = UI.Label(rail, (GetBuildInfo()) or "", UI.FS.eyebrow,
+        C.textGhost)
+    clientVersion:SetPoint("RIGHT", foot, "RIGHT", -UI.PAD, 0)
 
     -- ONE rule, across the whole window. Three separate lines with three sets
     -- of padding never quite agree, and the eye reads the disagreement as
@@ -516,10 +567,12 @@ function Options:Create()
     headerLine:SetHeight(1)
     headerLine:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
 
+    -- The one close cross, in the window's top-right corner - which is also
+    -- the top right of the inspector, which is where the design draws it.
     local close = CreateFrame("Button", nil, chrome)
-    close:SetSize(30, 30)
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -10)
-    local closeLabel = UI.Label(close, "X", 13, C.textDim)
+    close:SetSize(24, 24)
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -19)
+    local closeLabel = UI.Label(close, "X", UI.FS.meta, C.textDim)
     closeLabel:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnEnter", function()
         closeLabel:SetTextColor(C.danger[1], C.danger[2], C.danger[3])
@@ -543,22 +596,88 @@ function Options:Create()
     sideEdge:SetPoint("BOTTOMLEFT", sideHost, "BOTTOMLEFT", 0, 0)
 
     ---------------------------------------------------------------------
+    -- The third column on a page that has no bar list: what the row you
+    -- are pointing at actually does.
+    --
+    -- THE COLUMN IS NEVER EMPTY, and that is the point of it. Every setting
+    -- used to carry its explanation on a wrapped grey line underneath, which
+    -- was the single largest consumer of vertical space on the page - forty
+    -- rows, forty paragraphs, and a page you scroll past the thing you came
+    -- for. The text is the same text; it has moved to the one place that had
+    -- nothing in it.
+    ---------------------------------------------------------------------
+    local explain = CreateFrame("Frame", nil, sideHost)
+    explain:SetAllPoints(sideHost)
+    explain:Hide()
+
+    local explainTitle = UI.Label(explain, "", UI.FS.card, C.text)
+    explainTitle:SetPoint("TOPLEFT", explain, "TOPLEFT", PAD, -16)
+    explainTitle:SetWidth(SIDE_W - PAD * 2)
+    explainTitle:SetWordWrap(false)
+
+    local explainWhere = UI.Eyebrow(explain, "")
+    explainWhere:SetPoint("TOPLEFT", explainTitle, "BOTTOMLEFT", 0, -5)
+    explainWhere:SetWidth(SIDE_W - PAD * 2)
+    explainWhere:SetWordWrap(false)
+
+    local explainBody = UI.Label(explain, "", UI.FS.meta, C.textBody)
+    explainBody:SetPoint("TOPLEFT", explain, "TOPLEFT", PAD, -(HEADER_H + 20))
+    explainBody:SetWidth(SIDE_W - PAD * 2)
+    explainBody:SetJustifyH("LEFT")
+    explainBody:SetJustifyV("TOP")
+
+    -- Nothing pointed at yet. A column that starts blank looks unloaded, so
+    -- it says what it is for instead.
+    local explainIdle = UI.Label(explain, "Point at a setting and this is where "
+        .. "it says what it does.", UI.FS.meta, C.textGhost)
+    explainIdle:SetPoint("TOPLEFT", explain, "TOPLEFT", PAD, -(HEADER_H + 20))
+    explainIdle:SetWidth(SIDE_W - PAD * 2)
+    explainIdle:SetJustifyH("LEFT")
+
+    function self:SetExplain(title, section, body)
+        explainTitle:SetText(title or "")
+        explainWhere:SetText((section or ""):upper())
+        explainBody:SetText(body or "")
+        -- A setting with no note of its own is not a failure - most of them
+        -- are named well enough not to need one. The heading still changes,
+        -- so the column tracks the pointer either way.
+        explainBody:SetShown(body ~= nil and body ~= "")
+        explainIdle:Hide()
+    end
+
+    ---------------------------------------------------------------------
     -- Middle
     ---------------------------------------------------------------------
     local stageHost = CreateFrame("Frame", nil, frame)
     stageHost:SetPoint("TOPLEFT", rail, "TOPRIGHT", 0, 0)
     stageHost:SetPoint("BOTTOMLEFT", rail, "BOTTOMRIGHT", 0, 0)
-    UI.Fill(stageHost, "BACKGROUND", C.canvasBg)
+    -- windowBg, not canvasBg. The rail and the inspector are DARKER than this
+    -- in the new palette, which is the whole trick: the content is the top
+    -- level of the window rather than a trench between two raised sides.
+    UI.Fill(stageHost, "BACKGROUND", C.windowBg)
 
-    local pageTitle = UI.Label(stageHost, "", 19, C.text)
-    pageTitle:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -18)
+    local pageTitle = UI.Label(stageHost, "", UI.FS.title, C.text)
+    pageTitle:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -16)
 
     -- Width, not a second anchor: a font string given both TOPLEFT and RIGHT
     -- is told two different vertical positions and lands somewhere else.
-    local pageSubtitle = UI.Label(stageHost, "", 11, C.textDim)
-    pageSubtitle:SetPoint("TOPLEFT", pageTitle, "BOTTOMLEFT", 0, -5)
+    local pageSubtitle = UI.Label(stageHost, "", UI.FS.meta, C.textFaint)
+    pageSubtitle:SetPoint("TOPLEFT", pageTitle, "BOTTOMLEFT", 0, -6)
     pageSubtitle:SetJustifyH("LEFT")
     pageSubtitle:SetWordWrap(false)
+
+    -- The two ways into Edit Mode, in the header band where the page's own
+    -- actions live. They are shortcuts, not a second home: the rail entry
+    -- still opens edit mode, these two say which half of it you want.
+    local buildBtn = UI.Button(stageHost, "Build", 84, function()
+        ns.EditMode:SetUnlocked(true, "build")
+    end)
+    buildBtn:SetPoint("TOPRIGHT", stageHost, "TOPRIGHT", -PAD, -18)
+
+    local moveBtn = UI.Button(stageHost, "Move bars", 104, function()
+        ns.EditMode:SetUnlocked(true, "bars")
+    end)
+    moveBtn:SetPoint("TOPRIGHT", buildBtn, "TOPLEFT", -6, 0)
 
     local body = CreateFrame("Frame", nil, stageHost)
     body:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -(HEADER_H + 16))
@@ -609,33 +728,63 @@ function Options:Create()
         self:Refresh()
     end
 
-    -- EDIT MODE IS THE FIRST ENTRY IN THE LIST, not a button in the corner.
+    -- THE RAIL IS GROUPED, and its order is not the page list's order.
     --
-    -- It was a lone button at the bottom of the rail, on the argument that it
-    -- is a thing you DO rather than a place you go. True, and beside the
-    -- point: it is the thing this window exists to get you to, and it was the
-    -- one item on the left that did not look like the others. An entry among
-    -- the entries is where the eye already is.
+    -- Seven flat entries is a list you read from the top every time, because
+    -- nothing in it says where the thing you want is likely to be. Three
+    -- headed groups is three places to look, and the heading answers "is what
+    -- I want even in here" before any of the labels are read.
     --
-    -- It still closes the window, which is why it is the only entry that does
-    -- not stay lit afterwards - there is nothing to come back to until you
-    -- leave edit mode again.
-    local editItem = UI.NavItem(rail, "Edit Mode", "move", function()
-        frame:Hide()
-        ns.EditMode:SetUnlocked(true)
-    end)
-    editItem:SetPoint("TOPLEFT", rail, "TOPLEFT", 8, -76)
-    editItem:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -8, -76)
+    -- Edit Mode sits in BARS rather than with the pages, because it is an
+    -- ACTION and it belongs next to the thing it acts on. It still closes the
+    -- window, which is why it is the one entry that does not stay lit - there
+    -- is nothing to come back to until you leave edit mode again.
+    local NAV = {
+        { eyebrow = "Bars" },
+        { page = "cooldowns" },
+        { title = "Edit mode", glyph = "move", onClick = function()
+            frame:Hide()
+            ns.EditMode:SetUnlocked(true)
+        end },
+        { eyebrow = "System" },
+        { page = "settings" },
+        { page = "diagnostics" },
+        { eyebrow = "Info" },
+        { page = "about" },
+        { page = "changelog" },
+    }
 
-    -- The pages start one row below it.
-    local FIRST_PAGE_ROW = 1
-    for index, entry in ipairs(PAGES) do
-        local row = FIRST_PAGE_ROW + index - 1
-        local item = UI.NavItem(rail, entry.title, entry.glyph,
-            function() ShowPage(index) end)
-        item:SetPoint("TOPLEFT", rail, "TOPLEFT", 8, -76 - row * 34)
-        item:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -8, -76 - row * 34)
-        navItems[index] = item
+    local pageByKey = {}
+    for index, entry in ipairs(PAGES) do pageByKey[entry.key] = index end
+
+    local y = HEADER_H + UI.PAD
+    for position, entry in ipairs(NAV) do
+        if entry.eyebrow then
+            -- Air ABOVE the heading, and none under it. A heading belongs to
+            -- what follows; spaced evenly it belongs to neither side.
+            if position > 1 then y = y + 18 end
+            local caption = UI.Eyebrow(rail, entry.eyebrow)
+            caption:SetPoint("TOPLEFT", rail, "TOPLEFT", UI.PAD, -y - 6)
+            y = y + 20
+        else
+            local index = entry.page and pageByKey[entry.page]
+            local pageEntry = index and PAGES[index]
+            local item = UI.NavItem(rail,
+                entry.title or (pageEntry and pageEntry.title) or "",
+                entry.glyph or (pageEntry and pageEntry.glyph),
+                entry.onClick or function() ShowPage(index) end)
+            -- FLUSH WITH BOTH EDGES of the rail, not inset.
+            --
+            -- Inset by 8, the active row's fill is a floating box with a gap
+            -- down its right-hand side, and the accent bar sits 8 pixels in
+            -- from the column edge instead of ON it. The design runs the row
+            -- from edge to edge; the padding belongs INSIDE the row, which is
+            -- where the icon's own 8 already is.
+            item:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -y)
+            item:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, -y)
+            if index then navItems[index] = item end
+            y = y + UI.NAV_ITEM_H
+        end
     end
 
     ---------------------------------------------------------------------
@@ -644,13 +793,45 @@ function Options:Create()
     local function PaintView()
         local entry = PAGES[self.pageIndex] or PAGES[1]
         local withSide = entry.side and true or false
+        local withExplain = entry.explain and true or false
 
-        SetStageWidth(withSide)
-        sideHost:SetShown(withSide)
+        -- The middle column narrows for either of them: the third column is
+        -- there or it is not, and what is IN it is a separate question.
+        SetStageWidth(withSide or withExplain)
+        sideHost:SetShown(withSide or withExplain)
+        side:SetShown(withSide)
+        explain:SetShown(withExplain)
 
         pageTitle:SetText(entry.title)
-        pageSubtitle:SetText(entry.subtitle)
-        pageSubtitle:SetWidth((withSide and NARROW_W or WIDE_W) - PAD * 2)
+        if entry.status then
+            local count = ns.Bars:Count()
+            local slots, filled = 0, 0
+            for index = 1, count do
+                local cfg = ns.Bars:Get(index)
+                if cfg then
+                    local total = ns.Bars:CellCount(cfg)
+                    slots = slots + total
+                    for cell = 1, total do
+                        if cfg.cells and cfg.cells[cell] then filled = filled + 1 end
+                    end
+                end
+            end
+            pageSubtitle:SetText(string.format("%d bar%s - %d of %d cells filled",
+                count, count == 1 and "" or "s", filled, slots))
+        else
+            pageSubtitle:SetText(entry.subtitle)
+        end
+
+        -- The header actions belong to the bars page. On a page with no bars
+        -- on it, "Move bars" is an instruction to leave.
+        moveBtn:SetShown(withSide)
+        buildBtn:SetShown(withSide)
+
+        -- The subtitle stops at the buttons rather than at the column edge,
+        -- or a long one runs underneath them.
+        local room = ((withSide or withExplain) and NARROW_W or WIDE_W) - PAD * 2
+        if withSide then room = room - (104 + 84 + 6 + UI.PAD) end
+        pageSubtitle:SetWidth(room)
 
         barList:SetShown(withSide)
         for index, page in pairs(pageFrames) do

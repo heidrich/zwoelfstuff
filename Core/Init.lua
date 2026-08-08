@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.20.0"
+ns.version = "4.21.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -129,6 +129,16 @@ ns.DEFAULTS = {
     -- has been given its own. One place to change it, and no need to visit
     -- three sections on four bars to change a typeface.
     font       = "Friz Quadrata TT",
+
+    -- The PANEL font - the options window, not the bars. Two different jobs:
+    -- bar text is read at a glance over a moving scene, panel text is read in
+    -- rows. The design asks for a narrow grotesk here and the client's own
+    -- face is not one, which is why this is a separate setting rather than a
+    -- reuse of the one above.
+    --
+    -- nil on purpose: resolved at read time to the best narrow face actually
+    -- registered, so a profile made before this existed picks it up too.
+    panelFont  = nil,
 
     -- Whether the bars REPLACE Blizzard's Cooldown Manager display or sit
     -- next to it. On by default, and the setting says what off costs: taking
@@ -300,10 +310,46 @@ function ns.StyleFont(fontString, size, flags)
     fontString:SetFont(path, size, flags or "OUTLINE")
 end
 
+-- THE PANEL FONT IS THE ONE THE USER PICKED, not the client's.
+--
+-- This read GameFontHighlight, which is the client's default UI face - wide,
+-- round, and the reason the window looked nothing like the design it was
+-- built from. The design names a narrow grotesk, Settings already offers a
+-- "Panel font" picker, and every string in the window ignored it.
+--
+-- Falls back down the chain rather than assuming: the library may not have
+-- loaded yet when the very first string is styled at login.
+-- THE PANEL FONT, BY PATH, NOT BY NAME.
+--
+-- LibSharedMedia is a registry of NAMES. Any addon that loads after this one
+-- can register "Expressway" over a different file, and then the window is
+-- drawn in whatever that addon felt like - which is the one thing a design
+-- system must not leave to chance.
+--
+-- This is a path into the client's own Fonts directory. It ships with every
+-- installation, it is the narrow grotesk the design asks for, and nothing any
+-- other addon does can move it.
+-- A long string, so the backslash is a backslash. "Fonts\A..." in quotes is
+-- an invalid escape and takes the whole file down at load - which has now
+-- happened twice, both times via a script writing this line.
+ns.PANEL_FONT = [[Fonts\ARIALN.TTF]]
+
 function ns.StyleUIFont(fontString, size, flags)
-    local path = GameFontHighlight and GameFontHighlight:GetFont()
-    if not path then path = NumberFontNormalLarge:GetFont() end
-    fontString:SetFont(path, size, flags or "")
+    -- A font the USER picked still wins - that is a choice, not an accident.
+    local path
+    if ns.db and ns.db.panelFont and ns.Media then
+        path = ns.Media.Font(ns.db.panelFont)
+    end
+    path = path or ns.PANEL_FONT
+
+    -- SetFont reports whether the file loaded. It will not on a client whose
+    -- locale needs glyphs this file does not carry, and a font string that
+    -- silently failed to take a font renders nothing at all.
+    if not fontString:SetFont(path, size, flags or "") then
+        local fallback = GameFontHighlight and GameFontHighlight:GetFont()
+            or NumberFontNormalLarge:GetFont()
+        fontString:SetFont(fallback, size, flags or "")
+    end
 end
 
 -- Every font string inside a widget, styled with the number font. Used on

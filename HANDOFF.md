@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.20.0**. Read this first.
+State as of **2026-08-08**, version **4.21.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~115 checks in
+**Run `/zs test` before you believe anything below.** ~124 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,9 +25,127 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.20.0 is statically clean over 25 files and passes its own checks.
+Version 4.21.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
+
+## 4.21.0 — the design was built, and how it went wrong first
+
+A full design handoff arrived in `design_handoff_zwoelfstuff_ui/`: a token set,
+pixel measurements for every screen, an HTML board of screens 1a-1k and 3a/3b,
+a logo, and — in a second delivery — **68 SVG icons**. The owner's verdict on
+the first attempt was *"fast alles ist falsch"*, and he was largely right. What
+follows is why, because the reasons are reusable and the mistakes are not
+interesting twice.
+
+### The four things that were actually wrong
+
+1. **The font.** Every string in the window took `GameFontHighlight` — the
+   client's own face, wide and round. The design is drawn in a narrow grotesk
+   and Settings already had a font picker, which only ever reached the BARS.
+   This one difference accounted for most of "sieht nicht aus wie das Mockup".
+   Panel font and bar text are now two settings, and the panel default is a
+   **path** (`Fonts\ARIALN.TTF`), not a LibSharedMedia name: a name is a
+   registry key and any addon loading later can register over it.
+
+2. **The icons were the wrong TECHNIQUE.** `UI.Glyph` builds marks from filled
+   rectangles. The design draws **outlines at 1.4px with round caps** — four
+   *empty* squares, a true circle, real diagonals. A filled 4.6 square beside a
+   1.4 stroke is a different weight of drawing, and a circle cannot be built
+   from rectangles at all. See *The icon pipeline* below.
+
+3. **The spell picker was never touched.** It kept its green left stripe, its
+   two-line entries and a grey subline carrying the spell ID. Screen 1c is one
+   line per spell with one short thing on the right.
+
+4. **Two close crosses** sat on top of each other, because the design draws one
+   in the inspector header and the window already had one in the same corner.
+
+### The icon pipeline — this is the part worth keeping
+
+The client loads **BLP and TGA**. Not SVG, and *not PNG* — the handoff offers
+to supply PNGs and they would not have worked either.
+
+There is no SVG rasteriser on this machine, so **the browser is the
+rasteriser**, which is also the engine the design was drawn in:
+
+1. `mkpage.py` inlines each SVG with `currentColor` swapped for white and emits
+   a page that draws each one into a canvas at an exact pixel size.
+2. `agent-browser eval` runs it and the data URLs are redirected **to a file** —
+   never into the model's context, it is 200 KB of base64.
+3. `mktga.py` decodes and writes TGA: uncompressed, 32-bit, bottom-up origin,
+   power-of-two canvas with the mark centred.
+
+White files, tinted at the call site with `SetVertexColor`, so one file serves
+`textDim`, `text` and `accent` instead of three sets.
+
+**Rendered at each size, never scaled between them.** A 1.4px stroke does not
+survive being resized.
+
+**And rendered at DOUBLE as well, because the interface is not at 1:1.** The
+window is 1360 units wide and lands on ~2440 real pixels here, so one unit is
+~1.8 pixels: a 14px file shown at 14 units is stretched to 25 and every fine
+stroke goes soft. That was the owner's *"manche sehen echt unscharf aus"*, and
+no amount of care in the file fixes it — the file was too small. Each mark now
+exists at the design size and at double; `IconCut` picks by
+`UIParent:GetEffectiveScale()` and the frame stays the same size in units, so
+the client downsamples instead of upsampling. 272 files in `Media/icons/`.
+
+Wired up so far: the seven nav marks, `kind-bar`, and four chevrons. The other
+~50 are rendered and waiting for the places the design shows them.
+
+### The harness now BUILDS THE WINDOW
+
+Three regressions in a row shipped past a clean static check and 115 green
+model checks, because neither one opens a window:
+
+- `UI.HEADER_H` was dropped with the block it happened to sit in during the
+  palette swap. `Options:Create()` threw at line 548 — right after the rail,
+  before everything else — so the owner saw a window that was not built rather
+  than a design that was not implemented.
+- `UI.Swatch` returns the ROW it was given, and Edit Mode passed a bare table
+  `{ slot = tools }`. `ClearAllPoints` on it threw, and **the whole tool panel
+  below that line never got built** — grid, grid size, the switches. This one
+  had been live since 4.20.0.
+- The tool panel stepped down by a hardcoded 23 while its control was 20 tall.
+  The stepper is 28, so every row overlapped the next.
+
+The scratch harness now loads Widgets, EditMode, OptionsBars, OptionsGroups and
+Options, calls `Options:Create()`, paints all five pages, exercises all three
+inspector modes with real bars, and unlocks Edit Mode in both modes. It prints
+`window builds, all five pages painted`. **Every one of the three above throws
+there.** The stub answers getters with plausible numbers, hands back frames
+from `CreateTexture`/`CreateFontString`, and returns **nil for any key that is
+not PascalCase** — an addon field like `dkHeight` must be nil, or the layout
+does arithmetic on a function.
+
+### Lua escapes, three times in one session
+
+`"Interface\AddOns\..."` and `"Fonts\ARIALN.TTF"` were each written by a
+script through a shell heredoc, which ate one backslash and left `\A` — not a
+legal Lua escape, and the whole file fails to parse at login. It is already a
+lesson in this document and it still happened three times.
+
+**Any path written by a script goes in `[[long brackets]]`.** There are no
+escapes inside them. Better still: write paths with the editor, not a script.
+
+### Deliberately not done, with reasons
+
+- **Letter-spacing (.14em) on eyebrows and weight 600.** Neither exists here. A
+  FontString has no tracking axis, and the panel font is one file with one cut.
+  Upper case at 10 against a body of 13 carries the signal on its own.
+- **The card's 6-dot grip.** Bars cannot be reordered at all, and a handle that
+  does nothing is a lie. Cell reordering exists; bar reordering does not.
+- **"Aura display" in the rail.** The design shows a page the addon does not
+  have. Its icon is rendered and waiting.
+- **Screens 1d, 1f, 1g, 1h and 3a.** Empty state, Diagnostics, About/Changelog,
+  the Edit Mode overlay and the texture dropdown still wear their old layout.
+  3a is partly there: the menu scrolls now, but the search field, the two
+  groups and the preview strips are not built.
+
+### Not a bug
+
+The white ring in the owner's screenshots is his mouse cursor.
 
 ## What is confirmed in game, and what is not
 

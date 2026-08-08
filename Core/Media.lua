@@ -48,6 +48,23 @@ Media.DEFAULT = {
     border    = "None",
 }
 
+-- The panel wants a NARROW GROTESK. The design names Expressway; it is not
+-- ours to ship, it arrives with ElvUI and half a dozen other addons, so it is
+-- taken if it is there. Arial Narrow is registered by LibSharedMedia itself
+-- and is the same shape, which makes it the floor rather than a compromise.
+-- Friz Quadrata is last because it is the face the design was drawn to get
+-- away from.
+local PANEL_FONTS = { "Expressway", "Arial Narrow", "Friz Quadrata TT" }
+
+function Media.PanelFont()
+    if LSM then
+        for _, name in ipairs(PANEL_FONTS) do
+            if LSM:Fetch("font", name, true) then return name end
+        end
+    end
+    return Media.DEFAULT.font
+end
+
 ---------------------------------------------------------------------------
 -- Lookup
 ---------------------------------------------------------------------------

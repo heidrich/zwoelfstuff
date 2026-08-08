@@ -36,36 +36,59 @@ ns.UI = UI
 -- off its background, never white at 6%.
 ---------------------------------------------------------------------------
 local C = {
-    canvasBg   = { 0.063, 0.067, 0.075 },
-    windowBg   = { 0.082, 0.086, 0.098 },
-    sidebarBg  = { 0.106, 0.110, 0.125 },
-    well       = { 0.090, 0.094, 0.106 },  -- a recessed slot: empty cells, inputs
-    surface    = { 0.137, 0.145, 0.165 },
-    surfaceHi  = { 0.173, 0.182, 0.204 },
-    control    = { 0.204, 0.216, 0.243 },
-    controlHi  = { 0.251, 0.263, 0.294 },
-    separator  = { 0.169, 0.176, 0.196 },
-    edge       = { 0.196, 0.204, 0.227 },  -- a card's own outline
+    canvasBg   = { 0.039, 0.043, 0.051 },  -- #0A0B0D  behind the window
+    windowBg   = { 0.071, 0.078, 0.094 },  -- #121418  the window, middle column
+    sidebarBg  = { 0.055, 0.063, 0.075 },  -- #0E1013  rail AND inspector
+    well       = { 0.043, 0.051, 0.063 },  -- #0B0D10  preview, input, overlay
+    surface    = { 0.098, 0.110, 0.129 },  -- #191C21  a card, the active nav row
+    control    = { 0.129, 0.145, 0.169 },  -- #21252B  stepper, select, chip
+    controlHi  = { 0.200, 0.224, 0.255 },  -- #333941  control under the cursor
+    separator  = { 0.122, 0.137, 0.165 },  -- #1F232A  hairline
+    edge       = { 0.165, 0.184, 0.216 },  -- #2A2F37  card outline, window edge
 
-    accent     = { 1.000, 0.478, 0.239 },  -- ZwoelfStuff orange
-    accentDim  = { 0.694, 0.337, 0.169 },
-    accentSoft = { 0.286, 0.192, 0.161 },  -- accent laid over a surface, opaque
-    accentCool = { 0.494, 0.776, 0.831 },  -- the "DK" cyan
+    accent     = { 1.000, 0.478, 0.239 },  -- #FF7A3D  ZwoelfStuff orange
+    accentSoft = { 0.180, 0.118, 0.082 },  -- #2E1E15  toggle track on, badge bed
+    accentCool = { 0.494, 0.776, 0.831 },  -- #7EC6D4  references, category badges
 
     -- Green means "this one is already on the bar you have selected". Only
     -- ever used for that, so it stays readable as a state rather than decoration.
-    inUse      = { 0.404, 0.788, 0.443 },
-    inUseSoft  = { 0.145, 0.235, 0.180 },
+    inUse      = { 0.404, 0.788, 0.443 },  -- #67C971
+    inUseSoft  = { 0.086, 0.149, 0.106 },  -- #16261B
 
-    text       = { 0.949, 0.953, 0.965 },
-    textDim    = { 0.616, 0.635, 0.678 },
-    textFaint  = { 0.408, 0.424, 0.467 },
-    danger     = { 0.898, 0.353, 0.318 },
+    danger     = { 0.898, 0.353, 0.318 },  -- #E5645A  destructive actions ONLY
+    warning    = { 0.890, 0.702, 0.255 },  -- #E3B341  log level WARN
+
+    text       = { 0.937, 0.945, 0.957 },  -- #EFF1F4  titles, values, active row
+    textBody   = { 0.788, 0.812, 0.847 },  -- #C9CFD8  row labels in the inspector
+    textDim    = { 0.608, 0.639, 0.686 },  -- #9BA3AF  secondary, inactive nav
+    textFaint  = { 0.384, 0.416, 0.463 },  -- #626A76  meta, sublines
+    textGhost  = { 0.306, 0.337, 0.380 },  -- #4E5661  eyebrows, disabled
 }
 
--- One height for the whole window's header band, so the rule under every
--- heading lands on the same line no matter which column it is in.
-UI.HEADER_H = 62
+-- Two more the design names in prose rather than in the token list, and both
+-- earn a name because they appear in more than one place.
+--
+-- overlayEdge is what tells an overlay it is ON TOP of the page. There are no
+-- shadows here, so the only way to lift a popup off its background is an
+-- outline one step brighter than any edge on the page itself.
+C.overlayEdge     = { 0.235, 0.259, 0.294 }  -- #3C424B  popup outline, scroll grip
+C.accentCoolSoft  = { 0.082, 0.133, 0.153 }  -- #152227  bed for a category badge
+
+-- Derived, not designed. The palette above has no entry for either, but both
+-- are asked for by name in a couple of dozen places, so they are computed from
+-- the ladder rather than left to drift back to their old values.
+--
+--   surfaceHi   a card under the cursor - which in this ladder is simply the
+--               next step up, the same one a control sits on
+--   accentDim   orange that is NOT the current thing: Edit Mode draws every
+--               bar's outline, and only the selected one may be full accent.
+--               45% of the way back to the window ground.
+C.surfaceHi = C.control
+C.accentDim = {
+    C.accent[1] * 0.55 + C.windowBg[1] * 0.45,
+    C.accent[2] * 0.55 + C.windowBg[2] * 0.45,
+    C.accent[3] * 0.55 + C.windowBg[3] * 0.45,
+}
 
 -- Kept so the panels that are parked until 12.1 still resolve their colours.
 C.headerBg = C.surface
@@ -87,14 +110,54 @@ UI.C = C
 -- rather than counting boxes, and the same page shows a third more of itself.
 UI.ROW_H      = 28
 UI.ROW_GAP    = 1
-UI.SECTION_H  = 34
+UI.SECTION_H  = 32
 UI.COL_GAP    = 18
 
--- The one spacing rhythm. Everything in the window is a multiple of it, which
--- is most of what makes a layout look considered rather than assembled.
-UI.PAD    = 14
+-- The window, and the three columns it is made of. Stated here rather than in
+-- Options.lua because the inspector needs to know how wide it is in order to
+-- decide what fits on a row, and it is not the thing that creates itself.
+UI.WINDOW_W    = 1360
+UI.WINDOW_H    = 760
+UI.RAIL_W      = 168
+UI.INSPECTOR_W = 400
+UI.CONTENT_W   = UI.WINDOW_W - UI.RAIL_W - UI.INSPECTOR_W  -- 792
+
+-- One height for the whole window's header band, so the rule under every
+-- heading lands on the same line no matter which column it is in.
+UI.HEADER_H = 62
+
+-- Fixed heights, so that two controls of different kinds on the same row have
+-- the same silhouette.
+UI.CARD_HEAD_H = 40
+UI.NAV_ITEM_H  = 30
+UI.CONTROL_H   = 24   -- select
+UI.BUTTON_H    = 26   -- every screen in the design says 26, so 26 it is
+UI.STEPPER_H   = 22
+
+-- The one spacing rhythm: 4 · 8 · 12 · 16 · 20 · 24. Only these six for layout
+-- gaps and container padding. Padding INSIDE a control belongs to the control
+-- and is not on the scale: button 12, chip 6-8, stepper 0.
+UI.PAD    = 16
 UI.GAP    = 8
 UI.RADIUS = 0
+
+-- Five sizes, and there is no sixth. Seven had crept in, which is how a panel
+-- stops having a hierarchy: if everything is nearly the same size, size stops
+-- carrying meaning and colour has to do all the work on its own.
+--
+-- The design asks for weight 600 on title, card and eyebrow. There is no
+-- weight axis here - a FontString gets a font FILE, and the panel font is
+-- whatever the user picked in LibSharedMedia, which may ship one cut. So the
+-- emphasis those three would have taken from weight is taken from size and
+-- colour instead: a title is 20px `text` against 13px `textDim`, which is a
+-- wider gap than 600-against-400 would have been anyway.
+UI.FS = {
+    title   = 20,   -- page title in the header band
+    card    = 15,   -- bar name, inspector title
+    row     = 13,   -- row labels, nav, lists
+    meta    = 12,   -- sublines, hints
+    eyebrow = 10,   -- section heads, badges - ALWAYS upper case
+}
 
 local function Tex(parent, layer, r, g, b, a)
     local t = parent:CreateTexture(nil, layer or "BACKGROUND")
@@ -127,46 +190,118 @@ function UI.Label(parent, text, size, colour, flags)
 end
 
 function UI.Hint(parent, text)
-    return UI.Label(parent, text, 11, C.textDim)
+    return UI.Label(parent, text, UI.FS.meta, C.textDim)
+end
+
+-- Eyebrow - the small upper-case caption over a section, a group of nav rows,
+-- or inside a badge.
+--
+-- The design asks for .14em tracking. There is no letter spacing here:
+-- FontString:SetSpacing sets LINE spacing, and nothing in the client exposes
+-- the other one. The usual workaround is to push a space between every
+-- character, and it is rejected on purpose - a space in a proportional font is
+-- roughly .3em, so it would be double the tracking asked for, it would make
+-- "SHIPPED WITH ZWOELFSTUFF" wider than the column it lives in, and it turns
+-- a caption into a string that can no longer be measured or compared.
+--
+-- Upper case at 10px against a body of 13px carries the same signal on its own.
+function UI.Eyebrow(parent, text, colour)
+    return UI.Label(parent, (text or ""):upper(), UI.FS.eyebrow,
+        colour or C.textGhost)
+end
+
+-- Badge - upper-case caption on its own bed. Three meanings, and they are the
+-- only three: what KIND of thing this is (cool), what STATE it is in (green),
+-- and which one is CURRENT (accent).
+function UI.Badge(parent, text, kind)
+    local fg, bed = C.accentCool, C.accentCoolSoft
+    if kind == "state" then fg, bed = C.inUse, C.inUseSoft
+    elseif kind == "current" then fg, bed = C.accent, C.accentSoft end
+
+    local badge = CreateFrame("Frame", nil, parent)
+    badge.bg = Fill(badge, "BACKGROUND", bed)
+    badge.label = UI.Eyebrow(badge, text, fg)
+    badge.label:SetPoint("CENTER", badge, "CENTER", 0, 0)
+
+    -- Padding 4 vertical / 6 horizontal is the control's own, not the layout's,
+    -- so it does not sit on the spacing scale.
+    badge.SetLabel = function(self, value)
+        self.label:SetText((value or ""):upper())
+        self:SetSize(self.label:GetStringWidth() + 12,
+            self.label:GetStringHeight() + 8)
+    end
+    badge:SetLabel(text)
+    return badge
 end
 
 ---------------------------------------------------------------------------
 -- Button - flat, accent on hover
 ---------------------------------------------------------------------------
+-- Lighten a colour towards white. Used for the hovered state of the two
+-- styles that have no background to change - a fill cannot report the cursor
+-- if there is no fill.
+local function Lift(colour, amount)
+    return {
+        colour[1] + (1 - colour[1]) * amount,
+        colour[2] + (1 - colour[2]) * amount,
+        colour[3] + (1 - colour[3]) * amount,
+    }
+end
+
 function UI.Button(parent, text, width, onClick, style)
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(width or 100, 24)
+    btn:SetSize(width or 100, UI.BUTTON_H)
 
-    -- Three weights, and they are not interchangeable:
-    --   nil        an ordinary action
-    --   "primary"  the one action a page is for
-    --   "soft"     an action that belongs to the surface it sits on and must
-    --              not shout - the accent is in the text, not the fill
-    local accented = style == "primary" or style == "soft"
-    local base = style == "primary" and C.accentSoft or C.control
-    local hover = style == "primary" and C.accentDim or C.controlHi
-    if style == "soft" then base, hover = C.surface, C.accentSoft end
+    -- Four weights, and they are not interchangeable:
+    --   nil        an ordinary action - a surface with an outline
+    --   "primary"  the one action a page is for - SOLID accent, dark text.
+    --              There is at most one of these visible per column.
+    --   "ghost"    an action that belongs to the band it sits in and must not
+    --              compete with the content under it - no fill at all
+    --   "link"     a reference, not an action on this page
+    local fg, base, hover, outline = C.text, C.surface, C.control, C.edge
+    if style == "primary" then
+        -- Dark text on orange, not orange text on dark. This is the one place
+        -- the accent is a FILL, which is what makes it the loudest thing in
+        -- the column and therefore the thing that has to be rarest.
+        fg, base, hover, outline = C.windowBg, C.accent, Lift(C.accent, 0.15), nil
+    elseif style == "ghost" then
+        fg, base, hover, outline = C.textDim, nil, C.surface, nil
+    elseif style == "link" then
+        fg, base, hover, outline = C.accentCool, nil, nil, nil
+    end
 
-    local bg = Fill(btn, "BACKGROUND", base)
-    local edge = ns.CreateBorder(btn, 1, "BORDER")
-    local rest = style == "soft" and C.edge or C.separator
-    edge:SetColor(rest[1], rest[2], rest[3], 1)
+    local bg = Fill(btn, "BACKGROUND", base or C.surface)
+    if not base then bg:Hide() end
 
-    local label = UI.Label(btn, text, 12, accented and C.accent or C.text)
+    local edge
+    if outline then
+        edge = ns.CreateBorder(btn, 1, "BORDER")
+        edge:SetColor(outline[1], outline[2], outline[3], 1)
+    end
+
+    local label = UI.Label(btn, text, UI.FS.meta, fg)
     label:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.label = label
 
+    local hoverFg = style == "link" and Lift(C.accentCool, 0.25)
+        or (style == "ghost" and C.text or nil)
+
     btn:SetScript("OnEnter", function()
-        if btn:IsEnabled() then
+        if not btn:IsEnabled() then return end
+        if hover then
             bg:SetColorTexture(hover[1], hover[2], hover[3], 1)
-            edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
-            if style == "primary" then label:SetTextColor(1, 1, 1) end
+            bg:Show()
         end
+        if hoverFg then label:SetTextColor(hoverFg[1], hoverFg[2], hoverFg[3]) end
     end)
     btn:SetScript("OnLeave", function()
-        bg:SetColorTexture(base[1], base[2], base[3], 1)
-        edge:SetColor(rest[1], rest[2], rest[3], 1)
-        if accented then label:SetTextColor(C.accent[1], C.accent[2], C.accent[3]) end
+        if base then
+            bg:SetColorTexture(base[1], base[2], base[3], 1)
+        else
+            bg:Hide()
+        end
+        label:SetTextColor(fg[1], fg[2], fg[3])
     end)
     if onClick then btn:SetScript("OnClick", onClick) end
 
@@ -176,7 +311,7 @@ function UI.Button(parent, text, width, onClick, style)
     local baseSetEnabled = btn.SetEnabled
     btn.SetEnabled = function(self, enabled)
         baseSetEnabled(self, enabled)
-        local c = enabled and (style == "primary" and C.accent or C.text) or C.textFaint
+        local c = enabled and fg or C.textGhost
         label:SetTextColor(c[1], c[2], c[3])
     end
 
@@ -191,7 +326,17 @@ end
 -- The control is anchored to row.slot, a right-aligned area of fixed width,
 -- so every control in a column lines up no matter what type it is.
 ---------------------------------------------------------------------------
-local CONTROL_W = 150
+-- The widest control there is - a select. Everything else is right-aligned
+-- inside the same slot so that a column of mixed controls has one right edge.
+local CONTROL_W = 168
+
+-- A control narrower than the slot gives the label the difference back. The
+-- slot exists to align right edges, not to reserve space nobody uses: the
+-- stepper is 96 of the 168, and without this a label would be cut off at 192
+-- while 72 pixels sat empty next to it.
+local function ClaimRow(row, control)
+    row.label:SetPoint("RIGHT", control, "LEFT", -UI.GAP, 0)
+end
 
 function UI.Row(parent, text, opts)
     opts = opts or {}
@@ -208,30 +353,37 @@ function UI.Row(parent, text, opts)
     row.bg:Hide()
 
     -- The hairline that does the separating instead. One pixel, one step off
-    -- the background, and it stops short of both edges so a column of rows
-    -- reads as a list rather than as a table.
+    -- the background, and it runs the full width of the row so that it lines
+    -- up with the rule under a section heading and with the column edge.
     row.rule = Tex(row, "BACKGROUND", C.separator[1], C.separator[2],
         C.separator[3], 1)
     row.rule:SetHeight(1)
-    row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 2, 0)
-    row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 0)
+    row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
-    row.label = UI.Label(row, text, 12, C.text)
-    row.label:SetPoint("LEFT", row, "LEFT", 8, opts.sublabel and 8 or 0)
+    -- textBody, not text. A column of forty labels at full white is forty
+    -- things shouting; the value on the right is what the eye is looking for,
+    -- and it is the only thing on the row in `text`.
+    row.label = UI.Label(row, text, UI.FS.row, C.textBody)
+    row.label:SetPoint("LEFT", row, "LEFT", 0, opts.sublabel and 8 or 0)
     row.label:SetWordWrap(false)
 
     if opts.sublabel then
-        row.sub = UI.Label(row, opts.sublabel, 10, C.textFaint)
+        row.sub = UI.Label(row, opts.sublabel, UI.FS.meta, C.textFaint)
         row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -3)
         row.sub:SetWordWrap(false)
     end
 
+    -- Flush with the column edge, not inset. The padding a row needs is the
+    -- SECTION's - inset again here and every control sits 8px short of the
+    -- rule above it, which is the one misalignment that is visible from
+    -- across the room.
     row.slot = CreateFrame("Frame", nil, row)
-    row.slot:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.slot:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     row.slot:SetSize(opts.controlWidth or CONTROL_W, row:GetHeight() - 6)
 
     -- The label must never run under the control.
-    row.label:SetPoint("RIGHT", row.slot, "LEFT", -8, 0)
+    row.label:SetPoint("RIGHT", row.slot, "LEFT", -UI.GAP, 0)
 
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self) self.bg:Show() end)
@@ -258,12 +410,15 @@ function UI.SectionHeader(parent, text, onToggle, isOpen)
     -- follows it, and spacing it evenly is what makes a long page read as one
     -- undifferentiated column.
     local caption = text:upper()
-    local label = UI.Label(header, caption, 10, C.textDim, "")
-    label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 13 or 2, 7)
+    local label = UI.Eyebrow(header, caption)
+    label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 13 or 0, 7)
 
+    -- The rule runs from the caption to the right EDGE of the column, on the
+    -- caption's own baseline. That is what ties a heading to the rows under it
+    -- rather than leaving it floating over them.
     local line = Tex(header, "ARTWORK", C.line[1], C.line[2], C.line[3], C.line[4])
-    line:SetPoint("BOTTOMLEFT", label, "BOTTOMRIGHT", 8, 4)
-    line:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -2, 7)
+    line:SetPoint("BOTTOMLEFT", label, "BOTTOMRIGHT", 10, 4)
+    line:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 7)
     line:SetHeight(1)
 
     if onToggle then
@@ -314,13 +469,15 @@ end
 -- Toggle - an on/off switch
 ---------------------------------------------------------------------------
 function UI.Toggle(row, get, set)
+    -- 32 by 18 with a 14 knob: square, no outline, no animation. The track
+    -- carries the state as much as the knob position does, which is what lets
+    -- it stay readable at this size - a 4px travel on its own is not a signal.
     local toggle = CreateFrame("Button", nil, row.slot)
-    toggle:SetSize(38, 18)
+    toggle:SetSize(32, 18)
     toggle:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+    ClaimRow(row, toggle)
 
     local track = Fill(toggle, "BACKGROUND", C.control)
-    local edge = ns.CreateBorder(toggle, 1, "BORDER")
-    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     local knob = Tex(toggle, "ARTWORK", 1, 1, 1, 1)
     knob:SetSize(14, 14)
@@ -334,7 +491,7 @@ function UI.Toggle(row, get, set)
             track:SetColorTexture(C.accentSoft[1], C.accentSoft[2], C.accentSoft[3], 1)
         else
             knob:SetPoint("LEFT", toggle, "LEFT", 2, 0)
-            knob:SetColorTexture(0.45, 0.47, 0.52, 1)
+            knob:SetColorTexture(C.textGhost[1], C.textGhost[2], C.textGhost[3], 1)
             track:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
         end
     end
@@ -358,62 +515,81 @@ end
 -- small ranges and it does not read as "add one".
 ---------------------------------------------------------------------------
 function UI.Counter(row, cfg)
-    local holder = CreateFrame("Frame", nil, row.slot)
-    holder:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-    holder:SetSize(92, 22)
-
-    local value = UI.Label(holder, "", 13, C.text)
-    value:SetPoint("CENTER", holder, "CENTER", 0, 0)
-    value:SetJustifyH("CENTER")
-    value:SetWidth(40)
-
-    local function Step(delta)
-        local next_ = (cfg.get() or cfg.min) + delta
-        if next_ < cfg.min then next_ = cfg.min end
-        if next_ > cfg.max then next_ = cfg.max end
-        cfg.set(next_)
-        if cfg.apply then cfg.apply() end
-        ns.Options:Refresh()
-    end
-
-    local minus = UI.Button(holder, "-", 26, function() Step(-1) end)
-    minus:SetHeight(20)
-    minus:SetPoint("LEFT", holder, "LEFT", 0, 0)
-
-    local plus = UI.Button(holder, "+", 26, function() Step(1) end)
-    plus:SetHeight(20)
-    plus:SetPoint("RIGHT", holder, "RIGHT", 0, 0)
-
-    holder.Refresh = function()
-        local current = cfg.get()
-        value:SetText(tostring(current or cfg.min))
-        minus:SetEnabled((current or cfg.min) > cfg.min)
-        plus:SetEnabled((current or cfg.min) < cfg.max)
-    end
-
-    row.control = holder
-    row.Refresh = holder.Refresh
-    return row
+    -- Kept as its own name because "count me one more" and "tune this" read
+    -- differently at the call site, but there is only one control now. It is
+    -- the narrow one: a count is at most three digits.
+    return UI.Slider(row, {
+        min = cfg.min, max = cfg.max, step = 1, compact = true,
+        get = cfg.get, set = cfg.set, apply = cfg.apply,
+        format = function(v) return tostring(math.floor(v + 0.5)) end,
+    })
 end
 
 ---------------------------------------------------------------------------
--- Slider - track, thumb and a numeric readout
+-- Stepper - minus, value, plus. There is no slider in this window any more.
 --
--- Self-built rather than templated: it has to sit inside a fixed control
--- slot and match the rest, and the Blizzard templates do neither.
+-- A slider is the wrong control for everything on these pages. It is a
+-- fixed-width track standing in for a range, so its precision is whatever
+-- pixels-per-step happens to fall out of the column width: on a 0-to-1 opacity
+-- in a 150px slot, one pixel is .007 and no exact value is reachable by hand.
+-- Every number here is either small and counted (rows, columns) or tuned in
+-- known steps (scale .05, opacity 5%), and both of those are "give me one
+-- more", which is a button.
+--
+--   [ - ] [  value  ] [ + ]
+--     22      36|52     22        all 22 tall, gap 1
+--
+-- 52 wide in the inspector (96 total, leaving the label 264 of the 368), 36 in
+-- the narrower card column (80 total).
+--
+-- The value stays an EDIT BOX. That is not in the design, and it is not
+-- negotiable either: it was asked for directly, and a stepper without it is a
+-- worse slider - reaching 250 from 24 is 226 clicks. Click it and type.
 ---------------------------------------------------------------------------
-function UI.Slider(row, cfg)
-    local BOX = 44
-    local slider = CreateFrame("Frame", nil, row.slot)
-    slider:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-    slider:SetSize(row.slot:GetWidth(), 20)
+local function StepperButton(parent, glyph, onClick)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(UI.STEPPER_H, UI.STEPPER_H)
+
+    local bg = Fill(btn, "BACKGROUND", C.control)
+    local label = UI.Label(btn, glyph, UI.FS.row, C.text)
+    label:SetPoint("CENTER", btn, "CENTER", 0, 0)
+
+    btn:SetScript("OnClick", onClick)
+    btn:SetScript("OnEnter", function(self)
+        if self:IsEnabled() then
+            bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+        end
+    end)
+    btn:SetScript("OnLeave", function()
+        bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
+    end)
+
+    -- At the end of the range the button says so by going quiet, rather than
+    -- staying lit and doing nothing when clicked.
+    local baseSetEnabled = btn.SetEnabled
+    btn.SetEnabled = function(self, enabled)
+        baseSetEnabled(self, enabled)
+        local c = enabled and C.text or C.textGhost
+        label:SetTextColor(c[1], c[2], c[3])
+        if not enabled then
+            bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
+        end
+    end
+
+    return btn
+end
+
+-- The control itself. Both public names below are three lines of anchoring
+-- around this one builder, so the big one and the small one cannot drift.
+local function BuildStepper(parent, cfg)
+    local BOX = cfg.compact and 36 or 52
+    local slider = CreateFrame("Frame", nil, parent)
+    slider:SetSize(UI.STEPPER_H * 2 + BOX + 2, UI.STEPPER_H)
 
     local box = CreateFrame("Frame", nil, slider)
-    box:SetSize(BOX, 18)
-    box:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
-    Fill(box, "BACKGROUND", C.canvasBg)
-    local boxEdge = ns.CreateBorder(box, 1, "BORDER")
-    boxEdge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+    box:SetSize(BOX, UI.STEPPER_H)
+    box:SetPoint("CENTER", slider, "CENTER", 0, 0)
+    Fill(box, "BACKGROUND", C.well)
 
     -- AN EDIT BOX, NOT A LABEL. The number was read-only, which meant an exact
     -- value could only be reached by dragging until the display agreed - and
@@ -429,26 +605,8 @@ function UI.Slider(row, cfg)
     value:SetJustifyH("CENTER")
     value:SetNumeric(false)   -- decimals and a minus sign are both legal
     value:SetMaxLetters(8)
-    ns.StyleFont(value, 11)
+    ns.StyleFont(value, UI.FS.meta)
     value:SetTextColor(C.text[1], C.text[2], C.text[3], 1)
-
-    local bar = CreateFrame("Frame", nil, slider)
-    bar:SetPoint("LEFT", slider, "LEFT", 0, 0)
-    bar:SetPoint("RIGHT", box, "LEFT", -8, 0)
-    bar:SetHeight(18)
-    bar:EnableMouse(true)
-
-    local track = Tex(bar, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
-    track:SetPoint("LEFT", bar, "LEFT", 0, 0)
-    track:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-    track:SetHeight(3)
-
-    local fill = Tex(bar, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
-    fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
-    fill:SetHeight(3)
-
-    local thumb = Tex(bar, "OVERLAY", 1, 1, 1, 1)
-    thumb:SetSize(10, 10)
 
     local function Clamp(v)
         if v < cfg.min then v = cfg.min end
@@ -464,28 +622,26 @@ function UI.Slider(row, cfg)
         slider.Refresh()
     end
 
-    local function FromCursor()
-        local scale = bar:GetEffectiveScale()
-        local x = select(1, GetCursorPosition()) / scale
-        local left, width = bar:GetLeft(), bar:GetWidth()
-        if not left or width <= 0 then return end
-        local pct = math.max(0, math.min(1, (x - left) / width))
-        Commit(cfg.min + pct * (cfg.max - cfg.min))
+    local function Step(delta)
+        local current = cfg.get()
+        if type(current) ~= "number" then current = cfg.min end
+        Commit(current + delta * cfg.step)
+        -- The card column redraws itself from the model, so a shape change has
+        -- to go round the page. On-screen panels pass silent and repaint
+        -- themselves through cfg.apply instead.
+        if not cfg.silent then ns.Options:Refresh() end
     end
 
-    bar:SetScript("OnMouseDown", function(self)
-        self.dragging = true
-        FromCursor()
-    end)
-    bar:SetScript("OnMouseUp", function(self)
-        self.dragging = false
-        ns.Options:Refresh()
-    end)
-    bar:SetScript("OnUpdate", function(self)
-        if self.dragging then FromCursor() end
-    end)
-    bar:SetScript("OnMouseWheel", function(_, delta) Commit(cfg.get() + delta * cfg.step) end)
-    bar:EnableMouseWheel(true)
+    local minus = StepperButton(slider, "-", function() Step(-1) end)
+    minus:SetPoint("LEFT", slider, "LEFT", 0, 0)
+
+    local plus = StepperButton(slider, "+", function() Step(1) end)
+    plus:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+
+    -- The wheel over the value is the third way in, and it is the fast one:
+    -- it steps without moving the pointer off the row.
+    box:EnableMouseWheel(true)
+    box:SetScript("OnMouseWheel", function(_, delta) Step(delta) end)
 
     -- Typing. The unit and any decoration the format added are stripped, so
     -- "85%", "85" and " 85 s" all mean the same thing - people re-type over a
@@ -517,16 +673,25 @@ function UI.Slider(row, cfg)
             value:SetText(cfg.format and cfg.format(current) or tostring(current))
         end
 
-        local span = cfg.max - cfg.min
-        local pct = span > 0 and ((current - cfg.min) / span) or 0
-        local width = math.max(1, bar:GetWidth())
-        fill:SetWidth(math.max(1, width * pct))
-        thumb:ClearAllPoints()
-        thumb:SetPoint("CENTER", bar, "LEFT", width * pct, 0)
+        -- Compared against the CLAMPED ends rather than the raw bounds: with a
+        -- step that does not divide the range evenly the last reachable value
+        -- is short of cfg.max, and a plus button that stays lit on a number it
+        -- can no longer change is the same broken promise as a dead slider.
+        minus:SetEnabled(current > Clamp(cfg.min))
+        plus:SetEnabled(current < Clamp(cfg.max))
     end
 
-    row.control = slider
-    row.Refresh = slider.Refresh
+    return slider
+end
+
+-- On a settings row: right-aligned in the control slot. 96 wide in the
+-- inspector, which leaves the label 264 of the 368 and it never runs out.
+function UI.Slider(row, cfg)
+    local stepper = BuildStepper(row.slot, cfg)
+    stepper:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+    ClaimRow(row, stepper)
+    row.control = stepper
+    row.Refresh = stepper.Refresh
     return row
 end
 
@@ -539,6 +704,11 @@ end
 -- which is how a picker doubles as its own create/delete surface.
 ---------------------------------------------------------------------------
 local ENTRY_H = 23
+
+-- How tall a popup is allowed to get before it scrolls instead. Chosen so it
+-- fits inside the window it opens over rather than over the whole screen.
+local MENU_MAX_H = 404
+
 local popup
 
 local function GetPopup()
@@ -548,13 +718,21 @@ local function GetPopup()
     popup:SetFrameStrata("FULLSCREEN_DIALOG")
     popup:SetClampedToScreen(true)
     popup:Hide()
-    Fill(popup, "BACKGROUND", C.surface)
+    -- A well with a brighter-than-anything outline. There are no shadows here,
+    -- so "this is on top of the page" has to be said with an edge: one step
+    -- above the brightest edge the page itself can draw.
+    Fill(popup, "BACKGROUND", C.well)
     local edge = ns.CreateBorder(popup, 1, "BORDER")
-    edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
+    edge:SetColor(C.overlayEdge[1], C.overlayEdge[2], C.overlayEdge[3], 1)
     popup.rows = {}
     popup.divider = Tex(popup, "ARTWORK", C.separator[1], C.separator[2], C.separator[3], 1)
     popup.divider:SetHeight(1)
     popup.divider:Hide()
+
+    popup.grip = Tex(popup, "OVERLAY", C.overlayEdge[1], C.overlayEdge[2],
+        C.overlayEdge[3], 1)
+    popup.grip:SetWidth(4)
+    popup.grip:Hide()
 
     -- Click-away catcher: a full-screen button one level below the popup.
     local catcher = CreateFrame("Button", nil, UIParent)
@@ -565,7 +743,10 @@ local function GetPopup()
     catcher:SetScript("OnClick", function() popup:Hide() end)
     popup.catcher = catcher
 
-    popup:SetScript("OnHide", function() catcher:Hide() end)
+    popup:SetScript("OnHide", function(self)
+        catcher:Hide()
+        if self.owner and self.owner.SetOpen then self.owner:SetOpen(false) end
+    end)
     return popup
 end
 
@@ -643,7 +824,13 @@ local function ShowMenu(owner, spec)
         return
     end
 
+    -- The button that was open before this one is not necessarily the one
+    -- being clicked, and nothing else will ever tell it to close: the popup is
+    -- shared, so there is exactly one place that knows a select stopped being
+    -- the open one.
+    if menu.owner and menu.owner.SetOpen then menu.owner:SetOpen(false) end
     menu.owner = owner
+    if owner.SetOpen then owner:SetOpen(true) end
     menu:ClearAllPoints()
     local anchor = spec.anchor or { "TOPRIGHT", "BOTTOMRIGHT", 0, -2 }
     menu:SetPoint(anchor[1], owner, anchor[2], anchor[3], anchor[4])
@@ -654,6 +841,7 @@ local function ShowMenu(owner, spec)
     local function AddEntry(item, isAction)
         index = index + 1
         local entry = MenuEntry(menu, index)
+        entry.dkY = y
         entry:SetPoint("TOPLEFT", menu, "TOPLEFT", 0, y)
         entry:SetPoint("TOPRIGHT", menu, "TOPRIGHT", 0, y)
 
@@ -729,7 +917,69 @@ local function ShowMenu(owner, spec)
 
     for i = index + 1, #menu.rows do menu.rows[i]:Hide() end
 
-    menu:SetHeight(-y + 4)
+    -- SCROLLING, once the list is longer than the screen can usefully show.
+    --
+    -- The media lists are the reason: a full UI setup registers forty to sixty
+    -- textures, and a popup sized to all of them is taller than the window it
+    -- belongs to - the entries at the bottom are simply unreachable. So the
+    -- popup stops at a height, and the wheel moves the entries inside it.
+    --
+    -- Done by moving the ENTRIES rather than by putting a ScrollFrame in: the
+    -- entries are already positioned by hand from a running y, so scrolling is
+    -- the same arithmetic with an offset added, and a scroll frame would mean
+    -- reparenting every row.
+    local full = -y + 4
+    local limit = math.min(MENU_MAX_H, full)
+    menu:SetHeight(limit)
+
+    menu.dkFull, menu.dkLimit, menu.dkScroll = full, limit, 0
+    menu.dkCount = index
+
+    local scrollable = full > limit
+    menu.grip:SetShown(scrollable)
+    menu:EnableMouseWheel(scrollable)
+    if scrollable then
+        menu:SetScript("OnMouseWheel", function(self, delta)
+            local span = self.dkFull - self.dkLimit
+            local next_ = math.max(0, math.min(span,
+                (self.dkScroll or 0) - delta * ENTRY_H * 3))
+            if next_ == self.dkScroll then return end
+            self.dkScroll = next_
+            for position = 1, self.dkCount do
+                local entry = self.rows[position]
+                if entry then
+                    entry:ClearAllPoints()
+                    entry:SetPoint("TOPLEFT", self, "TOPLEFT", 0,
+                        (entry.dkY or 0) + next_)
+                    entry:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0,
+                        (entry.dkY or 0) + next_)
+                    -- An entry scrolled past the top or bottom edge would
+                    -- otherwise still be drawn, outside the popup.
+                    entry:SetShown((entry.dkY or 0) + next_ <= 0
+                        and (entry.dkY or 0) + next_ > -self.dkLimit)
+                end
+            end
+            self.grip:SetPoint("TOP", self, "TOP", 0,
+                -4 - (next_ / span) * (self.dkLimit - 8 - self.grip:GetHeight()))
+        end)
+
+        -- The grip says how far down the list this is. Four pixels wide, one
+        -- step brighter than the popup's own outline.
+        menu.grip:SetHeight(math.max(20,
+            (limit / full) * (limit - 8)))
+        menu.grip:ClearAllPoints()
+        menu.grip:SetPoint("TOP", menu, "TOP", 0, -4)
+        menu.grip:SetPoint("RIGHT", menu, "RIGHT", -2, 0)
+
+        for position = 1, index do
+            local entry = menu.rows[position]
+            if entry then
+                entry:SetShown((entry.dkY or 0) > -limit)
+            end
+        end
+    else
+        menu:SetScript("OnMouseWheel", nil)
+    end
     menu.catcher:Show()
     menu:SetFrameLevel(menu.catcher:GetFrameLevel() + 10)
     menu:Show()
@@ -745,28 +995,36 @@ UI.ShowMenu = ShowMenu
 ---------------------------------------------------------------------------
 function UI.MenuButton(parent, width, height)
     local button = CreateFrame("Button", nil, parent)
-    button:SetSize(width, height or 22)
+    button:SetSize(width, height or UI.CONTROL_H)
 
     local bg = Fill(button, "BACKGROUND", C.control)
     local edge = ns.CreateBorder(button, 1, "BORDER")
-    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
-    button.label = UI.Label(button, "", 12, C.text)
-    button.label:SetPoint("LEFT", button, "LEFT", 10, 0)
-    button.label:SetPoint("RIGHT", button, "RIGHT", -20, 0)
+    button.label = UI.Label(button, "", UI.FS.meta, C.text)
+    button.label:SetPoint("LEFT", button, "LEFT", 8, 0)
+    button.label:SetPoint("RIGHT", button, "RIGHT", -18, 0)
     button.label:SetWordWrap(false)
 
-    local arrow = UI.Label(button, "v", 9, C.textDim)
+    local arrow = UI.Label(button, "v", 9, C.textFaint)
     arrow:SetPoint("RIGHT", button, "RIGHT", -8, 0)
 
+    -- Hover moves the FILL, not the outline. The outline going orange is the
+    -- OPEN state, and if hovering did the same thing the two would be the same
+    -- picture - one of them meaning "a list is on screen somewhere" and the
+    -- other meaning nothing at all.
     button:SetScript("OnEnter", function()
         bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
-        edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
     end)
     button:SetScript("OnLeave", function()
         bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
-        edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
     end)
+
+    button.SetOpen = function(_, open)
+        local c = open and C.accent or C.edge
+        edge:SetColor(c[1], c[2], c[3], 1)
+        arrow:SetText(open and "^" or "v")
+    end
 
     return button
 end
@@ -1782,13 +2040,15 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     return scroll, content
 end
 
-function UI.Page(parent, width)
+function UI.Page(parent, width, opts)
     local contentWidth = width - 14
     local scroll, content = UI.ScrollArea(parent, contentWidth)
 
     local grid = setmetatable({
         content  = content,
         scroll   = scroll,
+        explain  = opts and opts.explain or nil,
+        tooltipNotes = opts and opts.tooltipNotes or nil,
         width    = contentWidth,
         colWidth = math.floor((contentWidth - UI.COL_GAP) / 2),
         items    = {},
@@ -1818,6 +2078,7 @@ function Grid:Wide(region, height, padTop, padBottom, indent)
 
     self.items[#self.items + 1] = {
         region = region, height = height, wide = true, group = self.group,
+        tab = self.recordTab,
         padTop = padTop or 0, padBottom = padBottom or UI.ROW_GAP,
         indent = indent,
     }
@@ -1840,8 +2101,51 @@ end
 local SECTION_PAD_TOP = 16
 local SECTION_PAD_BOTTOM = 3
 
+-- Whether an item belongs on the tab currently showing.
+--
+-- Its own function because both nil cases are decisions rather than accidents,
+-- and both have been got wrong once already:
+--   item has no tab   it was recorded before any Tab() call, so it belongs to
+--                     the page rather than to one tab - shown on all of them
+--   page has no tab   the page is not split at all - everything shows
+function UI.OnTab(itemTab, activeTab)
+    if itemTab == nil or activeTab == nil then return true end
+    return itemTab == activeTab
+end
+
+-- Everything added after this belongs to the named tab, until the next call.
+--
+-- A tab is not a section: a section folds and its heading stays put, a tab
+-- REPLACES the page under a strip that is always in the same place. Nine
+-- sections in one scroll is a page you have to remember your way around; the
+-- same nine split three ways is three short pages.
+function Grid:Tab(name)
+    -- recordTab is where new items are FILED. tab is which one is on SCREEN.
+    -- One field for both reads fine until the page finishes building, at which
+    -- point "the tab we are recording into" is the last one declared and the
+    -- page silently opens on Reuse.
+    self.recordTab = name
+    self.tab = self.tab or name
+    self.tabs = self.tabs or {}
+    if name then
+        for _, existing in ipairs(self.tabs) do
+            if existing == name then return end
+        end
+        self.tabs[#self.tabs + 1] = name
+    end
+end
+
+-- Which one is on screen. Layout is the only thing that reads it, so a switch
+-- costs one re-layout of frames that already exist.
+function Grid:ShowTab(name)
+    if self.tab == name then return end
+    self.tab = name
+    self:Layout()
+end
+
 function Grid:Section(title, key)
     self.group = key
+    self.sectionName = title
     local padTop = (#self.items == 0) and 0 or SECTION_PAD_TOP
 
     if not key then
@@ -1881,10 +2185,70 @@ function Grid:Note(text, height)
     local note = UI.Hint(self.content, text)
     note:SetWidth(self.width - NOTE_INDENT)
     note:SetJustifyV("TOP")
+
+    -- ON A PAGE WITH A THIRD COLUMN, a note is not laid out at all: it becomes
+    -- the explanation of the row above it, shown on the right when that row is
+    -- pointed at.
+    --
+    -- The note is kept as a real region rather than reduced to a string,
+    -- because several of them are written later (`layoutNote:SetText(...)`) -
+    -- so the text is read at the moment it is shown and a note that changes
+    -- with the setting above it still says the right thing.
+    if (self.explain or self.tooltipNotes) and self.lastRow then
+        note.dkSkip = true
+        note:Hide()
+        self.lastRow.dkNote = note
+        if self.tooltipNotes then self:WireTooltip(self.lastRow) end
+        return self:Wide(note, 0, 0, 0, NOTE_INDENT)
+    end
     -- Width is set, so GetStringHeight reports the WRAPPED height. Measured
     -- after the width, never before: the unwrapped height is one line, and
     -- everything below would be laid out on top of the other two.
     return self:Wide(note, height or note:GetStringHeight(), 3, 11, NOTE_INDENT)
+end
+
+-- On a page with a third column, every row publishes itself when pointed at,
+-- and the last one pointed at stays marked. Marked rather than merely hovered
+-- because the text it puts on the right has to survive the mouse travelling
+-- over there to read it.
+function Grid:WireExplain(row)
+    if not self.explain then return end
+
+    row:HookScript("OnEnter", function(entered)
+        if self.marked and self.marked ~= entered then self.marked.bg:Hide() end
+        self.marked = entered
+        -- Read at show time, not at build time: several notes are written
+        -- later than the row they belong to, and one or two are rewritten
+        -- whenever the setting above them changes.
+        ns.Options:SetExplain(entered.label:GetText(), entered.section,
+            entered.dkNote and entered.dkNote:GetText())
+    end)
+    row:HookScript("OnLeave", function(left)
+        if self.marked == left then left.bg:Show() end
+    end)
+end
+
+-- WHERE A PAGE HAS NO THIRD COLUMN, the explanation goes in the tooltip.
+--
+-- The inspector IS the third column, so it has nowhere to put one. It carried
+-- them inline instead: a wrapped grey paragraph under every other row, which
+-- is most of the height of the panel and, in the owner's words, "das juckt
+-- keinen". The row says what the setting is; the sentence is one hover away
+-- for the two or three where that is not enough.
+function Grid:WireTooltip(row)
+    if row.dkTipWired then return end
+    row.dkTipWired = true
+
+    row:HookScript("OnEnter", function(entered)
+        local note = entered.dkNote
+        local text = note and note:GetText()
+        if not text or text == "" then return end
+        GameTooltip:SetOwner(entered, "ANCHOR_LEFT")
+        GameTooltip:AddLine(entered.label:GetText() or "", 1, 1, 1)
+        GameTooltip:AddLine(text, 0.65, 0.67, 0.71, true)
+        GameTooltip:Show()
+    end)
+    row:HookScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
 -- A half-width row. Two consecutive calls share a line.
@@ -1893,11 +2257,14 @@ function Grid:Row(label, opts)
     opts.controlWidth = opts.controlWidth or 150
     local row = UI.Row(self.content, label, opts)
     row:SetWidth(self.colWidth)
+    row.section = self.sectionName
+    self:WireExplain(row)
     self.items[#self.items + 1] = {
         region = row, height = row:GetHeight(), group = self.group,
-        padTop = 0, padBottom = UI.ROW_GAP, indent = 0,
+        tab = self.recordTab, padTop = 0, padBottom = UI.ROW_GAP, indent = 0,
     }
     self.widgets[#self.widgets + 1] = row
+    self.lastRow = row
     return row
 end
 
@@ -1907,11 +2274,14 @@ function Grid:FullRow(label, opts)
     opts.controlWidth = opts.controlWidth or 300
     local row = UI.Row(self.content, label, opts)
     row:SetWidth(self.width)
+    row.section = self.sectionName
+    self:WireExplain(row)
     self.items[#self.items + 1] = {
         region = row, height = row:GetHeight(), wide = true, group = self.group,
-        padTop = 0, padBottom = UI.ROW_GAP, indent = 0,
+        tab = self.recordTab, padTop = 0, padBottom = UI.ROW_GAP, indent = 0,
     }
     self.widgets[#self.widgets + 1] = row
+    self.lastRow = row
     return row
 end
 
@@ -1946,8 +2316,7 @@ function Grid:Layout()
     for _, item in ipairs(self.items) do
         local region = item.region
         local folded = item.group ~= nil and collapsed[item.group]
-
-        if folded then
+        if folded or not UI.OnTab(item.tab, self.tab) then
             if region then region:Hide() end
         elseif region and region.dkSkip then
             -- Skipped entirely, and its padding goes with it: a hidden row
@@ -2013,16 +2382,98 @@ function UI.Card(parent, width)
 
     Fill(card, "BACKGROUND", C.surface)
     card.edge = ns.CreateBorder(card, 1, "BORDER")
-    card.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+    card.edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    -- The selected card is marked on its LEFT EDGE, not by turning its whole
+    -- outline orange. A full orange rectangle round a card that already
+    -- contains an orange chip and an orange badge is the third accent in one
+    -- column, and by the third the colour has stopped meaning anything. A bar
+    -- down one side says the same thing once.
+    card.mark = Tex(card, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+    card.mark:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
+    card.mark:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 0, 0)
+    card.mark:SetWidth(3)
+    card.mark:Hide()
 
     card.SetActive = function(self, active)
-        self.edge:SetColor(
-            active and C.accent[1] or C.edge[1],
-            active and C.accent[2] or C.edge[2],
-            active and C.accent[3] or C.edge[3], 1)
+        self.mark:SetShown(active)
+        local c = active and C.edge or C.separator
+        self.edge:SetColor(c[1], c[2], c[3], 1)
     end
 
     return card
+end
+
+---------------------------------------------------------------------------
+-- TabStrip - equal-width tabs over a rule
+--
+-- 34 tall, the rule on its bottom edge, and the active tab marks itself with
+-- a 2px accent bar sitting ON that rule rather than under it. That is the
+-- whole reason it reads as a tab: the marker and the line are the same line,
+-- so the active one looks connected to what is below and the others do not.
+---------------------------------------------------------------------------
+function UI.TabStrip(parent, names, onPick)
+    local strip = CreateFrame("Frame", nil, parent)
+    strip:SetHeight(34)
+
+    local rule = Tex(strip, "ARTWORK", C.separator[1], C.separator[2],
+        C.separator[3], 1)
+    rule:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", 0, 0)
+    rule:SetPoint("BOTTOMRIGHT", strip, "BOTTOMRIGHT", 0, 0)
+    rule:SetHeight(1)
+
+    local tabs = {}
+    for index, name in ipairs(names) do
+        local tab = CreateFrame("Button", nil, strip)
+        tab:SetPoint("TOP", strip, "TOP", 0, 0)
+        tab:SetPoint("BOTTOM", strip, "BOTTOM", 0, 0)
+
+        tab.label = UI.Label(tab, name, UI.FS.row, C.textDim)
+        tab.label:SetPoint("CENTER", tab, "CENTER", 0, 0)
+
+        tab.mark = Tex(tab, "OVERLAY", C.accent[1], C.accent[2], C.accent[3], 1)
+        tab.mark:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
+        tab.mark:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
+        tab.mark:SetHeight(2)
+        tab.mark:Hide()
+
+        tab:SetScript("OnClick", function() onPick(name) end)
+        tab:SetScript("OnEnter", function(self)
+            if self.mark:IsShown() then return end
+            self.label:SetTextColor(C.text[1], C.text[2], C.text[3])
+        end)
+        tab:SetScript("OnLeave", function(self)
+            if self.mark:IsShown() then return end
+            self.label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        end)
+
+        tabs[index] = { button = tab, name = name }
+    end
+
+    -- Widths are handed out at layout time, not now: the strip does not know
+    -- how wide it is until its parent has been sized.
+    strip.Layout = function(self)
+        local each = math.floor(self:GetWidth() / #tabs)
+        for index, entry in ipairs(tabs) do
+            entry.button:ClearAllPoints()
+            entry.button:SetPoint("TOP", self, "TOP", 0, 0)
+            entry.button:SetPoint("BOTTOM", self, "BOTTOM", 0, 0)
+            entry.button:SetPoint("LEFT", self, "LEFT", (index - 1) * each, 0)
+            entry.button:SetWidth(each)
+        end
+    end
+
+    strip.Select = function(_, name)
+        for _, entry in ipairs(tabs) do
+            local on = entry.name == name
+            entry.button.mark:SetShown(on)
+            local c = on and C.text or C.textDim
+            entry.button.label:SetTextColor(c[1], c[2], c[3])
+        end
+    end
+
+    strip:Select(names[1])
+    return strip
 end
 
 ---------------------------------------------------------------------------
@@ -2036,17 +2487,131 @@ local GLYPHS = {
     -- x, y, w, h in a 12x12 box, measured from the top left
     grid    = { {0,0,5,5}, {7,0,5,5}, {0,7,5,5}, {7,7,5,5} },
     bars    = { {0,0,12,3}, {0,5,8,3}, {0,10,12,3} },
-    aura    = { {4,0,4,4}, {0,5,12,3}, {4,10,4,3} },
+
+    -- A ring with a dot in it - a target, which is what an aura display is
+    -- pointed at.
+    --
+    -- Four sides and four turned corners. Four sides ALONE read as square
+    -- brackets round the middle, which is what they looked like; the corners
+    -- are what make it a ring. Counter-clockwise is positive, so the two
+    -- corners that rise left-to-right are positive and the two that fall are
+    -- negative.
+    aura    = { {4,0,4,2}, {4,10,4,2}, {0,4,2,4}, {10,4,2,4},
+                {0,1.5,5,2, 0.7854}, {7,1.5,5,2, -0.7854},
+                {0,8.5,5,2, -0.7854}, {7,8.5,5,2, 0.7854},
+                {5,5,2,2} },
+
+    -- Two tracks, each with its own handle at a different place. The old one
+    -- was two bars and two ticks that did not line up with either, and read as
+    -- a list rather than as controls.
     sliders = { {0,2,12,2}, {8,0,2,6}, {0,8,12,2}, {2,6,2,6} },
+
     pulse   = { {0,8,2,4}, {3,4,2,8}, {6,0,2,12}, {9,6,2,6} },
-    info    = { {5,0,3,3}, {5,5,3,7} },
+
+    -- An "i" INSIDE a ring, which is the sign everybody already knows. The
+    -- bare dot-and-stem it replaced read as a lower-case L. Same ring as the
+    -- aura mark, so the two are a family rather than two drawings.
+    info    = { {4,0,4,2}, {4,10,4,2}, {0,4,2,4}, {10,4,2,4},
+                {0,1.5,5,2, 0.7854}, {7,1.5,5,2, -0.7854},
+                {0,8.5,5,2, -0.7854}, {7,8.5,5,2, 0.7854},
+                {5,3,2,2}, {5,6,2,3} },
+
     log     = { {0,0,12,2}, {0,5,9,2}, {0,10,6,2} },
-    -- Four arrows off a centre: "pick it up and put it somewhere".
-    move    = { {5,0,2,12}, {0,5,12,2}, {3,2,2,2}, {7,2,2,2} },
+
+    -- Four carets, for the nudge pad on a bar in Edit Mode. Two turned bars
+    -- meeting at a point, rather than an arrow CHARACTER - "^" and "v" are
+    -- different widths on different baselines in every font, so a row of four
+    -- of them never lines up.
+    caretUP    = { {2,6,7,2,  0.7854}, {5,6,7,2, -0.7854} },
+    caretDOWN  = { {2,4,7,2, -0.7854}, {5,4,7,2,  0.7854} },
+    caretLEFT  = { {3,2,2,7,  0.7854}, {3,5,2,7, -0.7854} },
+    caretRIGHT = { {5,2,2,7, -0.7854}, {5,5,2,7,  0.7854} },
+
+    -- A six-pointed asterisk - three bars through one centre, two of them
+    -- turned. Distinct from the four-way arrow the movers on screen use, so
+    -- the rail entry and the thing it opens are not the same mark.
+    move    = { {5,0,2,12}, {5,0,2,12, 1.0472}, {5,0,2,12, -1.0472} },
 }
+
+-- THE DESIGN'S OWN ICONS, rendered to TGA at the two sizes it specifies.
+--
+-- The marks below this table are built from filled rectangles, and that is
+-- exactly why they never matched: the design draws OUTLINES at 1.4px with
+-- round caps - four empty squares, a true circle, real diagonals. A filled
+-- 4.6 square next to a 1.4 stroke is a different weight of drawing
+-- altogether, which is what "die icons sind komplett anders" was.
+--
+-- Rectangles cannot draw a circle. So the source SVGs are rasterised at the
+-- sizes they are shown at - 14 and 22, never scaled between - and shipped as
+-- TGA, which is what the client loads. They are white, and tinted per use, so
+-- one file serves textDim, text and accent.
+-- A long string. Quoted, this path opens with \A, which Lua rejects as an
+-- escape and which takes the whole file down at load. Third time.
+local ICON_PATH = [[Interface\AddOns\ZwoelfStuff\Media\icons\]]
+
+local ICON_FILES = {
+    grid    = "nav-cooldowns",
+    aura    = "nav-aura-display",
+    move    = "nav-edit-mode",
+    sliders = "nav-settings",
+    pulse   = "nav-diagnostics",
+    info    = "nav-about",
+    log     = "nav-changelog",
+    bars    = "kind-bar",
+
+    caretUP    = "ui-chevron-up",
+    caretDOWN  = "ui-chevron-down",
+    caretRIGHT = "ui-chevron-right",
+    caretLEFT  = "ui-chevron-right",   -- turned below; there is no left file
+}
+
+-- Which cut of a mark to load, and how big its frame is IN UI UNITS.
+--
+-- Two things are being decided at once and they are not the same thing:
+--
+--   the FRAME is in interface units, and must not change - a 14 icon occupies
+--   14 units whatever else is true, or the row it sits in moves
+--
+--   the FILE is in real pixels, and must match what the screen will actually
+--   draw. The interface is rarely at 1:1: on a 1440p screen at the usual
+--   setting one unit is about 1.8 pixels, so a 14px file shown at 14 units is
+--   stretched to 25 and every 1.4px stroke goes soft. That is the blur, and
+--   no amount of care in the file fixes it - the file was simply too small.
+--
+-- So each mark exists at the design size and at double, and the one nearer to
+-- what the screen will draw wins. Downsampling loses far less than
+-- upsampling: a 28px stroke squeezed into 25 still has an edge, a 14px stroke
+-- pulled up to 25 cannot invent one.
+local function IconCut(size)
+    local scale = UIParent and UIParent:GetEffectiveScale() or 1
+    local dense = scale > 1.25
+
+    if size >= 19 then
+        return dense and 44 or 22, 32
+    end
+    return dense and 28 or 14, 16
+end
 
 function UI.Glyph(parent, kind, size, colour)
     size = size or 12
+
+    local file = ICON_FILES[kind]
+    if file then
+        local drawn, canvas = IconCut(size)
+        local glyph = CreateFrame("Frame", nil, parent)
+        glyph:SetSize(canvas, canvas)
+
+        local tex = glyph:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints(glyph)
+        tex:SetTexture(ICON_PATH .. file .. "-" .. drawn)
+        if kind == "caretLEFT" then tex:SetRotation(math.pi) end
+
+        glyph.SetColor = function(_, r, g, b) tex:SetVertexColor(r, g, b, 1) end
+        local c = colour or C.textDim
+        glyph:SetColor(c[1], c[2], c[3])
+        return glyph
+    end
+
     local glyph = CreateFrame("Frame", nil, parent)
     glyph:SetSize(size, size)
 
@@ -2055,7 +2620,19 @@ function UI.Glyph(parent, kind, size, colour)
     for _, rect in ipairs(GLYPHS[kind] or GLYPHS.grid) do
         local part = Tex(glyph, "ARTWORK", 1, 1, 1, 1)
         part:SetSize(rect[3] * scale, rect[4] * scale)
-        part:SetPoint("TOPLEFT", glyph, "TOPLEFT", rect[1] * scale, -rect[2] * scale)
+        -- A FIFTH number is a rotation, in radians, about the bar's centre.
+        -- Rectangles alone cannot draw a diagonal, and two of these marks are
+        -- diagonals - so the one that spins is anchored by its CENTRE, since
+        -- a rotated texture keeps its centre and moves its corners.
+        if rect[5] then
+            part:SetPoint("CENTER", glyph, "TOPLEFT",
+                (rect[1] + rect[3] / 2) * scale,
+                -(rect[2] + rect[4] / 2) * scale)
+            part:SetRotation(rect[5])
+        else
+            part:SetPoint("TOPLEFT", glyph, "TOPLEFT",
+                rect[1] * scale, -rect[2] * scale)
+        end
         parts[#parts + 1] = part
     end
 
@@ -2073,25 +2650,32 @@ end
 ---------------------------------------------------------------------------
 function UI.NavItem(parent, text, glyphKind, onClick)
     local item = CreateFrame("Button", nil, parent)
-    item:SetHeight(32)
+    item:SetHeight(UI.NAV_ITEM_H)
 
     -- A neutral raised fill plus an accent marker, rather than a block of
     -- tinted orange: the tint muddies the label sitting on it, and the marker
     -- says "you are here" more plainly than a colour ever does.
-    item.bg = Fill(item, "BACKGROUND", C.surfaceHi)
+    --
+    -- The fill is `surface` - the same level a card is. The rail is DARKER
+    -- than the window in this palette, so the active row is the one thing in
+    -- the column that comes forward, and it comes forward to exactly the
+    -- level of the thing it opens.
+    item.bg = Fill(item, "BACKGROUND", C.surface)
     item.bg:Hide()
 
     item.marker = Tex(item, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
     item.marker:SetPoint("TOPLEFT", item, "TOPLEFT", 0, 0)
     item.marker:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", 0, 0)
-    item.marker:SetWidth(3)
+    item.marker:SetWidth(2)
     item.marker:Hide()
 
-    item.glyph = UI.Glyph(item, glyphKind, 12)
-    item.glyph:SetPoint("LEFT", item, "LEFT", 16, 0)
+    item.glyph = UI.Glyph(item, glyphKind, 14)
+    -- The row now runs edge to edge, so the row's own left padding is here:
+    -- past the 2px accent bar, on the same 16 the rail's heading uses.
+    item.glyph:SetPoint("LEFT", item, "LEFT", UI.PAD, 0)
 
-    item.label = UI.Label(item, text, 12.5, C.textDim)
-    item.label:SetPoint("LEFT", item.glyph, "RIGHT", 11, 0)
+    item.label = UI.Label(item, text, UI.FS.row, C.textDim)
+    item.label:SetPoint("LEFT", item.glyph, "RIGHT", 10, 0)
     item.label:SetWordWrap(false)
 
     item.SetActive = function(self, active)
@@ -2099,7 +2683,11 @@ function UI.NavItem(parent, text, glyphKind, onClick)
         self.marker:SetShown(active)
         local c = active and C.text or C.textDim
         self.label:SetTextColor(c[1], c[2], c[3])
-        local g = active and C.accent or C.textFaint
+        -- THE ICON DOES NOT GO ORANGE. The 2px edge on the left is this
+        -- column's one accent, and an orange icon next to it makes two - which
+        -- is the rule this palette is built on, broken in the first place it
+        -- could be. The icon brightens with the label instead.
+        local g = active and C.text or C.textFaint
         self.glyph:SetColor(g[1], g[2], g[3])
     end
 
@@ -2157,141 +2745,42 @@ function UI.GhostButton(parent, text, onClick, colour)
 end
 
 ---------------------------------------------------------------------------
--- MiniSlider - a labelled slider on one compact line
+-- MiniSlider - a labelled stepper on one compact line
 --
---   Rows   -----o--------   3
+--   Rows            [ - ] [ 3 ] [ + ]
 --
--- The control the bar cards use. It is the whole point of the middle column:
--- the shape of a bar is two numbers, so they sit right under the bar and are
--- dragged, not typed.
+-- The control the bar cards use, and the one on the Edit Mode panels. Same
+-- builder as the inspector's, with the narrow value box: a row count and a
+-- column count are at most two digits.
 --
--- cfg = { label, get, set, min, max, step, format, apply, labelWidth }
+-- cfg = { label, get, set, min, max, step, format, scale, apply }
 ---------------------------------------------------------------------------
 function UI.MiniSlider(parent, cfg)
-    local VALUE_W = 30
-    local labelWidth = cfg.labelWidth or 56
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(UI.ROW_H)
 
-    local slider = CreateFrame("Frame", nil, parent)
-    slider:SetHeight(20)
+    local stepper = BuildStepper(row, {
+        min = cfg.min, max = cfg.max, step = cfg.step, compact = true,
+        get = cfg.get, set = cfg.set, apply = cfg.apply,
+        format = cfg.format, scale = cfg.scale,
+        -- Always silent. Every caller of this one already hands in an apply
+        -- that redraws what it owns - the card re-measures itself, the
+        -- on-screen panel repaints its bar - so a page-wide refresh on top of
+        -- that is a second rebuild per click and nothing more.
+        silent = true,
+    })
+    stepper:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 
-    local label = UI.Label(slider, cfg.label or "", 11.5, C.textDim)
-    label:SetPoint("LEFT", slider, "LEFT", 0, 0)
-    label:SetWidth(labelWidth)
+    local label = UI.Label(row, cfg.label or "", UI.FS.row, C.textBody)
+    label:SetPoint("LEFT", row, "LEFT", 0, 0)
     label:SetWordWrap(false)
+    -- Anchored to the control rather than given a width. A fixed width was
+    -- what let a long label run under the value; this way the label owns
+    -- exactly what the stepper does not, whatever the column turns out to be.
+    label:SetPoint("RIGHT", stepper, "LEFT", -UI.GAP, 0)
 
-    -- Typeable, same as the big slider. Rows and Columns are exactly the two
-    -- numbers somebody wants to set exactly rather than aim at.
-    local value = CreateFrame("EditBox", nil, slider)
-    value:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
-    value:SetSize(VALUE_W, 18)
-    value:SetAutoFocus(false)
-    value:SetJustifyH("RIGHT")
-    value:SetMaxLetters(8)
-    ns.StyleFont(value, 12)
-    value:SetTextColor(C.text[1], C.text[2], C.text[3], 1)
-
-    local bar = CreateFrame("Frame", nil, slider)
-    bar:SetPoint("LEFT", label, "RIGHT", 8, 0)
-    bar:SetPoint("RIGHT", value, "LEFT", -8, 0)
-    bar:SetHeight(18)
-    bar:EnableMouse(true)
-    bar:EnableMouseWheel(true)
-
-    local track = Tex(bar, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
-    track:SetPoint("LEFT", bar, "LEFT", 0, 0)
-    track:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-    track:SetHeight(3)
-
-    local fill = Tex(bar, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
-    fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
-    fill:SetHeight(3)
-
-    local knob = CreateFrame("Frame", nil, bar)
-    knob:SetSize(11, 11)
-    knob:SetFrameLevel(bar:GetFrameLevel() + 2)
-    -- Round, via the same circular alpha mask the minimap button uses - that
-    -- path is verified in use on this client. A square handle on a track
-    -- reads as a rendering fault rather than a control.
-    local knobFill = Fill(knob, "BACKGROUND", C.text)
-    knobFill:SetMask("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-
-    local function Clamp(v)
-        if v < cfg.min then v = cfg.min end
-        if v > cfg.max then v = cfg.max end
-        v = cfg.min + math.floor((v - cfg.min) / cfg.step + 0.5) * cfg.step
-        return math.floor(v * 1000 + 0.5) / 1000
-    end
-
-    local function Commit(v)
-        local wanted = Clamp(v)
-        if wanted ~= cfg.get() then
-            cfg.set(wanted)
-            if cfg.apply then cfg.apply() end
-        end
-        slider.Refresh()
-    end
-
-    local function FromCursor()
-        local scale = bar:GetEffectiveScale()
-        local x = select(1, GetCursorPosition()) / scale
-        local left, width = bar:GetLeft(), bar:GetWidth()
-        if not left or width <= 0 then return end
-        local pct = math.max(0, math.min(1, (x - left) / width))
-        Commit(cfg.min + pct * (cfg.max - cfg.min))
-    end
-
-    bar:SetScript("OnMouseDown", function(self)
-        self.dragging = true
-        FromCursor()
-    end)
-    bar:SetScript("OnMouseUp", function(self) self.dragging = false end)
-    bar:SetScript("OnUpdate", function(self)
-        if self.dragging then FromCursor() end
-    end)
-    bar:SetScript("OnMouseWheel", function(_, delta)
-        Commit((cfg.get() or cfg.min) + delta * cfg.step)
-    end)
-    bar:SetScript("OnEnter", function()
-        knob:SetScale(1.15)
-        fill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
-    end)
-    bar:SetScript("OnLeave", function() knob:SetScale(1) end)
-
-    local function Typed(self)
-        return tonumber((self:GetText() or ""):match("%-?%d+%.?%d*"))
-    end
-    value:SetScript("OnEnterPressed", function(self)
-        local typed = Typed(self)
-        if typed then Commit(typed / (cfg.scale or 1)) end
-        self:ClearFocus()
-    end)
-    value:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-        slider.Refresh()
-    end)
-    value:SetScript("OnEditFocusLost", function(self)
-        local typed = Typed(self)
-        if typed then Commit(typed / (cfg.scale or 1)) else slider.Refresh() end
-    end)
-    value:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-
-    slider.Refresh = function()
-        local current = cfg.get()
-        if type(current) ~= "number" then current = cfg.min end
-        -- Not while it is being typed into.
-        if not value:HasFocus() then
-            value:SetText(cfg.format and cfg.format(current) or tostring(current))
-        end
-
-        local span = cfg.max - cfg.min
-        local pct = span > 0 and ((current - cfg.min) / span) or 0
-        local width = math.max(1, bar:GetWidth())
-        fill:SetWidth(math.max(1, width * pct))
-        knob:ClearAllPoints()
-        knob:SetPoint("CENTER", bar, "LEFT", width * pct, 0)
-    end
-
-    return slider
+    row.Refresh = stepper.Refresh
+    return row
 end
 
 ---------------------------------------------------------------------------
@@ -2348,42 +2837,68 @@ function UI.SpellRow(parent, width, height)
     row.bg = Fill(row, "BACKGROUND", C.surface)
     row.bg:Hide()
 
-    -- Green stripe: this spell is already on the bar you have selected. On the
-    -- left edge, where the eye scans down a list, so "have I got that one" is
-    -- answered without reading a word.
-    row.mark = Tex(row, "ARTWORK", C.inUse[1], C.inUse[2], C.inUse[3], 1)
-    row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
-    row.mark:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
-    row.mark:SetWidth(3)
-    row.mark:Hide()
+    -- The hairline between entries. A list of forty needs a rhythm; without
+    -- one the icons are the only thing the eye can hold on to.
+    row.rule = Tex(row, "BACKGROUND", C.separator[1], C.separator[2],
+        C.separator[3], 1)
+    row.rule:SetHeight(1)
+    row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(22, 22)
     row.icon:SetPoint("LEFT", row, "LEFT", 9, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    -- Widths rather than a second anchor: a font string given both TOPLEFT
-    -- and RIGHT is told two different vertical positions, and what comes out
-    -- is not what was meant.
-    local textWidth = width - 44
-
-    row.name = UI.Label(row, "", 12, C.text)
-    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 9, 1)
-    row.name:SetWidth(textWidth)
+    -- ONE LINE, not two.
+    --
+    -- The name sat on top of a grey subline carrying "on this bar, cell 2" and
+    -- the spell ID. Two lines per entry is a list half as long as the column,
+    -- and the ID is a number nobody reads while choosing a spell. What the
+    -- entry has to say on the right is one short thing - which cell it is in,
+    -- how long its cooldown is, or that the build does not have it - so it is
+    -- one short thing.
+    row.name = UI.Label(row, "", UI.FS.row, C.text)
+    row.name:SetPoint("LEFT", row.icon, "RIGHT", 10, 0)
     row.name:SetWordWrap(false)
 
-    row.meta = UI.Label(row, "", 10, C.textFaint)
-    row.meta:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-    row.meta:SetWidth(textWidth)
-    row.meta:SetWordWrap(false)
+    row.trail = UI.Label(row, "", 11, C.textFaint)
+    row.trail:SetPoint("RIGHT", row, "RIGHT", -9, 0)
+    row.trail:SetJustifyH("RIGHT")
+    row.trail:SetWordWrap(false)
+
+    -- The cell badge, which is the one trailing thing that is not just text:
+    -- "already on this bar" is a STATE, and a state gets a bed.
+    row.cellBadge = UI.Badge(row, "CELL 1", "state")
+    row.cellBadge:SetPoint("RIGHT", row, "RIGHT", -9, 0)
+    row.cellBadge:Hide()
+
+    row.name:SetPoint("RIGHT", row.trail, "LEFT", -8, 0)
+
+    -- kind: "cell" puts it on a green bed, anything else is plain small type.
+    row.SetTrailing = function(self, text, kind)
+        if kind == "cell" and text then
+            self.cellBadge:SetLabel(text)
+            self.cellBadge:Show()
+            self.trail:SetText("")
+            self.name:SetPoint("RIGHT", self.cellBadge, "LEFT", -8, 0)
+        else
+            self.cellBadge:Hide()
+            self.trail:SetText(text or "")
+            self.name:SetPoint("RIGHT", self.trail, "LEFT", -8, 0)
+        end
+    end
 
     -- cell is the cell number it sits in, or nil when it is not on the bar.
     -- known is false for a spell the current talent build does not have: it
     -- stays pickable, because a bar is often built for the build you are
     -- about to switch into, but it must not look available.
     row.SetUsed = function(self, cell, known)
-        self.mark:SetShown(cell ~= nil)
         self.dkUsedIn = cell
+        -- Not in the build: dimmed as a whole rather than recoloured piece by
+        -- piece. It stays pickable - a bar is often built for the build you
+        -- are about to switch into - it just must not look available.
+        self:SetAlpha(known and 1 or 0.42)
 
         local colour = C.text
         if not known then
@@ -2445,19 +2960,27 @@ function UI.ListHeading(parent, width, height)
     local heading = CreateFrame("Frame", nil, parent)
     heading:SetSize(width, height or 24)
 
-    heading.label = UI.Label(heading, "", 10, C.textFaint)
+    heading.label = UI.Eyebrow(heading, "")
     heading.label:SetPoint("BOTTOMLEFT", heading, "BOTTOMLEFT", 0, 5)
     heading.label:SetWordWrap(false)
+
+    -- How many are in this group, at the FAR right with the rule running
+    -- between. Sat immediately after the name before, which made it read as
+    -- part of the name - "COOLDOWNS 14" is not a heading, it is a puzzle.
+    heading.count = UI.Eyebrow(heading, "")
+    heading.count:SetPoint("BOTTOMRIGHT", heading, "BOTTOMRIGHT", 0, 5)
+    heading.count:SetJustifyH("RIGHT")
 
     -- Both ends resolve to the same height: the label's bottom sits 5 above
     -- the heading's, so +5 there and +10 here are the same line. Two anchors
     -- that disagree vertically do not make a slanted rule, they make a wrong one.
     heading.line = UI.Separator(heading)
     heading.line:SetPoint("BOTTOMLEFT", heading.label, "BOTTOMRIGHT", 8, 5)
-    heading.line:SetPoint("BOTTOMRIGHT", heading, "BOTTOMRIGHT", 0, 10)
+    heading.line:SetPoint("BOTTOMRIGHT", heading.count, "BOTTOMLEFT", -8, 5)
 
-    heading.SetText = function(self, text)
+    heading.SetText = function(self, text, count)
         self.label:SetText((text or ""):upper())
+        self.count:SetText(count and tostring(count) or "")
     end
     return heading
 end
@@ -2470,7 +2993,7 @@ end
 ---------------------------------------------------------------------------
 function UI.ChipRow(parent, width, cfg)
     local GAP = cfg.gap or 5
-    local ROW = 21
+    local ROW = 22
 
     local row = CreateFrame("Frame", nil, parent)
     row:SetWidth(width)
@@ -2481,21 +3004,23 @@ function UI.ChipRow(parent, width, cfg)
         chip:SetHeight(ROW)
 
         chip.bg = Fill(chip, "BACKGROUND", C.control)
-        chip.edge = ns.CreateBorder(chip, 1, "BORDER")
-        chip.edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
-        chip.label = UI.Label(chip, spec.text, 11, C.textDim)
+        -- Upper case at 10, no outline. A filter chip is a LABEL you can
+        -- press, not a button: six outlined buttons across the top of a list
+        -- weigh more than the list does, which is the wrong way round.
+        chip.label = UI.Eyebrow(chip, spec.text, C.textDim)
         chip.label:SetPoint("CENTER", chip, "CENTER", 0, 0)
-        chip:SetWidth(chip.label:GetStringWidth() + 18)
+        chip:SetWidth(chip.label:GetStringWidth() + 16)
 
         chip:SetScript("OnClick", function() cfg.onSelect(spec.key) end)
         chip:SetScript("OnEnter", function(self)
             if cfg.current() == spec.key then return end
-            self.bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+            self.bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
+            self.bg:Show()
         end)
         chip:SetScript("OnLeave", function(self)
             if cfg.current() == spec.key then return end
-            self.bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
+            self.bg:Hide()
         end)
 
         chips[index] = chip
@@ -2523,12 +3048,14 @@ function UI.ChipRow(parent, width, cfg)
         local current = cfg.current()
         for index, chip in ipairs(chips) do
             local active = cfg.chips[index].key == current
-            local bg = active and C.accentSoft or C.control
-            chip.bg:SetColorTexture(bg[1], bg[2], bg[3], 1)
-            chip.edge:SetColor(
-                active and C.accentDim[1] or C.separator[1],
-                active and C.accentDim[2] or C.separator[2],
-                active and C.accentDim[3] or C.separator[3], 1)
+            -- Only the chosen one has a bed. Six filled boxes across the top
+            -- of a list weigh more than the list, and five of them are saying
+            -- "not me".
+            chip.bg:SetShown(active)
+            if active then
+                chip.bg:SetColorTexture(C.accentSoft[1], C.accentSoft[2],
+                    C.accentSoft[3], 1)
+            end
             local text = active and C.accent or C.textDim
             chip.label:SetTextColor(text[1], text[2], text[3])
         end

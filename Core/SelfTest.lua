@@ -920,6 +920,117 @@ end
 ---------------------------------------------------------------------------
 -- Running it
 ---------------------------------------------------------------------------
+
+---------------------------------------------------------------------------
+-- The design system
+--
+-- Colour and type are not usually worth a test, and these are not tests of
+-- taste. They are the three rules the palette is BUILT on - if one of them
+-- gets tuned away the window still renders, still passes every other check,
+-- and quietly stops working the way it was drawn.
+---------------------------------------------------------------------------
+local function TestDesignSystem()
+    local UI = ns.UI
+    local C = UI.C
+
+    local names = {
+        "canvasBg", "windowBg", "sidebarBg", "well", "surface", "control",
+        "controlHi", "separator", "edge", "overlayEdge", "accent", "accentSoft",
+        "accentCool", "accentCoolSoft", "inUse", "inUseSoft", "danger",
+        "warning", "text", "textBody", "textDim", "textFaint", "textGhost",
+        -- Derived rather than designed, and referenced in two dozen places.
+        "surfaceHi", "accentDim",
+    }
+    local complete, broken = true, nil
+    for _, name in ipairs(names) do
+        local colour = C[name]
+        if type(colour) ~= "table" or #colour < 3 then
+            complete, broken = false, name
+            break
+        end
+        for channel = 1, 3 do
+            local v = colour[channel]
+            if type(v) ~= "number" or v < 0 or v > 1 then
+                complete, broken = false, name
+                break
+            end
+        end
+        if not complete then break end
+    end
+    Check("Every colour the window asks for exists", complete,
+        broken and ("missing or out of range: " .. broken))
+
+    -- EVERY MEASUREMENT THE WINDOW IS BUILT FROM.
+    --
+    -- This check exists because it was earned. Re-tuning the palette dropped
+    -- UI.HEADER_H with the block it happened to sit in; nothing caught it -
+    -- the static check sees a field, not a missing one, and no model test
+    -- opens a window - and the first thing that noticed was the client, with
+    -- "attempt to perform arithmetic on a nil value" and no window at all.
+    -- One constant read at file scope by three files is worth one loop.
+    local metrics = {
+        "HEADER_H", "ROW_H", "ROW_GAP", "SECTION_H", "COL_GAP",
+        "WINDOW_W", "WINDOW_H", "RAIL_W", "INSPECTOR_W", "CONTENT_W",
+        "CARD_HEAD_H", "NAV_ITEM_H", "CONTROL_H", "BUTTON_H", "STEPPER_H",
+        "PAD", "GAP", "RADIUS",
+    }
+    local measured, missing = true, nil
+    for _, name in ipairs(metrics) do
+        if type(UI[name]) ~= "number" then
+            measured, missing = false, name
+            break
+        end
+    end
+    Check("Every measurement the window is built from exists", measured,
+        missing and ("UI." .. missing .. " is " .. type(UI[missing])))
+
+    -- The three columns add up to the window. A change to one of them that
+    -- forgets the others leaves a stripe of nothing down the middle.
+    Check("The three columns add up to the window",
+        UI.RAIL_W + UI.CONTENT_W + UI.INSPECTOR_W == UI.WINDOW_W,
+        string.format("%d + %d + %d vs %d", UI.RAIL_W, UI.CONTENT_W,
+            UI.INSPECTOR_W, UI.WINDOW_W))
+
+    -- The inversion the whole redesign turns on. The side columns used to be
+    -- LIGHTER than the window, which put the content in a trench.
+    local function Lum(c) return c[1] + c[2] + c[3] end
+    Check("The side columns are darker than the window",
+        Lum(C.sidebarBg) < Lum(C.windowBg),
+        string.format("sidebar %.3f vs window %.3f", Lum(C.sidebarBg),
+            Lum(C.windowBg)))
+
+    -- There are no shadows here, so an overlay can only say it is on top by
+    -- being outlined brighter than anything the page can draw.
+    Check("An overlay outlines brighter than the page does",
+        Lum(C.overlayEdge) > Lum(C.edge),
+        string.format("overlay %.3f vs edge %.3f", Lum(C.overlayEdge),
+            Lum(C.edge)))
+
+    -- Five sizes, each clearly apart from the next. Two sizes one point apart
+    -- are not a hierarchy, they are a mistake nobody can see.
+    local ladder = { UI.FS.title, UI.FS.card, UI.FS.row, UI.FS.meta,
+        UI.FS.eyebrow }
+    local descends = true
+    for i = 2, #ladder do
+        if not (ladder[i] and ladder[i - 1] and ladder[i] < ladder[i - 1]) then
+            descends = false
+            break
+        end
+    end
+    Check("The five text sizes descend", descends,
+        table.concat({ tostring(ladder[1]), tostring(ladder[2]),
+            tostring(ladder[3]), tostring(ladder[4]), tostring(ladder[5]) }, " "))
+
+    -- An item with no tab is on every tab; a page with no tabs shows all of
+    -- them. Both nil cases are decisions, and both were wrong once.
+    Check("A row with no tab shows on every tab",
+        UI.OnTab(nil, "Look") and UI.OnTab(nil, nil))
+    Check("A page with no tabs shows every row",
+        UI.OnTab("Look", nil) and UI.OnTab("Reuse", nil))
+    Check("A row shows only on its own tab",
+        UI.OnTab("Look", "Look") and not UI.OnTab("Look", "Reuse"))
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -935,6 +1046,7 @@ function Test:Run()
         { "Stack colours", TestStackThresholds },
         { "Active states", TestActiveStates },
         { "Spell identity", TestSpellIdentity },
+        { "Design system",  TestDesignSystem },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

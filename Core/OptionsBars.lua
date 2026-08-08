@@ -26,11 +26,20 @@ local Bars = ns.Bars
 ns.OptionsBars = {}
 local Workspace = ns.OptionsBars
 
-local CARD_PAD  = 14
-local HEADER_H  = 34
-local SLIDER_H  = 20
-local CARD_GAP  = 12
-local ADD_H     = 34
+local CARD_PAD  = 16
+local HEADER_H  = ns.UI.CARD_HEAD_H
+local SLIDER_H  = ns.UI.ROW_H
+local CARD_GAP  = 14
+local ADD_H     = 40
+
+-- The shape column, to the RIGHT of the preview rather than under it.
+--
+-- Rows and columns used to sit in a full-width strip below the bar, which
+-- meant every card was as tall as its preview PLUS a row of controls, and two
+-- cards no longer fitted on the page. Beside it they cost nothing: a preview
+-- is never shorter than three rows anyway.
+local SHAPE_W   = 212
+local STAGE_MIN = 112
 
 ---------------------------------------------------------------------------
 -- Selection
@@ -140,84 +149,63 @@ local function BuildCard(parent, width)
     local card = UI.Card(parent, width)
 
     -- Header ---------------------------------------------------------------
-    local number = UI.Label(card, "", 11, C.textFaint)
-    number:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -12)
+    --
+    -- Left: which bar this is, what it is called, what KIND it is. Right: the
+    -- actions. The two halves never meet, because a click that changes the bar
+    -- and a click that changes the view must not be neighbours.
+    local chip = CreateFrame("Frame", nil, card)
+    chip:SetSize(20, 20)
+    chip:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -10)
+    local chipBg = UI.Fill(chip, "BACKGROUND", C.control)
 
-    local title = UI.Label(card, "", 13.5, C.text)
-    title:SetPoint("LEFT", number, "RIGHT", 8, 0)
-    title:SetWidth(140)              -- the tabs start right after it
+    local number = UI.Label(chip, "", 11, C.textDim)
+    number:SetPoint("CENTER", chip, "CENTER", 0, 0)
+
+    local title = UI.Label(card, "", UI.FS.card, C.text)
+    title:SetPoint("LEFT", chip, "RIGHT", 11, 0)
     title:SetWordWrap(false)
 
-    -- Two-step, because one stray click would otherwise throw away a bar the
-    -- user spent time filling, and there is no undo.
-    local remove
-    remove = UI.GhostButton(card, "Delete", function()
+    local kindBadge = UI.Badge(card, "", "kind")
+    kindBadge:SetPoint("LEFT", title, "RIGHT", 11, 0)
+
+    -- The overflow. Delete lives in here and nowhere else: it is the one
+    -- action on this card with no undo, and an action with no undo does not
+    -- belong one pixel away from the button you press all day.
+    local menu = CreateFrame("Button", nil, card)
+    menu:SetSize(24, 24)
+    menu:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -8)
+    local menuLabel = UI.Label(menu, "...", UI.FS.row, C.textFaint)
+    menuLabel:SetPoint("CENTER", menu, "CENTER", 0, -3)
+    menu:SetScript("OnEnter", function()
+        menuLabel:SetTextColor(C.text[1], C.text[2], C.text[3])
+    end)
+    menu:SetScript("OnLeave", function()
+        menuLabel:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+    end)
+    menu:SetScript("OnClick", function()
         if not card.dkIndex then return end
+        UI.ShowMenu(menu, {
+            width = 170,
+            items = {
+                {
+                    text = "Delete this bar",
+                    colour = C.danger,
+                    onClick = function()
+                        Bars:Remove(card.dkIndex)
+                        Workspace.cell = nil
+                        ns.Options:Refresh()
+                    end,
+                },
+            },
+        })
+    end)
 
-        if not card.armed then
-            card.armed = true
-            remove:SetText("Sure?")
-            remove:SetBaseColor(C.danger)
-            C_Timer.After(4, function()
-                if not card.armed then return end
-                card.armed = false
-                remove:SetText("Delete")
-                remove:SetBaseColor(C.textFaint)
-            end)
-            return
-        end
-
-        card.armed = false
-        remove:SetText("Delete")
-        remove:SetBaseColor(C.textFaint)
-        Bars:Remove(card.dkIndex)
-        Workspace.cell = nil
-        ns.Options:Refresh()
-    end, C.textFaint)
-    remove:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD + 6, -10)
-
-    -- THE CARD CARRIES ITS OWN TABS.
-    --
-    -- What the right column shows used to be decided by a button called
-    -- "Options" here and another called "Just this one" over there, which
-    -- between them never said what they were scoped to. Three tabs on the card
-    -- say it: the thing you are looking at chooses what is being edited, and
-    -- the answer appears beside it.
-    --
-    -- Only the CURRENT card lights one. Three cards each showing an active tab
-    -- would claim three things are being edited at once.
-    local tabs = {}
-    local function Tab(text, mode, anchorTo)
-        local button = UI.GhostButton(card, text, function()
-            if not card.dkIndex then return end
-            if mode == "cell" then
-                -- Nothing to talk about without a cell; say so rather than
-                -- opening an empty panel.
-                if not Workspace.cell then
-                    ns.Print("Pick a cell in the bar first - then this tab is its own settings.")
-                    return
-                end
-                Workspace:ShowCell(card.dkIndex, Workspace.cell)
-            elseif mode == "options" then
-                Workspace:ShowOptions(card.dkIndex)
-            else
-                Workspace:Select(card.dkIndex)
-                Workspace:ShowSpells()
-            end
-        end, C.textDim)
-        if anchorTo then
-            button:SetPoint("LEFT", anchorTo, "RIGHT", 10, 0)
-        else
-            button:SetPoint("LEFT", title, "RIGHT", 12, 0)
-        end
-        tabs[#tabs + 1] = { button = button, mode = mode }
-        return button
-    end
-
-    local spellsTab = Tab("Spells", "spells")
-    local barTab    = Tab("Bar", "options", spellsTab)
-    local cellTab   = Tab("Cell", "cell", barTab)
-    card.tabs, card.cellTab = tabs, cellTab
+    -- The bar's own settings, in the right column.
+    local options = UI.GhostButton(card, "Options", function()
+        if not card.dkIndex then return end
+        Workspace:ShowOptions(card.dkIndex)
+    end, C.textDim)
+    options:SetPoint("RIGHT", menu, "LEFT", -4, 0)
 
     -- Straight from the card onto the screen. An arrangement is something you
     -- judge by looking at it where it will live, not in a preview.
@@ -231,19 +219,48 @@ local function BuildCard(parent, width)
         Workspace:Select(card.dkIndex)
         ns.EditMode:OpenBuild()
     end, C.accentCool)
-    -- Beside Delete now that Options is gone: the two ACTIONS live on the
-    -- right of the header and the three tabs on the left, so a click that
-    -- changes the bar and a click that changes the view are never neighbours.
-    build:SetPoint("RIGHT", remove, "LEFT", -2, 0)
+    build:SetPoint("RIGHT", options, "LEFT", -11, 0)
+
+    -- ONE BUTTON FOR THE PICKED CELL, named after what the bar is made of.
+    --
+    -- This was three tabs - Spells, Bar, Cell - and three tabs on a card is
+    -- three questions asked before anything is answered. The card now says the
+    -- two things it is FOR: this cell, and this bar. Which cell is not left to
+    -- be remembered either; the badge says it.
+    local cellBadge = UI.Badge(card, "CELL 1", "current")
+    cellBadge:SetPoint("RIGHT", build, "LEFT", -11, 0)
+
+    local cellBtn = UI.GhostButton(card, "Icon options", function()
+        if not card.dkIndex then return end
+        if not Workspace.cell then
+            ns.Print("Pick a cell in the bar first - then this is its own settings.")
+            return
+        end
+        Workspace:ShowCell(card.dkIndex, Workspace.cell)
+    end, C.textDim)
+    cellBtn:SetPoint("RIGHT", cellBadge, "LEFT", -6, 0)
+
+    card.cellBtn, card.cellBadge, card.options = cellBtn, cellBadge, options
 
     local headerLine = UI.Separator(card)
     headerLine:SetPoint("TOPLEFT", card, "TOPLEFT", 0, -HEADER_H)
     headerLine:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, -HEADER_H)
 
     -- The bar itself -------------------------------------------------------
-    local stage = CreateFrame("Frame", nil, card)
-    stage:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -(HEADER_H + 12))
-    stage:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -(HEADER_H + 12))
+    --
+    -- A well with a hairline round it, so the preview reads as a piece of
+    -- SCREEN set into the card rather than as more card.
+    local well = CreateFrame("Frame", nil, card)
+    well:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -(HEADER_H + CARD_PAD))
+    well:SetWidth(width - CARD_PAD * 2 - SHAPE_W - UI.PAD)
+    well:SetHeight(STAGE_MIN)
+    UI.Fill(well, "BACKGROUND", C.well)
+    local wellEdge = ns.CreateBorder(well, 1, "BORDER")
+    wellEdge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    local stage = CreateFrame("Frame", nil, well)
+    stage:SetPoint("TOPLEFT", well, "TOPLEFT", 14, -14)
+    stage:SetPoint("TOPRIGHT", well, "TOPRIGHT", -14, -14)
     stage:SetHeight(1)
 
     local function Cfg()
@@ -309,12 +326,15 @@ local function BuildCard(parent, width)
     grid:SetPoint("TOPLEFT", stage, "TOPLEFT", 0, 0)
 
     -- Shape ----------------------------------------------------------------
+    --
+    -- Three rows in a 212 column beside the preview: how many across, how many
+    -- down, and which pattern they are laid out in. Everything else about a
+    -- bar is in the inspector; these three are here because they change the
+    -- picture immediately to their left.
     local shape = CreateFrame("Frame", nil, card)
-    shape:SetHeight(SLIDER_H)
-    shape:SetPoint("LEFT", card, "LEFT", CARD_PAD, 0)
-    shape:SetPoint("RIGHT", card, "RIGHT", -CARD_PAD, 0)
-
-    local sliderW = math.floor((width - CARD_PAD * 2 - 24) / 2)
+    shape:SetWidth(SHAPE_W)
+    shape:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -(HEADER_H + CARD_PAD))
+    shape:SetHeight(SLIDER_H * 3)
 
     local rows = UI.MiniSlider(shape, {
         label = "Rows", min = 1, max = 12, step = 1,
@@ -327,8 +347,8 @@ local function BuildCard(parent, width)
         -- follows rather than staying on whatever was picked before.
         apply = function() Workspace:Select(card.dkIndex) end,
     })
-    rows:SetPoint("LEFT", shape, "LEFT", 0, 0)
-    rows:SetWidth(sliderW)
+    rows:SetPoint("TOPLEFT", shape, "TOPLEFT", 0, 0)
+    rows:SetPoint("TOPRIGHT", shape, "TOPRIGHT", 0, 0)
 
     local columns = UI.MiniSlider(shape, {
         label = "Columns", labelWidth = 62, min = 1, max = 12, step = 1,
@@ -341,8 +361,8 @@ local function BuildCard(parent, width)
         -- follows rather than staying on whatever was picked before.
         apply = function() Workspace:Select(card.dkIndex) end,
     })
-    columns:SetPoint("RIGHT", shape, "RIGHT", 0, 0)
-    columns:SetWidth(sliderW)
+    columns:SetPoint("TOPLEFT", shape, "TOPLEFT", 0, -SLIDER_H)
+    columns:SetPoint("TOPRIGHT", shape, "TOPRIGHT", 0, -SLIDER_H)
 
     -- An arc, a diagonal and a puzzle have no rows and columns to set. They
     -- have a LENGTH, and offering two sliders that do nothing is worse than
@@ -359,8 +379,48 @@ local function BuildCard(parent, width)
         end,
         apply = function() Workspace:Select(card.dkIndex) end,
     })
-    slots:SetPoint("LEFT", shape, "LEFT", 0, 0)
-    slots:SetWidth(sliderW)
+    slots:SetPoint("TOPLEFT", shape, "TOPLEFT", 0, 0)
+    slots:SetPoint("TOPRIGHT", shape, "TOPRIGHT", 0, 0)
+
+    -- Which pattern. A grid, a row, an arc - the one setting that changes what
+    -- the other two even mean, so it sits under them rather than over them:
+    -- you count first and shape second.
+    local arrangeRow = CreateFrame("Frame", nil, shape)
+    arrangeRow:SetHeight(SLIDER_H)
+    arrangeRow:SetPoint("TOPLEFT", shape, "TOPLEFT", 0, -SLIDER_H * 2)
+    arrangeRow:SetPoint("TOPRIGHT", shape, "TOPRIGHT", 0, -SLIDER_H * 2)
+
+    local arrangeLabel = UI.Label(arrangeRow, "Arrangement", UI.FS.row, C.textBody)
+    arrangeLabel:SetPoint("LEFT", arrangeRow, "LEFT", 0, 0)
+    arrangeLabel:SetWordWrap(false)
+
+    local arrange = UI.MenuButton(arrangeRow, 124)
+    arrange:SetPoint("RIGHT", arrangeRow, "RIGHT", 0, 0)
+    arrangeLabel:SetPoint("RIGHT", arrange, "LEFT", -UI.GAP, 0)
+    arrange:SetScript("OnClick", function()
+        if not card.dkIndex then return end
+        local items = {}
+        for _, option in ipairs(ns.LAYOUTS) do
+            items[#items + 1] = {
+                text = option.text, value = option.value,
+                onClick = function()
+                    Bars:SetLayout(card.dkIndex, option.value)
+                    Workspace:Select(card.dkIndex)
+                    ns.Options:Refresh()
+                end,
+            }
+        end
+        local cfg = Cfg()
+        UI.ShowMenu(arrange, { items = items, current = cfg and cfg.layout })
+    end)
+    arrange.Refresh = function()
+        local cfg = Cfg()
+        local text = "-"
+        for _, option in ipairs(ns.LAYOUTS) do
+            if cfg and option.value == cfg.layout then text = option.text break end
+        end
+        arrange.label:SetText(text)
+    end
 
 
     -- Clicking anywhere on the card makes it the one the spells go into.
@@ -375,33 +435,35 @@ local function BuildCard(parent, width)
         local cfg = Cfg()
         if not cfg then return 0 end
 
-        -- Any other action disarms a half-pressed Delete. Cards are reused for
-        -- whatever bar sits at their position, so an armed one must never be
-        -- handed on to a different bar.
-        if card.armed then
-            card.armed = false
-            remove:SetText("Delete")
-            remove:SetBaseColor(C.textFaint)
-        end
-
-        number:SetText(tostring(card.dkIndex) .. ".")
+        number:SetText(tostring(card.dkIndex))
         title:SetText(cfg.name)
+        -- Measured, then capped. A FontString cannot be given a left anchor
+        -- and a right one at the same time, so the badge that follows the name
+        -- has to be told where the name ended.
+        title:SetWidth(math.min(title:GetStringWidth() + 1, 150))
+
+        local isIcons = cfg.kind ~= "bar"
+        kindBadge:SetLabel(isIcons and "Icon bar" or "Tracking bar")
+        cellBtn:SetText(isIcons and "Icon options" or "Bar options")
 
         local gridHeight = grid.Refresh()
 
         -- A wide grid must not run out of the card. Scaling the preview keeps
         -- the arrangement honest - it is still the real shape, just not at
         -- real size - and the drag maths follows the scale on its own.
-        local available = width - CARD_PAD * 2
+        local available = well:GetWidth() - 28
         local natural = math.max(1, grid:GetWidth())
         local fit = math.min(1, available / natural)
         grid:SetScale(fit)
         gridHeight = gridHeight * fit
 
         stage:SetHeight(math.max(1, gridHeight))
-        shape:ClearAllPoints()
-        shape:SetPoint("TOPLEFT", stage, "BOTTOMLEFT", 0, -14)
-        shape:SetPoint("TOPRIGHT", stage, "BOTTOMRIGHT", 0, -14)
+
+        -- The preview never collapses below the shape column beside it, or a
+        -- one-cell bar would leave the card with three controls hanging off
+        -- the side of a 40px picture.
+        local bodyHeight = math.max(STAGE_MIN, gridHeight + 28, SLIDER_H * 3)
+        well:SetHeight(bodyHeight)
 
         local lattice = ns.Layout.UsesGrid(cfg)
         rows:SetShown(lattice)
@@ -413,6 +475,7 @@ local function BuildCard(parent, width)
         else
             slots.Refresh()
         end
+        arrange.Refresh()
 
         local active = Workspace.index == card.dkIndex
         card:SetActive(active)
@@ -420,21 +483,28 @@ local function BuildCard(parent, width)
             active and C.text[1] or C.textDim[1],
             active and C.text[2] or C.textDim[2],
             active and C.text[3] or C.textDim[3])
-        -- The Cell tab names the spell it would edit, so it is obvious what
-        -- "Cell" means before you press it - and stays dim when there is none.
-        local cellID = Workspace.cell and cfg.cells and cfg.cells[Workspace.cell]
-        cellTab:SetText(active and cellID
-            and (ns.SpellName(cellID) or "Cell") or "Cell")
 
-        for _, tab in ipairs(card.tabs) do
-            local on = active and Workspace.mode == tab.mode
-            local reachable = active
-                and (tab.mode ~= "cell" or Workspace.cell ~= nil)
-            tab.button:SetBaseColor(on and C.accent
-                or (reachable and C.textDim or C.textFaint))
-        end
+        -- The index chip carries the selection as well as the card outline
+        -- does. It is the one thing on the card that is always in the same
+        -- place, so it is the one worth colouring.
+        chipBg:SetColorTexture(
+            active and C.accent[1] or C.control[1],
+            active and C.accent[2] or C.control[2],
+            active and C.accent[3] or C.control[3], 1)
+        local digit = active and C.windowBg or C.textDim
+        number:SetTextColor(digit[1], digit[2], digit[3])
 
-        local height = HEADER_H + 12 + gridHeight + 14 + SLIDER_H + CARD_PAD
+        -- Which cell the cell button would open. Shown only on the card that
+        -- owns the selection, because a badge saying CELL 2 on three cards is
+        -- three claims that only one of them can mean.
+        local hasCell = active and Workspace.cell ~= nil
+        cellBadge:SetShown(hasCell)
+        if hasCell then cellBadge:SetLabel("Cell " .. Workspace.cell) end
+        cellBtn:SetBaseColor(hasCell and C.textDim or C.textFaint)
+        options:SetBaseColor(active and Workspace.mode == "options"
+            and C.accent or C.textDim)
+
+        local height = HEADER_H + CARD_PAD + bodyHeight + CARD_PAD
         card:SetHeight(height)
         return height
     end
@@ -469,15 +539,27 @@ function Workspace:BuildList(parent, width)
         end)
     end
 
-    local addWidth = math.floor((cardWidth - 10) / 2)
+    -- One 40 row under the stack, ruled off from it, with the two actions
+    -- centred and a hairline between them. Two half-width filled buttons read
+    -- as a THIRD card - the heaviest thing on a page whose subject is the
+    -- cards above it.
+    local addRow = CreateFrame("Frame", nil, content)
+    addRow:SetHeight(ADD_H)
+    local addLine = UI.Separator(addRow, true)
+    addLine:SetPoint("TOPLEFT", addRow, "TOPLEFT", 0, 0)
+    addLine:SetPoint("TOPRIGHT", addRow, "TOPRIGHT", 0, 0)
 
-    local addIcons = UI.Button(content, "+   Icon bar", addWidth,
-        function() Add("icon") end, "soft")
-    addIcons:SetHeight(ADD_H)
+    local addStud = UI.Separator(addRow, false)
+    addStud:SetPoint("CENTER", addRow, "CENTER", 0, 0)
+    addStud:SetHeight(14)
 
-    local addBars = UI.Button(content, "+   Tracking bar", addWidth,
-        function() Add("bar") end, "soft")
-    addBars:SetHeight(ADD_H)
+    local addIcons = UI.Button(addRow, "+   Icon bar", 120,
+        function() Add("icon") end, "ghost")
+    addIcons:SetPoint("RIGHT", addStud, "LEFT", -UI.PAD, 0)
+
+    local addBars = UI.Button(addRow, "+   Tracking bar", 140,
+        function() Add("bar") end, "ghost")
+    addBars:SetPoint("LEFT", addStud, "RIGHT", UI.PAD, 0)
 
     local empty = UI.Label(content, "", 12, C.textDim)
     empty:SetWidth(cardWidth)
@@ -517,10 +599,9 @@ function Workspace:BuildList(parent, width)
             empty:Hide()
         end
 
-        addIcons:ClearAllPoints()
-        addIcons:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
-        addBars:ClearAllPoints()
-        addBars:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, y)
+        addRow:ClearAllPoints()
+        addRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+        addRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, y)
         y = y - ADD_H
 
         content:SetHeight(math.max(1, -y + 10))
@@ -538,6 +619,18 @@ end
 -- guaranteed to work. A spell that is not in here cannot be made to work by
 -- any addon on this patch - see the About page for why.
 ---------------------------------------------------------------------------
+-- "2m", "1m 30", "25s". A cooldown is compared with other cooldowns while
+-- scanning a list, and 90 against 120 is arithmetic; a minute and a half
+-- against two minutes is not.
+local function Duration(seconds)
+    if type(seconds) ~= "number" or seconds <= 0 then return "" end
+    if seconds < 60 then return string.format("%ds", seconds) end
+    local minutes = math.floor(seconds / 60)
+    local rest = seconds - minutes * 60
+    if rest == 0 then return string.format("%dm", minutes) end
+    return string.format("%dm %d", minutes, rest)
+end
+
 local SPELL_ROW_H = 32
 local HEADING_H   = 26
 
@@ -562,14 +655,13 @@ function Workspace:BuildSpellPane(parent, width)
 
     local filter = "all"
 
-    local target = UI.Label(pane, "", 11, C.accent)
-    target:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
-    target:SetWidth(width)
-    target:SetWordWrap(false)
-
+    -- The search sits at the TOP. The line that used to be above it said
+    -- "Click a spell to fill cell 5 of Cooldowns" in orange - which is what
+    -- the column's own subtitle says, one line higher, and orange is meant to
+    -- be rare enough to mean something.
     local search = UI.Input(pane, width, function() end, false, "Search")
-    search:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, -18)
-    search:SetHeight(24)
+    search:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
+    search:SetHeight(28)
 
     local chips
     chips = UI.ChipRow(pane, width, {
@@ -592,25 +684,40 @@ function Workspace:BuildSpellPane(parent, width)
 
     local listHost = CreateFrame("Frame", nil, pane)
     listHost:SetPoint("TOPLEFT", chips, "BOTTOMLEFT", 0, -10)
-    listHost:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 52)
+    listHost:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 56)
 
     local scroll, content = UI.ScrollArea(listHost, width - 8)
 
-    local manual = UI.Input(pane, 92, function(text)
+    -- The footer: a labelled field and the button that acts on it. The label
+    -- is beside the field rather than inside it as a placeholder, because a
+    -- placeholder disappears the moment you start typing - which is exactly
+    -- when "what am I typing here" is still a live question.
+    local function AddManual(text)
         local spellID = tonumber(text)
         if spellID and spellID > 0 then
             Workspace:Assign(spellID)
         else
             ns.Print("Enter a numeric spell ID.")
         end
-    end, true, "ID")
-    manual:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 0, 22)
+    end
 
-    local manualHint = UI.Hint(pane, "add by spell ID")
-    manualHint:SetPoint("LEFT", manual, "RIGHT", 8, 0)
+    local manualLabel = UI.Label(pane, "Spell ID", UI.FS.meta, C.textFaint)
+    manualLabel:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 0, 14)
 
-    local footer = UI.Label(pane, "", 10.5, C.textFaint)
-    footer:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 0, 4)
+    local manualAdd = UI.Button(pane, "Add", 54, function() end)
+    manualAdd:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 12)
+
+    local manual = UI.Input(pane, 92, AddManual, true, "")
+    manual:SetPoint("LEFT", manualLabel, "RIGHT", 10, 0)
+    manual:SetPoint("RIGHT", manualAdd, "LEFT", -8, 0)
+    manual:SetHeight(26)
+
+    manualAdd:SetScript("OnClick", function()
+        AddManual(manual.input and manual.input:GetText())
+    end)
+
+    local footer = UI.Label(pane, "", UI.FS.eyebrow, C.textGhost)
+    footer:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 0, 0)
     footer:SetWordWrap(false)
 
     local rows, headings = {}, {}
@@ -700,7 +807,7 @@ function Workspace:BuildSpellPane(parent, width)
                         heading = UI.ListHeading(content, rowWidth, HEADING_H)
                         headings[headCount] = heading
                     end
-                    heading:SetText(group.label .. "   " .. #bucket)
+                    heading:SetText(group.label, #bucket)
                     heading:ClearAllPoints()
                     heading:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
                     heading:Show()
@@ -725,27 +832,20 @@ function Workspace:BuildSpellPane(parent, width)
                     local known = entry.known ~= false
                     row:SetUsed(cell, known)
 
-                    if not known then
-                        row.meta:SetText(string.format("not talented   %d",
-                            entry.spellID))
-                    elseif cell then
-                        row.meta:SetText(string.format("on this bar, cell %d   %d",
-                            cell, entry.spellID))
-                    elseif entry.parent then
-                        -- An aura: say what actually drives it, because that
-                        -- is the surprising part and the thing to correct if
-                        -- the name above it is wrong. Unless the name IS the
-                        -- glowing ability, in which case there is nothing to
-                        -- name and "Defile on Defile" only reads as a fault.
-                        local driver = entry.route == "engine" and "aura" or "proc"
-                        row.meta:SetText(entry.spellID ~= entry.parent
-                            and string.format("%s on %s   %s", driver,
-                                ns.SpellName(entry.parent) or entry.parent,
-                                entry.duration and (entry.duration .. "s") or "?s")
-                            or string.format("%s   %s", driver,
-                                entry.duration and (entry.duration .. "s") or "?s"))
+                    -- ONE SHORT THING ON THE RIGHT, in this order of
+                    -- importance: is it already placed, does the build have
+                    -- it, how long does it last. Everything else - the ID,
+                    -- what drives an aura - is in the tooltip, which is where
+                    -- you look when you are asking about ONE of them rather
+                    -- than scanning all of them.
+                    if cell then
+                        row:SetTrailing("Cell " .. cell, "cell")
+                    elseif not known then
+                        row:SetTrailing("Not in build")
+                    elseif entry.duration then
+                        row:SetTrailing(Duration(entry.duration))
                     else
-                        row.meta:SetText(tostring(entry.spellID))
+                        row:SetTrailing("")
                     end
 
                     -- What the game's own tooltip cannot know: where this
@@ -819,15 +919,10 @@ function Workspace:BuildSpellPane(parent, width)
 
     pane.Fill = Fill
     pane.Refresh = function()
-        local _, cfg = Workspace:Current()
-        if not cfg then
-            target:SetText("Add a bar first")
-        elseif Workspace.cell then
-            target:SetText(string.format("Click a spell to fill cell %d of %s",
-                Workspace.cell, cfg.name))
-        else
-            target:SetText(string.format("Click a spell to add it to %s", cfg.name))
-        end
+        -- Called for its clamping side effect, not its return: it pulls the
+        -- selection back into range after a bar has been deleted, and the
+        -- list below is filled from that selection.
+        Workspace:Current()
         chips.Refresh()
         Fill()
     end
@@ -846,11 +941,30 @@ function Workspace:BuildOptionsPane(parent, width)
     local pane = CreateFrame("Frame", nil, parent)
     pane:SetAllPoints(parent)
 
+    -- The strip is part of the PANE, not of the scroll area under it: it has
+    -- to stay put while the settings scroll, or it is a heading rather than a
+    -- control.
+    local strip
+    strip = UI.TabStrip(pane, { "Look", "Behaviour", "Reuse" }, function(name)
+        pane.grid:ShowTab(name)
+        strip:Select(name)
+    end)
+    strip:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
+    strip:SetPoint("TOPRIGHT", pane, "TOPRIGHT", 0, 0)
+
     local body = CreateFrame("Frame", nil, pane)
-    body:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
+    body:SetPoint("TOPLEFT", strip, "BOTTOMLEFT", 0, -UI.PAD)
     body:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 0)
 
-    local grid = UI.Page(body, width)
+    -- The paragraphs under the rows go into TOOLTIPS here.
+    --
+    -- This column IS the third column, so there is nowhere to move them
+    -- to. Inline they were a wrapped grey block under every other setting
+    -- and most of the height of the panel, for text that answers a
+    -- question almost nobody is asking twice. The row says what the
+    -- setting is; the sentence is one hover away.
+    local grid = UI.Page(body, width, { tooltipNotes = true })
+    pane.grid, pane.strip = grid, strip
 
     local function Get(key)
         return function()
@@ -918,6 +1032,21 @@ function Workspace:BuildOptionsPane(parent, width)
         return string.format("%d%%", math.floor(v * 100 + 0.5))
     end
 
+    -- THREE TABS, not one nine-section scroll.
+    --
+    -- Look is what it looks like, Behaviour is what it does, Reuse is how it
+    -- gets copied. Anything filed under no tab at all shows on every one of
+    -- them, which is what the tab strip itself is.
+    --
+    -- Arrangement is NOT here any more - rows, columns and pattern moved onto
+    -- the card, next to the picture they change.
+    grid:Tab("Behaviour")
+    -- Which one is open when the panel is first built. Declared here rather
+    -- than left to fall out of the build order: the first section written is
+    -- Behaviour, and "the page opens on whatever I happened to type first" is
+    -- not a decision.
+    grid.tab = "Look"
+
     -- Identity ------------------------------------------------------------
     grid:Section("This bar")
 
@@ -951,6 +1080,7 @@ function Workspace:BuildOptionsPane(parent, width)
         end)
 
     -- Size ----------------------------------------------------------------
+    grid:Tab("Look")
     grid:Section("Size")
 
     local iconRow = Slide("Icon size", "iconSize", 16, 100, 2)
@@ -975,6 +1105,7 @@ function Workspace:BuildOptionsPane(parent, width)
     -- The shape of the thing, as opposed to what it is made of. Kept high on
     -- the page and unfolded, because it is the setting that changes the most
     -- and the one people come here for.
+    grid:Tab("Behaviour")
     grid:Section("Arrangement")
 
     local layoutRow = grid:FullRow("Pattern", { controlWidth = 150 })
@@ -1060,6 +1191,7 @@ function Workspace:BuildOptionsPane(parent, width)
     -- settings and they are set once; the grid, the spells and the sizes are
     -- what you come back to. A page that shows all of it at once buries the
     -- work under the knobs.
+    grid:Tab("Look")
     grid:Section("Icon", "look-icon")
 
     Slide("Opacity", "alpha", 0.1, 1, 0.05, Percent, 100)
@@ -1321,6 +1453,7 @@ function Workspace:BuildOptionsPane(parent, width)
         return string.format("%ds", v)
     end
 
+    grid:Tab("Behaviour")
     grid:Section("When it comes back", "fx-ready")
 
     FxSwitch("Flash", "readyFlash", "A pulse the moment the cooldown ends")
@@ -1443,6 +1576,7 @@ function Workspace:BuildOptionsPane(parent, width)
     end
 
     -- Reuse ---------------------------------------------------------------
+    grid:Tab("Reuse")
     grid:Section("Reuse")
     grid:Note("Sizes, spacing and colours only. Which spells a bar holds and "
         .. "how many rows it has always stay with that bar.")
@@ -1595,6 +1729,8 @@ function Workspace:BuildOptionsPane(parent, width)
             end
         end
 
+        strip:Layout()
+        strip:Select(grid.tab)
         grid:Layout()
         grid:Refresh()
     end
@@ -1625,7 +1761,7 @@ function Workspace:BuildCellPane(parent, width)
     local pane = CreateFrame("Frame", nil, parent)
     pane:SetAllPoints(parent)
 
-    local grid = UI.Page(pane, width)
+    local grid = UI.Page(pane, width, { tooltipNotes = true })
 
     local function Cell()
         local _, cfg = Workspace:Current()
@@ -1796,7 +1932,7 @@ function Workspace:BuildCellPane(parent, width)
             if not (cfg and index) then return end
             ns.Bars:ClearCellLook(cfg, index)
             Apply()
-        end, "soft")
+        end)
     reset:SetPoint("RIGHT", reset:GetParent(), "RIGHT", 0, 0)
 
     pane.Refresh = function()
@@ -1813,50 +1949,33 @@ function Workspace:BuildSide(parent, pad)
 
     local width = parent:GetWidth() - pad * 2
 
-    -- Under the path, which is a line of small type above it.
-    local title = UI.Label(side, "", 15, C.text)
-    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -42)
-    title:SetWidth(width - 56)       -- never under the Done button
+    -- The column header, on the same 62 as the other two.
+    --
+    -- It replaced a breadcrumb. The path was three words above the title that
+    -- between them named the same place the title already named, and its
+    -- deepest step was unreachable half the time. What is actually needed here
+    -- is two things: WHAT am I editing, and HOW DO I GET OUT - so that is
+    -- what is here.
+    local title = UI.Label(side, "", UI.FS.card, C.text)
+    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -16)
+    title:SetWidth(width - 96)       -- never under Done and the close cross
     title:SetWordWrap(false)
 
-    local subtitle = UI.Label(side, "", 11, C.textDim)
-    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    subtitle:SetWidth(width - 56)
+    local subtitle = UI.Eyebrow(side, "")
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    subtitle:SetWidth(width - 96)
     subtitle:SetWordWrap(false)
 
-    -- THE PATH, under the title.
+    -- Done steps back out to the spell list, which is where the work is.
     --
-    -- The tabs on the card choose what is edited; this says where you ended
-    -- up and is the way back out. It replaced two buttons that shared one
-    -- corner and swapped places depending on the mode - which read as the
-    -- window moving under your hand.
-    --
-    -- Every part is clickable, so you can go from a cell to its bar without
-    -- passing through the spell list, which the old "Done" forced.
-    local crumbs = {}
-    local function Crumb(text, index, onClick)
-        local button = UI.GhostButton(side, text, onClick, C.textDim)
-        if index == 1 then
-            button:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -20)
-        else
-            button:SetPoint("LEFT", crumbs[index - 1].sep, "RIGHT", 2, 0)
-        end
-        -- Plain ASCII on purpose: a chevron glyph has to survive being written
-        -- by a tool, read back, and rendered in whatever font the user
-        -- picked. This one always does.
-        local sep = UI.Label(side, ">", 11, C.textFaint)
-        sep:SetPoint("LEFT", button, "RIGHT", 4, 0)
-        crumbs[index] = { button = button, sep = sep }
-        return button
-    end
-
-    local crumbSpells = Crumb("Spells", 1, function() Workspace:ShowSpells() end)
-    local crumbBar = Crumb("Bar", 2, function()
-        Workspace:ShowOptions(Workspace.index or 1)
-    end)
-    local crumbCell = Crumb("Cell", 3, function()
-        if Workspace.cell then Workspace:ShowCell(Workspace.index or 1, Workspace.cell) end
-    end)
+    -- There is NO close cross here. The window already draws one in its own
+    -- top-right corner - which, this column being the rightmost, is exactly
+    -- where the design puts it. Adding a second one landed two crosses on top
+    -- of each other, which is what it looked like.
+    local done = UI.Button(side, "Done", 56, function()
+        Workspace:ShowSpells()
+    end, "primary")
+    done:SetPoint("TOPRIGHT", side, "TOPRIGHT", -(pad + 24 + 8), -18)
 
     local host = CreateFrame("Frame", nil, side)
     host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
@@ -1878,39 +1997,32 @@ function Workspace:BuildSide(parent, pad)
         options:SetShown(onOptions)
         cellPane:SetShown(onCell)
 
-        -- The path names the real things rather than the levels: the bar's
-        -- own name and the spell in the cell, so it reads as where you are.
-        crumbBar:SetText(cfg and cfg.name or "Bar")
-        local cellID = Workspace.cell and cfg and cfg.cells
-            and cfg.cells[Workspace.cell]
-        crumbCell:SetText(cellID and (ns.SpellName(cellID) or "Cell") or "Cell")
-
-        -- ONLY THE WAY BACK. The title below already says where you are, so
-        -- a path that repeated it would print the same word twice, one line
-        -- apart. Every part shown is somewhere you can go.
-        local depth = onCell and 3 or (onOptions and 2 or 1)
-        for position, crumb in ipairs(crumbs) do
-            local shown = position < depth
-            crumb.button:SetShown(shown)
-            crumb.sep:SetShown(shown)
-            crumb.button:SetBaseColor(C.textDim)
-        end
+        -- Done is the way back to the spell list, so it has nothing to do on
+        -- the spell list itself.
+        done:SetShown(onOptions or onCell)
 
         if onCell then
             local spellID = cfg and cfg.cells and cfg.cells[Workspace.cell]
             title:SetText(spellID and (ns.SpellName(spellID) or "This cell")
                 or string.format("Cell %d", Workspace.cell))
             subtitle:SetText(ns.Bars:CellHasLook(cfg, Workspace.cell)
-                and "Wearing its own look"
+                and "Its own look"
                 or "Following the bar")
             cellPane.Refresh()
         elseif onOptions then
             title:SetText(cfg and cfg.name or "Bar")
-            subtitle:SetText("How this bar looks")
+            -- What KIND of bar and how full it is, which is the pair of facts
+            -- that tells you whether you are on the right one.
+            subtitle:SetText(string.format("%s - %d cells",
+                (cfg and cfg.kind == "bar") and "Tracking bar" or "Icon bar",
+                cfg and Bars:CellCount(cfg) or 0))
             options.Refresh()
         else
-            title:SetText("Spells")
-            subtitle:SetText("From your Cooldown Manager")
+            title:SetText("Cooldown manager")
+            subtitle:SetText(cfg and Workspace.cell
+                and string.format("Cell %d of \"%s\" - pick a spell",
+                    Workspace.cell, cfg.name)
+                or "Pick a cell on a bar first")
             spells.Refresh()
         end
     end
