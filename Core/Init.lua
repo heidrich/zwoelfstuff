@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.33.0"
+ns.version = "4.34.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -110,6 +110,14 @@ ns.DEFAULTS = {
     -- Manager. Seeded once on first run and never re-seeded, so a deleted
     -- bar stays deleted.
     bars       = {},
+
+    -- REMINDERS: a line of text on the screen when something is wrong.
+    --
+    -- Empty on purpose and never seeded. A reminder is a sentence somebody
+    -- meant to write; one that arrives pre-written with an update is a
+    -- message shouting on your screen that you did not ask for, about a spell
+    -- that may not be in your build.
+    reminders  = {},
 
     -- Saved looks, by name. A preset carries ns.BAR_STYLE_KEYS only - sizes,
     -- spacing and colours - never the spells or the grid shape.
@@ -918,6 +926,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         ns.Bars:Seed()
         ns.Bars:Prepare()
 
+        -- Same reason, one line down: a reminder saved before a setting
+        -- existed has to gain it before anything reads it.
+        ns.Reminders:Migrate()
+
         -- Auras deliberately has no seeding step, and calling one here used to
         -- throw on every login. Its recorder registers itself when the file
         -- loads, and the shipped procs are merged when the list is READ -
@@ -953,6 +965,14 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- test mode both need the frames to exist before anybody turns
         -- it on. Create() draws nothing until Refresh decides to.
         Boot("Co-tanks", function() ns.CoTanks:Create() end)
+        -- After the Cooldown Manager for the same reason the bars are: a
+        -- reminder asks CDM whether its spell is active, and before the pools
+        -- have been walked once the honest answer is "not tracked" for
+        -- everything.
+        Boot("Reminders", function()
+            ns.Reminders:Rebuild()
+            ns.Reminders:Start()
+        end)
         Boot("Minimap button", function() ns.MinimapButton:Create() end)
         Boot("Game menu entry", function() ns.GameMenu:Create() end)
     end
@@ -990,6 +1010,11 @@ local usage = {
     "  |cffffd100/zs auras bind <glowID> <auraID>|r - name the buff (12.1 route)",
     "  |cffffd100/zs auras forget <glowID>|r - drop one, shipped ones included",
     "  |cffffd100/zs auras remember|r - put every forgotten one back",
+    "",
+    "",
+    "  Tank stuff",
+    "  |cffffd100/zs tanks|r - the co-tank panel (|cffffd100test|r fakes a raid)",
+    "  |cffffd100/zs reminders|r - every reminder, and why each one is or is not up",
     "",
     "  |cffffd100/zs test|r - run the addon's own checks and report failures",
     "  |cffffd100/zs minimap|r - show or hide the minimap button",
@@ -1071,6 +1096,12 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Print("Co-tanks",
                 db.coTanks.enabled and "|cff40ff40on|r" or "|cff888888off|r")
         end
+
+    -- Reminders. One command, and it is the diagnostic rather than a toggle:
+    -- "why is my reminder not showing" is the only question anybody has about
+    -- this feature, and it has a printable answer.
+    elseif cmd == "reminders" or cmd == "reminder" then
+        ns.Reminders:Dump()
 
     elseif cmd == "test" then
         ns.SelfTest:Run()

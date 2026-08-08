@@ -8,6 +8,26 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.34.0",
+        date = "2026-08-09",
+        lines = {
+            "REMINDERS. A line of text on your screen when something is wrong - a buff that has fallen off, a cooldown that is ready and sitting there. It is under Tank stuff, next to the co-tanks.",
+            "You type the words, drag the spell in from the same list the bars use, and say whether the message comes up when the thing is NOT active or while it is. Font, size, edge, colour, an icon on either side of the words or none, scale, and a flash with its own speed and its own floor - it never fades to nothing on purpose, because a message that disappears and comes back is one you have to catch.",
+            "When it may appear at all is the bars' own rule set, so \"only in combat\" (the default), \"only in a raid\" and \"only with a target\" are the same switches you already know.",
+            "Placed in Edit Mode like everything else this addon draws. Every reminder is held on screen while the overlay is up - otherwise placing the message about Bone Shield falling off would mean waiting for Bone Shield to fall off.",
+            "What it can watch is what Blizzard's Cooldown Manager tracks. On this patch an aura's fields are protected, so \"do I have Bone Shield\" has no answer an addon can work out for itself - the Cooldown Manager already knows, and its frame will say. When it does not know a spell, the reminder stays quiet and the page tells you why. \"Cannot answer\" is not \"not active\".",
+            "|cffffd100/zs reminders|r prints every one of them and what it is doing right now.",
+            "",
+            "THE SPELL LIST WAS MISSING SPELLS, ON EVERY CLASS. The list is built from two places - the arrangement you made in Blizzard's own Cooldown Manager settings, and the full category set behind it - and only the first one was ever read.",
+            "What that cost is every spell Blizzard only shows when it becomes relevant. Beacon of Light is Essential for a Holy Paladin permanently and still has no frame most of the time, so it was simply not in the list, with nothing on screen to say why. Every class has spells of that shape.",
+            "Both are read now. Your arrangement still decides the order, and anything you dragged to Not Displayed still stays out - the second source only fills in what the first never mentioned at all. |cffffd100/zs cdm|r says what each one contributed.",
+            "",
+            "THE PREVIEW CARD IGNORED THE DIRECTION SETTING. Every bar previewed left to right whatever arrow was picked - so the running bars from yesterday ran the wrong way for three of the four directions. The card asked for the direction to be worked out a second time after it already had it, which quietly answered \"left to right\" every time without erroring. Fixed at both ends, with checks.",
+            "",
+            "AND TWO THINGS IN THE ADDON'S OWN CHECKS. |cffffd100/zs test|r could report a failure about the co-tank panel while nothing was wrong, if you ran it with the options window open on that page. And the check that makes sure a page is built at the width it is shown at carried its own copy of the rule, so a new page failed a check it obeyed.",
+        },
+    },
+    {
         version = "4.33.0",
         date = "2026-08-08",
         lines = {

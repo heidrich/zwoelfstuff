@@ -478,6 +478,13 @@ local PAGES = {
       -- table would have captured a local upvalue that was still nil.
       build = function(page, width) return ns.OptionsCoTanks:BuildPage(page, width) end },
 
+    -- The other page about the fight rather than about the bars. It carries
+    -- the SPELL LIST as its third column - the same list the bars page uses -
+    -- because the whole gesture is dragging a spell onto the reminder.
+    { key = "reminders", title = "Reminders", glyph = "bell", reminders = true,
+      subtitle = "Text on your screen when a buff has fallen off.",
+      build = function(page, width) return ns.OptionsReminders:BuildPage(page, width) end },
+
     { key = "diagnostics", title = "Diagnostics", glyph = "pulse",
       subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
       build = BuildDiagnosticsPage },
@@ -516,8 +523,22 @@ Options.PAGES = PAGES
 -- CANNOT see the bug it prevents - its frame stub answers GetWidth with a
 -- fixed number whatever was set, so a page built at the wrong width looks
 -- exactly like one built at the right one.
+-- DOES THIS PAGE CARRY A THIRD COLUMN AT ALL?
+--
+-- One function, because the answer is needed in three places - the width
+-- above, the painter below, and the check in SelfTest - and the check used to
+-- carry its own copy of the list. A page flag added to PAGES and to PageWidth
+-- but not to the check would then be asserted against the OLD rule and fail
+-- while being correct, which is precisely what a new page did.
+--
+-- WHICH column it is stays a separate question, asked only by the painter.
+function Options.HasThirdColumn(entry)
+    return (entry.side or entry.explain or entry.tanks or entry.reminders)
+        and true or false
+end
+
 function Options.PageWidth(entry, narrow, wide)
-    if entry.side or entry.explain or entry.tanks then return narrow end
+    if Options.HasThirdColumn(entry) then return narrow end
     return wide
 end
 
@@ -804,6 +825,7 @@ function Options:Create()
     local barList = ns.OptionsBars:BuildList(body, listWidth)
     local side = ns.OptionsBars:BuildSide(sideHost, PAD)
     local tankSide = ns.OptionsCoTanks:BuildSide(sideHost, PAD)
+    local reminderSide = ns.OptionsReminders:BuildSide(sideHost, PAD)
 
     local pageFrames = {}
     for index, entry in ipairs(PAGES) do
@@ -860,6 +882,7 @@ function Options:Create()
         { page = "cooldowns" },
         { eyebrow = "Tank stuff" },
         { page = "cotanks" },
+        { page = "reminders" },
         { eyebrow = "System" },
         { page = "settings" },
         { page = "diagnostics" },
@@ -909,15 +932,19 @@ function Options:Create()
         local withSide = entry.side and true or false
         local withExplain = entry.explain and true or false
         local withTanks = entry.tanks and true or false
+        local withReminders = entry.reminders and true or false
 
-        -- The middle column narrows for either of them: the third column is
+        -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
-        SetStageWidth(withSide or withExplain or withTanks)
-        sideHost:SetShown(withSide or withExplain or withTanks)
+        local third = withSide or withExplain or withTanks or withReminders
+        SetStageWidth(third)
+        sideHost:SetShown(third)
         side:SetShown(withSide)
         explain:SetShown(withExplain)
         tankSide:SetShown(withTanks)
+        reminderSide:SetShown(withReminders)
         if withTanks then ns.OptionsCoTanks:Refresh() end
+        if withReminders then ns.OptionsReminders:Refresh() end
 
         pageTitle:SetText(entry.title)
         if entry.status then
@@ -946,7 +973,7 @@ function Options:Create()
 
         -- The subtitle stops at the buttons rather than at the column edge,
         -- or a long one runs underneath them.
-        local room = ((withSide or withExplain or withTanks) and NARROW_W or WIDE_W) - PAD * 2
+        local room = (third and NARROW_W or WIDE_W) - PAD * 2
         if withSide then room = room - (MOVE_W + BUILD_W + 6 + UI.PAD) end
         pageSubtitle:SetWidth(room)
 

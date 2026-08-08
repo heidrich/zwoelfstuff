@@ -656,7 +656,41 @@ local GROUPS = {
     { key = "other",     label = "Other" },
 }
 
-function Workspace:BuildSpellPane(parent, width)
+---------------------------------------------------------------------------
+-- WHO THE LIST IS FILLING IN FOR.
+--
+-- The list itself is the same list wherever it appears - the Cooldown
+-- Manager's spells plus this character's recorded procs, grouped, searched
+-- and sorted one way. What differs is only what a click MEANS and which
+-- entries are already spoken for. So that is what the caller passes, and
+-- everything else stays in one place.
+--
+-- This exists because the reminders page needs the same list, and the
+-- alternative was a second one. Every second copy of a display in this addon
+-- has drifted from the first, without exception.
+--
+--   Used()            -> { [spellID] = short label } for the "already used" mark
+--   Assign(spellID)   what a click and a drop do
+--   Hint(spellID)     one tooltip line about what a click would do, or nil
+--   Sync()            pull any selection back into range before filling
+local BAR_HOST = {
+    Used = function()
+        local _, cfg = Workspace:Current()
+        local used = {}
+        if cfg then
+            for cell = 1, Bars:CellCount(cfg) do
+                local spellID = cfg.cells[cell]
+                if spellID and not used[spellID] then used[spellID] = cell end
+            end
+        end
+        return used, cfg
+    end,
+    Assign = function(spellID) Workspace:Assign(spellID) end,
+    Sync = function() Workspace:Current() end,
+}
+
+function Workspace:BuildSpellPane(parent, width, host)
+    host = host or BAR_HOST
     local pane = CreateFrame("Frame", nil, parent)
     pane:SetAllPoints(parent)
 
@@ -703,7 +737,7 @@ function Workspace:BuildSpellPane(parent, width)
     local function AddManual(text)
         local spellID = tonumber(text)
         if spellID and spellID > 0 then
-            Workspace:Assign(spellID)
+            host.Assign(spellID)
         else
             ns.Print("Enter a numeric spell ID.")
         end
@@ -741,17 +775,12 @@ function Workspace:BuildSpellPane(parent, width)
         for _, entry in ipairs(ns.CDM:Catalogue()) do catalogue[#catalogue + 1] = entry end
         for _, entry in ipairs(ns.Auras:Catalogue()) do catalogue[#catalogue + 1] = entry end
 
-        -- Which spells are already on the bar being worked on. Only that bar:
-        -- the same spell may sit on three others, and marking it here would
-        -- say something the user did not ask about.
-        local _, cfg = Workspace:Current()
-        local used = {}
-        if cfg then
-            for cell = 1, Bars:CellCount(cfg) do
-                local spellID = cfg.cells[cell]
-                if spellID and not used[spellID] then used[spellID] = cell end
-            end
-        end
+        -- Which spells are already spoken for by whoever this list is filling
+        -- in for. For a bar that is that ONE bar: the same spell may sit on
+        -- three others, and marking it here would say something the user did
+        -- not ask about.
+        local used, cfg = host.Used()
+        used = used or {}
 
         local buckets = {}
         for _, group in ipairs(GROUPS) do buckets[group.key] = {} end
@@ -836,6 +865,12 @@ function Workspace:BuildSpellPane(parent, width)
                     row.icon:SetTexture(entry.icon or ns.WHITE)
                     row.name:SetText(entry.name)
 
+                    -- `cell` is a bar's cell NUMBER, and for any other host it
+                    -- is whatever short word that host uses for "this one is
+                    -- taken". SetUsed only ever tests it for truth, and the
+                    -- badge prints it, so both shapes work - but the label
+                    -- below has to be built from it rather than assuming a
+                    -- number, which is why it goes through tostring.
                     local cell = used[entry.spellID]
                     local known = entry.known ~= false
                     row:SetUsed(cell, known)
@@ -847,7 +882,8 @@ function Workspace:BuildSpellPane(parent, width)
                     -- you look when you are asking about ONE of them rather
                     -- than scanning all of them.
                     if cell then
-                        row:SetTrailing("Cell " .. cell, "cell")
+                        row:SetTrailing(type(cell) == "number"
+                            and ("Cell " .. cell) or tostring(cell), "cell")
                     elseif not known then
                         row:SetTrailing("Not in build")
                     elseif entry.duration then
@@ -883,7 +919,17 @@ function Workspace:BuildSpellPane(parent, width)
                         }
                     end
 
-                    if cell then
+                    -- What a click would do, in the host's own words. The bar
+                    -- names the cell; the reminders page names the reminder.
+                    local hint = host.Hint and host.Hint(entry.spellID, cell)
+                    if hint then
+                        row.dkLines[#row.dkLines + 1] = {
+                            text = hint,
+                            r = cell and 0.404 or 0.62,
+                            g = cell and 0.788 or 0.64,
+                            b = cell and 0.443 or 0.68,
+                        }
+                    elseif cell and type(cell) == "number" then
                         row.dkLines[#row.dkLines + 1] = {
                             text = string.format("Already on %s, in cell %d.",
                                 cfg and cfg.name or "this bar", cell),
@@ -899,7 +945,7 @@ function Workspace:BuildSpellPane(parent, width)
                         }
                     end
 
-                    row:SetScript("OnClick", function() Workspace:Assign(entry.spellID) end)
+                    row:SetScript("OnClick", function() host.Assign(entry.spellID) end)
                     row:Show()
 
                     y = y - SPELL_ROW_H
@@ -930,7 +976,7 @@ function Workspace:BuildSpellPane(parent, width)
         -- Called for its clamping side effect, not its return: it pulls the
         -- selection back into range after a bar has been deleted, and the
         -- list below is filled from that selection.
-        Workspace:Current()
+        if host.Sync then host.Sync() end
         chips.Refresh()
         Fill()
     end

@@ -461,20 +461,27 @@ end
 ---------------------------------------------------------------------------
 -- Everything the Cooldown Manager knows, on screen or not
 --
--- Two sources, and the better one is not the obvious one.
+-- Two sources, and NEITHER of them is the better one. They answer different
+-- questions, and the reference says so in as many words: "Either source alone
+-- misses spells. The union catches everything."
 --
--- GetCooldownViewerCategorySet returns where a cooldown BELONGS. It does not
--- know what the user did in Blizzard's own Cooldown Manager settings: a spell
--- dragged to "Not Displayed" is still in the set, so our picker offered
--- spells the user had deliberately removed, in an order they had deliberately
--- changed. That is the second half of the list not matching.
+-- GetCooldownViewerCategorySet returns where a cooldown BELONGS. It is the
+-- complete list and it is the only one that knows about a spell Blizzard pools
+-- only when it becomes relevant. What it does not know is what the user did in
+-- Blizzard's own Cooldown Manager settings: a spell dragged to "Not Displayed"
+-- is still in the set, so on its own it offered spells the user had
+-- deliberately removed, in an order they had deliberately changed.
 --
 -- CooldownViewerSettings' data provider answers the arrangement question -
 -- GetOrderedCooldownIDs is the user's own order, and anything hidden reports
 -- a category we do not map, so it drops out by itself. The reference reaches
--- for it for exactly this reason (EllesmereUICdmSpellPicker.lua:437-501) and
--- keeps the category set as the fallback, every step pcall-guarded, because
--- the provider only exists once Blizzard's settings frame has been built.
+-- for it for exactly this reason (EllesmereUICdmSpellPicker.lua:437-501),
+-- every step pcall-guarded, because the provider only exists once Blizzard's
+-- settings frame has been built.
+--
+-- So: the arranged source decides ORDER and what the user hid, the static set
+-- decides COMPLETENESS. Taking only the first cost us the situational spells
+-- on every class; taking only the second cost us the arrangement.
 ---------------------------------------------------------------------------
 local function SettingsProvider()
     local settings = CooldownViewerSettings
@@ -489,8 +496,24 @@ local function SettingsProvider()
     return provider
 end
 
--- Calls fn(cooldownID, viewerKey, order) for every catalogued cooldown.
--- Returns true when the arranged source answered, false when it fell back.
+-- Calls fn(cooldownID, viewerKey, order) for every catalogued cooldown, and
+-- returns how many each source contributed - the numbers /zs cdm prints.
+--
+-- BOTH SOURCES RUN. The arranged one used to return here and the static sets
+-- were never reached, which made the second half of this file's own header a
+-- description of something that did not happen. What it costs is every spell
+-- Blizzard only pools when it becomes relevant: Beacon of Light is Essential
+-- for a Holy Paladin permanently and still has no frame most of the time, so
+-- it was absent from our picker with nothing to explain why. Every class has
+-- spells of that shape, which is why the list looked short on all of them.
+--
+-- The arrangement is still honoured, and that is the whole reason this is a
+-- skip list rather than a plain union. A cooldown the user dragged to "Not
+-- Displayed" IS mentioned by the arranged source, under a category we do not
+-- map - so it is recorded as spoken for and the static pass leaves it alone.
+-- Only cooldowns the arranged source never mentioned at all get added. Both
+-- earlier complaints stay fixed: nothing the user removed comes back, and
+-- nothing the Cooldown Manager knows goes missing.
 function CDM:ForEachCatalogued(fn)
     local counters = {}
     local function Order(viewerKey)
@@ -498,6 +521,11 @@ function CDM:ForEachCatalogued(fn)
         counters[rank] = (counters[rank] or 0) + 1
         return rank * 10000 + counters[rank]
     end
+
+    -- Keyed by cooldownID, which is a plain number on every path - the
+    -- secret values live in the aura fields, never in this handle.
+    local spokenFor = {}
+    local arranged, hidden, extra = 0, 0, 0
 
     local provider = SettingsProvider()
     if provider then
@@ -507,22 +535,30 @@ function CDM:ForEachCatalogued(fn)
                 local okInfo, entry = pcall(provider.GetCooldownInfoForID, provider, cooldownID)
                 local category = okInfo and type(entry) == "table" and entry.category or nil
                 local viewerKey = category ~= nil and self:CategoryViewer(category) or nil
+                spokenFor[cooldownID] = true
                 -- No viewer means Hidden, or a category we do not show. Both
                 -- are things the user chose not to see.
                 if viewerKey then
+                    arranged = arranged + 1
                     fn(cooldownID, viewerKey, Order(viewerKey))
+                else
+                    hidden = hidden + 1
                 end
             end
-            return true
         end
     end
 
-    -- Fallback: the static sets. Iterated through VIEWERS rather than
-    -- pairs(Enum), because pairs has no order at all and the groups came out
-    -- shuffled differently on every rebuild.
+    -- The static sets, for everything the arranged pass never spoke for.
+    -- Iterated through VIEWERS rather than pairs(Enum), because pairs has no
+    -- order at all and the groups came out shuffled differently on every
+    -- rebuild. These land after the arranged entries inside their own viewer
+    -- band, because Order shares its counters across both passes: Blizzard's
+    -- own arrangement first, then the ones it had no position for.
     local categories = Enum and Enum.CooldownViewerCategory
     local getSet = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
-    if not (categories and getSet) then return false end
+    if not (categories and getSet) then
+        return arranged, extra, hidden
+    end
 
     for _, viewer in ipairs(self.VIEWERS) do
         for _, category in pairs(categories) do
@@ -531,13 +567,19 @@ function CDM:ForEachCatalogued(fn)
                 local ok, set = pcall(getSet, category, true)
                 if ok and type(set) == "table" then
                     for _, cooldownID in ipairs(set) do
-                        fn(cooldownID, viewer.key, Order(viewer.key))
+                        -- A cooldown can sit in two category sets, so the
+                        -- mark is written here too, not only above.
+                        if not spokenFor[cooldownID] then
+                            spokenFor[cooldownID] = true
+                            extra = extra + 1
+                            fn(cooldownID, viewer.key, Order(viewer.key))
+                        end
                     end
                 end
             end
         end
     end
-    return false
+    return arranged, extra, hidden
 end
 
 function CDM:Catalogue()
@@ -671,6 +713,21 @@ function CDM:Dump()
             viewer.label,
             frame and (count .. " items") or "frame does not exist"))
         for _, line in ipairs(lines) do ns.Print(line) end
+    end
+
+    -- WHERE EVERY ENTRY CAME FROM, because "the list is missing things" has no
+    -- answer without it. Three numbers, three different meanings, and the one
+    -- that matters is the middle one: spells the Cooldown Manager knows about
+    -- and had no arranged position for, which is where the situational ones
+    -- live. It read zero for a whole release because the static pass was
+    -- unreachable.
+    local arranged, extra, hidden = self:ForEachCatalogued(function() end)
+    ns.Print(string.format("Sources: |cffffd100%d|r arranged, |cffffd100%d|r " ..
+        "only in the category set, |cff888888%d not displayed|r.",
+        arranged, extra, hidden))
+    if arranged == 0 then
+        ns.Print("   |cff888888No arrangement read - Blizzard's Cooldown Manager|r")
+        ns.Print("   |cff888888settings have not been opened this session.|r")
     end
 
     local catalogue = self:Catalogue()
@@ -1090,6 +1147,69 @@ local function BarFill(item)
     return nil
 end
 CDM.BarFill = function(_, item) return BarFill(item) end
+
+---------------------------------------------------------------------------
+-- Which live item frame stands for which spell
+--
+-- It lived in Screen.lua while the screen was the only thing that asked. The
+-- reminders ask the same question - "is the frame for Bone Shield active" is
+-- this lookup followed by ItemIsActive - and a second walk building a second
+-- table is two answers to one question that drift apart on the first talent
+-- change. One index, one owner, both readers.
+--
+-- Rebuilt on demand rather than on a timer: the screen rebuilds it once per
+-- render pass, and anything else asking in between gets that pass's answer,
+-- which is the same frame the screen is looking at.
+---------------------------------------------------------------------------
+local itemBySpell = {}
+local itemViewer  = {}   -- which viewer an item came from: it decides its shape
+
+function CDM:RebuildItemIndex()
+    wipe(itemBySpell)
+    wipe(itemViewer)
+
+    -- INDEXED UNDER EVERY FORM OF THE SPELL, not just the one the frame is
+    -- reporting this second. A talent that replaces a spell changes the ID
+    -- the frame resolves to, and a cell that stored the old ID would simply
+    -- stop finding it - the spell is right there on screen and the bar goes
+    -- blank. Frostbolt becoming Glacial Spike is the everyday case.
+    --
+    -- The exact ID always wins; the other forms only fill gaps. Two spells of
+    -- one family can be on screen at once (a base and its override both
+    -- tracked), and without that rule whichever came out of the pool first
+    -- would answer for both.
+    local exact = {}
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        self:ForEachItem(viewer.key, function(item)
+            local spellID = self:ItemSpellID(item)
+            if not spellID then return end
+
+            if not exact[spellID] then
+                exact[spellID] = true
+                itemBySpell[spellID] = item
+            end
+            for _, variant in ipairs(self:VariantFamily(spellID)) do
+                if not itemBySpell[variant] then itemBySpell[variant] = item end
+            end
+            itemViewer[item] = viewer
+        end)
+    end
+end
+
+-- The live frame for a spell, or nil. `fresh` rebuilds first, for a caller
+-- that is not riding the screen's render pass.
+function CDM:ItemForSpell(spellID, fresh)
+    if not spellID then return nil end
+    if fresh then self:RebuildItemIndex() end
+    return itemBySpell[spellID]
+end
+
+-- Which of Blizzard's two templates a frame came out of: "icon" or "bar".
+function CDM:ItemShape(item)
+    local viewer = itemViewer[item]
+    return (viewer and viewer.kind) or "icon"
+end
 
 -- Is this buff actually up?
 --

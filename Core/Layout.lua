@@ -96,7 +96,21 @@ ns.FILL_DIRECTIONS = {
       orientation = "VERTICAL",   reverse = true },
 }
 
+-- Takes the stored NAME and hands back the entry. It also takes an entry and
+-- hands it straight back, and that second half is not politeness.
+--
+-- Bars:Style resolves this field once and stores the ENTRY, so half the code
+-- base holds a table where the other half holds a string. Ask this function
+-- for a table and the loop below compares a string against a table - false
+-- every time, no error in Lua - and it returns "left to right" while looking
+-- like it worked. That silent default is how the preview card spent 4.33.0
+-- animating every bar horizontally no matter which arrow was picked.
+--
+-- A caller that already has the answer asking for the answer is not a
+-- mistake worth punishing, so it is simply answered. What IS a mistake is a
+-- wrong shape becoming a plausible default, and that cannot happen here now.
 function Layout.FillDirection(value)
+    if type(value) == "table" and value.orientation then return value end
     for _, entry in ipairs(ns.FILL_DIRECTIONS) do
         if entry.value == value then return entry end
     end

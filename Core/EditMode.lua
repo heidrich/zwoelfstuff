@@ -1079,9 +1079,144 @@ local function RefreshTankMover()
     tankMover:Show()
 end
 
+---------------------------------------------------------------------------
+-- The reminders, moved the same way
+--
+-- Same three functions as the panel above, over a LIST rather than one frame.
+-- Everything this addon draws is placed on the screen it lives on, and a
+-- message that appears in the middle of a fight is the last thing anybody
+-- wants to position from a settings window.
+--
+-- THE OVERLAY FORCES THEM VISIBLE. A reminder is only on screen when its
+-- condition fires, so without Reminders:SetPlacing there would be nothing to
+-- drag except during the exact moment you are too busy to drag it.
+---------------------------------------------------------------------------
+local reminderMovers = {}
+
+local function ApplyReminderMove(index, x, y)
+    local cfg = ns.Reminders:Get(index)
+    if not cfg then return end
+    -- Centre terms, like the panel and like a bar with no anchor.
+    cfg.point, cfg.relPoint = "CENTER", "CENTER"
+    cfg.x, cfg.y = math.floor(x + 0.5), math.floor(y + 0.5)
+    ns.Reminders:Style(index)
+end
+
+local function CreateReminderMover(index)
+    local mover = CreateFrame("Button", nil, overlay)
+    mover:SetFrameLevel(overlay:GetFrameLevel() + 10)
+    mover:RegisterForDrag("LeftButton")
+    mover:Hide()
+
+    mover.bg = mover:CreateTexture(nil, "BACKGROUND")
+    mover.bg:SetAllPoints(mover)
+    mover.bg:SetColorTexture(C.sidebarBg[1], C.sidebarBg[2], C.sidebarBg[3], 0.55)
+
+    mover.edge = ns.CreateBorder(mover, 1, "BORDER")
+    mover.edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
+
+    -- The label sits ABOVE the box rather than in it. The box is exactly the
+    -- size of the words the reminder itself is showing, and a second caption
+    -- inside it would be printed over the thing being placed.
+    mover.name = UI.Label(mover, "", 11, C.textDim)
+    mover.name:SetPoint("BOTTOM", mover, "TOP", 0, 3)
+    mover.name:SetWordWrap(false)
+
+    mover.coords = UI.Label(mover, "", 10, C.textDim)
+    mover.coords:SetPoint("TOP", mover, "BOTTOM", 0, -3)
+    mover.coords:SetWordWrap(false)
+
+    mover:SetScript("OnDragStart", function(self)
+        local cfg = ns.Reminders:Get(self.dkIndex)
+        if not cfg then return end
+        local cursorX, cursorY = CursorPosition()
+        self.grab = {
+            cursorX = cursorX, cursorY = cursorY,
+            originX = cfg.x or 0, originY = cfg.y or 0,
+        }
+    end)
+
+    local function Stop(self)
+        self.grab = nil
+        ShowGuide(guideX, nil, true)
+        ShowGuide(guideY, nil, false)
+    end
+    mover:SetScript("OnDragStop", Stop)
+    mover:SetScript("OnMouseUp", Stop)
+
+    mover.dkIndex = index
+    return mover
+end
+
+local function DragReminders()
+    for index, mover in ipairs(reminderMovers) do
+        if mover.grab then
+            if not IsMouseButtonDown("LeftButton") then
+                mover.grab = nil
+                ShowGuide(guideX, nil, true)
+                ShowGuide(guideY, nil, false)
+                return
+            end
+
+            local frame = ns.Reminders:Frame(index)
+            if not frame then return end
+
+            local cursorX, cursorY = CursorPosition()
+            local x = mover.grab.originX + (cursorX - mover.grab.cursorX)
+            local y = mover.grab.originY + (cursorY - mover.grab.cursorY)
+
+            local lineX, lineY
+            if not IsAltKeyDown() then
+                local scale = frame:GetScale()
+                if not scale or scale <= 0 then scale = 1 end
+                local snappedX, gx = Snap(x, nil, frame:GetWidth() * scale / 2, "x")
+                local snappedY, gy = Snap(y, nil, frame:GetHeight() * scale / 2, "y")
+                x, y = snappedX, snappedY
+                lineX, lineY = gx, gy
+            end
+
+            ApplyReminderMove(index, x, y)
+            ShowGuide(guideX, lineX, true)
+            ShowGuide(guideY, lineY, false)
+            return
+        end
+    end
+end
+
+local function RefreshReminderMovers()
+    local count = ns.Reminders:Count()
+
+    for index = 1, count do
+        local mover = reminderMovers[index]
+        if not mover then
+            mover = CreateReminderMover(index)
+            reminderMovers[index] = mover
+        end
+
+        local frame = ns.Reminders:Frame(index)
+        local cfg = ns.Reminders:Get(index)
+        -- Not while the options page has it: the frame is then parented into
+        -- a card inside a window, and a mover pinned to it would be a box
+        -- floating over the settings.
+        if not (frame and cfg and EditMode.overlayShown and not ns.Reminders.hosted) then
+            mover:Hide()
+        else
+            mover:ClearAllPoints()
+            mover:SetAllPoints(frame)
+            mover.name:SetText(ns.Reminders:Label(cfg, index))
+            mover.coords:SetText(string.format("%d, %d", cfg.x or 0, cfg.y or 0))
+            mover.coords:SetShown(Prefs().showCoords or mover.grab ~= nil)
+            mover:Show()
+        end
+    end
+
+    for index = count + 1, #reminderMovers do reminderMovers[index]:Hide() end
+end
+
 local function OnUpdate()
     if cellDrag then DragCell() end
     DragTank()
+    DragReminders()
     if not dragging then return end
 
     -- The button can be let go anywhere, including over another window or off
@@ -2118,6 +2253,7 @@ function EditMode:Refresh()
     end
 
     RefreshTankMover()
+    RefreshReminderMovers()
 
     -- The selection can outlive what it pointed at: delete a bar, or shrink a
     -- grid, and the cell it named is gone.
@@ -2198,6 +2334,12 @@ function EditMode:SetUnlocked(state, wanted)
         ns.db.coTanks.locked = not state
         ns.CoTanks:Refresh()
     end
+
+    -- AND SO DO THE REMINDERS, for the same reason one layer sharper: a
+    -- reminder is on screen only while the thing it names is wrong. Waiting
+    -- for Bone Shield to fall off in order to place the message about Bone
+    -- Shield falling off is not a workflow.
+    if ns.Reminders then ns.Reminders:SetPlacing(state) end
 
     if state then
         -- The window would sit behind the overlay, catching clicks that were

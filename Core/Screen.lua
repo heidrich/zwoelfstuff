@@ -923,44 +923,20 @@ end
 ---------------------------------------------------------------------------
 -- Which live Cooldown Manager frame stands for which spell
 --
+-- THE INDEX ITSELF LIVES IN CDM, and this is a window onto it rather than a
+-- second copy. The reminders need the same answer - "is the frame for Bone
+-- Shield active right now" is the same lookup as "which frame does this cell
+-- adopt" - and two tables built by two walks are two things that can disagree
+-- about which frame stands for a spell after a talent change. This addon has
+-- paid for that shape more than once.
+--
 -- Rebuilt whenever the pools churn rather than searched per cell: a spec
 -- change, a talent change and entering combat all reshuffle them.
 ---------------------------------------------------------------------------
-local itemBySpell = {}
-local itemViewer  = {}   -- which viewer an item came from: it decides its shape
 local held = {}          -- every item we have touched, so it can be handed back
 
 local function RebuildItemIndex()
-    wipe(itemBySpell)
-    wipe(itemViewer)
-
-    -- INDEXED UNDER EVERY FORM OF THE SPELL, not just the one the frame is
-    -- reporting this second. A talent that replaces a spell changes the ID
-    -- the frame resolves to, and a cell that stored the old ID would simply
-    -- stop finding it - the spell is right there on screen and the bar goes
-    -- blank. Frostbolt becoming Glacial Spike is the everyday case.
-    --
-    -- The exact ID always wins; the other forms only fill gaps. Two spells of
-    -- one family can be on screen at once (a base and its override both
-    -- tracked), and without that rule whichever came out of the pool first
-    -- would answer for both.
-    local exact = {}
-
-    for _, viewer in ipairs(ns.CDM.VIEWERS) do
-        ns.CDM:ForEachItem(viewer.key, function(item)
-            local spellID = ns.CDM:ItemSpellID(item)
-            if not spellID then return end
-
-            if not exact[spellID] then
-                exact[spellID] = true
-                itemBySpell[spellID] = item
-            end
-            for _, variant in ipairs(ns.CDM:VariantFamily(spellID)) do
-                if not itemBySpell[variant] then itemBySpell[variant] = item end
-            end
-            itemViewer[item] = viewer
-        end)
-    end
+    ns.CDM:RebuildItemIndex()
 end
 
 -- Where an adopted frame goes inside a cell, and how big it is.
@@ -976,8 +952,7 @@ end
 -- frame may be restyled AND whether we add anything of our own beside it, so
 -- it is asked once and passed along rather than re-derived in three places.
 local function ItemShape(item)
-    local viewer = itemViewer[item]
-    return (viewer and viewer.kind) or "icon"
+    return ns.CDM:ItemShape(item)
 end
 
 local function ItemGeometry(cfg, cell, item, slot)
@@ -1369,7 +1344,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
 
     cell.spellID = spellID
 
-    local item = itemBySpell[spellID]
+    local item = ns.CDM:ItemForSpell(spellID)
 
     -- A BAR-SHAPED CELL IS DRAWN, NEVER ADOPTED.
     --
@@ -1559,7 +1534,7 @@ function Screen:WarnIfInvisible()
     local wanted = false
     for _, cfg in ipairs(ns.db.bars) do
         for _, spellID in pairs(cfg.cells) do
-            if itemBySpell[spellID] then wanted = true break end
+            if ns.CDM:ItemForSpell(spellID) then wanted = true break end
         end
         if wanted then break end
     end

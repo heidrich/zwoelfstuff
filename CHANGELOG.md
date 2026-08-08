@@ -8,6 +8,97 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.34.0] - 2026-08-09
+
+### Added
+
+- **Reminders.** A line of text on your screen when something is wrong - a
+  buff that has fallen off, a cooldown that is ready and sitting there. Under
+  Tank stuff, next to the co-tanks. You type the words, drag the spell in from
+  the same list the bars use, and say whether the message appears when the
+  thing is NOT active or while it is.
+
+  Everything about it is yours: font, size, edge, colour, an icon on either
+  side of the words or none, scale, and a flash with its own speed and its own
+  floor. The flash never fades to nothing on purpose - a message that vanishes
+  and comes back is one you have to catch.
+
+  When it may appear at all is the BARS' own rule set, evaluated by the bars'
+  own evaluator: only in combat (the default), only in a raid, only with a
+  target, only on these specs. A second vocabulary for the same idea is a
+  second thing to learn and a second thing to get wrong.
+
+  Placed in Edit Mode, like the bars and the tank panel. Every reminder is
+  forced onto the screen while the overlay is up - otherwise placing the
+  message about Bone Shield falling off would mean waiting for Bone Shield to
+  fall off.
+
+  What it can watch is what Blizzard's Cooldown Manager tracks, because on
+  this patch an aura's fields are secret values and "do I have Bone Shield"
+  has no direct answer in Lua at all. The Cooldown Manager already knows, and
+  its item frame will say. When it does not know a spell, the reminder stays
+  SILENT and says why on its own page - "cannot answer" is not "not active",
+  and getting that backwards would leave a mistyped spell shouting at you
+  forever.
+
+  `/zs reminders` prints every one of them, what it watches, its state right
+  now, and why it is or is not on screen - the same sentence the page shows,
+  off the same function.
+
+### Fixed
+
+- **The spell list was missing spells, on every class.** The catalogue is
+  built from two sources on purpose - the arrangement you made in Blizzard's
+  own Cooldown Manager settings, and the static category set - and only the
+  first of them ever ran. The walk returned as soon as the arranged source
+  answered, so the second half of this addon's own documented design never
+  happened.
+
+  What it cost is every spell Blizzard only pools when it becomes relevant.
+  Beacon of Light is Essential for a Holy Paladin permanently and still has no
+  frame most of the time; it was simply absent from the picker, with nothing
+  on screen to explain the gap. Every class has spells of that shape.
+
+  Both sources run now. The arranged one still decides the ORDER and still
+  honours what you dragged to "Not Displayed" - a cooldown it mentioned is
+  spoken for, hidden or not - and the static set fills in only what the
+  arranged one never mentioned at all. Nothing you removed comes back, and
+  nothing the Cooldown Manager knows goes missing. `/zs cdm` now prints what
+  each source contributed, because "the list is short" has no answer without
+  it.
+
+- **The preview card ignored the Direction control.** Every bar previewed as
+  left-to-right whatever arrow was picked, including the two vertical ones -
+  so the running bars shipped in 4.33.0 ran the wrong way for three of the
+  four settings, on the same card that had already been wrong seven times.
+
+  `Bars:Style` resolves that field once and stores the ENTRY; the card handed
+  the entry back in to be resolved again, which compared a table against a
+  string, missed every time, and returned "left to right" while looking like
+  it had worked. The card now reads the resolved entry the way the screen
+  does, and `Layout.FillDirection` hands back an entry it is given rather than
+  quietly defaulting - a wrong shape must not become a plausible answer. Both
+  halves have checks.
+
+- **The self test could fail while nothing was wrong.** Running `/zs test`
+  with the options window open on the Co-tanks page read the live "the panel
+  is borrowed" flag and reported a failure about a panel behaving exactly as
+  designed.
+
+- **A new page could fail its own width check.** The check carried its own
+  copy of the "does this page have a third column" rule instead of asking the
+  addon, so a page that added a column was asserted against the old list.
+  There is one predicate now, and both use it.
+
+### Changed
+
+- The spell list is one implementation with two callers. The reminders page
+  uses the bars' list rather than a second one - same search, same groups,
+  same order, same drag - and only says what a click means on its page.
+- The "which live frame is this spell" index moved out of the renderer into
+  the Cooldown Manager layer, so the reminders and the bars read one table
+  instead of building two that drift apart on the first talent change.
+
 ## [4.33.0] - 2026-08-08
 
 ### Added

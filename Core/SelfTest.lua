@@ -764,6 +764,34 @@ local function TestSpellIdentity()
     Check("The picker groups the viewers", not revisited,
         revisited and ("comes back to " .. tostring(revisited)) or nil)
     Check("The picker never goes backwards through Blizzard's order", ordered)
+
+    -- BOTH SOURCES RUN, AND NEITHER REPEATS THE OTHER.
+    --
+    -- The walk used to stop after the arranged source, so every spell the
+    -- Cooldown Manager only pools situationally was absent from the picker on
+    -- every class. Now the static sets fill in behind it - which is only safe
+    -- if a cooldown the arranged pass already spoke for cannot come back
+    -- through the second one. Handed the same cooldownID twice, the picker
+    -- would list the spell once anyway (it keys by spell) and quietly award it
+    -- two positions, so this is the only place the fault is visible.
+    local emitted, twice = {}, nil
+    local arranged, extra, hidden = CDM:ForEachCatalogued(function(cooldownID)
+        if emitted[cooldownID] then twice = cooldownID end
+        emitted[cooldownID] = true
+    end)
+    Check("No cooldown is catalogued twice", not twice,
+        twice and ("cooldown " .. tostring(twice)) or nil)
+    Check("The catalogue walk reports what each source gave",
+        type(arranged) == "number" and type(extra) == "number"
+        and type(hidden) == "number")
+
+    -- Not an assertion: with no arrangement read, everything legitimately
+    -- comes from the static set, and a fresh login before Blizzard's settings
+    -- have been opened is exactly that. It is worth SAYING, because "0 extra"
+    -- next to a short list is the signature of the bug this replaced.
+    Skip("Catalogue sources", string.format(
+        "%d arranged, %d situational, %d not displayed",
+        arranged, extra, hidden))
 end
 
 ---------------------------------------------------------------------------
@@ -1182,6 +1210,21 @@ local function TestFillDirection()
         fallback and fallback.orientation ~= nil)
     Check("The fallback is left to right", fallback.value == "right",
         tostring(fallback.value))
+
+    -- ASKING TWICE MUST NOT CHANGE THE ANSWER.
+    --
+    -- Bars:Style resolves this once and stores the entry, so a caller reading
+    -- from a style holds a TABLE while a caller reading raw config holds a
+    -- STRING. Handing the table back in used to compare it against a string,
+    -- miss every time, and return "left to right" - the preview card animated
+    -- every bar horizontally for a whole version because of it, and nothing
+    -- errored. Four directions, both shapes, same answer.
+    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
+        local once = ns.Layout.FillDirection(entry.value)
+        local twice = ns.Layout.FillDirection(once)
+        Check("Resolving '" .. entry.value .. "' twice keeps it",
+            twice == once, tostring(twice and twice.value))
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -1414,6 +1457,12 @@ local function TestCoTanks()
     -- mode ON, which is the setting that used to win.
     local ctdb = ns.db.coTanks
     local hosted, testing, rows = ns.CoTanks.hosted, ctdb.testMode, ctdb.maxRows
+    -- Cleared, not just saved. Run /zs test with the options window open on
+    -- the Co-tanks page and the panel is genuinely hosted, so the first check
+    -- below would read 1 and report a failure about a panel behaving exactly
+    -- as designed. A check has to state the conditions it needs, not inherit
+    -- whichever window happens to be open.
+    ns.CoTanks.hosted = nil
     ctdb.testMode, ctdb.maxRows = true, 5
     Check("Test mode fills the panel", ns.CoTanks:RowCount() == 5,
         tostring(ns.CoTanks:RowCount()))
@@ -1738,7 +1787,10 @@ local function TestCoTanks()
     local NARROW, WIDE = 750, 1150
     local carried = 0
     for _, entry in ipairs(ns.Options.PAGES) do
-        local third = entry.side or entry.explain or entry.tanks
+        -- THE ADDON'S OWN PREDICATE, not a copy of it. This line used to list
+        -- the flags again, so adding a page that carried a third column made
+        -- the check assert the opposite of the rule and fail a correct page.
+        local third = ns.Options.HasThirdColumn(entry)
         local width = ns.Options.PageWidth(entry, NARROW, WIDE)
         if third then
             carried = carried + 1
@@ -1824,6 +1876,112 @@ end
 -- icon sitting on the same bar disagreeing about where "bottom right" is, is
 -- exactly the class of bug this addon keeps finding by eye.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- THE REMINDERS.
+--
+-- Three things are worth checking without a screen, and they are the three
+-- that would be silent faults:
+--
+--   The trigger, which is one word turning into a decision. Getting it
+--   backwards means a message that shows exactly when nothing is wrong, and
+--   nothing about that looks like a bug from the code.
+--
+--   "Cannot answer" is not "not active". A spell the Cooldown Manager does
+--   not track has to make the reminder SILENT, or every mistyped spell sits
+--   on screen forever insisting a buff is gone.
+--
+--   The flash, whose whole job is to never reach nothing. A message that
+--   vanishes and comes back is one you have to catch.
+--
+-- The geometry is a pure function for the usual reason: the harness answers
+-- GetStringWidth with a stub, so the arithmetic is checked here and the
+-- drawing is checked by a pair of eyes.
+---------------------------------------------------------------------------
+local function TestReminders()
+    local Reminders = ns.Reminders
+
+    -- The trigger, all four combinations.
+    Check("'Not active' fires when it is idle",
+        Reminders.Fires("missing", "idle") == true)
+    Check("'Not active' stays quiet while it is up",
+        Reminders.Fires("missing", "active") == false)
+    Check("'While active' fires while it is up",
+        Reminders.Fires("active", "active") == true)
+    Check("'While active' stays quiet when it is idle",
+        Reminders.Fires("active", "idle") == false)
+
+    -- AN UNANSWERABLE STATE IS SILENT, both ways round. This is the one that
+    -- matters: nil is not false.
+    Check("An unknown state fires nothing (missing)",
+        Reminders.Fires("missing", nil) == false)
+    Check("An unknown state fires nothing (active)",
+        Reminders.Fires("active", nil) == false)
+
+    -- Every trigger in the vocabulary is one the evaluator answers. A word in
+    -- the dropdown that Fires has never heard of would silently behave like
+    -- "missing".
+    for _, entry in ipairs(ns.REMINDER_TRIGGERS) do
+        local onActive = Reminders.Fires(entry.value, "active")
+        local onIdle = Reminders.Fires(entry.value, "idle")
+        Check("Trigger '" .. entry.value .. "' tells the two states apart",
+            onActive ~= onIdle, tostring(onActive) .. "/" .. tostring(onIdle))
+    end
+
+    -- The flash never reaches nothing, and it does come back to full.
+    local floor = 0.25
+    local lowest, highest = 1, 0
+    for step = 0, 40 do
+        local alpha = Reminders.FlashAlpha(step / 40, 1, floor)
+        if alpha < lowest then lowest = alpha end
+        if alpha > highest then highest = alpha end
+        if alpha < floor - 0.001 or alpha > 1.001 then
+            Check("The flash stays inside its range", false,
+                string.format("%.3f at %d", alpha, step))
+        end
+    end
+    Check("The flash reaches full brightness", highest > 0.99,
+        string.format("%.3f", highest))
+    Check("The flash dims to the floor", Near(lowest, floor, 0.02),
+        string.format("%.3f", lowest))
+    Check("A flash rate of nothing is a steady message",
+        Reminders.FlashAlpha(1.7, 0, 0.25) == 1)
+
+    -- The box is measured, and the icon has to be inside it.
+    local wide, tall = Reminders.Extent(120, 30, "left", 40, 8)
+    Check("The icon widens the box", wide == 168, tostring(wide))
+    Check("A tall icon raises the box", tall == 40, tostring(tall))
+    local plainW, plainH = Reminders.Extent(120, 30, "none", 40, 8)
+    Check("No icon, no extra width", plainW == 120, tostring(plainW))
+    Check("No icon, the text's own height", plainH == 30, tostring(plainH))
+    local zeroW, zeroH = Reminders.Extent(0, 0, "none", 0, 8)
+    Check("An empty reminder still has a size", zeroW >= 1 and zeroH >= 1)
+
+    -- The store, and the label that must never be empty.
+    local before = Reminders:Count()
+    local index = Reminders:Add()
+    Check("A new reminder is added", index ~= nil and Reminders:Count() == before + 1)
+    if index then
+        local cfg = Reminders:Get(index)
+        Check("A brand new reminder still has a name",
+            (Reminders:Label(cfg, index) or "") ~= "")
+        Check("It waits for combat by default", cfg.show.combat == "in",
+            tostring(cfg.show.combat))
+        -- WITH NO SPELL it cannot answer, and therefore must not show.
+        Check("With nothing to watch it stays off the screen",
+            Reminders:ShouldShow(cfg) == false)
+        Check("And it says why", (Reminders:Explain(cfg) or "") ~= "")
+
+        cfg.text = "  BONE SHIELD  \nsecond line"
+        Check("The name comes off the first line of the text",
+            Reminders:Label(cfg, index) == "BONE SHIELD",
+            Reminders:Label(cfg, index))
+
+        Reminders:Remove(index)
+    end
+    Check("A removed reminder is gone", Reminders:Count() == before,
+        tostring(Reminders:Count()))
+end
+
 local function TestTextElements()
     local byKey = {}
     for _, element in ipairs(ns.TEXT_ELEMENTS) do byKey[element.key] = element end
@@ -2107,6 +2265,7 @@ function Test:Run()
         { "Gradients",     TestGradients },
         { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },
+        { "Reminders",     TestReminders },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
         { "Anchors",       TestAnchors },

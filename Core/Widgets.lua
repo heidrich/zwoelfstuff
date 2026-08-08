@@ -1958,6 +1958,95 @@ function UI.Input(parent, width, onSubmit, numeric, placeholder)
 end
 
 ---------------------------------------------------------------------------
+-- TextArea - several lines of typing
+--
+-- NOT UI.Input WITH A TALLER BOX. A multi-line EditBox differs in three ways
+-- that each break something if they are missed:
+--
+--   Enter inserts a newline instead of submitting, so there is no "commit"
+--   keystroke at all - the value is saved as it is typed and on focus loss.
+--   Escape is the only way out, and it has to give the keyboard back or the
+--   window cannot be closed while the cursor is in here.
+--
+--   It does not scroll itself. Blizzard's own answer is a ScrollFrame with
+--   the EditBox as its scroll child, and the box's height driven by its own
+--   content - anything else clips the line you are typing the moment you
+--   reach the bottom.
+--
+--   It has no width until it is given one. SetPoint on both sides is not
+--   enough inside a ScrollFrame, whose child is free-floating: the text wraps
+--   at zero and every character lands on its own line.
+---------------------------------------------------------------------------
+function UI.TextArea(parent, width, height, onChange, placeholder)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(width, height or 74)
+    Fill(holder, "BACKGROUND", C.canvasBg)
+    local edge = ns.CreateBorder(holder, 1, "BORDER")
+    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    local scroll = CreateFrame("ScrollFrame", nil, holder)
+    scroll:SetPoint("TOPLEFT", holder, "TOPLEFT", 6, -5)
+    scroll:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -6, 5)
+
+    local input = CreateFrame("EditBox", nil, scroll)
+    input:SetMultiLine(true)
+    input:SetAutoFocus(false)
+    input:SetMaxLetters(240)
+    input:SetWidth(width - 12)
+    input:SetHeight(height or 74)
+    ns.StyleUIFont(input, 12, "")
+    input:SetTextColor(C.text[1], C.text[2], C.text[3])
+    scroll:SetScrollChild(input)
+
+    local ghost = UI.Label(holder, placeholder or "", 12, C.textFaint)
+    ghost:SetPoint("TOPLEFT", holder, "TOPLEFT", 7, -6)
+    ghost:SetWidth(width - 14)
+    ghost:SetJustifyH("LEFT")
+
+    local function UpdateGhost()
+        ghost:SetShown((placeholder or "") ~= ""
+            and (input:GetText() or "") == "" and not input:HasFocus())
+    end
+
+    -- Typed, not submitted. There is no Enter to press - Enter is a newline
+    -- here - so the setting follows the keystrokes and the preview moves with
+    -- them. That is also what makes the card worth looking at while typing.
+    input:SetScript("OnTextChanged", function(self, byUser)
+        UpdateGhost()
+        if byUser and onChange then onChange(self:GetText() or "") end
+        -- Keep the caret in view: without this, typing past the bottom of the
+        -- box carries on invisibly.
+        local caret = self.GetCursorPosition and self:GetCursorPosition() or nil
+        if caret then scroll:UpdateScrollChildRect() end
+    end)
+
+    input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    input:SetScript("OnEditFocusGained", function()
+        edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        UpdateGhost()
+    end)
+    input:SetScript("OnEditFocusLost", function(self)
+        edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+        UpdateGhost()
+        if onChange then onChange(self:GetText() or "") end
+    end)
+
+    -- Clicking anywhere in the box puts the cursor in it. The EditBox is only
+    -- as tall as its text, so the lower half of an empty box is dead space
+    -- that looks exactly like the live part.
+    holder:EnableMouse(true)
+    holder:SetScript("OnMouseDown", function() input:SetFocus() end)
+
+    holder.input = input
+    holder.SetText = function(_, text)
+        input:SetText(text or "")
+        UpdateGhost()
+    end
+    UpdateGhost()
+    return holder
+end
+
+---------------------------------------------------------------------------
 -- CellGrid - the bar, laid out as you will see it on screen
 --
 -- An empty cell is a real place you can click, not a gap, which is what makes
@@ -2024,6 +2113,113 @@ function UI.CellUnderCursor()
         end
     end
     return nil, nil
+end
+
+---------------------------------------------------------------------------
+-- SpellSlot - one square you drop a spell onto
+--
+-- A reminder watches ONE spell, so the bar's whole grid is the wrong shape
+-- for it - but the gesture has to be the same one, because "drag it out of
+-- the list" is the thing people already know how to do here.
+--
+-- SO IT IS A GRID OF ONE. It registers in the same list UI.CellGrid does and
+-- answers the same four questions, which means UI.SpellRow needs no idea this
+-- widget exists: the drag it already implements finds this the way it finds a
+-- bar card. The alternative was a second drag path in SpellRow with its own
+-- proxy, its own marker and its own drop test - three more places for the two
+-- to drift apart.
+--
+-- cfg = { size, get() -> spellID or nil, onPick(spellID), onClear() }
+---------------------------------------------------------------------------
+function UI.SpellSlot(parent, cfg)
+    local size = cfg.size or 46
+    local slot = CreateFrame("Button", nil, parent)
+    slot:SetSize(size, size)
+    slot:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    grids[#grids + 1] = slot
+
+    Fill(slot, "BACKGROUND", C.well)
+    local edge = ns.CreateBorder(slot, 1, "BORDER")
+    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    slot.icon = slot:CreateTexture(nil, "ARTWORK")
+    slot.icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 2, -2)
+    slot.icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -2, 2)
+    slot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    slot.icon:Hide()
+
+    -- What an empty slot says. A plus sign and nothing else reads as "add",
+    -- which is right, and it disappears the moment there is an icon.
+    -- The same "+" an empty bar cell shows, not a glyph of its own: two marks
+    -- for "there is nothing here yet" is two things to learn.
+    slot.mark = UI.Label(slot, "+", math.floor(size * 0.38), C.textFaint)
+    slot.mark:SetPoint("CENTER", slot, "CENTER", 0, 0)
+
+    -- The drop marker, the same green ring the bar cards show.
+    local marker = ns.CreateBorder(slot, 2, "OVERLAY")
+    marker:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+    marker:Hide()
+
+    slot.CellAt = function()
+        if not slot:IsVisible() then return nil end
+        local x, y = GetCursorPosition()
+        local scale = slot:GetEffectiveScale()
+        x, y = x / scale, y / scale
+        local left, bottom = slot:GetLeft(), slot:GetBottom()
+        if not (left and bottom) then return nil end
+        if x < left or x > left + slot:GetWidth() then return nil end
+        if y < bottom or y > bottom + slot:GetHeight() then return nil end
+        -- 1, because there is exactly one place to land. The drag machinery
+        -- treats this as the cell index and hands it straight back to dkDrop.
+        return 1
+    end
+
+    slot.ShowMarker = function(index) marker:SetShown(index and true or false) end
+    slot.HideMarker = function() marker:Hide() end
+    slot.dkDrop = function(_, spellID)
+        if cfg.onPick then cfg.onPick(spellID) end
+    end
+
+    slot:SetScript("OnClick", function(_, button)
+        if button == "RightButton" then
+            if cfg.onClear then cfg.onClear() end
+        elseif cfg.onEmptyClick then
+            cfg.onEmptyClick()
+        end
+    end)
+
+    slot:SetScript("OnEnter", function(self)
+        edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        local spellID = cfg.get and cfg.get()
+        if not (GameTooltip and spellID) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if not pcall(GameTooltip.SetSpellByID, GameTooltip, spellID) then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(ns.SpellName(spellID) or tostring(spellID))
+        end
+        GameTooltip:AddLine("Right click to clear.", 0.5, 0.5, 0.5)
+        GameTooltip:Show()
+    end)
+
+    slot:SetScript("OnLeave", function()
+        edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+
+    slot.Refresh = function(self)
+        local spellID = cfg.get and cfg.get()
+        if spellID then
+            self.icon:SetTexture(ns.SpellTexture(spellID))
+            self.icon:Show()
+            self.mark:Hide()
+        else
+            self.icon:Hide()
+            self.mark:Show()
+        end
+    end
+
+    slot:Refresh()
+    return slot
 end
 
 function UI.CellGrid(parent, cfg)
@@ -2335,8 +2531,13 @@ function UI.CellGrid(parent, cfg)
                     -- reach a mirrored bar is a fault to fix, not a reason for
                     -- the editor to quietly agree with it.
                     cell.run = {
-                        direction = ns.Layout.FillDirection(
-                            style and style.fillDirection),
+                        -- The entry Bars:Style already resolved, exactly as
+                        -- Screen.lua reads it. Handing it back through
+                        -- FillDirection was the eighth time this card and the
+                        -- screen disagreed - it silently answered "left to
+                        -- right" for every bar.
+                        direction = (style and style.fillDirection)
+                            or ns.Layout.FillDirection("right"),
                         grow = style and style.fillGrow and true or false,
                         leftPad = leftPad,
                         rightPad = rightPad,
@@ -3144,6 +3345,11 @@ local ICON_FILES = {
     -- above are - the rail names a FUNCTION, and what stays put when the
     -- drawing is eventually replaced is the function.
     tanks   = "cond-group",
+
+    -- Same reasoning again, and a happier accident: the design's mark for the
+    -- "nag" effect on a bar is a reminder drawn small, which is exactly what
+    -- this page is. One drawing, one idea, two places.
+    bell    = "effect-nag",
 
     caretUP    = "ui-chevron-up",
     caretDOWN  = "ui-chevron-down",
