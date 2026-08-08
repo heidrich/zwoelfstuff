@@ -1411,6 +1411,20 @@ local function TestCoTanks()
     local cut = CoTanks:CutName("Sunwarden", 4)
     Check("A long name is cut to the limit", cut == "Sunw", tostring(cut))
 
+    -- THE LIMIT IS IN CHARACTERS, NOT BYTES, and on a European realm that is
+    -- the difference between a name and a name with a box on the end. The
+    -- first version stepped one byte per pass while counting to a limit in
+    -- characters: four letters of "Grimtusk" came back as four bytes of a name
+    -- whose first letter is two bytes long.
+    local wide = "\195\150lrunn"           -- "Oelrunn" with an O-umlaut: 7 chars, 8 bytes
+    cut = CoTanks:CutName(wide, 3)
+    Check("A two-byte letter counts as one", cut == "\195\150lr", cut)
+    Check("A cut never ends mid-letter",
+        not strlenutf8 or strlenutf8(cut) == 3,
+        tostring(strlenutf8 and strlenutf8(cut)))
+    Check("A name shorter than the limit comes back whole",
+        CoTanks:CutName(wide, 20) == wide)
+
     -- Every setting the panel reads has a default. Two lists of the same
     -- thing drift - that is written down in this file already, from the time
     -- it cost a whole feature - so this walks the defaults rather than a

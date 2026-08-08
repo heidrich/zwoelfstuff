@@ -685,30 +685,33 @@ function ns.CreateBorder(frame, thickness, layer)
     function border:SetTint(colour, alpha, gradient)
         alpha = alpha or 1
 
-        if not (gradient and gradient.on) then
-            self:SetColor(colour[1], colour[2], colour[3], alpha)
-            return
-        end
-
-        local orientation, swap = ns.Layout.GradientOrder(gradient.direction)
-        local from, to = colour, gradient.color or colour
+        local on = gradient and gradient.on
+        local orientation, swap = ns.Layout.GradientOrder(
+            gradient and gradient.direction)
+        local from, to = colour, (gradient and gradient.color) or colour
         if swap then from, to = to, from end
 
         local along, startEdge, endEdge
-        if orientation == "VERTICAL" then
+        if on and orientation == "VERTICAL" then
             along, startEdge, endEdge = { "LEFT", "RIGHT" }, "BOTTOM", "TOP"
         else
             along, startEdge, endEdge = { "TOP", "BOTTOM" }, "LEFT", "RIGHT"
         end
 
+        -- ALL FOUR go through ns.Tint, including the flat ones, and including
+        -- the whole flat case. SetColorTexture cannot undo a gradient an edge
+        -- was given a moment ago, so switching the ramp off - or turning it
+        -- from vertical to horizontal - left the old one crossing the new.
+        -- ns.Tint always sets a ramp; a solid colour is simply that colour
+        -- twice.
         for _, edge in ipairs(along) do
-            -- White first: a colour texture already carrying the tint would
-            -- be multiplied BY the ramp rather than replaced by it.
             self[edge]:SetColorTexture(1, 1, 1, 1)
-            ns.Tint(self[edge], colour, alpha, gradient)
+            ns.Tint(self[edge], colour, alpha, on and gradient or nil)
         end
-        self[startEdge]:SetColorTexture(from[1], from[2], from[3], alpha)
-        self[endEdge]:SetColorTexture(to[1], to[2], to[3], alpha)
+        for _, pair in ipairs({ { startEdge, from }, { endEdge, to } }) do
+            self[pair[1]]:SetColorTexture(1, 1, 1, 1)
+            ns.Tint(self[pair[1]], pair[2], alpha, nil)
+        end
     end
 
     -- This is a plain table of four textures, not a frame, so it has none of

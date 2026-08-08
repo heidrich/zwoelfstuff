@@ -206,13 +206,25 @@ function ns.Tint(texture, colour, alpha, gradient)
     local r, g, b = colour[1], colour[2], colour[3]
     alpha = alpha or 1
 
-    if not (gradient and gradient.on and texture.SetGradient) then
+    -- SOLID IS A RAMP OF ONE COLOUR, and it is set as one on purpose.
+    --
+    -- There is no ClearGradient and SetVertexColor does NOT undo a gradient:
+    -- once a texture has one it keeps it. Switching the setting off, or
+    -- picking a flat look after a gradient one, left the ramp on screen until
+    -- a reload - a control that worked in one direction only, which is a
+    -- worse version of the defect the whole feature was written to avoid.
+    local second = colour
+    local orientation, swap = "HORIZONTAL", false
+
+    if gradient and gradient.on then
+        second = gradient.color or colour
+        orientation, swap = ns.Layout.GradientOrder(gradient.direction)
+    end
+
+    if not texture.SetGradient then
         texture:SetVertexColor(r, g, b, alpha)
         return
     end
-
-    local second = gradient.color or colour
-    local orientation, swap = ns.Layout.GradientOrder(gradient.direction)
 
     -- The SECOND colour carries the first one's alpha. A gradient that fades
     -- out is a separate wish from a gradient that changes colour, and there

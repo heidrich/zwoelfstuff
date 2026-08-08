@@ -83,14 +83,28 @@ function CoTanks:CollectTanks(out)
             return (UnitName(a) or "") < (UnitName(b) or "")
         end)
     elseif db.sortBy == "health" then
-        -- Health may be secret, and sorting on a secret raises. When it is
-        -- unreadable the roster order stands - which is the same order as
-        -- last frame, so the rows do not shuffle under the eye.
-        table.sort(out, function(a, b)
-            local ha, hb = UnitHealth(a), UnitHealth(b)
-            if not (ns.CanCompute(ha) and ns.CanCompute(hb)) then return false end
-            return ha < hb
-        end)
+        -- READ EVERY VALUE FIRST, AND ONLY THEN DECIDE WHETHER TO SORT.
+        --
+        -- The obvious shape - compare inside the comparator and return false
+        -- when a value is unreadable - is INTRANSITIVE, and table.sort detects
+        -- that and raises "invalid order function for sorting". So the answer
+        -- is not a careful comparator, it is not calling sort at all: if any
+        -- health in the group is protected the roster order stands, which is
+        -- the order it was in a moment ago and therefore the order that does
+        -- not shuffle under the eye.
+        local key, sortable = {}, true
+        for _, unit in ipairs(out) do
+            local health = UnitHealth(unit)
+            if ns.CanCompute(health) then
+                key[unit] = health
+            else
+                sortable = false
+                break
+            end
+        end
+        if sortable then
+            table.sort(out, function(a, b) return key[a] < key[b] end)
+        end
     end
 
     return out
@@ -223,10 +237,18 @@ local function SampleIcons()
         for _, spellID in pairs(cfg and cfg.cells or {}) do Take(spellID) end
     end
 
-    if #sampleIcons < 6 and ns.CDM and ns.CDM.ForEachCatalogued then
-        pcall(ns.CDM.ForEachCatalogued, ns.CDM, function(entry)
-            Take(entry and entry.spellID)
-        end)
+    -- CDM:Catalogue(), not ForEachCatalogued. The low-level walk hands over
+    -- (cooldownID, viewerKey, order) - three numbers - and this asked it for
+    -- `entry.spellID`, which raises on the first one. The pcall around it
+    -- swallowed that, so the documented fallback silently contributed nothing:
+    -- the exact shape of bug this addon keeps finding, one that succeeds at
+    -- doing nothing. Catalogue is the assembled list and already carries the
+    -- resolved icon.
+    if #sampleIcons < 6 and ns.CDM and ns.CDM.Catalogue then
+        local ok, list = pcall(ns.CDM.Catalogue, ns.CDM)
+        if ok and type(list) == "table" then
+            for _, entry in ipairs(list) do Take(entry and entry.spellID) end
+        end
     end
 
     return sampleIcons
@@ -614,15 +636,26 @@ end
 function CoTanks:CutName(name, limit)
     if not name or not limit or limit <= 0 then return name end
     if strlenutf8 and strlenutf8(name) <= limit then return name end
-    if not strlenutf8 then return name:sub(1, limit) end
 
-    local out = ""
-    for index = 1, limit do
-        local char = name:sub(index, index)
-        out = out .. char
-        if strlenutf8(out) >= limit then break end
+    -- WALKED BY CHARACTER, NOT BY BYTE. The first version stepped one byte per
+    -- pass while counting to a limit in characters, so a name with any
+    -- non-ASCII letter came back too short and could end halfway through a
+    -- sequence - which the client draws as a box. That is precisely what this
+    -- function exists to prevent, so it was worth writing out.
+    --
+    -- A leading byte is < 0x80 (one byte), or >= 0xC0 and says how many
+    -- follow. Bytes in 0x80-0xBF are continuations and are never counted.
+    local index, length, count = 1, #name, 0
+    while index <= length and count < limit do
+        local byte = name:byte(index)
+        local size = 1
+        if byte >= 240 then size = 4
+        elseif byte >= 224 then size = 3
+        elseif byte >= 192 then size = 2 end
+        index = index + size
+        count = count + 1
     end
-    return out
+    return name:sub(1, index - 1)
 end
 
 local function PaintStrip(strip, cfg, testing)
@@ -839,6 +872,10 @@ end
 
 function CoTanks:SavePosition()
     if not self.panel then return end
+    -- NOT WHILE IT IS SITTING IN THE OPTIONS CARD. Its point is then relative
+    -- to that card, and writing those numbers into the profile would move the
+    -- real panel somewhere arbitrary the next time it goes home.
+    if self.hosted then return end
     local point, _, relPoint, x, y = self.panel:GetPoint(1)
     if not point then return end
     local db = ns.db.coTanks
@@ -877,6 +914,13 @@ function CoTanks:RowCount()
     local db = ns.db.coTanks
     local limit = math.max(1, math.min(MAX_ROWS, db.maxRows or 5))
     if self:Testing() then return limit end
+
+    -- ONE ROW MINIMUM WHILE IT IS BEING MOVED OR PREVIEWED. Playing solo there
+    -- are no tanks, so the panel came out one pixel tall - "Move it on screen"
+    -- unlocked something invisible and the user had nothing to drag. The row
+    -- says what it is instead of pretending to be somebody.
+    if not db.locked or self.hosted then return math.max(1, #self.tanks) end
+
     return math.min(limit, #self.tanks)
 end
 
@@ -913,8 +957,14 @@ function CoTanks:Refresh()
             local snap = self.snapshots[index]
             if testing then
                 TestSnapshot(index, snap)
-            else
+            elseif self.tanks[index] then
                 LiveSnapshot(self.tanks[index], snap)
+            else
+                -- Unlocked or previewed with nobody to show. Something to
+                -- take hold of, and it says why it is empty.
+                BlankSnapshot(snap)
+                snap.name = "No tanks in the group"
+                snap.healthMax, snap.health = 1, 1
             end
             PaintRow(row, snap, db, testing)
             row:Show()
@@ -1018,10 +1068,17 @@ local function BuildEngineStrip(strip, cfg, filter)
     local size = math.max(6, cfg.size or 20)
     local border = cfg.borderColor
 
+    -- THE STRIP'S OWN CORNER, the same one the test strip lays out from.
+    -- Handed the ROW's corner the engine starts its flow at the opposite end
+    -- of the strip frame and overflows the other way - so the live display
+    -- could not land where the preview drew it, which is the one thing the
+    -- preview exists to promise.
+    local corner = ns.Layout.StripCorner(cfg.anchor)
+
     local container = ns.Engine:CreateContainer(strip, {
-        anchorPoint = cfg.anchor,
+        anchorPoint = corner,
         growthH     = cfg.growth == "left" and "LEFT" or "RIGHT",
-        growthV     = cfg.anchor:find("BOTTOM") and "DOWN" or "UP",
+        growthV     = corner:find("BOTTOM") and "UP" or "DOWN",
     })
     if not container then return nil end
 
@@ -1088,6 +1145,27 @@ end
 -- Groups are ADD-ONLY: a settings change that alters the baked skin needs a
 -- NEW container, and the old one is retired rather than mutated. So this runs
 -- from ApplyLayout, not from Refresh.
+-- What the containers were BAKED with. A group is add-only, so any change to
+-- the skin needs new containers - but only a change to the skin, and a frame
+-- can never be freed. Rebuilding on every ApplyLayout meant one drag of one
+-- slider leaked hundreds of AuraContainer frames.
+local function StripSignature(db)
+    local parts = {}
+    for _, key in ipairs({ "debuffs", "buffs" }) do
+        local cfg = db[key]
+        local colour = cfg.borderColor or { 0, 0, 0 }
+        parts[#parts + 1] = table.concat({
+            tostring(cfg.show), tostring(cfg.max), tostring(cfg.size),
+            tostring(cfg.spacing), tostring(cfg.perRow), tostring(cfg.anchor),
+            tostring(cfg.growth), tostring(cfg.borderSize),
+            tostring(colour[1]), tostring(colour[2]), tostring(colour[3]),
+            tostring(cfg.countdown), tostring(cfg.countdownSize),
+            tostring(cfg.stacks), tostring(cfg.stacksSize),
+        }, ",")
+    end
+    return table.concat(parts, "|")
+end
+
 function CoTanks:BuildAuraContainers()
     if not (ns.Engine and ns.Engine:IsAvailable()) then return end
     if ns.Engine:IsLocked() then
@@ -1097,6 +1175,9 @@ function CoTanks:BuildAuraContainers()
     self.containersPending = false
 
     local db = ns.db.coTanks
+    local signature = StripSignature(db)
+    if signature == self.containerSignature then return end
+    self.containerSignature = signature
     for _, row in ipairs(self.rows or {}) do
         for key, filter in pairs({ debuffs = "HARMFUL", buffs = "HELPFUL" }) do
             local strip = row[key]

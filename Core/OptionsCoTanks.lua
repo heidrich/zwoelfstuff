@@ -31,6 +31,9 @@ local function DB() return ns.db.coTanks end
 -- a slider that stutters and one that does not.
 local function Apply()
     ns.CoTanks:ApplyLayout()
+    -- The panel may have changed size, and while it is in the preview card
+    -- that changes how far it has to be scaled down to fit.
+    OptionsCoTanks:FitPanel()
 end
 
 local function Repaint()
@@ -95,18 +98,33 @@ function OptionsCoTanks:BorrowPanel()
     self.homeScale = panel:GetScale()
 
     self.borrowed = true
-    -- Read by CoTanks:ApplyLayout and ShouldShow: while this is set the panel
-    -- takes its position from the card and shows whether or not the feature
-    -- is switched on.
+    -- Read by CoTanks:ApplyLayout, ShouldShow and SavePosition: while this is
+    -- set the panel takes its position from the card, shows whether or not
+    -- the feature is switched on, and never writes its position back.
     ns.CoTanks.hosted = true
     panel:SetParent(self.stage.slot)
     panel:ClearAllPoints()
     panel:SetPoint("TOP", self.stage.slot, "TOP", 0, 0)
-    -- Scaled to fit the card rather than shown at its real size: a 240-wide
-    -- panel of five rows is taller than the card, and a preview you have to
-    -- scroll is not one.
-    panel:SetScale(math.min(1, (self.stage.slot:GetWidth() - 8) / math.max(1, db.width)))
     panel:Show()
+    self:FitPanel()
+end
+
+-- WORKED OUT EVERY REFRESH, not once when the panel was borrowed. Width is one
+-- of the four sliders on this very page, so a scale taken at borrow time is
+-- wrong the moment somebody uses the control the preview is there to show -
+-- the panel simply grew out of the card.
+function OptionsCoTanks:FitPanel()
+    local panel = ns.CoTanks.panel
+    if not (panel and self.borrowed and self.stage) then return end
+
+    local room = self.stage.slot:GetWidth() - 8
+    local wide = math.max(1, DB().width)
+    local tall = math.max(1, panel:GetHeight())
+    local high = math.max(1, self.stage.slot:GetHeight() - 4)
+
+    -- The tighter of the two, so a tall stack of rows shrinks as well. A
+    -- preview you have to scroll is not a preview.
+    panel:SetScale(math.min(1, room / wide, high / tall))
 end
 
 function OptionsCoTanks:ReleasePanel()
@@ -259,6 +277,7 @@ function OptionsCoTanks:BuildSide(parent, pad)
     side.Refresh = function()
         grid:Refresh()
         OptionsCoTanks:BorrowPanel()
+        OptionsCoTanks:FitPanel()
     end
 
     side:SetScript("OnShow", function() OptionsCoTanks:BorrowPanel() end)
