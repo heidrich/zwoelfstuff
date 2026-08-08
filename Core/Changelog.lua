@@ -8,6 +8,21 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.30.0",
+        date = "2026-08-08",
+        lines = {
+            "THE CHARGE COUNT IS ITS OWN SETTING, and on the cells this addon draws it is there at all for the first time. A charge spell on one of our own bars showed no number while the same spell on an adopted icon beside it did - that was the gap.",
+            "It gets the same seven controls as every other text element: on, font, size, colour, outline, one of nine positions, and a nudge each way. Stacks and charges used to share one entry, because the game never puts both numbers on one frame - but \"charges top left, stacks bottom right\" is an ordinary thing to want, and one setting for two numbers cannot say it.",
+            "",
+            "If you had moved or recoloured the stack count, your charges inherit exactly that. Nothing on your screen moves on this update.",
+            "",
+            "HOW IT CAN BE SHOWN AT ALL: on this patch the live count is a protected value that no addon may read - not compare, not add to, not even test. It CAN be handed straight to the game's own text setter, which formats and draws it without ever letting the addon see it. That is the one door, and this addon never reads the number: at full charges the answer is simply the maximum, and below that the count goes from the game to the font string without passing through us.",
+            "",
+            "ZWOELFSTUFF IS IN THE GAME MENU, under the last of Blizzard's own entries. Escape, then click it. It steps aside while you are in combat: pressing it closes the pause menu, and the game does not let an addon do that mid-fight - a button that did nothing when pressed would be worse than no button. Off with one tick in Settings.",
+            "It is appended below the last entry rather than slipped into the middle, which is why nothing of Blizzard's moves: the menu re-anchors every one of its own buttons each time it opens, and an addon inserting itself in that stack has to fight it on every pass, for ever.",
+        },
+    },
+    {
         version = "4.29.0",
         date = "2026-08-08",
         lines = {

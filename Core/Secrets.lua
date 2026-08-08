@@ -25,6 +25,25 @@ function ns.CanCompute(value)
     return value ~= nil and not issecret(value)
 end
 
+-- True when a value may be handed to a font string's SetFormattedText.
+--
+-- THE ONE PLACE A SECRET IS ALLOWED THROUGH. SetFormattedText declares a
+-- secret argument: the engine formats the number and draws it, and addon Lua
+-- never sees it. That is how a live charge count can be displayed at all on
+-- this patch - `currentCharges` is secret in combat, so every other route
+-- (comparing it, concatenating it, .. it into a string) raises.
+--
+-- Read off EllesmereUICdmBuffBars.lua:4577-4584, which says so in as many
+-- words: "the text setter accepts a SECRET live count".
+--
+-- Deliberately NOT ns.CanCompute: this returns true for exactly the values
+-- CanCompute rejects. Anything that passes here may be printed and nothing
+-- else - no arithmetic, no comparison, not even a boolean test.
+function ns.CanDisplay(value)
+    if issecret(value) then return true end
+    return type(value) == "number"
+end
+
 -- Equality that never raises: two values only count as equal when both are
 -- readable. Unreadable input reports "unknown" rather than guessing.
 function ns.SameValue(a, b)

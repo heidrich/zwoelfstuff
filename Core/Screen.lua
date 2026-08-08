@@ -175,6 +175,15 @@ local function BuildAuraVisual(cell)
     -- font raises rather than doing nothing.
     ns.Media.ApplyFont(aura.label, nil, 11)
 
+    -- HOW MANY CHARGES ARE LEFT. Adopted icons get this from Blizzard's own
+    -- ChargeCount frame; a cell we draw ourselves had nothing at all, which
+    -- is why a charge spell on one of our bars showed no number while the
+    -- same spell on an adopted icon beside it did.
+    aura.charges = aura.textLayer:CreateFontString(nil, "OVERLAY")
+    aura.charges:SetWordWrap(false)
+    ns.Media.ApplyFont(aura.charges, nil, 11)
+    aura.charges:Hide()
+
     cell.aura = aura
     return aura
 end
@@ -246,6 +255,15 @@ local function StyleAuraVisual(aura, style, isBar)
 
     local timer = style.countdown
     ns.Media.ApplyFont(aura.timer, timer.font, timer.size, timer.outline, timer.color)
+
+    -- The charge count is placed HERE rather than in the layout pass: where it
+    -- sits is a position the user picked, not a consequence of the cell's
+    -- shape. Same anchor and same inset as an adopted icon's, from the same
+    -- function, so the two renderers cannot drift apart on it.
+    ns.PlaceText(aura.charges, aura, style.charges)
+    -- Read by ApplyChargeCount, which runs on its own event and has no style
+    -- table in hand - the same arrangement as the spark and the marks above.
+    aura.showCharges = style.charges.show
 end
 
 -- Bar-shaped aura cells put the icon on the left and the name beside it;
@@ -408,19 +426,82 @@ local function EnsureThreshold(aura, index)
     return overlay
 end
 
--- How many charges a spell has, or nil for the ordinary one-charge case.
--- The count can be secret, so it is checked before any comparison.
-local function MaxCharges(spellID)
+-- Blizzard's charge record for a spell, or nil when there is none to be had.
+-- pcall because the accessor is absent on some builds and raises on others
+-- rather than returning nothing.
+local function ChargeInfo(spellID)
     local get = C_Spell and C_Spell.GetSpellCharges
     if not (get and ns.CanCompute(spellID)) then return nil end
 
     local ok, charges = pcall(get, spellID)
     if not (ok and type(charges) == "table") then return nil end
+    return charges
+end
 
-    local most = charges.maxCharges
+-- How many charges a spell has AT MOST, or nil for the ordinary one-charge
+-- case. The readable half of the record: the maximum is a property of the
+-- spell and stays plain while the live count does not.
+local function MaxOf(charges)
+    local most = charges and charges.maxCharges
     if not ns.CanCompute(most) or type(most) ~= "number" then return nil end
     if most <= 1 then return nil end
     return math.floor(most + 0.5)
+end
+
+local function MaxCharges(spellID)
+    return MaxOf(ChargeInfo(spellID))
+end
+
+-- HOW MANY CHARGES ARE LEFT, on a cell we draw ourselves.
+--
+-- Adopted icons get this from Blizzard's own ChargeCount frame. A drawn cell
+-- had nothing, so the same charge spell showed a number on one bar and not on
+-- the next - which is the "Charge Count fehlt" this exists to answer.
+--
+-- THE LIVE COUNT IS A SECRET VALUE IN COMBAT. It may not be compared, added
+-- to or tested for truth. It may be PRINTED: SetFormattedText declares a
+-- secret argument, the engine formats it, and no addon Lua ever sees the
+-- number. Nothing here reads it - `show` is decided entirely from values that
+-- are known to be plain, and the count itself only ever travels from the
+-- accessor to the setter.
+--
+-- `isActive` is the clean signal that makes that possible: it stays readable
+-- and is false only at full charges. At full, the answer IS the maximum and
+-- no secret is touched at all. Read off EllesmereUICdmBuffBars.lua:4310-4340,
+-- which does the same two-arm split for the same reason.
+local function ApplyChargeCount(cell)
+    local aura = cell.aura
+    if not (aura and aura.charges) then return end
+
+    local value, show = nil, false
+
+    if aura.showCharges then
+        local charges = ChargeInfo(cell.spellID)
+        local most = charges and MaxOf(charges)
+        if charges and most then
+            local recharging = charges.isActive
+            if not ns.CanCompute(recharging) then
+                -- Unreadable: show nothing rather than freeze yesterday's
+                -- number on screen. A stale count is worse than none, because
+                -- it looks exactly like a working one.
+                show = false
+            elseif not recharging then
+                value, show = most, true
+            elseif ns.CanDisplay(charges.currentCharges) then
+                value, show = charges.currentCharges, true
+            end
+        end
+    end
+
+    -- pcall around the one call that takes the secret: a build where the
+    -- setter has not declared that argument raises, and it would raise inside
+    -- a render pass that has a whole screen still to draw.
+    if show and pcall(aura.charges.SetFormattedText, aura.charges, "%d", value) then
+        aura.charges:Show()
+    else
+        aura.charges:SetText("")
+        aura.charges:Hide()
+    end
 end
 
 -- The lines between charges. Three charges give two lines, at a third and
@@ -1090,6 +1171,11 @@ function Screen:BlankCell(cell)
         for _, overlay in ipairs(cell.aura.thresholds) do overlay:Hide() end
         for _, mark in ipairs(cell.aura.marks) do mark:Hide() end
         cell.aura.spark:Hide()
+        -- And the charge count, for the same reason: it is refreshed from its
+        -- own event, which would go on writing a number for the spell that
+        -- used to be here.
+        cell.aura.charges:SetText("")
+        cell.aura.charges:Hide()
     end
     if cell.caption then cell.caption:Hide() end
     ns.Effects.Silence(cell)
@@ -1198,6 +1284,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
             cell.inactiveDesaturate = style.inactiveDesaturate
             PaintAura(cell, true)
             RefreshFill(cell)
+            ApplyChargeCount(cell)
         elseif cell.aura then
             cell.aura:Hide()
         end
@@ -1287,6 +1374,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     cell.auraEntry = auraBySpell[spellID]
     PaintAura(cell, cell.active and true or false)
     RefreshFill(cell)
+    ApplyChargeCount(cell)
 
     -- Ours, so the effects get a real remaining time out of the clock we run
     -- ourselves. Adopted frames deliberately do not - see Core/Effects.lua.
@@ -1346,6 +1434,24 @@ function Screen:ReleaseAll()
         ns.CDM:Release(item)
     end
     wipe(held)
+end
+
+-- The charge counts on the cells we draw, without a render pass.
+--
+-- Its own entry point because charges change several times a fight, and a
+-- full Render walks every bar, every cell and every adopted frame to answer a
+-- question about one font string.
+--
+-- Adopted icons are deliberately not touched: their number is Blizzard's own
+-- ChargeCount frame and the game keeps it correct without us.
+function Screen:RefreshCharges()
+    for _, bar in ipairs(barFrames) do
+        for _, cell in ipairs(bar.cells) do
+            if cell.aura and cell.aura:IsShown() then
+                ApplyChargeCount(cell)
+            end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -1573,11 +1679,22 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
 events:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
+-- A charge spent or regained. Event-driven rather than polled, like
+-- everything else here: the number is wrong for exactly as long as it takes
+-- this to arrive, which is no time at all.
+events:RegisterEvent("SPELL_UPDATE_CHARGES")
 
 events:SetScript("OnEvent", function(_, event, spellID)
     if event == "PLAYER_ENTERING_WORLD" then
         Screen:Render()
         Screen:ResyncAuras()
+        return
+    end
+
+    -- Before the spell ID check below: this one carries no payload at all,
+    -- and CanCompute(nil) is false, so it would be dropped there.
+    if event == "SPELL_UPDATE_CHARGES" then
+        Screen:RefreshCharges()
         return
     end
 

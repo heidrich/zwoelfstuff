@@ -1223,6 +1223,175 @@ local function TestMenuFilter()
     Check("A nil list is not a crash", #Filter(nil, "flat") == 0)
 end
 
+---------------------------------------------------------------------------
+-- The text elements
+--
+-- The charge count split off from the stack count, and a split like that has
+-- three ways to go wrong that nothing on screen would show you: the new
+-- element never reaching the renderer, the migration not carrying the old
+-- look over, and the two ending up sharing one colour table so that editing
+-- either edits both.
+--
+-- ns.TextOffset is checked here rather than in the design suite because it is
+-- the ONE piece of arithmetic both renderers run. A drawn cell and an adopted
+-- icon sitting on the same bar disagreeing about where "bottom right" is, is
+-- exactly the class of bug this addon keeps finding by eye.
+---------------------------------------------------------------------------
+local function TestTextElements()
+    local byKey = {}
+    for _, element in ipairs(ns.TEXT_ELEMENTS) do byKey[element.key] = element end
+
+    Check("Charges are their own text element", byKey.charges ~= nil)
+    Check("Stacks and charges are two entries, not one",
+        byKey.stacks ~= nil and byKey.charges ~= nil
+            and byKey.stacks ~= byKey.charges)
+
+    -- Every element in the list must be a real default, or the options panel
+    -- generates seven controls that read and write a table nothing renders.
+    for _, element in ipairs(ns.TEXT_ELEMENTS) do
+        Check("'" .. element.label .. "' has defaults to edit",
+            type(ns.BAR_DEFAULTS[element.key]) == "table")
+
+        local travels = false
+        for _, key in ipairs(ns.BAR_STYLE_KEYS) do
+            if key == element.key then travels = true end
+        end
+        Check("'" .. element.label .. "' travels with a saved look", travels)
+    end
+
+    -- And it has to reach the renderer with its size resolved. A size of 0
+    -- means "work it out from the cell", and an element that skipped that step
+    -- would be drawn at zero.
+    local style = ns.Bars:Style(Fresh({ kind = "bar" }), 24)
+    Check("The charge count reaches the renderer",
+        type(style.charges) == "table" and Finite(style.charges.size)
+            and style.charges.size > 0,
+        tostring(style.charges and style.charges.size))
+
+    -- THE MIGRATION. Both numbers used to be driven by `stacks`, so a bar that
+    -- had moved its stack count keeps that placement for its charges rather
+    -- than snapping back to the default on update.
+    local old = Fresh()
+    old.charges = nil
+    old.stacks = { show = true, font = "", size = 14, color = { 1, 0.5, 0 },
+        outline = "THICKOUTLINE", anchor = "TOPLEFT", x = 3, y = -2 }
+
+    local saved = ns.db.bars
+    ns.db.bars = { old }
+    ns.Bars:Prepare()
+    ns.db.bars = saved
+
+    Check("An older bar inherits its stack placement for charges",
+        old.charges ~= nil and old.charges.anchor == "TOPLEFT"
+            and old.charges.x == 3 and old.charges.size == 14,
+        old.charges and tostring(old.charges.anchor) or "nil")
+
+    -- A SHARED COLOUR TABLE would make the two settings one setting again, one
+    -- indirection further down where it is much harder to see: the panel would
+    -- write a colour into charges and the stack count would change with it.
+    Check("The two do not share one colour table",
+        old.charges.color ~= old.stacks.color
+            and old.charges.color[1] == old.stacks.color[1])
+
+    -- Replay-safe: a second Prepare must not undo a charge placement the user
+    -- has since moved. This is the failure the fillDirection migration was
+    -- moved out of Migrate to avoid, and it only shows on the NEXT login.
+    old.charges.anchor = "BOTTOM"
+    ns.db.bars = { old }
+    ns.Bars:Prepare()
+    ns.db.bars = saved
+    Check("Preparing twice does not undo the user's own placement",
+        old.charges.anchor == "BOTTOM", tostring(old.charges.anchor))
+
+    -- The nine positions. A corner insets itself so an outlined glyph is not
+    -- clipped by the border; the centre does not, because there is no edge to
+    -- be clipped by and an inset there would just be off centre.
+    local function At(anchor, x, y)
+        return ns.TextOffset({ anchor = anchor, x = x or 0, y = y or 0 })
+    end
+
+    local cx, cy = At("CENTER")
+    Check("The centre is not inset", cx == 0 and cy == 0)
+
+    local bx, by = At("BOTTOMRIGHT")
+    Check("Bottom right insets inwards on both axes", bx == -2 and by == 2,
+        bx .. "," .. by)
+
+    local tx, ty = At("TOPLEFT")
+    Check("Top left insets the other way", tx == 2 and ty == -2,
+        tx .. "," .. ty)
+
+    local nx, ny = At("CENTER", 5, -7)
+    Check("The nudge is added to the position", nx == 5 and ny == -7)
+
+    local mx, my = At("TOPLEFT", -2, 2)
+    Check("A nudge can cancel the inset", mx == 0 and my == 0)
+
+    -- What a font string's setter may be handed. CanDisplay is the opposite of
+    -- CanCompute on purpose: it says "this may be PRINTED and nothing else".
+    -- A secret cannot be made here, so what is checked is the plain half.
+    Check("A plain number may be displayed", ns.CanDisplay(3))
+    Check("Nothing at all may not", not ns.CanDisplay(nil))
+    Check("A string is not a count", not ns.CanDisplay("3"))
+end
+
+---------------------------------------------------------------------------
+-- The game menu entry
+--
+-- Our button hangs under the LAST of Blizzard's, and both halves of working
+-- that out fail silently: pick the wrong two and it sits in the middle of the
+-- menu, get the gap backwards and it lands on the entry above it. Neither
+-- throws, and both need the pause menu open to look at - which is exactly the
+-- shape of the snapping bug that was misdiagnosed three times by reading.
+---------------------------------------------------------------------------
+local function TestGameMenu()
+    local Menu = ns.GameMenu
+    local function Bottom(item) return item.y end
+
+    -- Deliberately out of order: the menu's pool does not enumerate in
+    -- layout order, and code that assumed it did would pass a sorted fixture.
+    local buttons = {
+        { name = "options", y = 400 },
+        { name = "editmode", y = 100 },
+        { name = "addons",  y = 200 },
+        { name = "shop",    y = 300 },
+    }
+
+    local lowest, second = Menu.TwoLowest(buttons, Bottom)
+    Check("The bottom-most button is found whatever the order",
+        lowest and lowest.name == "editmode", lowest and lowest.name or "nil")
+    Check("And the one directly above it",
+        second and second.name == "addons", second and second.name or "nil")
+
+    -- A button the menu is not showing is not in the running. Hanging ours
+    -- under a hidden one puts it in empty space below the frame.
+    local hidden = Menu.TwoLowest({
+        { name = "shown", y = 300 },
+        { name = "hidden", y = 100, gone = true },
+    }, function(item) return not item.gone and item.y or nil end)
+    Check("A hidden button is not the anchor",
+        hidden and hidden.name == "shown", hidden and hidden.name or "nil")
+
+    Check("An empty menu has no anchor at all", Menu.TwoLowest({}, Bottom) == nil)
+    Check("One button alone has no partner to measure against",
+        select(2, Menu.TwoLowest({ { y = 1 } }, Bottom)) == nil)
+
+    -- The gap: the bottom of the button ABOVE, minus the top of the one below
+    -- it. Backwards, this is negative and the entry lands on its neighbour.
+    Check("The gap is measured between the two edges that face each other",
+        Menu.GapBetween(100, 112) == 12, tostring(Menu.GapBetween(100, 112)))
+    Check("A different spacing is followed rather than assumed",
+        Menu.GapBetween(100, 104) == 4, tostring(Menu.GapBetween(100, 104)))
+
+    -- Everything the arithmetic cannot make sense of falls back rather than
+    -- producing a number: a menu laid out some other way is not something to
+    -- guess at.
+    Check("Overlapping buttons fall back", Menu.GapBetween(100, 90) == 12)
+    Check("An absurd gap falls back", Menu.GapBetween(0, 5000) == 12)
+    Check("A missing partner falls back", Menu.GapBetween(100, nil) == 12)
+    Check("A missing measurement falls back", Menu.GapBetween(nil, nil) == 12)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -1242,6 +1411,8 @@ function Test:Run()
         { "Snapping",      TestSnapping },
         { "Menu filter",   TestMenuFilter },
         { "Fill direction", TestFillDirection },
+        { "Text elements", TestTextElements },
+        { "Game menu",     TestGameMenu },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

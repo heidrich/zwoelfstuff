@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.29.0"
+ns.version = "4.30.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -174,6 +174,11 @@ ns.DEFAULTS = {
         locked = false,
         angle  = 200,
     },
+
+    -- An entry in the game menu (Escape), under the last of Blizzard's own.
+    -- On by default: it is the place people look for an interface addon, and
+    -- one line in a menu you open by choice is not clutter.
+    gameMenu = true,
 
     -- Co-tank panel: one row per tank in the group.
     coTanks = {
@@ -364,6 +369,38 @@ end
 -- for the countdown, so ours is applied on top rather than instead - which
 -- also means an anchor of CENTER is left alone, because that is already
 -- where the engine puts it and re-anchoring it can only go wrong.
+-- Where one of the nine positions actually puts a number, nudge included.
+--
+-- The inset keeps an outlined glyph off the border: a corner position with no
+-- inset has its outline clipped by the edge it sits in, which reads as a
+-- blurry number rather than as a placement problem.
+--
+-- ONE function, because there are two renderers - Blizzard's adopted frames
+-- and the cells this addon draws - and they sit next to each other on the
+-- same bar. A position that means something slightly different on each is
+-- exactly the disagreement the whole styling pass exists to end.
+function ns.TextOffset(text)
+    local inset = 2
+    local x = (text.anchor:find("LEFT") and inset
+        or text.anchor:find("RIGHT") and -inset or 0) + text.x
+    local y = (text.anchor:find("TOP") and -inset
+        or text.anchor:find("BOTTOM") and inset or 0) + text.y
+    return x, y
+end
+
+-- A font string OF OUR OWN, given a text element's font and its place. The
+-- counterpart to StyleNumbers below, which has to go looking for somebody
+-- else's font strings inside a frame we do not own.
+function ns.PlaceText(fontString, parent, text)
+    if not (fontString and parent and text) then return end
+
+    ns.Media.ApplyFont(fontString, text.font, text.size, text.outline, text.color)
+
+    local x, y = ns.TextOffset(text)
+    fontString:ClearAllPoints()
+    fontString:SetPoint(text.anchor, parent, text.anchor, x, y)
+end
+
 function ns.StyleNumbers(widget, text)
     if not (widget and text) then return end
 
@@ -376,11 +413,7 @@ function ns.StyleNumbers(widget, text)
             -- Blizzard's engine puts its countdown, and re-anchoring it can
             -- only go wrong. Anywhere else we have to say so ourselves.
             if text.anchor ~= "CENTER" or text.x ~= 0 or text.y ~= 0 then
-                local inset = 2
-                local x = (text.anchor:find("LEFT") and inset
-                    or text.anchor:find("RIGHT") and -inset or 0) + text.x
-                local y = (text.anchor:find("TOP") and -inset
-                    or text.anchor:find("BOTTOM") and inset or 0) + text.y
+                local x, y = ns.TextOffset(text)
                 region:ClearAllPoints()
                 region:SetPoint(text.anchor, widget, text.anchor, x, y)
             end
@@ -617,6 +650,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- pools have been walked once.
         Boot("Bars", function() ns.Screen:Start() end)
         Boot("Minimap button", function() ns.MinimapButton:Create() end)
+        Boot("Game menu entry", function() ns.GameMenu:Create() end)
     end
 end)
 

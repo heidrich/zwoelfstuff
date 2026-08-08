@@ -117,7 +117,18 @@ local function BuildGeneralPage(page, width)
         function() return ns.db.minimap.locked end,
         function(value) ns.db.minimap.locked = value end)
 
-    grid:Note("Left click opens this window, drag moves it around the minimap edge.")
+    grid:Note("Left click opens this window, right click moves the bars, and "
+        .. "drag moves the button around the minimap edge.")
+
+    grid:Section("Game menu")
+    UI.Toggle(grid:Row("Show in the game menu"),
+        function() return ns.db.gameMenu ~= false end,
+        function(value) ns.GameMenu:SetShown(value) end)
+
+    grid:Note("An entry under the last of Blizzard's own, where you look for "
+        .. "an addon when you have forgotten what its slash command was. It "
+        .. "stands down while you are in combat: pressing it closes the pause "
+        .. "menu, and the game does not let an addon do that mid-fight.")
 
     ---------------------------------------------------------------------
     -- Another character's layout

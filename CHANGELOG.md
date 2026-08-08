@@ -8,6 +8,59 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.30.0] - 2026-08-08
+
+### Added
+
+- THE CHARGE COUNT IS ITS OWN TEXT ELEMENT, with the same seven controls as
+  the rest: on, font, size, colour, outline, one of nine positions, and a
+  nudge on each axis. It shared `stacks` before, on the reasoning that
+  Blizzard never puts both numbers on one frame - a cooldown item carries
+  `ChargeCount`, a buff item carries `Applications`. True per icon, and beside
+  the point across a screen: "charges top left, stacks bottom right" was not
+  expressible.
+
+- AND IT IS DRAWN ON OUR OWN CELLS FOR THE FIRST TIME. Adopted icons always
+  had Blizzard's own `ChargeCount`; a cell this addon draws had nothing, so
+  the same charge spell showed a number on one bar and not on the next. New
+  `SPELL_UPDATE_CHARGES` handler and `Screen:RefreshCharges`, which walks only
+  the drawn cells - an adopted icon's number is Blizzard's and stays correct
+  without us.
+
+- `ns.CanDisplay` in `Core/Secrets.lua`: the one sanctioned route for a secret
+  value. `SetFormattedText` declares a secret argument, so the engine formats
+  and draws the live count while addon Lua never sees it. Nothing reads the
+  number - `isActive` is the clean signal (false only at full charges), so at
+  full the answer is the maximum and below it the secret travels from the
+  accessor to the setter untouched. Verified against
+  `EllesmereUICdmBuffBars.lua:4310-4340` and `:4577-4584`.
+
+- A ZWOELFSTUFF ENTRY IN THE GAME MENU (`Core/GameMenu.lua`), appended under
+  the last of Blizzard's own buttons. Appended, never inserted: the menu
+  re-anchors its whole pool on each open, so an entry in the middle means
+  rewriting Blizzard's offsets on every `Layout` pass for ever. It stands down
+  in combat - the click closes a protected panel - and can be switched off in
+  Settings.
+
+### Changed
+
+- `ns.TextOffset` and `ns.PlaceText` in `Core/Init.lua`: where one of the nine
+  positions actually puts a number, including the 2px inset that keeps an
+  outlined glyph off the border. One function, because the two renderers sit
+  on the same bar and a position that means something slightly different on
+  each is the exact class of bug this styling pass exists to end.
+
+- `Bars:Prepare` migrates `stacks` into `charges` where the new key is absent,
+  before `ApplyDefaults` - the same placement, and for the same reason, as the
+  `fillSide` migration in 4.27.0. A fresh table with a fresh colour inside it:
+  sharing `stacks`' colour would make the two settings one setting again, one
+  indirection further down where it is much harder to see.
+
+- 199 checks in `/zs test`, up from 166. Two new suites. `GameMenu.TwoLowest`
+  and `GameMenu.GapBetween` are pure and exported for exactly the reason
+  `EditMode.SnapAxis` is: both fail silently, both need the pause menu open to
+  look at, and a rule that cannot be run gets diagnosed by reading.
+
 ## [4.29.0] - 2026-08-08
 
 ### Added

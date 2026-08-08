@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.29.0
+## Version: 4.30.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -39,6 +39,10 @@ Core\Visibility.lua
 Core\Effects.lua
 Core\Bars.lua
 Core\Minimap.lua
+# The other two ways in: the minimap button above, and an entry in the pause
+# menu. Both only call ns.Options at click time, so neither needs the window
+# to have loaded yet.
+Core\GameMenu.lua
 # Widgets defines ns.UI, and EditMode reads it while it loads. Anything that
 # takes a reference to the design system at file scope belongs BELOW this line.
 Core\Widgets.lua

@@ -197,7 +197,7 @@ ns.BAR_DEFAULTS = {
     -- paint last and cannot be chosen with an `if`.
     stackThresholds = {},      -- { { value = 5, color = {r,g,b}, alpha = 1 }, ... }
 
-    -- Text. Three elements, one shape each, because "the countdown can be
+    -- Text. Four elements, one shape each, because "the countdown can be
     -- moved but the stack count cannot" is the kind of arbitrary limit that
     -- makes people go looking for another addon.
     --
@@ -215,6 +215,26 @@ ns.BAR_DEFAULTS = {
     },
 
     stacks = {
+        show    = true,
+        font    = "",   -- empty means "whatever Settings says"
+        size    = 0,
+        color   = { 1.00, 1.00, 1.00 },
+        outline = "OUTLINE",
+        anchor  = "BOTTOMRIGHT",
+        x       = 0,
+        y       = 0,
+    },
+
+    -- HOW MANY CHARGES ARE LEFT - its own element, not a share of the stack
+    -- count. They were one setting because Blizzard never puts both on one
+    -- frame: a cooldown item carries ChargeCount, a buff item carries
+    -- Applications. But "put the charges top left and the stacks bottom
+    -- right" is a perfectly ordinary thing to want across a whole screen,
+    -- and one setting for two numbers cannot answer it.
+    --
+    -- The same bottom right as stacks by default, because that is where the
+    -- game itself puts it and nobody's display should move on update.
+    charges = {
         show    = true,
         font    = "",   -- empty means "whatever Settings says"
         size    = 0,
@@ -852,7 +872,7 @@ ns.BAR_STYLE_KEYS = {
     "fillDirection",
     "showSpark", "chargeMarks", "chargeMarkColor",
     "stackThresholds",
-    "countdown", "stacks", "spellName",
+    "countdown", "stacks", "charges", "spellName",
 
     -- The arrangement travels too - it is how a bar LOOKS, not what it holds.
     -- Rows and columns deliberately do not: those are the shape the user laid
@@ -866,10 +886,16 @@ ns.BAR_STYLE_KEYS = {
     "effects",
 }
 
--- The three text elements, in the order they appear in the options.
+-- The four text elements, in the order they appear in the options.
+--
+-- Stacks and charges used to be one entry, because Blizzard never puts both
+-- numbers on the same frame. They are two now: the two numbers mean different
+-- things, and "charges top left, stacks bottom right" is an ordinary thing to
+-- want that one setting cannot express.
 ns.TEXT_ELEMENTS = {
     { key = "countdown", label = "Countdown", barOnly = false },
-    { key = "stacks",    label = "Stacks and charges", barOnly = false },
+    { key = "stacks",    label = "Stacks", barOnly = false },
+    { key = "charges",   label = "Charge count", barOnly = false },
     { key = "spellName", label = "Spell name", barOnly = true },
 }
 
@@ -1087,6 +1113,10 @@ function Bars:Style(cfg, height)
 
         countdown = TextStyle(cfg.countdown, height, 0.42, 9, 20),
         stacks    = TextStyle(cfg.stacks,    height, 0.30, 8, 16),
+        -- The same automatic size as stacks: they are the same kind of small
+        -- number in the same corner, and a charge count that came out larger
+        -- than a stack count would read as a different display.
+        charges   = TextStyle(cfg.charges,   height, 0.30, 8, 16),
         spellName = TextStyle(cfg.spellName, height, 0.45, 9, 14),
     }
 end
@@ -1151,6 +1181,7 @@ ns.BUILT_IN_LOOKS = {
             fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            charges   = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
             -- Explicitly empty, not absent: a look that says nothing about
             -- effects would leave the last one's flashing switched on, and
@@ -1170,6 +1201,7 @@ ns.BUILT_IN_LOOKS = {
             fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            charges   = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
             -- Explicitly empty, not absent: a look that says nothing about
             -- effects would leave the last one's flashing switched on, and
@@ -1190,6 +1222,7 @@ ns.BUILT_IN_LOOKS = {
             fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "THICKOUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 0.9, 0.4 }, "THICKOUTLINE", "BOTTOMRIGHT"),
+            charges   = Text(0, { 1, 0.9, 0.4 }, "THICKOUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "OUTLINE", "LEFT"),
             effects = {},
         },
@@ -1207,6 +1240,7 @@ ns.BUILT_IN_LOOKS = {
             fillTexture = "", fillSide = false, fillGrow = false,
             countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
             stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            charges   = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
             spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
             effects = {
                 readyFlash = true, readyPulses = 2,
@@ -1228,6 +1262,7 @@ ns.BUILT_IN_LOOKS = {
             fillTexture = "", fillSide = false, fillGrow = false,
             countdown = { show = false },
             stacks    = { show = false },
+            charges   = { show = false },
             spellName = { show = false },
             effects = {},
         },
@@ -1511,6 +1546,35 @@ function Bars:Prepare()
         -- new key is still absent.
         if cfg.fillDirection == nil and cfg.fillSide ~= nil then
             cfg.fillDirection = cfg.fillSide and "left" or "right"
+        end
+
+        -- The charge count splits off from the stack count, and it INHERITS
+        -- what the one setting used to say. Both numbers were driven by
+        -- `stacks`, so a bar whose stack count had been moved to the top left
+        -- and made yellow would otherwise have its charges snap back to a
+        -- white bottom right - a display that changed itself on update.
+        --
+        -- Before the defaults and only where the new key is absent, for the
+        -- same reason as fillDirection above: after ApplyDefaults there is
+        -- nothing left to detect, and the inheritance would be undone on the
+        -- next login.
+        --
+        -- A fresh table, and a fresh colour inside it. Sharing the one from
+        -- `stacks` would make the two settings the same setting again, one
+        -- indirection further down where it is much harder to see.
+        if cfg.charges == nil and type(cfg.stacks) == "table" then
+            local from = cfg.stacks
+            cfg.charges = {
+                show    = from.show,
+                font    = from.font,
+                size    = from.size,
+                outline = from.outline,
+                anchor  = from.anchor,
+                x       = from.x,
+                y       = from.y,
+                color   = type(from.color) == "table"
+                    and { from.color[1], from.color[2], from.color[3] } or nil,
+            }
         end
 
         ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)

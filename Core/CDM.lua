@@ -1128,10 +1128,20 @@ function CDM:Skin(item, style, shape)
 
     -- Stacks and charges are Blizzard's own child FRAMES. Alpha, never Hide -
     -- the same rule that applies to the item itself.
-    for _, widget in ipairs({ item.ChargeCount, item.Applications }) do
+    --
+    -- ONE SETTING EACH, not one setting for both. Blizzard never puts these
+    -- two numbers on the same frame - a cooldown item carries ChargeCount and
+    -- a buff item carries Applications - so sharing a style was invisible on
+    -- any single icon. It was not invisible across a screen: "charges top
+    -- left, stacks bottom right" was simply not expressible.
+    for _, pair in ipairs({
+        { item.ChargeCount,  style.charges },
+        { item.Applications, style.stacks },
+    }) do
+        local widget, text = pair[1], pair[2]
         if widget then
-            pcall(widget.SetAlpha, widget, style.stacks.show and 1 or 0)
-            ns.StyleNumbers(widget, style.stacks)
+            pcall(widget.SetAlpha, widget, text.show and 1 or 0)
+            ns.StyleNumbers(widget, text)
         end
     end
 end
