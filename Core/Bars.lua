@@ -24,6 +24,19 @@ ns.BAR_DEFAULTS = {
     enabled = true,
     kind    = "icon",          -- "icon" | "bar"
 
+    -- Pinned in place. Edit mode still shows it and still opens its settings;
+    -- it cannot be dragged or nudged. Per bar rather than one switch for all
+    -- of them, because the bar you have finished placing and the bar you are
+    -- still placing are usually on screen together, and the finished one is
+    -- exactly what a stray drag lands on.
+    --
+    -- `pinned`, not `locked`. There WAS a `locked = true` in this table, and
+    -- nothing anywhere read it - a dead field from an older shape. Reusing the
+    -- name would have locked every bar you already own the moment you updated,
+    -- because the defaults are re-applied on load and every saved bar already
+    -- carries it as true.
+    pinned  = false,
+
     -- Identity, and it is NOT the position in the list. A bar that is anchored
     -- to another one has to keep pointing at the same bar after a delete
     -- reshuffles every index below it.
@@ -226,7 +239,6 @@ ns.BAR_DEFAULTS = {
     relPoint = "CENTER",
     x        = 0,
     y        = -200,
-    locked   = true,
 
     -- Attached to another bar, and then the fields above are not used:
     --   { to = <bar id>, point, relPoint, x, y }

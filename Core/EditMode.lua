@@ -461,6 +461,57 @@ local function CreateMover(index)
     end)
     mover.cog:SetScript("OnClick", function() OpenMenu(mover) end)
 
+    -- THE PADLOCK, DIRECTLY UNDER THE COG. One bar at a time.
+    --
+    -- The bar you have finished placing and the bar you are still placing are
+    -- on screen together, and the finished one is exactly what a stray drag
+    -- lands on. Pinned still selects, still opens its settings, still takes a
+    -- cell - it just does not move.
+    mover.lock = CreateFrame("Button", nil, mover)
+    mover.lock:SetSize(20, 20)
+    mover.lock:SetPoint("TOPRIGHT", mover.cog, "BOTTOMRIGHT", 0, -2)
+    mover.lock:SetFrameLevel(mover:GetFrameLevel() + 4)
+    local lockGlyph = UI.Glyph(mover.lock, "ui-lock", 12, C.textDim)
+    lockGlyph:SetPoint("CENTER", mover.lock, "CENTER", 0, 0)
+    mover.lockGlyph = lockGlyph
+
+    -- Its own function, because three things set it: the click, the refresh
+    -- that runs when edit mode opens, and hovering off it.
+    mover.RefreshLock = function(self)
+        local cfg = BarConfig(self.index)
+        local pinned = cfg and cfg.pinned
+
+        -- Under the cog when there is room for it, beside it when there is
+        -- not. A mover is exactly as tall as its bar, and a tracking bar is 24
+        -- high by default - two 20px buttons stacked need 44, so on those the
+        -- padlock would hang out of the bottom of the box.
+        self.lock:ClearAllPoints()
+        if (self:GetHeight() or 0) >= 44 then
+            self.lock:SetPoint("TOPRIGHT", self.cog, "BOTTOMRIGHT", 0, -2)
+        else
+            self.lock:SetPoint("TOPRIGHT", self.cog, "TOPLEFT", -2, 0)
+        end
+
+        self.lockGlyph:SetKind(pinned and "ui-lock" or "menu-unlock")
+        local c = pinned and C.accent or C.textDim
+        self.lockGlyph:SetColor(c[1], c[2], c[3])
+        -- The pad has nothing to do on a pinned bar, and a row of arrows that
+        -- silently ignore you is worse than no row at all.
+        if self.pad then self.pad:SetShown(not pinned) end
+    end
+
+    mover.lock:SetScript("OnEnter", function()
+        lockGlyph:SetColor(C.accent[1], C.accent[2], C.accent[3])
+    end)
+    mover.lock:SetScript("OnLeave", function() mover:RefreshLock() end)
+    mover.lock:SetScript("OnClick", function()
+        local cfg = BarConfig(mover.index)
+        if not cfg then return end
+        cfg.pinned = not cfg.pinned
+        mover:RefreshLock()
+        ns.Options:Refresh()
+    end)
+
     -- FOUR ARROWS ON THE ELEMENT ITSELF, one pixel a click.
     --
     -- The keyboard already nudged, and the keyboard is the wrong hand: you are
@@ -470,26 +521,45 @@ local function CreateMover(index)
     --
     -- Shift is the same multiplier the keys use, so the two are one behaviour
     -- with two ways in rather than two features.
+    --
+    -- ONE ROW, ON A TAB ABOVE THE BOX - not a four-way pad inside it.
+    --
+    -- Inside, the pad sat on top of the bar's own name and whatever the bar is
+    -- drawing behind the overlay, and a 10px chevron over a spell icon is not
+    -- readable at any colour. On its own strip above the frame it always has
+    -- the same ground under it. It is a TAB: flush on the top edge, same fill
+    -- and same outline, so it reads as part of the box rather than as a second
+    -- floating thing near it.
+    local ARROW = 16
+    local PAD_INSET = 4
     local pad = CreateFrame("Frame", nil, mover)
-    pad:SetSize(46, 32)
-    pad:SetPoint("TOPRIGHT", mover.cog, "TOPLEFT", -2, 0)
+    pad:SetSize(PAD_INSET * 2 + ARROW * 4 + 6, ARROW + 6)
+    pad:SetPoint("BOTTOMLEFT", mover, "TOPLEFT", 0, 0)
     pad:SetFrameLevel(mover:GetFrameLevel() + 4)
     mover.pad = pad
 
-    -- x, y in a 16-box, and which way the bar goes. The glyph is a triangle
-    -- built the way the disclosure marker is - two bars - because an arrow
-    -- character is a different width and baseline in every font.
+    pad.bg = pad:CreateTexture(nil, "BACKGROUND")
+    pad.bg:SetAllPoints(pad)
+    pad.bg:SetColorTexture(C.sidebarBg[1], C.sidebarBg[2], C.sidebarBg[3], 0.92)
+
+    pad.edge = ns.CreateBorder(pad, 1, "BORDER")
+    pad.edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
+
+    -- Reading order, left to right: across first, then up and down. That is
+    -- the order it was asked for, and it is also the order the two pairs come
+    -- in everywhere else in this addon - x before y.
     local NUDGERS = {
-        { key = "UP",    dx = 0,  dy = 1,  x = 16, y = 0  },
-        { key = "DOWN",  dx = 0,  dy = -1, x = 16, y = 16 },
-        { key = "LEFT",  dx = -1, dy = 0,  x = 0,  y = 8  },
-        { key = "RIGHT", dx = 1,  dy = 0,  x = 32, y = 8  },
+        { key = "LEFT",  dx = -1, dy = 0  },
+        { key = "RIGHT", dx = 1,  dy = 0  },
+        { key = "UP",    dx = 0,  dy = 1  },
+        { key = "DOWN",  dx = 0,  dy = -1 },
     }
 
-    for _, spec in ipairs(NUDGERS) do
+    for position, spec in ipairs(NUDGERS) do
         local button = CreateFrame("Button", nil, pad)
-        button:SetSize(14, 14)
-        button:SetPoint("TOPLEFT", pad, "TOPLEFT", spec.x, -spec.y)
+        button:SetSize(ARROW, ARROW)
+        button:SetPoint("LEFT", pad, "LEFT",
+            PAD_INSET + (position - 1) * (ARROW + 2), 0)
 
         local glyph = UI.Glyph(button, "caret" .. spec.key, 10, C.textDim)
         glyph:SetPoint("CENTER", button, "CENTER", 0, 0)
@@ -503,11 +573,13 @@ local function CreateMover(index)
         button:SetScript("OnClick", function()
             local step = IsShiftKeyDown() and NUDGE_FAST or NUDGE
             local cfg = BarConfig(mover.index)
-            if not cfg then return end
+            if not cfg or cfg.pinned then return end
             local x, y = Origin(cfg)
             ApplyMove(mover, x + spec.dx * step, y + spec.dy * step)
         end)
     end
+
+    mover:RefreshLock()
 
     mover:SetScript("OnMouseDown", function(self, button)
         if button == "RightButton" then
@@ -518,8 +590,22 @@ local function CreateMover(index)
         end
 
         SetSelected(self)
+
+        -- CLICKING A BAR OPENS ITS SETTINGS. The tools panel already followed
+        -- the selection, but you had to know that and press Tools first, so
+        -- clicking a bar looked like it did nothing at all. Opened here rather
+        -- than in SetSelected, because entering edit mode also selects and
+        -- should not throw a panel across the screen on its own.
+        if tools then
+            tools.Refresh()
+            tools:Show()
+        end
+
         local cfg = BarConfig(self.index)
         if not cfg then return end
+
+        -- A pinned bar selects and opens like any other. It just does not move.
+        if cfg.pinned then return end
 
         local cursorX, cursorY = CursorPosition()
         local originX, originY = Origin(cfg)
@@ -940,6 +1026,15 @@ local function BuildKeyCatcher()
         Propagate(self, false)
         local cfg = BarConfig(selected.index)
         if not cfg then return end
+
+        -- Pinned means pinned, whichever hand is asking. The arrow keys and
+        -- the arrow buttons are one behaviour with two ways in, so a rule that
+        -- held for only one of them would be the bug, not the feature.
+        if cfg.pinned then
+            ns.Print(cfg.name or "That bar", "is pinned - the padlock on it "
+                .. "lets it move again.")
+            return
+        end
 
         local x, y = Origin(cfg)
         ApplyMove(selected, x + direction[1] * step, y + direction[2] * step)
@@ -1766,6 +1861,7 @@ function EditMode:Refresh()
                 cfg.enabled == false and C.textFaint[3] or C.text[3])
             UpdateReadout(mover)
             mover.coords:SetShown(Prefs().showCoords or selected == mover)
+            mover:RefreshLock()
             mover:SetShown(self.overlayShown)
 
             RefreshHandles(index, cfg)

@@ -1085,6 +1085,14 @@ function Workspace:BuildOptionsPane(parent, width)
             Apply()
         end)
 
+    -- The same switch the padlock on the mover throws. It is here as well so
+    -- that "which of my bars are pinned" is answerable without entering edit
+    -- mode and looking at each one.
+    UI.Toggle(grid:FullRow("Pinned", {
+        controlWidth = 124,
+        sublabel = "Cannot be dragged or nudged in edit mode",
+    }), Get("pinned"), Set("pinned"))
+
     -- Size ----------------------------------------------------------------
     grid:Tab("Look")
     grid:Section("Size")

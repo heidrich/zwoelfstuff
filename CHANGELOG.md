@@ -8,6 +8,46 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.23.0] - 2026-08-08
+
+### Added
+
+- EVERY BAR CAN BE PINNED ON ITS OWN. A padlock sits under the cog on each
+  one. A pinned bar still selects, still opens its settings, still takes a
+  cell - it just does not move, by drag, by the arrow buttons or by the arrow
+  keys. The bar you have finished placing and the bar you are still placing
+  are on screen together, and the finished one is exactly what a stray drag
+  lands on. The same switch is in the bar's own settings, so you can see which
+  are pinned without going in and looking at each one.
+
+### Changed
+
+- CLICKING A BAR OPENS ITS SETTINGS. The tools panel already followed whichever
+  bar was selected, but you had to know that and press Tools first - so
+  clicking a bar looked like it did nothing.
+
+- THE NUDGE ARROWS ARE ONE ROW ON A TAB ABOVE THE BAR. As a four-way pad
+  inside the box they sat on top of the bar's own name and whatever it was
+  drawing, and a small chevron over a spell icon is not readable at any
+  colour. Now they have their own strip, flush on the top edge, with the same
+  fill and outline as the box: left, right, up, down. One pixel a click, ten
+  with Shift, unchanged.
+
+### Fixed
+
+- THE MINIMAP BUTTON IS ACTUALLY ROUND. Its rim and plate were a solid colour
+  with a circular mask over them - and a mask works by multiplying a TEXTURE's
+  transparency, which a colour fill does not have. So the mask did nothing to
+  those two layers and everything to the icon, and the square corners of the
+  plate stuck out around the round icon. Both are a real round file now
+  (`Media/disc-64` and `disc-128`), tinted where they are used, the same way
+  the window's icons work.
+
+- A dead `locked = true` in the bar defaults, read by nothing, is removed. The
+  new switch is `pinned` on purpose: reusing the old name would have pinned
+  every bar you already own on update, because every saved bar already carries
+  it as true.
+
 ## [4.22.0] - 2026-08-08
 
 ### Changed

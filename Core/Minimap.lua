@@ -1,10 +1,22 @@
 ---------------------------------------------------------------------------
 -- Minimap button - click to open the settings.
 --
--- Self-built, no LibDBIcon. The round look comes from a circular alpha mask
--- (Interface\CharacterFrame\TempPortraitAlphaMask, verified in use by current
--- addons on this client) applied to three stacked textures: an accent rim, a
--- dark backdrop, and the icon itself.
+-- Self-built, no LibDBIcon. Three stacked layers: an accent rim, a dark plate
+-- and the icon.
+--
+-- THE RIM AND THE PLATE ARE A FILE, NOT A COLOUR FILL.
+--
+-- They used to be SetColorTexture with a circular alpha mask over the top, and
+-- they came out SQUARE - the owner's "der bg ragt immer aus den kreisen raus".
+-- A mask works by multiplying a texture's alpha channel, and a solid colour
+-- fill has no texture for it to multiply, so the mask did nothing to the two
+-- layers that were fills and everything to the one that was a real file. The
+-- icon was round and the two plates behind it were not.
+--
+-- So the disc is a file too: white, alpha-shaped, tinted per layer with
+-- SetVertexColor - exactly the technique the icon set already uses, one file
+-- serving both the accent rim and the near-black plate. Two cuts, because this
+-- button is 32 units and the interface is rarely at 1:1; see Media/mkdisc.
 --
 -- The button is dragged around the minimap edge and its angle is saved, which
 -- is what every minimap button does and what people expect.
@@ -16,6 +28,16 @@ ns.MinimapButton = MinimapButton
 
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local BUTTON_SIZE = 32
+
+-- Long brackets: the path opens with \A, which is not a legal Lua escape and
+-- takes the whole file down at load if this is ever written as a quoted string.
+local DISC_SMALL = [[Interface\AddOns\ZwoelfStuff\Media\disc-64]]
+local DISC_LARGE = [[Interface\AddOns\ZwoelfStuff\Media\disc-128]]
+
+local function Disc()
+    local scale = UIParent and UIParent:GetEffectiveScale() or 1
+    return scale > 1.25 and DISC_LARGE or DISC_SMALL
+end
 
 ---------------------------------------------------------------------------
 -- Placement
@@ -69,17 +91,19 @@ function MinimapButton:Create()
     -- own mark, and one accent everywhere is the point of having one.
     local accent = ns.UI.C.accent
 
+    local disc = Disc()
+
     local rim = button:CreateTexture(nil, "BACKGROUND")
     rim:SetAllPoints(button)
-    rim:SetColorTexture(accent[1], accent[2], accent[3], 1)
-    rim:SetMask(MASK)
+    rim:SetTexture(disc)
+    rim:SetVertexColor(accent[1], accent[2], accent[3], 1)
     button.rim = rim
 
     local plate = button:CreateTexture(nil, "BORDER")
     plate:SetPoint("CENTER")
     plate:SetSize(BUTTON_SIZE - 4, BUTTON_SIZE - 4)
-    plate:SetColorTexture(0.05, 0.05, 0.06, 1)
-    plate:SetMask(MASK)
+    plate:SetTexture(disc)
+    plate:SetVertexColor(0.05, 0.05, 0.06, 1)
 
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetPoint("CENTER")
@@ -134,8 +158,10 @@ function MinimapButton:Refresh()
     -- find again on a busy minimap.
     self.button.icon:SetTexture(ns.ICON_TEXTURE)
 
+    -- SetVertexColor, not SetColorTexture: this is a tint on the disc file,
+    -- and re-setting the texture here would throw the shape away.
     local accent = ns.UI.C.accent
-    self.button.rim:SetColorTexture(accent[1], accent[2], accent[3], 1)
+    self.button.rim:SetVertexColor(accent[1], accent[2], accent[3], 1)
 
     self:UpdatePosition()
     self.button:SetShown(db.show and true or false)
