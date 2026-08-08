@@ -797,17 +797,23 @@ function Options:Create()
     -- headed groups is three places to look, and the heading answers "is what
     -- I want even in here" before any of the labels are read.
     --
-    -- Edit Mode sits in BARS rather than with the pages, because it is an
-    -- ACTION and it belongs next to the thing it acts on. It still closes the
-    -- window, which is why it is the one entry that does not stay lit - there
-    -- is nothing to come back to until you leave edit mode again.
+    -- EDIT MODE STANDS ABOVE THE GROUPS, on its own, with no heading over it.
+    --
+    -- It was filed under Bars, which reads as "one of the bar pages" - and it
+    -- is not a page at all. Every other entry opens something inside this
+    -- window; this one CLOSES the window and puts you on the screen with your
+    -- bars in your hands. That is a different kind of thing, and a heading
+    -- over it would be a promise that the entries under it behave alike.
+    --
+    -- It is also the entry that gets used most often and it was five rows
+    -- down. A door belongs at the top.
     local NAV = {
-        { eyebrow = "Bars" },
-        { page = "cooldowns" },
         { title = "Edit mode", glyph = "move", onClick = function()
             frame:Hide()
             ns.EditMode:SetUnlocked(true)
         end },
+        { eyebrow = "Bars" },
+        { page = "cooldowns" },
         { eyebrow = "System" },
         { page = "settings" },
         { page = "diagnostics" },

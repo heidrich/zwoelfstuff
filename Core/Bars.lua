@@ -101,6 +101,23 @@ ns.BAR_DEFAULTS = {
     borderSize  = 1,
     borderColor = { 0.00, 0.00, 0.00 },
 
+    -- EVERY COLOUR THAT CAN BE A GRADIENT CARRIES ONE OF THESE, and the ones
+    -- that cannot carry nothing at all.
+    --
+    -- Shaped { on, color, direction }: the colour above is the FIRST stop and
+    -- stays the only thing a solid setting reads, so switching a gradient off
+    -- gives back exactly the bar you had. The engine takes two colours and no
+    -- more (see ns.GRADIENT_DIRECTIONS), so there is no stop list to store.
+    --
+    -- Deliberately absent, and this is the whole reason the list is written
+    -- out rather than applied everywhere:
+    --   swipeColor       SetSwipeColor takes ONE colour
+    --   chargeMarkColor  a one-pixel line has nowhere for a ramp to go
+    --   every text colour   a FontString has no SetGradient at all
+    -- A control that silently does nothing is the defect this addon spent a
+    -- whole session removing. Three missing rows are better than three lies.
+    borderGradient = { on = false, color = { 0.35, 0.35, 0.35 }, direction = "right" },
+
     -- A surface behind the icon. Visible through the icon's own transparency
     -- and, more usefully, everywhere the icon is not - a zoomed-out icon on a
     -- dark plate reads very differently from one floating on the world.
@@ -108,6 +125,7 @@ ns.BAR_DEFAULTS = {
     backdropColor   = { 0.00, 0.00, 0.00 },
     backdropAlpha   = 0.90,
     backdropTexture = "Blizzard",
+    backdropGradient = { on = false, color = { 0.16, 0.16, 0.18 }, direction = "down" },
 
     -- "None" keeps the crisp one-pixel line drawn from colour textures.
     -- Anything else is a real edge file out of LibSharedMedia, which is where
@@ -145,6 +163,10 @@ ns.BAR_DEFAULTS = {
     fillColor   = { 1.00, 0.478, 0.239 },
     fillAlpha   = 0.85,
     fillTexture = "",
+    -- The second stop starts as the deep end of the same orange, so switching
+    -- the gradient on gives a bar that still looks like this addon rather
+    -- than a random second colour somebody has to fix first.
+    fillGradient = { on = false, color = { 0.72, 0.24, 0.08 }, direction = "right" },
 
     -- TWO SETTINGS, because they are two different things and shipping them
     -- as one was a real bug: "Fill up" was wired to SetReverseFill, which
@@ -864,11 +886,13 @@ ns.BAR_STYLE_KEYS = {
     "spacing", "lineSpacing",
     "iconPlacement",
     "scale", "alpha",
-    "borderSize", "borderColor", "borderTexture",
+    "borderSize", "borderColor", "borderTexture", "borderGradient",
     "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
+    "backdropGradient",
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
     "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "fillGradient",
     "fillDirection",
     "showSpark", "chargeMarks", "chargeMarkColor",
     "stackThresholds",
@@ -924,6 +948,21 @@ ns.TEXT_ANCHORS = {
 
 -- One text element, with its automatic size worked out. autoScale is the
 -- fraction of the cell height the element takes when its size is 0.
+-- A gradient, resolved the same way for all four colours that offer one.
+--
+-- It is ALWAYS a table, never nil. ns.Tint takes `gradient.on` as the whole
+-- question, so a nil here would work by accident today and break the moment
+-- somebody writes `style.fillGradient.direction` - which is the shape every
+-- other resolved style field already has.
+local function Gradient(cfg)
+    cfg = cfg or {}
+    return {
+        on        = cfg.on and true or false,
+        color     = cfg.color or { 1, 1, 1 },
+        direction = cfg.direction or "right",
+    }
+end
+
 local function TextStyle(element, height, autoScale, floor, ceiling)
     element = element or {}
     local size = element.size or 0
@@ -970,6 +1009,13 @@ function Bars:StackThresholds(cfg)
                 value = math.floor(value),
                 color = { colour[1] or 0, colour[2] or 0, colour[3] or 0 },
                 alpha = entry.alpha or 1,
+                -- Its own, not the fill's. A threshold overlay wears the same
+                -- TEXTURE as the fill on purpose, so the bar does not change
+                -- material when it crosses - but the whole point of the band
+                -- is that it is a different colour, and inheriting the fill's
+                -- ramp would make it a different colour that ramps the wrong
+                -- way.
+                gradient = Gradient(entry.gradient),
             }
         end
     end
@@ -1003,9 +1049,11 @@ end
 -- be added here - but it should be asked for rather than assumed.
 ns.CELL_LOOK_KEYS = {
     "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "fillGradient",
     "fillDirection",
-    "borderSize", "borderColor", "borderTexture",
+    "borderSize", "borderColor", "borderTexture", "borderGradient",
     "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
+    "backdropGradient",
     "iconZoom", "swipeColor", "swipeAlpha",
     "showSpark", "chargeMarks", "chargeMarkColor",
     "stackThresholds",
@@ -1077,11 +1125,13 @@ function Bars:Style(cfg, height)
         borderSize    = math.max(0, cfg.borderSize or 1),
         borderColor   = cfg.borderColor or { 0, 0, 0 },
         borderTexture = cfg.borderTexture or "None",
+        borderGradient = Gradient(cfg.borderGradient),
 
         backdrop        = cfg.backdrop ~= false,
         backdropColor   = cfg.backdropColor or { 0, 0, 0 },
         backdropAlpha   = cfg.backdropAlpha or 0.9,
         backdropTexture = cfg.backdropTexture,
+        backdropGradient = Gradient(cfg.backdropGradient),
 
         iconZoom = math.min(0.2, math.max(0, cfg.iconZoom or 0.08)),
 
@@ -1099,6 +1149,7 @@ function Bars:Style(cfg, height)
         -- to be next to each other.
         fillTexture = (cfg.fillTexture ~= "" and cfg.fillTexture)
             or cfg.backdropTexture,
+        fillGradient = Gradient(cfg.fillGradient),
         fillSide    = cfg.fillSide and true or false,
         fillGrow    = cfg.fillGrow and true or false,
         -- Resolved to the orientation and the reverse flag HERE, so the
@@ -1168,12 +1219,25 @@ local function Text(size, colour, outline, anchor)
     return { size = size, color = colour, outline = outline, anchor = anchor }
 end
 
+-- "This look uses no gradient", written out rather than left absent.
+--
+-- ApplyStyle only copies keys a look actually declares, so a look silently
+-- missing one leaves the PREVIOUS look's setting in place - pick Clean after
+-- a gradient bar and you get Clean's colour with the old second stop still
+-- ramping. Same reasoning as the empty `effects` table below it, and the same
+-- bug it was written to prevent.
+--
+-- One shared table is safe: ApplyStyle deep-copies everything it takes, and
+-- ApplyDefaults fills in the colour and direction afterwards.
+local FLAT = { on = false }
+
 ns.BUILT_IN_LOOKS = {
     {
         name = "Clean",
         note = "One-pixel black edge, dark plate, white numbers. The default.",
         style = {
             borderSize = 1, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            borderGradient = FLAT, backdropGradient = FLAT, fillGradient = FLAT,
             backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
@@ -1194,6 +1258,7 @@ ns.BUILT_IN_LOOKS = {
         note = "The whole icon including its own frame, no plate, no edge.",
         style = {
             borderSize = 0, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            borderGradient = FLAT, backdropGradient = FLAT, fillGradient = FLAT,
             backdrop = false, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
             iconZoom = 0,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.8, showEdge = true,
@@ -1215,6 +1280,7 @@ ns.BUILT_IN_LOOKS = {
             .. "a glance in a fight.",
         style = {
             borderSize = 3, borderColor = { 0.02, 0.02, 0.03 }, borderTexture = "None",
+            borderGradient = FLAT, backdropGradient = FLAT, fillGradient = FLAT,
             backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 1,
             iconZoom = 0.12,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.85, showEdge = false,
@@ -1233,6 +1299,7 @@ ns.BUILT_IN_LOOKS = {
             .. "lands, an edge while it is up, and a nag if you sit on it.",
         style = {
             borderSize = 1, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            borderGradient = FLAT, backdropGradient = FLAT, fillGradient = FLAT,
             backdrop = true, backdropColor = { 0, 0, 0 }, backdropAlpha = 0.9,
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
@@ -1251,10 +1318,32 @@ ns.BUILT_IN_LOOKS = {
         },
     },
     {
+        name = "Deep",
+        note = "The fill runs from bright to dark along the bar, on a plate "
+            .. "that fades downwards. Shows what a gradient does.",
+        style = {
+            borderSize = 1, borderColor = { 0.05, 0.05, 0.06 }, borderTexture = "None",
+            borderGradient = FLAT,
+            backdrop = true, backdropColor = { 0.10, 0.10, 0.12 }, backdropAlpha = 0.95,
+            backdropGradient = { on = true, color = { 0.02, 0.02, 0.03 }, direction = "down" },
+            iconZoom = 0.08,
+            swipeColor = { 0, 0, 0 }, swipeAlpha = 0.7, showEdge = false,
+            fillColor = { 1.00, 0.55, 0.28 }, fillAlpha = 0.95,
+            fillTexture = "", fillSide = false, fillGrow = false,
+            fillGradient = { on = true, color = { 0.62, 0.16, 0.05 }, direction = "right" },
+            countdown = Text(0, { 1, 1, 1 }, "OUTLINE", "CENTER"),
+            stacks    = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            charges   = Text(0, { 1, 1, 1 }, "OUTLINE", "BOTTOMRIGHT"),
+            spellName = Text(0, { 1, 1, 1 }, "", "LEFT"),
+            effects = {},
+        },
+    },
+    {
         name = "Bare",
         note = "No edge, no plate, no numbers. Just the icons.",
         style = {
             borderSize = 0, borderColor = { 0, 0, 0 }, borderTexture = "None",
+            borderGradient = FLAT, backdropGradient = FLAT, fillGradient = FLAT,
             backdrop = false, backdropColor = { 0, 0, 0 }, backdropAlpha = 0,
             iconZoom = 0.08,
             swipeColor = { 0, 0, 0 }, swipeAlpha = 0.6, showEdge = false,

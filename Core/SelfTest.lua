@@ -1185,6 +1185,117 @@ local function TestFillDirection()
 end
 
 ---------------------------------------------------------------------------
+-- Gradients
+--
+-- The whole of "which way round do the two colours go" is four strings in and
+-- two values out, so it is checked here rather than looked at on a bar - a
+-- swapped pair is invisible on two similar colours and upside down on every
+-- other one, which is the worst kind of bug to have to see.
+---------------------------------------------------------------------------
+local function TestGradients()
+    local seen = {}
+    for _, entry in ipairs(ns.GRADIENT_DIRECTIONS) do
+        local key = entry.orientation .. ":" .. tostring(entry.swap)
+        Check("Gradient direction '" .. entry.value .. "' is its own pair",
+            not seen[key], key .. " already taken by " .. tostring(seen[key]))
+        seen[key] = entry.value
+
+        Check("Gradient direction '" .. entry.value .. "' has a mark",
+            entry.icon and ns.UI.HasIcon(entry.icon), tostring(entry.icon))
+    end
+    Check("All four gradient directions are offered",
+        #ns.GRADIENT_DIRECTIONS == 4, tostring(#ns.GRADIENT_DIRECTIONS))
+
+    -- The four the engine can actually draw: two orientations times a swap.
+    -- Anything else on this list would be a control that cannot be built.
+    local orientation, swap = ns.Layout.GradientOrder("right")
+    Check("Left to right is HORIZONTAL, unswapped",
+        orientation == "HORIZONTAL" and swap == false,
+        tostring(orientation) .. " swap=" .. tostring(swap))
+
+    orientation, swap = ns.Layout.GradientOrder("left")
+    Check("Right to left is HORIZONTAL, swapped",
+        orientation == "HORIZONTAL" and swap == true,
+        tostring(orientation) .. " swap=" .. tostring(swap))
+
+    -- VERTICAL takes (bottom, top) - so bottom-to-top is the UNSWAPPED one.
+    -- This is the assertion that catches the whole thing being upside down,
+    -- and the convention behind it is written out in ns.GRADIENT_DIRECTIONS.
+    orientation, swap = ns.Layout.GradientOrder("up")
+    Check("Bottom to top is VERTICAL, unswapped",
+        orientation == "VERTICAL" and swap == false,
+        tostring(orientation) .. " swap=" .. tostring(swap))
+
+    orientation, swap = ns.Layout.GradientOrder("down")
+    Check("Top to bottom is VERTICAL, swapped",
+        orientation == "VERTICAL" and swap == true,
+        tostring(orientation) .. " swap=" .. tostring(swap))
+
+    orientation, swap = ns.Layout.GradientOrder("diagonal")
+    Check("An unknown direction falls back rather than returning nil",
+        orientation ~= nil and swap ~= nil)
+    Check("The gradient fallback is left to right",
+        orientation == "HORIZONTAL" and swap == false)
+
+    -- The resolved style always hands the renderer a table. ns.Tint reads
+    -- .on and would take a nil as "off" today; the first line of code that
+    -- reads .direction off it would throw instead.
+    local cfg = {}
+    ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
+    local style = ns.Bars:Style(cfg, 40)
+    for _, key in ipairs({ "fillGradient", "backdropGradient", "borderGradient" }) do
+        Check(key .. " is always a table", type(style[key]) == "table",
+            type(style[key]))
+        Check(key .. " starts switched off", style[key].on == false)
+        Check(key .. " always carries a direction",
+            type(style[key].direction) == "string")
+        Check(key .. " always carries a second colour",
+            type(style[key].color) == "table")
+    end
+
+    -- A profile written before gradients existed carries none of this, and
+    -- the renderer must still be handed the full shape.
+    local old = { fillGradient = nil, stackThresholds = { { value = 3 } } }
+    local oldStyle = ns.Bars:Style(old, 40)
+    Check("A profile with no gradient still resolves to one",
+        type(oldStyle.fillGradient) == "table" and oldStyle.fillGradient.on == false)
+    Check("A band with no gradient still resolves to one",
+        type(oldStyle.stackThresholds[1].gradient) == "table",
+        type(oldStyle.stackThresholds[1].gradient))
+
+    -- Every colour that CAN ramp travels when a look is copied. The three
+    -- that cannot must not be in the list, or a preset would carry a setting
+    -- with nothing to apply it to.
+    local styleKeys = {}
+    for _, key in ipairs(ns.BAR_STYLE_KEYS) do styleKeys[key] = true end
+    for _, key in ipairs({ "fillGradient", "backdropGradient", "borderGradient" }) do
+        Check(key .. " travels with a copied look", styleKeys[key] == true)
+    end
+    for _, key in ipairs({ "swipeGradient", "chargeMarkGradient" }) do
+        Check(key .. " does not exist - the engine cannot draw it",
+            styleKeys[key] == nil and ns.BAR_DEFAULTS[key] == nil)
+    end
+
+    -- A look that says nothing about a gradient leaves the last look's
+    -- ramping on a bar that is meant to be flat. Every built-in must declare
+    -- all three, which is the same rule as the empty `effects` table.
+    for _, look in ipairs(ns.BUILT_IN_LOOKS) do
+        for _, key in ipairs({ "fillGradient", "backdropGradient", "borderGradient" }) do
+            Check("Look '" .. look.name .. "' declares " .. key,
+                look.style[key] ~= nil)
+        end
+    end
+
+    -- And at least one of them turns a gradient on, or the capability ships
+    -- switched off everywhere and nobody finds it.
+    local anyOn = false
+    for _, look in ipairs(ns.BUILT_IN_LOOKS) do
+        if look.style.fillGradient and look.style.fillGradient.on then anyOn = true end
+    end
+    Check("One built-in look shows what a gradient does", anyOn)
+end
+
+---------------------------------------------------------------------------
 -- The menu filter
 --
 -- Pure, for the same reason the snapping arithmetic is: the rule that is easy
@@ -1516,6 +1627,7 @@ function Test:Run()
         { "Snapping",      TestSnapping },
         { "Menu filter",   TestMenuFilter },
         { "Fill direction", TestFillDirection },
+        { "Gradients",     TestGradients },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
         { "Anchors",       TestAnchors },

@@ -1028,6 +1028,103 @@ function Workspace:BuildOptionsPane(parent, width)
             Apply)
     end
 
+    -- THE SECOND COLOUR AND THE DIRECTION, for the colours that can ramp.
+    --
+    -- Three rows, and the last two are HIDDEN while the switch is off rather
+    -- than greyed: a colour picker and a direction list that belong to a
+    -- gradient nobody has turned on are two more things to read on a page
+    -- that is already long, and they say nothing about the bar as it is.
+    --
+    -- Only four colours get called with this, and the three that cannot ramp
+    -- get nothing at all - see the note beside the defaults for which and
+    -- why. There is no gradientable-ness flag to look up: the call site IS
+    -- the list, so a colour cannot quietly acquire a control that does not
+    -- work by being added to a table somewhere.
+    local gradientGroups = {}
+
+    -- Where a gradient LIVES, handed in rather than looked up.
+    --
+    -- Three of the four sit on the bar's own config and one sits inside a
+    -- numbered stack band, so there is no single path expression that reaches
+    -- all four. A resolver is two closures and no string parsing, and the
+    -- band's own accessors already know how to make an entry that does not
+    -- exist yet - which a path walker here would have had to reinvent.
+    local function CfgGradient(key)
+        return {
+            read = function()
+                local _, cfg = Workspace:Current()
+                local grad = cfg and cfg[key]
+                if type(grad) == "table" then return grad end
+                return nil
+            end,
+            write = function(field, value)
+                local _, cfg = Workspace:Current()
+                if not cfg then return end
+                if type(cfg[key]) ~= "table" then cfg[key] = {} end
+                cfg[key][field] = value
+            end,
+        }
+    end
+
+    local function GradientRows(access, note, collect)
+        local function Field(field, fallback)
+            return function()
+                local grad = access.read()
+                if not grad then return fallback end
+                local value = grad[field]
+                if value == nil then return fallback end
+                return value
+            end
+        end
+        local function SetField(field)
+            return function(value) access.write(field, value) end
+        end
+
+        -- gated: this gradient sits inside a section that stands down on a
+        -- bar of icons. The visibility pass has to know, because "the switch
+        -- is on" and "the section is on screen" are two different questions
+        -- and the answer is the AND of them.
+        local group = { rows = {}, on = Field("on", false), gated = collect ~= nil }
+
+        local switch = UI.Toggle(
+            grid:FullRow("Gradient", { controlWidth = 124, sublabel = note }),
+            Field("on", false),
+            function(value)
+                SetField("on")(value)
+                Apply()
+                -- The two rows below appear and disappear with it, so the
+                -- page has to be measured again - a Refresh alone repaints
+                -- rows that are still in their old places.
+                grid:Layout()
+            end)
+
+        group.rows[#group.rows + 1] = UI.Swatch(
+            grid:FullRow("Second colour", { controlWidth = 124 }),
+            function()
+                local colour = Field("color", { 1, 1, 1 })()
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b) SetField("color")({ r, g, b }) end,
+            Apply)
+
+        group.rows[#group.rows + 1] = UI.Dropdown(
+            grid:FullRow("Runs", { controlWidth = 150 }),
+            ns.GRADIENT_DIRECTIONS, Field("direction", "right"),
+            SetField("direction"), { apply = Apply })
+
+        gradientGroups[#gradientGroups + 1] = group
+
+        -- Everything this built goes into the caller's list, switch included.
+        -- The fill's section disappears entirely on a bar of icons, and three
+        -- gradient rows left standing there would be three settings pointing
+        -- at a fill that is not on the screen.
+        if collect then
+            collect[#collect + 1] = switch
+            for _, row in ipairs(group.rows) do collect[#collect + 1] = row end
+        end
+        return switch
+    end
+
     -- A size of 0 means "work it out from the cell", so the slider says that
     -- rather than showing a zero nobody would read as automatic.
     local function AutoSize(v)
@@ -1225,6 +1322,8 @@ function Workspace:BuildOptionsPane(parent, width)
 
     Slide("Thickness", "borderSize", 0, 4, 1)
     Colour("Colour", "borderColor")
+    GradientRows(CfgGradient("borderGradient"),
+        "Only the one-pixel line - an edge texture takes a single colour")
     UI.MediaPicker(grid:FullRow("Texture",
         { controlWidth = 190, icon = "media-border" }), "border",
         Get("borderTexture"), Set("borderTexture"), Apply)
@@ -1236,6 +1335,7 @@ function Workspace:BuildOptionsPane(parent, width)
 
     Switch("Show", "backdrop", "A plate behind the icon")
     Colour("Colour", "backdropColor")
+    GradientRows(CfgGradient("backdropGradient"))
     Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent, 100)
     UI.MediaPicker(grid:FullRow("Texture",
         { controlWidth = 190, icon = "media-texture" }), "statusbar",
@@ -1263,6 +1363,8 @@ function Workspace:BuildOptionsPane(parent, width)
     -- The preview strips in the list are painted in THIS bar's fill colour.
     -- You open the list to see what this bar will look like, and a column of
     -- orange strips answers a question nobody asked.
+    GradientRows(CfgGradient("fillGradient"), nil, fillRows)
+
     fillRows[#fillRows + 1] = UI.MediaPicker(
         grid:FullRow("Texture",
             { controlWidth = 190, icon = "media-texture" }), "statusbar",
@@ -1368,6 +1470,21 @@ function Workspace:BuildOptionsPane(parent, width)
             end,
             function(r, g, b) SetThreshold(index, "color")({ r, g, b }) end,
             Apply)
+        -- Its own ramp per band, not the fill's. A band exists precisely
+        -- because it is a different colour from the fill, so inheriting the
+        -- fill's second stop would give it a ramp that ends somewhere the
+        -- band was never meant to go.
+        GradientRows({
+            read  = function() return GetThreshold(index, "gradient", nil)() end,
+            write = function(field, value)
+                local grad = GetThreshold(index, "gradient", nil)()
+                if type(grad) ~= "table" then
+                    grad = {}
+                    SetThreshold(index, "gradient")(grad)
+                end
+                grad[field] = value
+            end,
+        }, nil, fillRows)
     end
 
     fillRows[#fillRows + 1] = grid:Note("Blizzard reports the count, and on this "
@@ -1776,6 +1893,17 @@ function Workspace:BuildOptionsPane(parent, width)
         for _, region in ipairs(fillRows) do
             region.dkSkip = not isBar
             region:SetShown(isBar)
+        end
+
+        -- AFTER the section pass, and computed from scratch rather than read
+        -- back off dkSkip. A flag left over from the last refresh is how a row
+        -- that was hidden once stays hidden for the rest of the session.
+        for _, group in ipairs(gradientGroups) do
+            local shown = group.on() and (isBar or not group.gated) and true or false
+            for _, row in ipairs(group.rows) do
+                row.dkSkip = not shown
+                row:SetShown(shown)
+            end
         end
 
         RefreshArrangement()

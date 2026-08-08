@@ -103,6 +103,50 @@ function Layout.FillDirection(value)
     return ns.FILL_DIRECTIONS[1]
 end
 
+---------------------------------------------------------------------------
+-- Gradients
+--
+-- SetGradient(orientation, colourA, colourB) takes EXACTLY TWO COLOURS and
+-- one of "HORIZONTAL" / "VERTICAL". There are no stops and there is no
+-- diagonal, so the four directions people expect are two orientations and a
+-- swap - which is what this table says and what GradientOrder returns.
+--
+-- Which end each colour lands on was READ OFF SHIPPING CODE, not assumed:
+--   HORIZONTAL  A is LEFT, B is RIGHT
+--               EllesmereUIQoL colour picker: SetGradient("HORIZONTAL",
+--               white opaque, white transparent) draws the saturation ramp,
+--               and white sits on the left of an HSV square.
+--   VERTICAL    A is BOTTOM, B is TOP
+--               the same picker's value ramp is SetGradient("VERTICAL",
+--               black, transparent), and a second call there names its two
+--               arguments `bot` and `top` in as many words.
+--
+-- Getting that backwards is invisible on a symmetric pair of colours and
+-- upside down on every other one, which is why it is written here once.
+ns.GRADIENT_DIRECTIONS = {
+    { value = "right", text = "Left to right", icon = "dir-left-right",
+      orientation = "HORIZONTAL", swap = false },
+    { value = "left",  text = "Right to left", icon = "dir-right-left",
+      orientation = "HORIZONTAL", swap = true },
+    { value = "up",    text = "Bottom to top", icon = "dir-bottom-top",
+      orientation = "VERTICAL",   swap = false },
+    { value = "down",  text = "Top to bottom", icon = "dir-top-bottom",
+      orientation = "VERTICAL",   swap = true },
+}
+
+-- The orientation, and whether the two colours change places.
+--
+-- Pure on purpose, like SnapAxis and SparkEdge: the whole of the "which way
+-- round" question is four strings in and two values out, and that is testable
+-- without a texture, a frame or a client.
+function Layout.GradientOrder(value)
+    for _, entry in ipairs(ns.GRADIENT_DIRECTIONS) do
+        if entry.value == value then return entry.orientation, entry.swap end
+    end
+    local first = ns.GRADIENT_DIRECTIONS[1]
+    return first.orientation, first.swap
+end
+
 ns.GROW_Y = {
     { value = "down", text = "Top to bottom", icon = "dir-top-bottom" },
     { value = "up",   text = "Bottom to top", icon = "dir-bottom-top" },

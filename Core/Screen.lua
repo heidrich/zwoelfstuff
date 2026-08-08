@@ -258,8 +258,18 @@ local function StyleAuraVisual(aura, style, isBar)
     -- and resolving it twice is how the two ended up looking different.
     aura.fill:SetStatusBarTexture(aura.fillTexturePath)
 
+    -- THE COLOUR GOES ON THE TEXTURE, NOT ON THE BAR, when it is a gradient.
+    --
+    -- SetStatusBarColor is a vertex colour on the bar's own texture, and a
+    -- gradient set afterwards would be multiplied by it. Worse, calling it
+    -- again later FLATTENS the ramp back to one colour - so the order here is
+    -- load-bearing: texture, then white, then the ramp, and nothing may set
+    -- the bar colour after this point. (Nothing does; the thresholds paint
+    -- their own overlays.)
     local colour = style.fillColor
-    aura.fill:SetStatusBarColor(colour[1], colour[2], colour[3], style.fillAlpha)
+    aura.fill:SetStatusBarColor(1, 1, 1, 1)
+    ns.Tint(aura.fill:GetStatusBarTexture(), colour, style.fillAlpha,
+        style.fillGradient)
     -- WHICH END, not which direction in time. Those are two settings now, and
     -- confusing them was the reported "fillup richtung stimmt nicht": this call
     -- moves the fill to the other end of the bar and has nothing to do with
@@ -761,10 +771,9 @@ local function ApplyThresholds(cell)
             overlay:SetAllPoints(aura.fill)
         end
 
-        local colour = entry.color
         local tex = overlay:GetStatusBarTexture()
         if tex then
-            tex:SetVertexColor(colour[1], colour[2], colour[3], entry.alpha or 1)
+            ns.Tint(tex, entry.color, entry.alpha or 1, entry.gradient)
             tex:SetDrawLayer("ARTWORK", math.min(7, index))
         end
 

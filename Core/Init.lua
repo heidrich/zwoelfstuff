@@ -523,6 +523,47 @@ function ns.CreateBorder(frame, thickness, layer)
         end
     end
 
+    -- Solid or gradient, in the shape the rest of the addon uses.
+    --
+    -- A BORDER IS NOT A SURFACE, and the difference is the whole of this
+    -- function. A gradient across a rectangle is one ramp over one quad; a
+    -- gradient across a FRAME is four separate strips, and only two of them
+    -- run along the ramp at all. The other two sit at its ends, so each takes
+    -- the single colour of the end it is on - ramping them as well draws two
+    -- little rainbows at right angles to the one you asked for.
+    --
+    --   HORIZONTAL  TOP and BOTTOM carry the ramp; LEFT is its start colour
+    --               and RIGHT its end colour.
+    --   VERTICAL    LEFT and RIGHT carry it; BOTTOM starts and TOP ends.
+    function border:SetTint(colour, alpha, gradient)
+        alpha = alpha or 1
+
+        if not (gradient and gradient.on) then
+            self:SetColor(colour[1], colour[2], colour[3], alpha)
+            return
+        end
+
+        local orientation, swap = ns.Layout.GradientOrder(gradient.direction)
+        local from, to = colour, gradient.color or colour
+        if swap then from, to = to, from end
+
+        local along, startEdge, endEdge
+        if orientation == "VERTICAL" then
+            along, startEdge, endEdge = { "LEFT", "RIGHT" }, "BOTTOM", "TOP"
+        else
+            along, startEdge, endEdge = { "TOP", "BOTTOM" }, "LEFT", "RIGHT"
+        end
+
+        for _, edge in ipairs(along) do
+            -- White first: a colour texture already carrying the tint would
+            -- be multiplied BY the ramp rather than replaced by it.
+            self[edge]:SetColorTexture(1, 1, 1, 1)
+            ns.Tint(self[edge], colour, alpha, gradient)
+        end
+        self[startEdge]:SetColorTexture(from[1], from[2], from[3], alpha)
+        self[endEdge]:SetColorTexture(to[1], to[2], to[3], alpha)
+    end
+
     -- This is a plain table of four textures, not a frame, so it has none of
     -- the frame visibility methods by default - callers reasonably expect
     -- them, and their absence only shows up at runtime.

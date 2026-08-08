@@ -170,6 +170,57 @@ Media.OUTLINES = {
 -- these the same way, so they live here rather than twice.
 ---------------------------------------------------------------------------
 
+-- TWO REUSED COLOUR OBJECTS, not two fresh ones per call.
+--
+-- SetGradient copies the values at call time, so one shared pair is safe
+-- across every texture in the addon - and tinting runs on every style pass,
+-- which is often enough that CreateColor here would be two tables of garbage
+-- each time. Read off EllesmereUIUnitFrames.lua:1171-1179, which says the
+-- same thing about the same call.
+local gradA = CreateColor and CreateColor(1, 1, 1, 1) or nil
+local gradB = CreateColor and CreateColor(1, 1, 1, 1) or nil
+
+-- Colour a texture, solid or as a gradient. THE ONE SINK, so the fill, the
+-- backdrop and every threshold overlay cannot end up doing it three ways.
+--
+-- gradient is optional and shaped { on, color, direction }. Absent, off, or
+-- on a client with no SetGradient, this is exactly the flat tint it replaced.
+--
+-- THE VERTEX COLOUR IS RESET TO WHITE FIRST. A gradient MULTIPLIES the vertex
+-- colour, so a texture still carrying its flat tint comes out as the tint
+-- times the ramp - darker at both ends and never the colours that were
+-- picked. That is not a subtle bug in the picture, but it is a silent one in
+-- the code, because both calls succeed.
+function ns.Tint(texture, colour, alpha, gradient)
+    if not texture then return end
+
+    local r, g, b = colour[1], colour[2], colour[3]
+    alpha = alpha or 1
+
+    if not (gradient and gradient.on and texture.SetGradient and gradA) then
+        texture:SetVertexColor(r, g, b, alpha)
+        return
+    end
+
+    local second = gradient.color or colour
+    local orientation, swap = ns.Layout.GradientOrder(gradient.direction)
+
+    -- The SECOND colour carries the first one's alpha. A gradient that fades
+    -- out is a separate wish from a gradient that changes colour, and there
+    -- is no control for it - so it must not happen by accident because a
+    -- swatch handed back three numbers and a nil.
+    if swap then
+        gradA:SetRGBA(second[1], second[2], second[3], alpha)
+        gradB:SetRGBA(r, g, b, alpha)
+    else
+        gradA:SetRGBA(r, g, b, alpha)
+        gradB:SetRGBA(second[1], second[2], second[3], alpha)
+    end
+
+    texture:SetVertexColor(1, 1, 1, 1)
+    texture:SetGradient(orientation, gradA, gradB)
+end
+
 -- The plate behind an icon. A colour texture when no texture is chosen,
 -- because a flat fill is sharper than a bar texture stretched over a square.
 function ns.PaintSurface(texture, style)
@@ -180,11 +231,16 @@ function ns.PaintSurface(texture, style)
 
     if key and Media.IsKnown("statusbar", key) then
         texture:SetTexture(Media.Statusbar(key))
-        texture:SetVertexColor(colour[1], colour[2], colour[3], style.backdropAlpha)
     else
-        texture:SetColorTexture(colour[1], colour[2], colour[3], style.backdropAlpha)
+        -- White, then tinted - NOT SetColorTexture(r, g, b) as it was.
+        -- SetColorTexture bakes the colour into the texture itself, and a
+        -- gradient set on top of a texture that is already orange is orange
+        -- times the ramp. The colour has to arrive as a vertex colour for
+        -- either path to work, and ns.Tint is the only thing that sets it.
+        texture:SetColorTexture(1, 1, 1, 1)
     end
 
+    ns.Tint(texture, colour, style.backdropAlpha, style.backdropGradient)
     texture:SetShown(style.backdrop)
 end
 
@@ -249,7 +305,7 @@ function ns.PaintBorder(chrome, style, outside)
     if not key or key == "None" or not Media.IsKnown("border", key) then
         if chrome.SetBackdrop then chrome:SetBackdrop(nil) end
         chrome.pixel:SetThickness(size)
-        chrome.pixel:SetColor(colour[1], colour[2], colour[3], 1)
+        chrome.pixel:SetTint(colour, 1, style.borderGradient)
         chrome.pixel:Show()
         return
     end
@@ -260,6 +316,11 @@ function ns.PaintBorder(chrome, style, outside)
     -- Edge files are drawn from a strip and need real room; the thickness
     -- slider runs 0-4, so it is scaled into the 6-24 an edge file expects.
     chrome:SetBackdrop({ edgeFile = Media.Border(key), edgeSize = size * 6 })
+    -- ONE COLOUR, and the panel says so where the setting is.
+    -- SetBackdropBorderColor is a single tint over the whole nine-slice;
+    -- there is no per-edge access and therefore no gradient. Silently taking
+    -- the second colour and dropping it is exactly the defect this addon
+    -- spent a session removing.
     chrome:SetBackdropBorderColor(colour[1], colour[2], colour[3], 1)
 end
 
