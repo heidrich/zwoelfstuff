@@ -8,6 +8,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.32.2] - 2026-08-08
+
+### Changed
+
+- **The preview card draws a bar-shaped cell at its FULL length.** It was
+  drawn at 70% so the card would read as a bar rather than as a block of
+  colour, and that single choice produced three separate reports: the bar
+  looking shorter than it is; then the faint track added to show the true
+  length wearing the bar's own colour and reading as a setting; then, with the
+  track removed in 4.32.1 and a black backdrop invisible against a near-black
+  card, the gap simply coming back.
+
+  A settings card is asked how big the bar is and what it looks like. The
+  honest answer to that is the whole bar. The cost is that fill DIRECTION
+  cannot be previewed here - it is a full bar either way - which the four
+  arrows in the Direction picker already state and the bar on screen shows
+  for real.
+
+- `Layout.PreviewFill` and `Layout.PreviewTrack`, added one version ago, are
+  gone with the thing they described, and so is `cell.track`. They got the
+  part-full preview exactly right; the part-full preview was the fault.
+
 ## [4.32.1] - 2026-08-08
 
 Two more ways the preview card disagreed with the screen, both reported by

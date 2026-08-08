@@ -2082,22 +2082,9 @@ function UI.CellGrid(parent, cfg)
 
         -- The fill of a bar-shaped cell, beside its square icon. Without it a
         -- tracking bar in the editor is an icon and a hole, which tells you
-        -- nothing about the texture you just picked.
-        -- THE TRACK: how long the bar actually is.
-        --
-        -- The fill is drawn part-full on purpose, so the card shows a BAR and
-        -- not a coloured block. With a backdrop behind it that reads correctly
-        -- - filled to here, empty to there. With the backdrop switched off
-        -- there was nothing behind it at all, so the bar simply looked shorter
-        -- than it is: "die vorschau sollte auch die richtigen dimensionen
-        -- zeigen, wie du siehst, ist die bar eigentlich laenger".
-        --
-        -- An editor affordance, under the fill and faint, and nothing to do
-        -- with what goes on screen. It carries the bar's own fill colour so it
-        -- reads as the rest of THIS bar rather than as a grey box.
-        cell.track = cell:CreateTexture(nil, "ARTWORK")
-        cell.track:Hide()
-
+        -- nothing about the texture you just picked. It runs the WHOLE length
+        -- of the bar - see the note where it is anchored, which is the third
+        -- and last word on why there is no part-full fill here any more.
         cell.fill = cell:CreateTexture(nil, "ARTWORK", nil, 1)
         cell.fill:Hide()
 
@@ -2296,40 +2283,39 @@ function UI.CellGrid(parent, cfg)
                     cell.icon:SetPoint("BOTTOM" .. side, cell, "BOTTOM" .. side, 0, 0)
                     cell.icon:SetWidth(h)
 
-                    -- The fill, in the bar's OWN colour and texture, drawn at
-                    -- a part-full value so it reads as a bar rather than as a
-                    -- coloured block. It is the same settings the screen uses
-                    -- - a preview painted in the editor's accent colour tells
-                    -- you nothing about the bar you are actually building.
+                    -- The fill, in the bar's OWN colour and texture, from the
+                    -- same settings the screen uses - a preview painted in the
+                    -- editor's accent colour tells you nothing about the bar
+                    -- you are actually building. The pads are the room the
+                    -- icon takes at whichever end it sits.
                     local inset = (place == "hidden") and 0 or h
-                    local area = math.max(1, w - inset)
                     local leftPad = (place == "right") and 0 or inset
                     local rightPad = (place == "right") and -inset or 0
 
-                    -- WHICH WAY THE FILL RUNS, read off the same one-of-four
-                    -- the screen uses - both ends AND both axes.
+                    -- THE BAR IS DRAWN AT ITS FULL LENGTH.
                     --
-                    -- It was asking `style.fillSide`, the boolean that
-                    -- fillDirection REPLACED in 4.29.0: nothing writes it any
-                    -- more, so the card ignored the Direction control
-                    -- entirely. And when that was put right it still only
-                    -- swapped left for right, so a bar set to fill upwards
-                    -- previewed lying down. Both halves of the answer come
-                    -- from Layout now.
-                    local runs = ns.Layout.FillDirection(style and style.fillDirection)
-                    local corner, pad, fillW, fillH =
-                        ns.Layout.PreviewFill(runs, leftPad, rightPad, area, h)
+                    -- It used to be drawn at 70% so that the card read as a
+                    -- bar rather than as a block of colour, and that single
+                    -- choice came back three times. First the bar looked
+                    -- shorter than it is ("die vorschau sollte auch die
+                    -- richtigen dimensionen zeigen, wie du siehst, ist die bar
+                    -- eigentlich laenger"). Then the faint track put behind it
+                    -- to show the true length wore the bar's OWN colour and
+                    -- read as a second setting somebody had chosen ("das
+                    -- scheint immer noch nicht zu passen"). Then, with the
+                    -- track gone and a black backdrop invisible against a
+                    -- black card, the gap at the end was simply back - circled
+                    -- in a screenshot, "nope".
+                    --
+                    -- A settings card is asked how big the bar is and what it
+                    -- looks like, and the honest answer to that is the whole
+                    -- bar. The cost is that fill DIRECTION cannot be seen here
+                    -- - it is a full bar either way - which the four arrows in
+                    -- the Direction picker already say, and the bar on screen
+                    -- shows for real.
                     cell.fill:ClearAllPoints()
-                    cell.fill:SetPoint(corner, cell, corner, pad, 0)
-                    cell.fill:SetSize(fillW, fillH)
-
-                    -- The whole run of the bar, under the part-full fill.
-                    -- Only ever seen when nothing else shows how long the bar
-                    -- is - see the colour below. Anchored across the same area
-                    -- rather than given a width, so it follows the cell.
-                    cell.track:ClearAllPoints()
-                    cell.track:SetPoint("TOPLEFT", cell, "TOPLEFT", leftPad, 0)
-                    cell.track:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", rightPad, 0)
+                    cell.fill:SetPoint("TOPLEFT", cell, "TOPLEFT", leftPad, 0)
+                    cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", rightPad, 0)
 
                     if style then
                         local fill = style.fillTexture
@@ -2349,25 +2335,7 @@ function UI.CellGrid(parent, cfg)
                         local colour = style.fillColor
                         ns.Tint(cell.fill, colour, style.fillAlpha,
                             style.fillGradient)
-
-                        -- THE EMPTY PART OF A BAR IS THE BACKDROP, and the
-                        -- track is not part of the bar at all - it is the
-                        -- editor saying how far the bar reaches when nothing
-                        -- else does. So it wears the EDITOR's colour, one step
-                        -- off the card behind it, and never the bar's own: at
-                        -- 16% of the fill colour a green bar previewed as
-                        -- bright green then dark green, where on screen it is
-                        -- bright green and then the plate. That is the
-                        -- preview inventing a look the bar does not have,
-                        -- which is the one thing it may never do.
-                        cell.track:SetTexture(ns.WHITE)
-                        cell.track:SetVertexColor(C.control[1], C.control[2],
-                            C.control[3], 1)
                     end
-                    -- Hidden whenever the backdrop is already showing the
-                    -- bar's length, which is the usual case and the one the
-                    -- screen matches exactly.
-                    cell.track:SetShown(ns.Layout.PreviewTrack(style))
                     cell.fill:Show()
 
                     if style and style.spellName.show then
@@ -2400,7 +2368,6 @@ function UI.CellGrid(parent, cfg)
                     cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 0, 0)
                     cell.icon:Show()
                     cell.fill:Hide()
-                    cell.track:Hide()
                     cell.caption:Hide()
                 end
 
@@ -2410,7 +2377,6 @@ function UI.CellGrid(parent, cfg)
             else
                 cell.icon:Hide()
                 cell.fill:Hide()
-                cell.track:Hide()
                 cell.caption:Hide()
                 cell.plus:Show()
                 cell.number:SetText("")

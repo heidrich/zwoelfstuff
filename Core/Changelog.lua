@@ -8,6 +8,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.32.2",
+        date = "2026-08-08",
+        lines = {
+            "THE BAR IN THE PREVIEW IS AS LONG AS YOUR BAR NOW. It was drawn part-full, so that the card read as a bar rather than as a block of colour - and that one decision has now caused three complaints in a row. First the bar looked shorter than it really is. Then the faint mark added behind it to show the true length was drawn in your own bar colour and read as a second setting you had chosen. Then, with that gone and a black backdrop invisible against a black card, the gap at the end was simply back.",
+            "So the card shows the whole bar. That is what it is being asked - how big is it, what colour, which texture, where does the name sit - and the honest answer to all of it is a full bar. The one thing it can no longer show is which way the fill runs, and the Direction setting already draws four arrows saying exactly that.",
+        },
+    },
+    {
         version = "4.32.1",
         date = "2026-08-08",
         lines = {

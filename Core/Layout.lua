@@ -236,58 +236,11 @@ function Layout.FillEdge(orientation, reverse)
     return reverse and "LEFT" or "RIGHT", false
 end
 
--- WHERE THE PART-FULL FILL SITS IN A PREVIEW CELL.
---
--- The card draws its bar at a fraction of full on purpose, so it reads as a
--- bar and not as a block of colour. Which corner that fraction hangs from is
--- the same one-of-four the screen fills along - and the card only ever knew
--- left from right, so a bar set to fill upwards previewed lying down. The
--- rule lives here now, beside the screen's half of it, rather than in a
--- renderer that decided it for itself.
---
--- ONE anchor and both sizes, never two opposing anchors plus a size: those
--- two rules fight, and which of them wins is not worth having to remember.
---
--- leftPad and rightPad are the room the icon takes at either end (rightPad
--- negative, as an inset from the right edge); area and height are what is
--- left over for the bar itself.
-function Layout.PreviewFill(direction, leftPad, rightPad, area, height, portion)
-    portion = portion or 0.7
-
-    if direction.orientation == "VERTICAL" then
-        -- Downwards hangs from the TOP: the fill starts at the end it grows
-        -- away from, which is the reverse flag read the same way the
-        -- StatusBar reads it.
-        local corner = direction.reverse and "TOPLEFT" or "BOTTOMLEFT"
-        return corner, leftPad, area, math.max(1, height * portion)
-    end
-
-    if direction.reverse then
-        return "TOPRIGHT", rightPad, math.max(1, area * portion), height
-    end
-    return "TOPLEFT", leftPad, math.max(1, area * portion), height
-end
-
--- DOES THE PREVIEW HAVE TO MARK HOW LONG THE BAR IS?
---
--- The empty part of a bar on screen is the BACKDROP and nothing else - a
--- StatusBar's fill over the plate behind it, with no third thing in between.
--- So the card must not paint anything of its own across the unfilled run. It
--- was washing it in the bar's OWN colour at 16%, which previewed a green bar
--- as bright green then dark green where the screen shows bright green then
--- black: the preview inventing a look the bar does not have.
---
--- It is still needed for the case it was written for. With the backdrop
--- switched off there is nothing behind the part-full fill at all, and the bar
--- simply looks shorter than it is ("die vorschau sollte auch die richtigen
--- dimensionen zeigen"). Only then - and the caller paints it in the EDITOR's
--- own colour, so it reads as the card saying "the bar reaches to here"
--- instead of as a second colour somebody chose.
-function Layout.PreviewTrack(style)
-    if not style then return false end
-    if not style.backdrop then return true end
-    return (style.backdropAlpha or 0) <= 0.02
-end
+-- There is deliberately NO "where does the part-full preview fill sit" rule
+-- here any more. The card draws its bar at FULL length: three separate
+-- reports came out of drawing it short, and the last of them arrived after
+-- this pair of functions had been written to get the short version exactly
+-- right. Getting a thing right is not the same as it being the right thing.
 
 -- Green at full, through amber, to red. Two straight ramps rather than one
 -- across all three, because a single interpolation from green to red passes
