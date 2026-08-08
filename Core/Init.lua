@@ -1012,6 +1012,13 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "text" then
         ns.Screen:DumpText()
 
+    -- The third diagnostic of its kind, and written for the same reason as
+    -- the other two: a number appeared on a cell that nothing in the code
+    -- says should be there, and reading the code says which font string
+    -- SHOULD print what - not which one IS printing a nought.
+    elseif cmd == "numbers" then
+        ns.Screen:DumpNumbers()
+
     -- Co-tanks. The panel owns the settings; these three are the ones worth
     -- reaching without opening a window - move it, fake a raid, put it away.
     elseif cmd == "tanks" or cmd == "cotanks" then

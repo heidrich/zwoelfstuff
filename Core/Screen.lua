@@ -1846,6 +1846,91 @@ function Screen:DumpText()
 end
 
 ---------------------------------------------------------------------------
+-- WHERE A NUMBER ON A CELL COMES FROM  --  /zs numbers
+--
+-- Built for one question that could not be answered by reading: "I moved the
+-- charge count onto the icon, and now there is an extra 0 next to it." There
+-- are FIVE font strings that can hold a number on one cell - our charges and
+-- our stacks, Blizzard's ChargeCount and Applications, and the Cooldown
+-- widget's own countdown - and reading the code says which one SHOULD print
+-- what, not which one IS printing a nought.
+--
+-- This asks them. Per cell it prints, for each candidate, whether it exists,
+-- whether it is shown, and what it currently reads. It also prints the STATE
+-- behind our two: readable, secret, or absent - because "secret" is the whole
+-- reason a number that should be hidden can end up on screen. A secret may
+-- not be compared to 1, so a stack count of nought cannot be recognised as
+-- one and gets printed like any other.
+--
+-- The third command of its kind. /zs skin settled "ours or Blizzard's",
+-- /zs text settled "where did it land", and each was written after a fix made
+-- by reading the code came back still broken.
+---------------------------------------------------------------------------
+function Screen:DumpNumbers()
+    ns.Print("|cffffd100--- numbers: what each one holds right now ---|r")
+
+    -- Never printed, only described. Calling tostring on a secret is itself
+    -- forbidden, so the state is reported through the two guards instead.
+    local function State(value)
+        if value == nil then return "|cff888888absent|r" end
+        if not ns.CanCompute(value) then
+            return "|cffff7a3dSECRET|r - cannot be compared, only printed"
+        end
+        return "|cff40ff40readable|r  " .. tostring(value)
+    end
+
+    local function Says(fontString)
+        if not fontString then return "|cff888888none|r" end
+        local text = fontString.GetText and fontString:GetText()
+        if text == nil or text == "" then text = "|cff888888(blank)|r" end
+        return string.format("%s  shown %s", tostring(text),
+            tostring(fontString:IsShown()))
+    end
+
+    -- No `goto`: this client is Lua 5.1 and the label form arrived in 5.2.
+    -- It parses on the desktop language server and fails at login, which is
+    -- the worst possible place to find out.
+    for index, _ in ipairs(ns.db.bars) do
+        local bar = barFrames[index]
+        for cellIndex, cell in ipairs(bar and bar.cells or {}) do
+            if cell:IsShown() and cell.spellID then
+                local aura = cell.aura
+                local item = cell.mirrorItem or cell.item
+
+                ns.Print(string.format("|cffffd100%d.%d %s|r  %s", index,
+                    cellIndex, ns.SpellName(cell.spellID) or "?",
+                    cell.item and "|cff40ff40adopted|r"
+                        or (aura and "|cffffd100ours|r" or "?")))
+
+                local charges = ChargeInfo(cell.spellID)
+                ns.Print(string.format("   charges   max %s   recharging %s   live %s",
+                    tostring(MaxOf(charges)),
+                    charges and State(charges.isActive) or "|cff888888none|r",
+                    charges and State(charges.currentCharges) or "|cff888888none|r"))
+
+                local stacks = item and ns.CDM:ItemStacks(item)
+                ns.Print("   stacks    " .. State(stacks))
+
+                if aura then
+                    ns.Print("   ours: charges " .. Says(aura.charges)
+                        .. "   stacks " .. Says(aura.stacks))
+                end
+                if item then
+                    ns.Print("   blizzard: ChargeCount "
+                        .. Says(ns.CDM:CounterText(item, "ChargeCount"))
+                        .. "   Applications "
+                        .. Says(ns.CDM:CounterText(item, "Applications")))
+                end
+            end
+        end
+    end
+
+    ns.Print("|cff888888A count marked SECRET may not be compared to anything, "
+        .. "so 'is it more than one' cannot be asked and a nought prints like "
+        .. "any other number. That is the shape of the extra 0.|r")
+end
+
+---------------------------------------------------------------------------
 -- Unlocked look
 --
 -- The grid itself becomes visible, so an empty bar is still something you can

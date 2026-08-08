@@ -2003,6 +2003,73 @@ function Workspace:BuildCellPane(parent, width)
 
     local function Percent(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end
 
+    -- THE GRADIENT TRIO, per cell. It was missing here entirely: the whole-bar
+    -- pane grew it and this one did not, so a cell that had been given its own
+    -- fill colour could not be given the ramp that goes with it. Owner: "wenn
+    -- ich bei den individuellen optionen von einer bar bin, fehlt die verlauf
+    -- option". The MODEL already carried it - all three keys are in
+    -- ns.CELL_LOOK_KEYS - so this was a control that had simply never been
+    -- built, which is the quietest kind of missing feature.
+    --
+    -- COPY BEFORE WRITE, and this is the trap. Get() falls through to the
+    -- BAR's table while this cell is still following it, so writing a field
+    -- into what it returns would edit the bar - and therefore every other cell
+    -- on it - from a panel headed "This one only". The stack bands two
+    -- sections down already copy for exactly this reason.
+    local gradientGroups = {}
+
+    local function GradientRows(key)
+        local function Read()
+            local grad = Get(key, nil)()
+            return type(grad) == "table" and grad or nil
+        end
+        local function Field(field, fallback)
+            return function()
+                local grad = Read()
+                if not grad then return fallback end
+                local value = grad[field]
+                if value == nil then return fallback end
+                return value
+            end
+        end
+        local function Write(field, value)
+            local cfg, index = Cell()
+            if not (cfg and index) then return end
+
+            local from = Read() or {}
+            local colour = from.color or { 1, 1, 1 }
+            local copy = {
+                on = from.on and true or false,
+                direction = from.direction or "right",
+                color = { colour[1] or 1, colour[2] or 1, colour[3] or 1 },
+            }
+            copy[field] = value
+            ns.Bars:SetCellLook(cfg, index, key, copy)
+        end
+
+        local group = { rows = {}, on = Field("on", false) }
+
+        UI.Toggle(grid:FullRow("Gradient", { controlWidth = 124 }),
+            Field("on", false),
+            function(value) Write("on", value); Apply() end)
+
+        group.rows[#group.rows + 1] = UI.Swatch(
+            grid:FullRow("Second colour", { controlWidth = 124 }),
+            function()
+                local colour = Field("color", { 1, 1, 1 })()
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b) Write("color", { r, g, b }) end,
+            Apply)
+
+        group.rows[#group.rows + 1] = UI.Dropdown(
+            grid:FullRow("Runs", { controlWidth = 150 }),
+            ns.GRADIENT_DIRECTIONS, Field("direction", "right"),
+            function(value) Write("direction", value) end, { apply = Apply })
+
+        gradientGroups[#gradientGroups + 1] = group
+    end
+
     grid:Section("This one only")
     grid:Note("Every setting here follows the bar until you change it. After "
         .. "that this cell keeps its own, and Reset below hands it all back.")
@@ -2042,6 +2109,7 @@ function Workspace:BuildCellPane(parent, width)
 
     grid:Section("Bar fill", "cell-fill")
     Colour("Colour", "fillColor")
+    GradientRows("fillGradient")
     Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent, 100)
     UI.MediaPicker(grid:FullRow("Texture",
         { controlWidth = 190, icon = "media-texture" }), "statusbar",
@@ -2058,7 +2126,9 @@ function Workspace:BuildCellPane(parent, width)
     grid:Section("Border and backdrop", "cell-edge")
     Slide("Thickness", "borderSize", 0, 4, 1)
     Colour("Border colour", "borderColor")
+    GradientRows("borderGradient")
     Colour("Backdrop colour", "backdropColor")
+    GradientRows("backdropGradient")
     Slide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05, Percent, 100)
 
     -- Stack colours per cell, because this is the setting that most obviously
@@ -2133,8 +2203,15 @@ function Workspace:BuildCellPane(parent, width)
     reset:SetIcon("ui-reset")
 
     pane.Refresh = function()
-        grid:Layout()
+        for _, group in ipairs(gradientGroups) do
+            local shown = group.on() and true or false
+            for _, row in ipairs(group.rows) do
+                row.dkSkip = not shown
+                row:SetShown(shown)
+            end
+        end
         grid:Refresh()
+        grid:Layout()
     end
 
     return pane

@@ -1008,6 +1008,22 @@ end
 -- an addon that has just said it let go.
 local counterAnchor = setmetatable({}, { __mode = "k" })
 
+-- The font string inside one of Blizzard's counter frames, for the diagnostic
+-- in Screen:DumpNumbers. Published rather than re-derived there: WHERE these
+-- frames live is the thing Counter above exists to know, and a second finder
+-- would look in one of the two places and quietly report "none".
+function CDM:CounterText(item, key)
+    local widget = Counter(item, key)
+    if not widget then return nil end
+    if widget.GetText then return widget end
+
+    local regions = { widget:GetRegions() }
+    for _, region in ipairs(regions) do
+        if region.GetText then return region end
+    end
+    return nil
+end
+
 local function MoveCounter(widget, item, text)
     if not counterAnchor[widget] then
         local point, relativeTo, relativePoint, x, y = widget:GetPoint(1)
