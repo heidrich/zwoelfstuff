@@ -940,8 +940,148 @@ function StopDrag()
     guideY:Hide()
 end
 
+---------------------------------------------------------------------------
+-- The co-tank panel, moved the same way the bars are
+--
+-- The owner's call, and the right one: "das tank panel musst du wie die
+-- cooldowns im edit mode bearbeiten koennen. der button kann da also raus".
+-- A display that is moved from a button on a settings page is a display you
+-- move blind - the window is over the place you are trying to put it. Every
+-- other thing this addon draws is placed on the screen it lives on, and this
+-- is now no different.
+--
+-- It reuses Snap, which needs nothing from the panel but a half-width: the
+-- `index` argument is only ever used to leave a bar out of its own candidate
+-- list, and nil is not a bar. So the panel lines up on the bars and the bars
+-- line up on it, which is the whole point of snapping to something.
+---------------------------------------------------------------------------
+local tankMover
+
+local function TankPanel()
+    local panel = ns.CoTanks and ns.CoTanks.panel
+    if panel and panel:IsShown() then return panel end
+    return nil
+end
+
+local function ApplyTankMove(x, y)
+    local db = ns.db.coTanks
+    -- Written in CENTRE terms, like a bar with no anchor. The pinned point is
+    -- forced to CENTER because that is what the numbers below now mean.
+    db.point, db.relPoint = "CENTER", "CENTER"
+    db.x, db.y = math.floor(x + 0.5), math.floor(y + 0.5)
+    ns.CoTanks:ApplyLayout()
+end
+
+local function CreateTankMover()
+    local mover = CreateFrame("Button", nil, overlay)
+    mover:SetFrameLevel(overlay:GetFrameLevel() + 10)
+    mover:RegisterForDrag("LeftButton")
+    mover:Hide()
+
+    mover.bg = mover:CreateTexture(nil, "BACKGROUND")
+    mover.bg:SetAllPoints(mover)
+    mover.bg:SetColorTexture(C.sidebarBg[1], C.sidebarBg[2], C.sidebarBg[3], 0.92)
+
+    mover.edge = ns.CreateBorder(mover, 1, "BORDER")
+    mover.edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
+
+    local text = CreateFrame("Frame", nil, mover)
+    text:SetAllPoints(mover)
+    text:SetFrameLevel(mover:GetFrameLevel() + 2)
+    text:SetClipsChildren(true)
+
+    mover.name = UI.Label(text, "Co-tanks", 12, C.text)
+    mover.name:SetPoint("CENTER", text, "CENTER", 0, 0)
+    mover.name:SetWordWrap(false)
+
+    mover.coords = UI.Label(text, "", 10, C.textDim)
+    mover.coords:SetPoint("TOPLEFT", text, "TOPLEFT", 4, -3)
+    mover.coords:SetWordWrap(false)
+
+    mover:SetScript("OnDragStart", function(self)
+        local panel = TankPanel()
+        if not panel then return end
+        local cursorX, cursorY = CursorPosition()
+        self.grab = {
+            cursorX = cursorX, cursorY = cursorY,
+            originX = ns.db.coTanks.x or 0,
+            originY = ns.db.coTanks.y or 0,
+        }
+    end)
+
+    local function Stop(self)
+        self.grab = nil
+        ShowGuide(guideX, nil, true)
+        ShowGuide(guideY, nil, false)
+    end
+    mover:SetScript("OnDragStop", Stop)
+    mover:SetScript("OnMouseUp", Stop)
+
+    return mover
+end
+
+-- Dragged from the overlay's own OnUpdate, for the same reason the bars are:
+-- the button can be let go anywhere, including off the edge of the screen,
+-- and OnMouseUp only fires on the frame it went down on. Without this the
+-- panel stays glued to the cursor.
+local function DragTank()
+    local mover = tankMover
+    if not (mover and mover.grab) then return end
+
+    if not IsMouseButtonDown("LeftButton") then
+        mover.grab = nil
+        ShowGuide(guideX, nil, true)
+        ShowGuide(guideY, nil, false)
+        return
+    end
+
+    local panel = TankPanel()
+    if not panel then return end
+
+    local cursorX, cursorY = CursorPosition()
+    local x = mover.grab.originX + (cursorX - mover.grab.cursorX)
+    local y = mover.grab.originY + (cursorY - mover.grab.cursorY)
+
+    -- Snapping is what dragging DOES here too, and Alt suspends it for the
+    -- length of one drag. Same rule, same escape hatch, so there is one thing
+    -- to learn rather than two.
+    local lineX, lineY
+    if not IsAltKeyDown() then
+        local scale = panel:GetScale()
+        if not scale or scale <= 0 then scale = 1 end
+        local snappedX, guideLineX = Snap(x, nil, panel:GetWidth() * scale / 2, "x")
+        local snappedY, guideLineY = Snap(y, nil, panel:GetHeight() * scale / 2, "y")
+        x, y = snappedX, snappedY
+        lineX, lineY = guideLineX, guideLineY
+    end
+
+    ApplyTankMove(x, y)
+    ShowGuide(guideX, lineX, true)
+    ShowGuide(guideY, lineY, false)
+end
+
+-- Placed over the panel, sized to it, and only there at all when there is a
+-- panel to place it over.
+local function RefreshTankMover()
+    if not tankMover then tankMover = CreateTankMover() end
+
+    local panel = TankPanel()
+    if not (panel and EditMode.overlayShown) then
+        tankMover:Hide()
+        return
+    end
+
+    tankMover:ClearAllPoints()
+    tankMover:SetAllPoints(panel)
+    tankMover.coords:SetText(string.format("%d, %d",
+        ns.db.coTanks.x or 0, ns.db.coTanks.y or 0))
+    tankMover.coords:SetShown(Prefs().showCoords or tankMover.grab ~= nil)
+    tankMover:Show()
+end
+
 local function OnUpdate()
     if cellDrag then DragCell() end
+    DragTank()
     if not dragging then return end
 
     -- The button can be let go anywhere, including over another window or off
@@ -1977,6 +2117,8 @@ function EditMode:Refresh()
         end
     end
 
+    RefreshTankMover()
+
     -- The selection can outlive what it pointed at: delete a bar, or shrink a
     -- grid, and the cell it named is gone.
     if picked then
@@ -2046,6 +2188,16 @@ function EditMode:SetUnlocked(state, wanted)
     dragging, cellDrag, selected = nil, nil, nil
 
     ns.Screen:SetUnlocked(state)
+
+    -- THE CO-TANK PANEL COMES OUT WHILE YOU ARE PLACING IT. It hides itself
+    -- when the feature is off, when you are solo, or when nobody else is
+    -- tanking - which is very nearly always, for somebody who has just opened
+    -- edit mode to put it somewhere. `locked` is what ShouldShow reads, and
+    -- it outranks the master switch on purpose.
+    if ns.CoTanks and ns.CoTanks.panel then
+        ns.db.coTanks.locked = not state
+        ns.CoTanks:Refresh()
+    end
 
     if state then
         -- The window would sit behind the overlay, catching clicks that were

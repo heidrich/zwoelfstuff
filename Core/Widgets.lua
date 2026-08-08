@@ -2609,7 +2609,21 @@ end
 -- REPLACES the page under a strip that is always in the same place. Nine
 -- sections in one scroll is a page you have to remember your way around; the
 -- same nine split three ways is three short pages.
+-- A TAB BOUNDARY ALSO ENDS THE SECTION. A tab REPLACES the page under a
+-- strip; a section is a disclosure inside one. So a section cannot span two
+-- tabs, and leaving `group` set meant the first thing written on the new tab
+-- was quietly filed into the last tab's folded-shut section - present, laid
+-- out, and never once on screen. That is exactly how the co-tank page's "live
+-- auras need 12.1" note, the single most important sentence on it, opened
+-- hidden.
+--
+-- Reset here rather than at the call site, because the call site that gets it
+-- wrong is always the next one.
 function Grid:Tab(name)
+    -- AND IT ENDS THE OPEN SECTION. See the note above this function.
+    self.group = nil
+    self.sectionName = nil
+
     -- recordTab is where new items are FILED. tab is which one is on SCREEN.
     -- One field for both reads fine until the page finishes building, at which
     -- point "the tab we are recording into" is the last one declared and the

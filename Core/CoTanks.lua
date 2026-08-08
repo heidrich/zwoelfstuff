@@ -39,6 +39,35 @@ local HEALTH_INTERVAL = 0.1     -- polled, see StartEvents
 local MAX_ROWS = 8              -- the ceiling the slider stops at
 
 ---------------------------------------------------------------------------
+-- The indicators, as ONE list
+--
+-- Five small marks that all answer the same questions - shown, how big, which
+-- corner, and a nudge each way - so they are declared once and both the
+-- renderer and the options page walk this table. Written out five times, the
+-- fourth one always ends up with three controls and somebody has to explain
+-- why the crown can be moved and the role mark cannot.
+--
+-- EVERY PIECE OF ARTWORK HERE WAS VERIFIED, none of it remembered:
+--   marker  SetRaidTargetIconTexture, the game's own setter (eight installed
+--           addons call it)
+--   leader  Interface\GroupFrame\UI-Group-LeaderIcon
+--   role    UI-LFG-ICON-PORTRAITROLES is a 64px sheet of 19px tiles at a 3px
+--           inset - NOT four quarters. The tank tile is (0, 19/64, 22/64,
+--           41/64), copied from EXBoss/BunBar/View.lua:655, which names it.
+--   combat  the atlas UI-HUD-UnitFrame-Player-CombatIcon, which is what oUF's
+--           own combat element sets (combatindicator.lua, shipped inside
+--           EllesmereUIUnitFrames).
+---------------------------------------------------------------------------
+ns.COTANK_INDICATORS = {
+    { key = "marker", label = "Raid marker",
+      note = "The skull, cross or square you put on them" },
+    { key = "leader", label = "Leader crown" },
+    { key = "role",   label = "Role mark",
+      note = "Says tank, which on this panel everyone is" },
+    { key = "combat", label = "In combat" },
+}
+
+---------------------------------------------------------------------------
 -- Who counts as a tank
 ---------------------------------------------------------------------------
 local function GroupUnits(out)
@@ -122,7 +151,7 @@ local function BlankSnapshot(snap)
     snap.absorb, snap.healAbsorb = nil, nil
     snap.dead, snap.offline, snap.inRange = false, false, true
     snap.leader, snap.marker, snap.role = false, nil, nil
-    snap.targeted = false
+    snap.targeted, snap.inCombat = false, false
     return snap
 end
 
@@ -148,6 +177,7 @@ local function LiveSnapshot(unit, snap)
     snap.marker = GetRaidTargetIndex and GetRaidTargetIndex(unit) or nil
     snap.role = UnitGroupRolesAssigned(unit)
     snap.targeted = UnitIsUnit(unit, "target") and true or false
+    snap.inCombat = UnitAffectingCombat(unit) and true or false
 
     return snap
 end
@@ -184,6 +214,8 @@ local function TestSnapshot(index, snap)
     snap.offline = fake.offline or false
     snap.targeted = index == 1
     snap.inRange = index ~= 4
+    -- Not all of them, so the mark can be judged against a row without it.
+    snap.inCombat = index % 2 == 1
 
     snap.healthMax = 1000000
     if snap.dead then
@@ -290,11 +322,32 @@ local function BuildRow(panel)
 
     row.chrome = ns.CreateChrome(row)
 
-    -- Your target, as a ring rather than a colour change: the health colour
-    -- is already carrying class or health, and a third meaning on the same
-    -- pixel is a meaning nobody reads.
-    row.targetRing = ns.CreateBorder(row, 2, "OVERLAY")
-    row.targetRing:Hide()
+    -- THE BORDER SITS ON TOP OF EVERYTHING, and so does the target ring.
+    --
+    -- Draw order is FRAME LEVEL first and draw layer second, which is the one
+    -- thing that catches people out here: a texture put on the row itself is
+    -- painted under every one of the row's child frames whatever layer it
+    -- claims. The health bar is a child, so it covered both. The ring was
+    -- switched on by default and had never once been visible; the chrome's
+    -- own edge was at +5 and the bar could reach it at borderSize 0.
+    --
+    -- Own host, above the chrome, the way CreateChrome does it for the same
+    -- reason (Core/Media.lua) - and the owner asked for exactly this: "der
+    -- Border muss ganz on top sein".
+    row.chrome:SetFrameLevel(row:GetFrameLevel() + 6)
+
+    local ringHost = CreateFrame("Frame", nil, row)
+    ringHost:SetAllPoints(row)
+    ringHost:SetFrameLevel(row:GetFrameLevel() + 7)
+    row.ringHost = ringHost
+
+    -- Your target, as a SECOND BORDER rather than a colour change: the health
+    -- colour is already carrying class or health, and a third meaning on the
+    -- same pixel is a meaning nobody reads. Not a "ring" - it is drawn
+    -- exactly like the border above it, and calling it something else made
+    -- people look for a circle.
+    row.targetBorder = ns.CreateBorder(ringHost, 2, "OVERLAY")
+    row.targetBorder:Hide()
 
     row.textLayer = CreateFrame("Frame", nil, row)
     row.textLayer:SetFrameLevel(row.health:GetFrameLevel() + 3)
@@ -304,19 +357,28 @@ local function BuildRow(panel)
     row.healthText = row.textLayer:CreateFontString(nil, "OVERLAY")
     row.healthText:SetWordWrap(false)
 
-    row.marker = row.textLayer:CreateTexture(nil, "OVERLAY")
-    row.marker:SetTexture([[Interface\TargetingFrame\UI-RaidTargetingIcons]])
-    row.marker:Hide()
+    -- The four marks, built from the one list. On the ring host rather than
+    -- the text layer, so a mark in a corner is never painted under the border
+    -- it sits next to.
+    row.marks = {}
+    for _, entry in ipairs(ns.COTANK_INDICATORS) do
+        local mark = ringHost:CreateTexture(nil, "OVERLAY")
+        mark:Hide()
+        row.marks[entry.key] = mark
+    end
 
-    row.leader = row.textLayer:CreateTexture(nil, "OVERLAY")
-    row.leader:SetTexture([[Interface\GroupFrame\UI-Group-LeaderIcon]])
-    row.leader:Hide()
-
-    row.roleIcon = row.textLayer:CreateTexture(nil, "OVERLAY")
-    row.roleIcon:SetTexture([[Interface\LFGFrame\UI-LFG-ICON-PORTRAITROLES]])
-    -- The tank quarter of Blizzard's four-role sheet.
-    row.roleIcon:SetTexCoord(0, 0.25, 0.25, 0.5)
-    row.roleIcon:Hide()
+    row.marks.leader:SetTexture([[Interface\GroupFrame\UI-Group-LeaderIcon]])
+    -- THE TANK TILE. The sheet is 64x64 holding 19px tiles at a 3px inset,
+    -- NOT four quarters - the quarter coordinates drew a corner of the sheet
+    -- with a slice of the next role in it.
+    row.marks.role:SetTexture([[Interface\LFGFrame\UI-LFG-ICON-PORTRAITROLES]])
+    row.marks.role:SetTexCoord(0, 19 / 64, 22 / 64, 41 / 64)
+    -- An ATLAS, not a file: the combat mark has no fixed path, and this is the
+    -- one oUF's own element sets.
+    if row.marks.combat.SetAtlas then
+        pcall(row.marks.combat.SetAtlas, row.marks.combat,
+            "UI-HUD-UnitFrame-Player-CombatIcon")
+    end
 
     row.debuffs = BuildStrip(row, "debuffs")
     row.buffs = BuildStrip(row, "buffs")
@@ -494,16 +556,28 @@ local function StyleRow(row, index, db)
     row.health:SetReverseFill(db.healthReverse and true or false)
     row.track:SetTexture(texture)
 
-    row.absorb:SetTexture(texture)
-    row.healAbsorb:SetTexture(texture)
+    -- Their own material, falling back to the health bar's. A shield in the
+    -- same texture as the health under it reads as more health, which is the
+    -- one thing it must not do.
+    local function Material(key)
+        local name = db[key]
+        if name and name ~= "" and ns.Media.IsKnown("statusbar", name) then
+            return ns.Media.Statusbar(name)
+        end
+        return texture
+    end
+    row.absorb:SetTexture(Material("absorbTexture"))
+    row.healAbsorb:SetTexture(Material("healAbsorbTexture"))
     ns.Tint(row.absorb, db.absorbColor, db.absorbAlpha)
     ns.Tint(row.healAbsorb, db.healAbsorbColor, db.healAbsorbAlpha)
     row.absorb:SetShown(false)
     row.healAbsorb:SetShown(false)
 
-    row.targetRing:SetThickness(2)
-    row.targetRing:SetColor(db.targetColor[1], db.targetColor[2],
-        db.targetColor[3], 1)
+    -- At least as thick as the border it has to clear, or a 4px border hides
+    -- it again and the setting looks broken at one end of its range.
+    row.targetBorder:SetThickness(math.max(db.targetBorder.size or 2, inset))
+    row.targetBorder:SetColor(db.targetBorder.color[1], db.targetBorder.color[2],
+        db.targetBorder.color[3], 1)
 
     row.textLayer:SetAllPoints(row.health)
 
@@ -512,30 +586,45 @@ local function StyleRow(row, index, db)
     -- the old right edge the moment the panel got wider - the same fault that
     -- was found and fixed on the bars, and it would have arrived here for
     -- free by copying the wrong half.
+    -- THE TEXT BAND STOPS SHORT OF THE MARKS. A raid marker sitting on the
+    -- LEFT and a name starting at the left edge are the same four pixels, and
+    -- the mark won - so a marked tank's name began underneath a skull. The
+    -- band is measured from whichever marks are actually switched on and
+    -- actually on that side, so switching one off gives the room back
+    -- immediately. Same idea as Layout.LabelBand on a bar cell.
+    local leftInset, rightInset = 4, 4
+    for _, entry in ipairs(ns.COTANK_INDICATORS) do
+        local mark = db[entry.key]
+        if mark.show then
+            local room = (mark.size or 12) + 2
+            if (mark.anchor or ""):find("LEFT") then
+                leftInset = math.max(leftInset, room + 2)
+            elseif (mark.anchor or ""):find("RIGHT") then
+                rightInset = math.max(rightInset, room + 2)
+            end
+        end
+    end
+
     local nameSize = TextSize(db.name, height, 0.52)
     ns.Media.ApplyFont(row.name, db.name.font, nameSize, db.name.outline,
         db.name.color)
-    ns.PlaceLabel(row.name, row.textLayer, db.name, 4, 4)
+    ns.PlaceLabel(row.name, row.textLayer, db.name, leftInset, rightInset)
     row.name:SetShown(db.name.show ~= false)
 
     local healthSize = TextSize(db.health, height, 0.52)
     ns.Media.ApplyFont(row.healthText, db.health.font, healthSize,
         db.health.outline, db.health.color)
-    ns.PlaceLabel(row.healthText, row.textLayer, db.health, 4, 4)
+    ns.PlaceLabel(row.healthText, row.textLayer, db.health, leftInset, rightInset)
     row.healthText:SetShown(db.health.show ~= false)
 
-    row.marker:SetSize(db.raidMarkerSize, db.raidMarkerSize)
-    row.marker:ClearAllPoints()
-    row.marker:SetPoint("LEFT", row.textLayer, "LEFT", 2, 0)
-
-    row.leader:SetSize(db.leaderIconSize, db.leaderIconSize)
-    row.leader:ClearAllPoints()
-    row.leader:SetPoint("TOPLEFT", row, "TOPLEFT", -2, 4)
-
-    row.roleIcon:SetSize(db.roleIconSize, db.roleIconSize)
-    row.roleIcon:ClearAllPoints()
-    row.roleIcon:SetPoint("RIGHT", row.textLayer, "RIGHT", -2, 0)
-    row.roleIcon:SetShown(db.roleIcon and true or false)
+    -- The marks, all four from the one list and all four the same way.
+    for _, entry in ipairs(ns.COTANK_INDICATORS) do
+        local cfg, mark = db[entry.key], row.marks[entry.key]
+        local size = math.max(4, cfg.size or 12)
+        mark:SetSize(size, size)
+        mark:ClearAllPoints()
+        mark:SetPoint(cfg.anchor, row, cfg.anchor, cfg.x or 0, cfg.y or 0)
+    end
 
     StyleStrip(row, row.debuffs, db.debuffs)
     StyleStrip(row, row.buffs, db.buffs)
@@ -575,9 +664,22 @@ end
 
 local CLASS_FALLBACK = { r = 0.7, g = 0.7, b = 0.7 }
 
+-- A SECRET VALUE MAY NOT BE A TABLE KEY. That is the first line of
+-- Core/Secrets.lua and it is the fault that broke this addon's 1.0.0.
+--
+-- UnitClass on a group member who is out of range, or who cannot be
+-- inspected, can answer with a protected token - and `colours[classFile]`
+-- would then raise inside the 10 Hz repaint, taking the whole panel down at
+-- exactly the moment somebody walked out of range. ns.CanCompute is the
+-- guard, and it covers nil as well, so it replaces the `classFile and` test
+-- rather than sitting next to it.
+--
+-- Grey is the honest answer for "we may not know": the reference does the
+-- same (EllesmereUIRaidFrames.lua:1543 falls back to a flat colour).
 local function ClassColour(classFile)
+    if not ns.CanCompute(classFile) then return CLASS_FALLBACK end
     local colours = RAID_CLASS_COLORS or CUSTOM_CLASS_COLORS
-    return (classFile and colours and colours[classFile]) or CLASS_FALLBACK
+    return (colours and colours[classFile]) or CLASS_FALLBACK
 end
 
 -- The bar colour, which is three settings arguing with each other and worth
@@ -707,14 +809,18 @@ local function PaintRow(row, snap, db, testing)
         db.healthGradient)
     row.track:SetVertexColor(r, g, b, db.trackAlpha)
 
-    -- THE BAR TAKES THE NUMBER WITHOUT READING IT. SetMinMaxValues and
-    -- SetValue both accept secret values, so the bar is correct on a client
-    -- and in a fight where no addon may compute the percentage. That is why
-    -- the bar always works and the TEXT is the part that sometimes cannot.
-    if ns.CanCompute(snap.healthMax) and snap.healthMax > 0 then
-        row.health:SetMinMaxValues(0, snap.healthMax)
-    end
-    row.health:SetValue(snap.health)
+    -- THE BAR TAKES THE NUMBER WITHOUT READING IT - but the RANGE has to be
+    -- set, and that was the hole. SetMinMaxValues was guarded by CanCompute,
+    -- so on exactly the client and the fight where the health is protected
+    -- the range was never set at all: the bar kept whatever range it had
+    -- (0..1 from BuildRow) while SetValue pushed a number in the millions
+    -- into it, which clamps to full. Every co-tank sat at 100% for the whole
+    -- pull - the precise opposite of what the comment above it promised.
+    --
+    -- Both setters accept a secret, so the range goes in unguarded. The
+    -- guard was never needed and it was doing harm.
+    row.health:SetMinMaxValues(0, snap.healthMax or 1)
+    row.health:SetValue(snap.health or 0)
 
     -- Both overlays hang off the fill's LEADING EDGE, the one that moves with
     -- the clock - the shield outward from it, the un-healable part inward.
@@ -759,6 +865,19 @@ local function PaintRow(row, snap, db, testing)
     end
 
     if db.health.show ~= false then
+        -- CLASS COLOUR, which the panel offered and the renderer never read.
+        -- The name branch above has always done this; the health text was
+        -- given the same control and none of the code behind it, so the
+        -- switch wrote a key nothing looked at. Owner: "health text, class
+        -- color geht nicht".
+        if db.health.classColor then
+            local colour = ClassColour(snap.classFile)
+            row.healthText:SetTextColor(colour.r, colour.g, colour.b)
+        else
+            row.healthText:SetTextColor(db.health.color[1], db.health.color[2],
+                db.health.color[3])
+        end
+
         local text
         if snap.dead then
             text = DEAD or "Dead"
@@ -774,13 +893,22 @@ local function PaintRow(row, snap, db, testing)
         row.healthText:SetText(text or "")
     end
 
-    row.marker:SetShown(db.raidMarker and snap.marker ~= nil)
-    if db.raidMarker and snap.marker then
-        SetRaidTargetIconTexture(row.marker, snap.marker)
+    -- The marks. Each is on when its own switch is on AND the thing it stands
+    -- for is true; the marker also needs the game's own setter, which is
+    -- pcalled because this is a repaint with a whole panel still to draw and
+    -- a throw here would take the rest of it with it.
+    local marker = db.marker.show and snap.marker ~= nil
+        and SetRaidTargetIconTexture ~= nil
+    if marker then
+        marker = pcall(SetRaidTargetIconTexture, row.marks.marker, snap.marker)
     end
-    row.leader:SetShown(db.leaderIcon and snap.leader and true or false)
+    row.marks.marker:SetShown(marker and true or false)
+    row.marks.leader:SetShown(db.leader.show and snap.leader and true or false)
+    row.marks.role:SetShown(db.role.show and snap.role == "TANK" and true or false)
+    row.marks.combat:SetShown(db.combat.show and snap.inCombat and true or false)
 
-    row.targetRing:SetShown(db.targetHighlight and snap.targeted and true or false)
+    row.targetBorder:SetShown(db.targetBorder.show and snap.targeted
+        and true or false)
 
     -- One alpha for the whole row, decided by the worst thing true about it.
     -- Three separate fades multiplied together made a dead, disconnected tank
@@ -803,6 +931,48 @@ end
 ---------------------------------------------------------------------------
 -- The panel
 ---------------------------------------------------------------------------
+-- THE OLD FLAT INDICATOR KEYS, CARRIED OVER AND THEN REMOVED.
+--
+-- raidMarker/raidMarkerSize and friends became one table each. ApplyDefaults
+-- only ADDS keys, so without this a profile made this morning would keep its
+-- old switches as dead weight and silently lose whatever the user had set -
+-- they would find the crown back on after having turned it off.
+--
+-- Runs BEFORE ApplyDefaults fills the new tables, and deletes as it goes, so
+-- it is a no-op on the second login. Same placement rule as Bars:Prepare,
+-- where doing it the other way round meant the default overwrote the migrated
+-- value on the next load - which is the whole class of bug that eats a saved
+-- setting without saying anything.
+function CoTanks:Migrate(db)
+    if type(db) ~= "table" then return end
+
+    local moved = {
+        marker = { show = "raidMarker",     size = "raidMarkerSize" },
+        leader = { show = "leaderIcon",     size = "leaderIconSize" },
+        role   = { show = "roleIcon",       size = "roleIconSize" },
+    }
+
+    for key, from in pairs(moved) do
+        if db[from.show] ~= nil or db[from.size] ~= nil then
+            local into = type(db[key]) == "table" and db[key] or {}
+            if db[from.show] ~= nil then into.show = db[from.show] end
+            if db[from.size] ~= nil then into.size = db[from.size] end
+            db[key] = into
+        end
+        db[from.show], db[from.size] = nil, nil
+    end
+
+    if db.targetHighlight ~= nil or db.targetColor ~= nil then
+        local into = type(db.targetBorder) == "table" and db.targetBorder or {}
+        if db.targetHighlight ~= nil then into.show = db.targetHighlight end
+        if type(db.targetColor) == "table" then
+            into.color = { db.targetColor[1], db.targetColor[2], db.targetColor[3] }
+        end
+        db.targetBorder = into
+    end
+    db.targetHighlight, db.targetColor = nil, nil
+end
+
 function CoTanks:Create()
     if self.panel then return end
 
@@ -929,10 +1099,15 @@ function CoTanks:ShouldShow()
     -- In the preview card it always shows. A card that is empty until you
     -- switch the feature on is a card that cannot tell you what switching it
     -- on would look like.
+    -- THE ORDER IS THE WHOLE FUNCTION, and it was wrong. `enabled` is off by
+    -- default, and it sat ABOVE the two escapes - so switching Test mode on,
+    -- or asking to move the panel, both did exactly nothing on a fresh
+    -- profile. The two are explicit requests to SEE the thing; they have to
+    -- outrank the master switch, the way `hosted` already did.
     if self.hosted then return true end
-    if not db.enabled then return false end
     if self:Testing() then return true end
     if not db.locked then return true end
+    if not db.enabled then return false end
     if db.onlyInGroup and not IsInGroup() then return false end
     if db.onlyInInstance and not IsInInstance() then return false end
     return #self.tanks > 0
@@ -1087,13 +1262,21 @@ local function BuildEngineStrip(strip, cfg, filter)
         filter = ns.Engine:Filter(filter),
         max    = wanted,
         layout = {
-            -- THE SAME FOUR NUMBERS THE TEST STRIP LAYS ITSELF OUT WITH.
-            -- The engine does its own arithmetic, so this is the only thing
-            -- keeping the preview and the real display the same shape.
+            -- THE SAME NUMBERS THE TEST STRIP LAYS ITSELF OUT WITH. The engine
+            -- does its own arithmetic, so these are the only thing keeping the
+            -- preview and the real display the same shape.
             elementWidth   = size,
             elementHeight  = size,
             elementSpacing = cfg.spacing or 0,
             lineSpacing    = cfg.spacing or 0,
+            -- WHERE TO WRAP. Without it the engine has no reason to start a
+            -- second line and draws every icon in one long row - so a strip
+            -- set to four per row would have looked right in test mode and
+            -- come out as a single line the moment 12.1 landed, which is the
+            -- one promise a preview must not break. The +0.4 is slack against
+            -- the engine's own rounding, the same as Groups.lua uses.
+            maxLineSize    = math.max(1, cfg.perRow or 1) * (size + (cfg.spacing or 0))
+                - (cfg.spacing or 0) + 0.4,
         },
         initialize = function(button)
             ns.Engine:MakeDisplayOnly(button)

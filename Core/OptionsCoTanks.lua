@@ -114,6 +114,18 @@ function OptionsCoTanks:BorrowPanel()
     panel:SetParent(self.stage.slot)
     panel:ClearAllPoints()
     panel:SetPoint("TOP", self.stage.slot, "TOP", 0, 0)
+
+    -- AND NOW ASK IT TO DRAW ITSELF. Setting `hosted` only changes what
+    -- ShouldShow and RowCount ANSWER - it does not make anything ask, and
+    -- nothing on this path did. With the feature off (the shipped default)
+    -- the last Refresh had taken the early exit that hides every row and
+    -- returns before the panel is ever given a size, so the card showed the
+    -- word "Preview" over a nought-by-nought frame full of hidden rows.
+    --
+    -- ApplyLayout rather than Refresh, so Borrow and Release are symmetric:
+    -- both end by re-applying the layout under the new value of `hosted`.
+    -- Before FitPanel, because FitPanel measures the panel's height.
+    ns.CoTanks:ApplyLayout()
     panel:Show()
     self:FitPanel()
 end
@@ -185,16 +197,15 @@ function OptionsCoTanks:BuildPage(page, width)
         .. "actually be judged. It survives a reload and it is switched off "
         .. "from here or with |cffffd100/zs tanks test|r.")
 
-    local moveRow = grid:FullRow("Position", { controlWidth = 190 })
-    local moveBtn = UI.Button(moveRow.slot, "Move it on screen", 190, function()
-        -- The window closes FIRST. Hiding it is what hands the panel back to
-        -- UIParent (the page's OnHide releases it), and unlocking a panel
-        -- that is still parented into a card would let the user drag a
-        -- preview around inside a window.
-        if ns.Options.frame then ns.Options.frame:Hide() end
-        ns.CoTanks:SetUnlocked(true)
-    end)
-    moveBtn:SetPoint("RIGHT", moveRow.slot, "RIGHT", 0, 0)
+    -- NO "MOVE IT" BUTTON. It moved into Edit Mode, where every other thing
+    -- this addon draws is placed - the owner's call, and the right one: a
+    -- display moved from a button on a settings page is moved blind, because
+    -- the window is sitting over the place you are trying to put it.
+    grid:Note("To move it, open |cffffd100Edit mode|r at the top of the list "
+        .. "on the left. The panel comes out while you are in there even if "
+        .. "it is switched off, it drags like a bar, and it snaps to your "
+        .. "bars and to the middle of the screen - hold |cffffd100Alt|r to "
+        .. "put it exactly where you want it instead.")
 
     grid:Section("The basics")
 
@@ -308,6 +319,20 @@ function OptionsCoTanks:Refresh()
     if self.pageGrid then self.pageGrid:Refresh() end
 end
 
+-- Declared up here rather than beside the text section, because the
+-- indicators use the same nine and a second copy would drift.
+local TEXT_ANCHORS = {
+    { value = "TOPLEFT",     text = "Top left" },
+    { value = "TOP",         text = "Top" },
+    { value = "TOPRIGHT",    text = "Top right" },
+    { value = "LEFT",        text = "Left" },
+    { value = "CENTER",      text = "Centre" },
+    { value = "RIGHT",       text = "Right" },
+    { value = "BOTTOMLEFT",  text = "Bottom left" },
+    { value = "BOTTOM",      text = "Bottom" },
+    { value = "BOTTOMRIGHT", text = "Bottom right" },
+}
+
 ---------------------------------------------------------------------------
 -- Control helpers
 --
@@ -348,7 +373,7 @@ end
 -- The gradient trio, exactly as the bars have it: a switch, a second colour
 -- and a direction, with the last two hidden until the switch is on. Same
 -- three colours can ramp here as there, and for the same reasons.
-local function GradientRows(grid, key, collect)
+local function GradientRows(grid, key, collect, note)
     local function Read()
         local grad = DB()[key]
         return type(grad) == "table" and grad or nil
@@ -369,7 +394,7 @@ local function GradientRows(grid, key, collect)
 
     local rows = {}
 
-    UI.Toggle(grid:FullRow("Gradient", { controlWidth = 124 }),
+    UI.Toggle(grid:FullRow("Gradient", { controlWidth = 124, sublabel = note }),
         Field("on", false),
         function(value)
             Write("on", value)
@@ -469,7 +494,12 @@ function OptionsCoTanks:BuildLook(grid)
         Colour(grid, "Nearly dead", "healthLow"),
     }
 
-    grid:Section("Plate", "ct-plate")
+    -- "Plate" was a word from the bar code that means nothing on a unit
+    -- frame - the owner asked what it was, which is the answer. It is the
+    -- surface the bar is drawn on, seen wherever the bar is not.
+    grid:Section("Behind the bar", "ct-plate")
+    grid:Note("The surface the health bar sits on. You see it wherever the "
+        .. "bar is not - the empty end of it, and the gap the border leaves.")
     Colour(grid, "Colour", "bgColor")
     GradientRows(grid, "bgGradient", gradients)
     Slide(grid, "Opacity", "bgAlpha", 0, 1, 0.05,
@@ -478,21 +508,44 @@ function OptionsCoTanks:BuildLook(grid)
     grid:Section("Border", "ct-border")
     Slide(grid, "Thickness", "borderSize", 0, 4, 1)
     Colour(grid, "Colour", "borderColor")
-    GradientRows(grid, "borderGradient", gradients)
+    GradientRows(grid, "borderGradient", gradients,
+        "Only the one-pixel line - an edge texture takes a single colour")
     UI.MediaPicker(grid:FullRow("Texture",
         { controlWidth = 190, icon = "media-border" }), "border",
         Get("borderTexture"), function(value) DB().borderTexture = value end,
         Apply)
 
-    grid:Section("Absorbs", "ct-absorb")
-    Switch(grid, "Shield", "absorbShow", "Drawn over the health, where it sits")
+    grid:Section("Shields", "ct-absorb")
+    grid:Note("Two different things, both drawn over the health bar rather "
+        .. "than beside it. A SHIELD is damage they can take before they lose "
+        .. "any health, so it sits past the end of the fill. HEALING BLOCKED "
+        .. "is the opposite - a debuff that eats incoming heals until it is "
+        .. "used up, so it sits inside the fill, at the end that would be "
+        .. "healed first. Necrotic Wound and Mortal Wounds are the ones you "
+        .. "will see it from.")
+
+    Switch(grid, "Shield", "absorbShow", "Damage they can take for free")
     Colour(grid, "Shield colour", "absorbColor")
     Slide(grid, "Shield opacity", "absorbAlpha", 0, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
-    Switch(grid, "Healing taken away", "healAbsorbShow")
+    UI.MediaPicker(grid:FullRow("Shield texture",
+        { controlWidth = 190, icon = "media-texture" }), "statusbar",
+        Get("absorbTexture"), function(v) DB().absorbTexture = v end, Apply)
+
+    Switch(grid, "Healing blocked", "healAbsorbShow",
+        "A debuff that eats their incoming heals")
     Colour(grid, "Its colour", "healAbsorbColor")
     Slide(grid, "Its opacity", "healAbsorbAlpha", 0, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
+    UI.MediaPicker(grid:FullRow("Its texture",
+        { controlWidth = 190, icon = "media-texture" }), "statusbar",
+        Get("healAbsorbTexture"),
+        function(v) DB().healAbsorbTexture = v end, Apply)
+
+    grid:Note("Leave a texture empty and it wears the health bar's. Picking a "
+        .. "different one is the point though: a shield drawn in the same "
+        .. "material as the health under it reads as more health, which is "
+        .. "the one thing it must not do.")
 
     self.lookGradients = gradients
     grid.widgets[#grid.widgets + 1] = {
@@ -516,17 +569,6 @@ end
 ---------------------------------------------------------------------------
 -- Text
 ---------------------------------------------------------------------------
-local TEXT_ANCHORS = {
-    { value = "TOPLEFT",     text = "Top left" },
-    { value = "TOP",         text = "Top" },
-    { value = "TOPRIGHT",    text = "Top right" },
-    { value = "LEFT",        text = "Left" },
-    { value = "CENTER",      text = "Centre" },
-    { value = "RIGHT",       text = "Right" },
-    { value = "BOTTOMLEFT",  text = "Bottom left" },
-    { value = "BOTTOM",      text = "Bottom" },
-    { value = "BOTTOMRIGHT", text = "Bottom right" },
-}
 
 -- Both texts get THE SAME SEVEN CONTROLS, generated rather than written out
 -- twice. "The name can be moved but the health cannot" is exactly the kind of
@@ -782,16 +824,66 @@ function OptionsCoTanks:BuildRules(grid)
     Switch(grid, "Only in a group", "onlyInGroup")
     Switch(grid, "Only in a dungeon or raid", "onlyInInstance")
 
-    grid:Section("Indicators", "ct-marks")
-    Switch(grid, "Target ring", "targetHighlight",
-        "A ring when that tank is your target")
-    Colour(grid, "Ring colour", "targetColor")
-    Switch(grid, "Raid marker", "raidMarker")
-    Slide(grid, "Marker size", "raidMarkerSize", 8, 32, 1)
-    Switch(grid, "Leader crown", "leaderIcon")
-    Slide(grid, "Crown size", "leaderIconSize", 8, 24, 1)
-    Switch(grid, "Role mark", "roleIcon")
-    Slide(grid, "Role size", "roleIconSize", 8, 24, 1)
+    -- THE MARKS, GENERATED. Every one gets the same five controls, walked off
+    -- ns.COTANK_INDICATORS rather than typed out four times - which is what
+    -- stops the fourth one shipping with three of them. The owner asked for
+    -- exactly this: "ich muss die raid marker, leader, in fight etc. icons
+    -- einstellen koennen. also alles was dazu gehoert."
+    for _, entry in ipairs(ns.COTANK_INDICATORS) do
+        local function El() return DB()[entry.key] end
+        local function ElGet(field, fallback)
+            return function()
+                local value = El()[field]
+                if value == nil then return fallback end
+                return value
+            end
+        end
+        local function ElSet(field)
+            return function(value) El()[field] = value; Apply() end
+        end
+
+        grid:Section(entry.label, "ct-mark-" .. entry.key)
+        if entry.note then grid:Note(entry.note) end
+
+        UI.Toggle(grid:FullRow("Show", { controlWidth = 124 }),
+            ElGet("show", true), ElSet("show"))
+        UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
+            get = ElGet("size", 14), set = function(v) El().size = v end,
+            min = 6, max = 40, step = 1, apply = Apply,
+        })
+        UI.Dropdown(grid:FullRow("Position", { controlWidth = 150 }),
+            TEXT_ANCHORS, ElGet("anchor", "LEFT"), ElSet("anchor"),
+            { apply = Apply })
+        UI.Slider(grid:FullRow("Nudge across", { controlWidth = 124 }), {
+            get = ElGet("x", 0), set = function(v) El().x = v end,
+            min = -60, max = 60, step = 1, apply = Apply,
+        })
+        UI.Slider(grid:FullRow("Nudge up", { controlWidth = 124 }), {
+            get = ElGet("y", 0), set = function(v) El().y = v end,
+            min = -60, max = 60, step = 1, apply = Apply,
+        })
+    end
+
+    -- NOT A RING. It is drawn exactly like the border above, which is what
+    -- the owner said, and calling it a ring sent people looking for a circle.
+    grid:Section("Target border", "ct-target")
+    grid:Note("A second border on the tank you currently have targeted, so "
+        .. "you can see at a glance whether you are about to taunt the right "
+        .. "one.")
+    UI.Toggle(grid:FullRow("Show", { controlWidth = 124 }),
+        function() return DB().targetBorder.show end,
+        function(value) DB().targetBorder.show = value; Apply() end)
+    UI.Slider(grid:FullRow("Thickness", { controlWidth = 124 }), {
+        get = function() return DB().targetBorder.size end,
+        set = function(value) DB().targetBorder.size = value end,
+        min = 1, max = 6, step = 1, apply = Apply,
+    })
+    UI.Swatch(grid:FullRow("Colour", { controlWidth = 124 }),
+        function()
+            local colour = DB().targetBorder.color
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) DB().targetBorder.color = { r, g, b } end, Apply)
 
     grid:Section("Fading", "ct-fade")
     Switch(grid, "Fade out of range", "rangeFade")

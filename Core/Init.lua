@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.31.1"
+ns.version = "4.32.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -248,12 +248,19 @@ ns.DEFAULTS = {
         -- Absorbs, drawn over the health rather than beside it: a shield is
         -- health you have, and a separate strip somewhere else is a second
         -- thing to look at during the two seconds you have to look.
+        -- THEIR OWN TEXTURE, not the health bar's. A shield drawn in the same
+        -- material as the health under it reads as more health rather than as
+        -- a shield, which is the one thing it must not do. Empty means "wear
+        -- the health bar's", which is what it did before and still the
+        -- default, so nothing on screen changes until it is picked.
         absorbShow    = true,
         absorbColor   = { 0.85, 0.90, 1.00 },
         absorbAlpha   = 0.45,
+        absorbTexture = "",
         healAbsorbShow  = true,
         healAbsorbColor = { 0.78, 0.11, 0.11 },
         healAbsorbAlpha = 0.55,
+        healAbsorbTexture = "",
 
         -- Text. The same seven controls per element as a bar's, from the same
         -- shape, so the panel generator and the anchor rules are shared.
@@ -275,17 +282,31 @@ ns.DEFAULTS = {
             format = "percent",
         },
 
-        -- Indicators
-        roleIcon      = false,
-        roleIconSize  = 14,
-        leaderIcon    = true,
-        leaderIconSize = 12,
-        raidMarker    = true,
-        raidMarkerSize = 16,
-        -- A ring in your own accent when that tank is your target. Cheap, and
-        -- it answers "am I taunting the right one" without moving your eyes.
-        targetHighlight = true,
-        targetColor   = { 1.00, 0.82, 0.20 },
+        -- INDICATORS - one table each, and all of them the same shape.
+        --
+        -- They were six loose keys with two settings between them (show, and
+        -- a size for three of them), so a marker could not be moved off the
+        -- name it was sitting on. Every one now carries the same controls,
+        -- generated from ns.COTANK_INDICATORS rather than written out five
+        -- times - which is what stops "the crown can be moved but the role
+        -- mark cannot" from ever becoming true.
+        --
+        -- The list lives in Core/CoTanks.lua next to the code that draws
+        -- them, because the artwork and the anchor belong together.
+        marker = { show = true,  size = 16, anchor = "LEFT",     x = 2,  y = 0 },
+        leader = { show = true,  size = 12, anchor = "TOPLEFT",  x = -2, y = 4 },
+        role   = { show = false, size = 14, anchor = "RIGHT",    x = -2, y = 0 },
+        combat = { show = false, size = 14, anchor = "TOPRIGHT", x = 2,  y = 4 },
+
+        -- A SECOND BORDER when that tank is your target, not a "ring": it is
+        -- drawn exactly like the border above, and the owner said so - "das
+        -- ist einfach nur ein border". It answers "am I taunting the right
+        -- one" without moving your eyes off the health.
+        targetBorder = {
+            show = true,
+            size = 2,
+            color = { 1.00, 0.82, 0.20 },
+        },
 
         deadFade      = 0.45,
         offlineFade   = 0.45,
@@ -849,6 +870,16 @@ function ns.OpenProfile()
 
     local key = ns.CharacterKey() or "unknown"
     store.chars[key] = store.chars[key] or {}
+
+    -- BEFORE ApplyDefaults, never after. A migration that runs afterwards is
+    -- overwritten by the default it was meant to replace on the very next
+    -- login, which is the class of bug that eats a saved setting in silence.
+    -- Same placement, and the same reasoning, as the fill-direction migration
+    -- in Bars:Prepare.
+    if ns.CoTanks and ns.CoTanks.Migrate then
+        pcall(ns.CoTanks.Migrate, ns.CoTanks, store.chars[key].coTanks)
+    end
+
     ns.db = ns.ApplyDefaults(store.chars[key], ns.DEFAULTS)
     ns.profileKey = key
 end
@@ -1027,12 +1058,13 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.CoTanks:SetTestMode(not db.coTanks.testMode)
             ns.Print("Co-tank test mode",
                 db.coTanks.testMode and "|cff40ff40on|r" or "|cff888888off|r")
+        -- Both of these now go through EDIT MODE, because that is where
+        -- everything this addon draws is placed. Two ways to move one thing,
+        -- with two different sets of rules, is one way too many.
         elseif sub == "unlock" or sub == "move" then
-            ns.CoTanks:SetUnlocked(true)
-            ns.Print("Co-tank panel unlocked - drag it, then |cffffd100/zs tanks lock|r.")
+            ns.EditMode:SetUnlocked(true, "bars")
         elseif sub == "lock" then
-            ns.CoTanks:SetUnlocked(false)
-            ns.Print("Co-tank panel locked.")
+            ns.EditMode:SetUnlocked(false)
         else
             db.coTanks.enabled = not db.coTanks.enabled
             ns.CoTanks:Refresh()

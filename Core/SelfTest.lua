@@ -1439,11 +1439,87 @@ local function TestCoTanks()
         "borderSize", "borderColor", "borderTexture", "borderGradient",
         "absorbShow", "absorbColor", "healAbsorbShow",
         "name", "health", "debuffs", "buffs",
-        "targetHighlight", "raidMarker", "leaderIcon", "roleIcon",
+        "targetBorder", "absorbTexture", "healAbsorbTexture",
         "deadFade", "offlineFade", "rangeFade", "rangeAlpha",
     }) do
         Check("Co-tanks default for '" .. key .. "'", defaults[key] ~= nil)
     end
+
+    -- THE INDICATORS ARE WALKED, not listed a second time. Every one has to
+    -- carry the same five fields, because the panel generates the same five
+    -- controls for all of them off this very table - a mark missing one is a
+    -- control that reads nil and writes into a table nothing looks at.
+    Check("There are indicators to check", #ns.COTANK_INDICATORS >= 4,
+        tostring(#ns.COTANK_INDICATORS))
+    for _, entry in ipairs(ns.COTANK_INDICATORS) do
+        local mark = defaults[entry.key]
+        Check("Indicator '" .. entry.key .. "' has a default table",
+            type(mark) == "table", type(mark))
+        if type(mark) == "table" then
+            for _, field in ipairs({ "show", "size", "anchor", "x", "y" }) do
+                Check("Indicator '" .. entry.key .. "' has " .. field,
+                    mark[field] ~= nil)
+            end
+            -- Every anchor the panel offers must be one SetPoint accepts, or
+            -- the mark lands on a point that does not exist and throws in a
+            -- repaint.
+            local vertical = ns.Layout.LabelVertical(mark.anchor)
+            Check("Indicator '" .. entry.key .. "' anchors to a real point",
+                vertical == "" or vertical == "TOP" or vertical == "BOTTOM",
+                tostring(mark.anchor))
+        end
+        Check("Indicator '" .. entry.key .. "' has a label",
+            type(entry.label) == "string" and #entry.label > 0)
+    end
+
+    -- The target border is the fifth mark and does NOT have the same shape -
+    -- it is a border, so it carries a thickness and a colour instead of a
+    -- position. Checked separately rather than bent into the list above.
+    Check("The target border has a thickness",
+        type(defaults.targetBorder.size) == "number")
+    Check("The target border has a colour",
+        type(defaults.targetBorder.color) == "table")
+
+    -- The old flat keys are GONE, not merely unused. A leftover default is a
+    -- setting somebody will wire a control to by accident in six months.
+    for _, dead in ipairs({ "raidMarker", "raidMarkerSize", "leaderIcon",
+        "leaderIconSize", "roleIcon", "roleIconSize", "targetHighlight",
+        "targetColor" }) do
+        Check("The old indicator key '" .. dead .. "' is gone",
+            defaults[dead] == nil)
+    end
+
+    -- AND A PROFILE THAT STILL CARRIES THEM IS CARRIED OVER, not thrown away.
+    -- Run on a throwaway table, so nothing the player owns is touched.
+    local old = {
+        raidMarker = false, raidMarkerSize = 22,
+        leaderIcon = false, leaderIconSize = 9,
+        roleIcon = true, roleIconSize = 20,
+        targetHighlight = false, targetColor = { 0.1, 0.2, 0.3 },
+    }
+    ns.CoTanks:Migrate(old)
+    Check("A switched-off marker stays switched off",
+        old.marker and old.marker.show == false, tostring(old.marker))
+    Check("Its size comes with it", old.marker.size == 22,
+        tostring(old.marker.size))
+    Check("A switched-on role mark stays on",
+        old.role and old.role.show == true)
+    Check("The target border keeps its colour",
+        old.targetBorder and old.targetBorder.color[3] == 0.3)
+    Check("The target border keeps its switch",
+        old.targetBorder.show == false)
+    for _, dead in ipairs({ "raidMarker", "raidMarkerSize", "leaderIcon",
+        "leaderIconSize", "roleIcon", "roleIconSize", "targetHighlight",
+        "targetColor" }) do
+        Check("Migration removes '" .. dead .. "' from the profile",
+            old[dead] == nil)
+    end
+
+    -- Twice is the same as once: it runs on every login and must not undo
+    -- what the user changed after the first one.
+    old.marker.show = true
+    ns.CoTanks:Migrate(old)
+    Check("Migrating again changes nothing", old.marker.show == true)
 
     -- The two text elements carry the same seven fields, because the panel
     -- generates the same seven controls for both. One missing field is a

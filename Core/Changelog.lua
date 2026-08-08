@@ -8,6 +8,33 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.32.0",
+        date = "2026-08-08",
+        lines = {
+            "THE CO-TANK PANEL IS MOVED IN EDIT MODE NOW, like everything else this addon draws. The button on the settings page is gone: a display you move from a button in a window is moved blind, because the window is sitting over the place you are trying to put it. It comes out while you are in edit mode even when it is switched off, it drags like a bar, and it snaps to your bars and to the middle of the screen - hold Alt to put it exactly where you want it instead.",
+            "",
+            "FOUR THINGS WERE BADLY BROKEN AND ARE NOT ANY MORE.",
+            "The co-tank health bar was PINNED AT FULL for anybody whose health this client protects - which is everybody, in a fight. The bar was being handed the number without ever being told the range it belonged to, so a value in the millions clamped to the end. It read 100% for the whole pull.",
+            "Reading a group member's CLASS could take the whole panel down. On someone out of range the game answers with a protected value, and using one of those to look something up is not allowed - it throws, and it would have thrown ten times a second at exactly the moment somebody walked away.",
+            "TEST MODE DID NOTHING unless you had already switched the panel on. So did asking to move it. Both are requests to SEE the thing, and both were being refused by the master switch above them.",
+            "And the PREVIEW on the settings page was empty every time you opened it. It was showing the real panel, correctly - but nothing ever asked that panel to draw itself in the card, so it was a nought-by-nought frame full of hidden rows.",
+            "",
+            "THE INDICATORS ARE YOURS NOW. Raid marker, leader crown, role mark and a new IN COMBAT mark: each one gets shown, size, one of nine positions, and a nudge each way. The name and the health text keep out of their way automatically - a marked tank's name used to start underneath the skull.",
+            "The target marker is called a BORDER, because that is what it is. It also had never once been visible: it was drawn on the row underneath the health bar, which covers it completely.",
+            "",
+            "SHIELDS GET THEIR OWN TEXTURE, and their own explanation. A shield drawn in the same material as the health under it reads as more health, which is the one thing it must not do. \"Healing taken away\" is now \"Healing blocked\", and the panel says what the two actually are: a shield is damage they can take for free and sits past the end of the fill; healing blocked is a debuff eating their incoming heals and sits inside it.",
+            "\"Plate\" is now \"Behind the bar\", which is what it is.",
+            "",
+            "CLASS COLOUR ON THE HEALTH TEXT DOES SOMETHING. The switch was there and the renderer never read it.",
+            "",
+            "THE AURAS TAB OPENED WITH NO EXPLANATION ON IT. Its note - the one that says live aura strips need next Monday's patch, which is the single most important sentence on that page - had been quietly filed into a collapsed section belonging to the previous tab. Fixed for every tab, not just that one.",
+            "",
+            "AND THE GRADIENT REACHED THE PER-CELL SETTINGS. A cell given its own fill colour could not be given the ramp that goes with it - the whole-bar page grew the control and this one did not.",
+            "",
+            "Smaller: the role mark was drawing a corner of Blizzard's icon sheet with a slice of the next role in it. The fade slider under a bar's visibility rules stored the wrong number when you typed into it. And the 12.1 aura strips will wrap where the preview says they wrap.",
+        },
+    },
+    {
         version = "4.31.1",
         date = "2026-08-08",
         lines = {

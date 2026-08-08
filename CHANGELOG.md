@@ -8,6 +8,88 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.32.0] - 2026-08-08
+
+Twenty confirmed findings from a five-lens adversarial sweep of the new
+Co-Tanks UI, plus the owner's own list from a live session. The sweep ran
+because a screenshot had just found two faults the harness could not see; it
+found twenty more, and seven of its findings were refuted and dropped.
+
+### Fixed - would have hurt in a raid
+
+- **THE CO-TANK HEALTH BAR WAS PINNED AT 100%** for any unit whose health this
+  client protects - which is every unit, in combat. `SetMinMaxValues` was
+  guarded by `ns.CanCompute` while `SetValue` was not, so on exactly the path
+  where the value is secret the range was never set: the bar kept BuildRow's
+  0..1 while a value in the millions clamped to full. Both setters accept a
+  secret; the guard was never needed and was doing harm.
+
+- **A SECRET VALUE WAS BEING USED AS A TABLE KEY.** `UnitClass` on a group
+  member who is out of range or uninspectable can answer with a protected
+  token, and `RAID_CLASS_COLORS[token]` raises - inside a 10 Hz repaint. This
+  is the fault that broke 1.0.0 and it is the first line of `Core/Secrets.lua`.
+
+- **Test mode and "move it" both did nothing on a fresh profile.**
+  `ShouldShow` tested `enabled` (off by default) above both escapes. They are
+  explicit requests to SEE the panel and now outrank the master switch, as
+  `hosted` already did.
+
+- **The preview card was empty on every visit.** `BorrowPanel` set
+  `CoTanks.hosted` and reparented, but nothing on that path ever asked the
+  panel to draw itself - and `hosted` only changes what `ShouldShow` and
+  `RowCount` ANSWER. With the feature off, the last Refresh had hidden every
+  row and returned before the panel was ever given a size.
+
+### Added - the owner's list
+
+- **The co-tank panel is placed in EDIT MODE**, with its own mover, the same
+  snapping the bars get (it snaps to them and they snap to it), and Alt to
+  suspend it. `Snap`'s `index` argument only ever excluded a bar from its own
+  candidate list, so `nil` works. The panel is forced out while edit mode is
+  open, because it hides itself when the feature is off, when you are solo, or
+  when nobody else is tanking - which is nearly always when somebody opens
+  edit mode to place it. **The "Move it on screen" button is gone.**
+
+- **Every indicator is configurable**, generated from `ns.COTANK_INDICATORS`
+  rather than written out four times: shown, size, one of nine positions, and
+  a nudge each way. **A new "In combat" mark**, using the atlas oUF's own
+  combat element sets. The name and health text bands now reserve room for
+  whichever marks are switched on and on that side.
+
+- **Shields get their own texture**, and both absorb kinds get an explanation.
+
+### Changed - words that told nobody anything
+
+- "Target ring" → **Target border** (it is drawn exactly like the border above
+  it; calling it a ring sent people looking for a circle).
+- "Plate" → **Behind the bar**.
+- "Healing taken away" → **Healing blocked**, with a note saying what the two
+  absorb kinds are and why one sits outside the fill and the other inside it.
+
+### Fixed - the rest of the sweep
+
+- **The target border had never once been visible.** It was built on the row,
+  under the health bar (a child frame) and under the chrome. Draw order is
+  frame level first and draw layer second. The border and the target border
+  both sit above everything now - which is also what the owner asked for.
+- **The Auras tab opened with no explanation**: `Grid:Tab` did not end the
+  open disclosure section, so the tab's first note was filed into the previous
+  tab's collapsed group. Fixed in `Grid:Tab`, not at the call site - the call
+  site that gets it wrong is always the next one.
+- **The gradient trio was missing from the per-cell pane**, with copy-on-write
+  so editing a still-following cell cannot recolour the whole bar.
+- **The health text's "Class colour" wrote a key the renderer never read.**
+- **The role mark's TexCoord was wrong**: `UI-LFG-ICON-PORTRAITROLES` is a
+  64px sheet of 19px tiles at a 3px inset, not four quarters.
+- **`perRow` never reached the 12.1 aura container** (`maxLineSize`), so the
+  live strip would have drawn one long line where the preview shows a wrapped
+  block - the one promise a preview must not break.
+- **The bar-visibility "Otherwise" slider had no `scale`**, so a typed
+  percentage stored 55 instead of 0.55 and clamped to fully visible.
+- A migration carries the old flat indicator keys into the new tables and
+  removes them, before `ApplyDefaults` rather than after - the other order is
+  how a saved setting gets eaten in silence.
+
 ## [4.31.1] - 2026-08-08
 
 ### Fixed

@@ -1732,6 +1732,12 @@ function Workspace:BuildOptionsPane(parent, width)
     Rule(UI.Slider(grid:FullRow("Otherwise", { controlWidth = 124 }), {
         get = RuleGet("hiddenAlpha"), set = RuleSet("hiddenAlpha"),
         min = 0, max = 1, step = 0.05, apply = Apply,
+        -- scale: what the DISPLAY multiplies by, so a number TYPED into the
+        -- box is divided back. Without it the row showed 55% and stored 55
+        -- when typed into, which clamps to 1 - fully visible - and the fade
+        -- silently stopped working. Every other percentage on this page
+        -- carries it; this one was written by hand and missed it.
+        scale = 100,
         format = function(v)
             if v <= 0 then return "gone" end
             return string.format("%d%%", math.floor(v * 100 + 0.5))
