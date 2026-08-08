@@ -125,6 +125,22 @@ function GameMenu:Place()
     local gap = GameMenu.GapBetween(lowest:GetTop(),
         second and second:GetBottom() or nil)
 
+    -- THE NEIGHBOUR'S OWN FONT, read each time rather than chosen once.
+    --
+    -- This menu is skinned by half the interface suites people run, and a
+    -- skin changes the font on Blizzard's pooled buttons without telling
+    -- anybody. Borrowing it is the only way our line reads as one of the menu
+    -- entries instead of as an addon that turned up. Our own panel font is
+    -- the fallback, for a build where the label cannot be reached.
+    local neighbour = lowest.GetFontString and lowest:GetFontString()
+    local path, size, flags = nil, nil, nil
+    if neighbour then path, size, flags = neighbour:GetFont() end
+    -- The size as well as the path: SetFont with a nil size is an error, not
+    -- a default, and this is reading a font off somebody else's font string.
+    if path and type(size) == "number" then
+        button.label:SetFont(path, size, flags or "")
+    end
+
     button:SetSize(width, height)
     button:ClearAllPoints()
     button:SetPoint("TOP", lowest, "BOTTOM", 0, -gap)
@@ -140,12 +156,38 @@ function GameMenu:Create()
     if self.button then return end
     if not (GameMenuFrame and GameMenuFrame.Layout) then return end
 
+    -- NO TEMPLATE. MainMenuFrameButtonTemplate brings its own artwork, and
+    -- that artwork is a red plate - Blizzard's menu does not look like that
+    -- because every button in it is restyled, by Blizzard's own code or by
+    -- whichever skin is running. Ours is not in that pool and never will be,
+    -- so it came out as the raw template: a red slab among grey entries.
+    --
+    -- A bare frame carries no artwork to be left over. What is left is the
+    -- word, in the menu's own font, on the menu's own ground - which is what
+    -- the other entries look like whatever is skinning them.
     local button = CreateFrame("Button", "ZwoelfStuffGameMenuButton",
-        GameMenuFrame, "MainMenuFrameButtonTemplate")
-    button:SetText(LABEL)
+        GameMenuFrame)
     -- Hidden until a layout pass has placed it, so it never appears for one
     -- frame in the corner it was created in.
     button:Hide()
+
+    button.label = button:CreateFontString(nil, "OVERLAY")
+    button.label:SetPoint("CENTER")
+    button.label:SetText(LABEL)
+    -- Until the first Place borrows the neighbour's font. A font string with
+    -- no font at all draws nothing, so this is not a nicety.
+    ns.StyleUIFont(button.label, 14)
+
+    -- The one thing a bare frame does lose: any sign that it can be pressed.
+    -- A faint lift on hover rather than a border or a plate - enough to say
+    -- the row is live, not enough to be a style of its own.
+    local hover = button:CreateTexture(nil, "BACKGROUND")
+    hover:SetAllPoints(button)
+    hover:SetColorTexture(1, 1, 1, 0.07)
+    hover:Hide()
+
+    button:SetScript("OnEnter", function() hover:Show() end)
+    button:SetScript("OnLeave", function() hover:Hide() end)
 
     button:SetScript("OnClick", function()
         HideUIPanel(GameMenuFrame)

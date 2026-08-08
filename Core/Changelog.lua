@@ -20,6 +20,7 @@ ns.CHANGELOG = {
             "",
             "ZWOELFSTUFF IS IN THE GAME MENU, under the last of Blizzard's own entries. Escape, then click it. It steps aside while you are in combat: pressing it closes the pause menu, and the game does not let an addon do that mid-fight - a button that did nothing when pressed would be worse than no button. Off with one tick in Settings.",
             "It is appended below the last entry rather than slipped into the middle, which is why nothing of Blizzard's moves: the menu re-anchors every one of its own buttons each time it opens, and an addon inserting itself in that stack has to fight it on every pass, for ever.",
+            "It carries no artwork of its own - just the word, in the font the menu is already using, whichever skin you run. Blizzard's button template comes with a red plate that you never see on the real entries because every one of them gets restyled afterwards; ours is not in that pool, so it wore the plate. A bare frame has nothing left over to look wrong.",
         },
     },
     {

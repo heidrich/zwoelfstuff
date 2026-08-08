@@ -42,6 +42,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   in combat - the click closes a protected panel - and can be switched off in
   Settings.
 
+- NO FRAME TEMPLATE ON IT. `MainMenuFrameButtonTemplate` ships a red plate
+  that is never seen on the real entries because all of them are restyled
+  afterwards - by Blizzard, or by whichever skin is running. Ours is not in
+  that pool, so it wore the raw template: a red slab among grey rows. A bare
+  frame has no leftover artwork; the label borrows the neighbouring button's
+  font on every `Place`, so it reads as a menu entry under any skin rather
+  than as a fixed guess at what the menu looks like.
+
 ### Changed
 
 - `ns.TextOffset` and `ns.PlaceText` in `Core/Init.lua`: where one of the nine
@@ -377,7 +385,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - NEW LOGO, and the minimap button wears it.
 
-
 ## [4.20.0] - 2026-08-08
 
 ### Changed
@@ -417,7 +424,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   neither can know a value the other does not. A star next to the name means
   that cell wears something of its own.
 
-
 ## [4.19.0] - 2026-08-08
 
 ### Changed
@@ -439,7 +445,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   is a thing you DO rather than a place you go. True, and beside the point -
   it is the thing this window exists to get you to, and it was the one item on
   the left that did not look like the others.
-
 
 ## [4.18.0] - 2026-08-08
 
@@ -472,7 +477,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   each is a panel that cannot be read, and a bar whose cells use four fonts is
   not a design. If one cell needs its own countdown, say so and it gets added.
 
-
 ## [4.17.0] - 2026-08-08
 
 ### Changed
@@ -502,7 +506,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - The tooltip on a filled cell now says all of this, since a drag nobody knows
   about is a drag nobody uses.
-
 
 ## [4.16.0] - 2026-08-07
 
@@ -535,7 +538,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - That is all four you picked out of the reference addon.
 
-
 ## [4.15.0] - 2026-08-07
 
 ### Changed
@@ -562,7 +564,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - Third of the four you picked. The small ones - charge marks, keybind text,
   the spark - are what is left.
-
 
 ## [4.14.0] - 2026-08-07
 
@@ -599,7 +600,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Second of the four you picked. Pandemic glow and the small ones - charge
   marks, keybind text, the spark - are still to come.
 
-
 ## [4.13.0] - 2026-08-07
 
 ### Changed
@@ -632,7 +632,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - This is the first of four things you picked out of that addon. Custom active
   states, pandemic glow and the small ones - charge marks, keybind text, the
   spark - are next.
-
 
 ## [4.12.0] - 2026-08-07
 
