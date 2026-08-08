@@ -1083,13 +1083,29 @@ end
 function CoTanks:RowCount()
     local db = ns.db.coTanks
     local limit = math.max(1, math.min(MAX_ROWS, db.maxRows or 5))
+
+    -- EXACTLY ONE ROW IN THE PREVIEW CARD, and it is the first thing decided
+    -- here so that test mode cannot fill it up again.
+    --
+    -- Five rows at the size they really are is a wall of thumbnails in a card
+    -- that is mostly empty either side, and every single thing this page sets
+    -- - the name, the health text, the marker, the aura strips - ends up too
+    -- small to judge: "da erkennt man nix". The card is asked what ONE tank
+    -- looks like. How many of them stack up is a number in the settings and
+    -- something you see for real the moment you are in a group.
+    --
+    -- Row 1 is the useful one to show: it is the invented tank that carries a
+    -- raid marker, the leader crown and moving health, so most of what can be
+    -- switched on is switched on in the one row that is left.
+    if self.hosted then return 1 end
+
     if self:Testing() then return limit end
 
-    -- ONE ROW MINIMUM WHILE IT IS BEING MOVED OR PREVIEWED. Playing solo there
-    -- are no tanks, so the panel came out one pixel tall - "Move it on screen"
-    -- unlocked something invisible and the user had nothing to drag. The row
-    -- says what it is instead of pretending to be somebody.
-    if not db.locked or self.hosted then return math.max(1, #self.tanks) end
+    -- ONE ROW MINIMUM WHILE IT IS BEING MOVED. Playing solo there are no
+    -- tanks, so the panel came out one pixel tall - unlocking it left the user
+    -- with something invisible to drag. The row says what it is instead of
+    -- pretending to be somebody.
+    if not db.locked then return math.max(1, #self.tanks) end
 
     return math.min(limit, #self.tanks)
 end

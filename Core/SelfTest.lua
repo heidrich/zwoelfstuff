@@ -1347,6 +1347,20 @@ end
 local function TestCoTanks()
     local Layout = ns.Layout
 
+    -- THE PREVIEW CARD SHOWS EXACTLY ONE ROW, whatever else is switched on.
+    -- Five of them at their real size made the card shrink the whole panel to
+    -- fit, and then nothing on it could be read - so this is checked with test
+    -- mode ON, which is the setting that used to win.
+    local ctdb = ns.db.coTanks
+    local hosted, testing, rows = ns.CoTanks.hosted, ctdb.testMode, ctdb.maxRows
+    ctdb.testMode, ctdb.maxRows = true, 5
+    Check("Test mode fills the panel", ns.CoTanks:RowCount() == 5,
+        tostring(ns.CoTanks:RowCount()))
+    ns.CoTanks.hosted = true
+    Check("The preview card shows one tank", ns.CoTanks:RowCount() == 1,
+        tostring(ns.CoTanks:RowCount()))
+    ns.CoTanks.hosted, ctdb.testMode, ctdb.maxRows = hosted, testing, rows
+
     -- Slot 1 is always the anchor corner itself. Everything else is measured
     -- from there, so an offset on the first icon means the whole strip has
     -- moved and nothing on screen says which end it moved from.

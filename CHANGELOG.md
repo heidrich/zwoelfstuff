@@ -8,6 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.32.3] - 2026-08-08
+
+### Changed
+
+- **The Co-Tanks preview card shows exactly one tank.** Five rows at their
+  real size did not fit the card, so `FitPanel` scaled the whole panel down to
+  make them fit - and everything the page sets was then too small to judge:
+  "da erkennt man nix". With one row the panel is drawn at 1:1. The card is
+  asked what ONE tank looks like; how many of them stack up is a number in the
+  settings and something you see for real in a group. The card is shorter for
+  it, and the panel is centred in it rather than hung from the top.
+
+- **The paragraph explaining what a test mode is has gone** - "wow spieler
+  kennen das". The switch's own sublabel still says what these tanks are, and
+  `/zs tanks test` still works.
+
 ## [4.32.2] - 2026-08-08
 
 ### Changed

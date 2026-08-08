@@ -59,7 +59,12 @@ end
 -- vanished, and the user's only clue would be that their co-tanks stopped
 -- appearing after they looked at the settings once.
 ---------------------------------------------------------------------------
-local STAGE_H = 260
+-- ONE ROW, so the card no longer has to be tall enough for a stack of five -
+-- and with only one in it FitPanel stops scaling the panel down, which is
+-- what actually made everything unreadable. There is still room for a row
+-- turned right up with aura strips above and below it; past that FitPanel
+-- shrinks it to fit, as it always did.
+local STAGE_H = 180
 
 local function BuildStage(parent, width)
     local card = UI.Card(parent, width)
@@ -111,9 +116,12 @@ function OptionsCoTanks:BorrowPanel()
     -- set the panel takes its position from the card, shows whether or not
     -- the feature is switched on, and never writes its position back.
     ns.CoTanks.hosted = true
+    -- CENTRED, not hung from the top. With five rows the panel filled the slot
+    -- and it made no difference; with one it would sit at the top of an empty
+    -- card and read as something that failed to draw.
     panel:SetParent(self.stage.slot)
     panel:ClearAllPoints()
-    panel:SetPoint("TOP", self.stage.slot, "TOP", 0, 0)
+    panel:SetPoint("CENTER", self.stage.slot, "CENTER", 0, 0)
 
     -- AND NOW ASK IT TO DRAW ITSELF. Setting `hosted` only changes what
     -- ShouldShow and RowCount ANSWER - it does not make anything ask, and
@@ -191,11 +199,10 @@ function OptionsCoTanks:BuildPage(page, width)
     }), function() return DB().testMode end,
         function(value) ns.CoTanks:SetTestMode(value) end)
 
-    grid:Note("Test mode fills the panel with tanks that do not exist - five "
-        .. "classes, one dead, one disconnected, one out of range, and health "
-        .. "that moves so the bar, the texture and the absorb overlay can "
-        .. "actually be judged. It survives a reload and it is switched off "
-        .. "from here or with |cffffd100/zs tanks test|r.")
+    -- NO PARAGRAPH EXPLAINING WHAT A TEST MODE IS. Everyone who plays this
+    -- game has used one - "wow spieler kennen das" - and the sublabel on the
+    -- switch already says what these tanks are. `/zs tanks test` still works
+    -- and is listed with the other commands.
 
     -- NO "MOVE IT" BUTTON. It moved into Edit Mode, where every other thing
     -- this addon draws is placed - the owner's call, and the right one: a

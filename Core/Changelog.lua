@@ -8,6 +8,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.32.3",
+        date = "2026-08-08",
+        lines = {
+            "THE CO-TANK PREVIEW SHOWS ONE TANK, not five. Five rows at the size they really are did not fit the card, so the card shrank the whole panel to make them fit - and then the names, the health text, the markers and the aura strips were all too small to judge, which is the only reason the card exists. One row is drawn at its true size, and how many of them stack up is a number in the settings and something you see for real the moment you are in a group.",
+            "",
+            "AND THE PARAGRAPH EXPLAINING WHAT A TEST MODE IS HAS GONE. Everyone who plays this game has used one.",
+        },
+    },
+    {
         version = "4.32.2",
         date = "2026-08-08",
         lines = {
