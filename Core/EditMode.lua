@@ -50,13 +50,19 @@ local NUDGE_FAST = 10
 -- Everything about how unlock mode BEHAVES lives in saved variables, so it is
 -- there again tomorrow. Read through one function rather than reached into,
 -- because it has to survive a profile that predates any of these keys.
+-- FILLED FROM THE PROFILE DEFAULTS, not from a second list of the same keys.
+--
+-- There used to be a list here: gridStep, snap, snapDistance, dim. Four of the
+-- seven keys ns.DEFAULTS.editMode declares - and `snapToGrid` was one of the
+-- three it did not. So on any profile made before that key existed it read
+-- nil, grid snapping was off, and nothing on screen said it had never been on.
+-- Two lists of the same thing drift; this one cannot.
 local function Prefs()
     ns.db.editMode = ns.db.editMode or {}
     local prefs = ns.db.editMode
-    if prefs.gridStep == nil then prefs.gridStep = 40 end
-    if prefs.snap == nil then prefs.snap = true end
-    if prefs.snapDistance == nil then prefs.snapDistance = 10 end
-    if prefs.dim == nil then prefs.dim = 0.35 end
+    for key, value in pairs(ns.DEFAULTS.editMode) do
+        if prefs[key] == nil then prefs[key] = value end
+    end
     return prefs
 end
 
@@ -97,6 +103,14 @@ end
 local function Candidates(index, half, axis)
     local list = { { value = 0, guide = 0 } }   -- the screen centre
 
+    -- The screen's own edges, with our edge flush against them. Pushing a bar
+    -- into a corner is one of the two things everybody does with a bar, and
+    -- there was nothing there to catch it.
+    local screenHalf = ((axis == "x") and UIParent:GetWidth()
+        or UIParent:GetHeight()) / 2
+    list[#list + 1] = { value = -screenHalf + half, guide = -screenHalf }
+    list[#list + 1] = { value = screenHalf - half,  guide = screenHalf }
+
     for otherIndex in ipairs(ns.db.bars) do
         local bar = ns.Screen:BarFrame(otherIndex)
         if otherIndex ~= index and bar and bar:IsShown() then
@@ -104,10 +118,20 @@ local function Candidates(index, half, axis)
             if offsetX then
                 local centre = (axis == "x") and offsetX or offsetY
                 local otherHalf = ((axis == "x") and bar:GetWidth() or bar:GetHeight()) / 2
+                local near, far = centre - otherHalf, centre + otherHalf
 
+                -- ALIGNED: our centre or one of our edges on one of theirs.
                 list[#list + 1] = { value = centre, guide = centre }
-                list[#list + 1] = { value = centre - otherHalf + half, guide = centre - otherHalf }
-                list[#list + 1] = { value = centre + otherHalf - half, guide = centre + otherHalf }
+                list[#list + 1] = { value = near + half, guide = near }
+                list[#list + 1] = { value = far - half,  guide = far }
+
+                -- FLUSH: our edge against theirs, the two side by side with
+                -- nothing between. This was the missing half of "snap to
+                -- another bar" - every candidate was an ALIGNMENT, so two bars
+                -- could line up their left edges but never sit next to each
+                -- other, which is how a row of bars is actually built.
+                list[#list + 1] = { value = near - half, guide = near }
+                list[#list + 1] = { value = far + half,  guide = far }
             end
         end
     end
@@ -129,10 +153,17 @@ local function Snap(value, index, half, axis)
     -- The screen grid, when it is asked for, and only where nothing better
     -- caught. A bar edge lining up with another bar's edge beats landing on
     -- an arbitrary multiple of 40, so this is the fallback and not the rule.
+    --
+    -- The grid pulls from any distance, unlike everything above: a grid you
+    -- have switched on means every position is on it, not "on it if you were
+    -- already close". What it did NOT do was say so - it returned no guide, so
+    -- the one kind of snapping that always fires was also the only kind with
+    -- no line to show for it, and it read as nothing happening.
     if prefs.snapToGrid and not guide then
         local step = prefs.gridStep
         if step and step > 0 then
             best = math.floor(value / step + 0.5) * step
+            guide = best
         end
     end
 
@@ -1278,7 +1309,10 @@ local function BuildTools()
     Switch("Grid", function() return gridLines and gridLines:IsShown() end,
         function(value) EditMode:SetGridShown(value) end, half)
     Switch("Snap to it", function() return Prefs().snapToGrid end,
-        function(value) Prefs().snapToGrid = value end, half, true)
+        function(value)
+            Prefs().snapToGrid = value
+            RefreshInspector()
+        end, half, true)
 
     Slider({
         label = "Grid", labelWidth = 60, min = 8, max = 160, step = 4,
@@ -1290,7 +1324,10 @@ local function BuildTools()
     })
 
     Switch("Snapping", function() return Prefs().snap end,
-        function(value) Prefs().snap = value end, half)
+        function(value)
+            Prefs().snap = value
+            RefreshInspector()
+        end, half)
     Switch("Coordinates", function() return Prefs().showCoords end,
         function(value)
             Prefs().showCoords = value
@@ -1600,8 +1637,25 @@ function RefreshInspector()
     if not inspector then return end
 
     if mode ~= "build" then
+        -- The snapping state is STATED, not implied. It lives on two switches
+        -- in a panel you have to open, so "why does nothing snap" was a
+        -- question this screen could answer and did not - it explained how to
+        -- suspend snapping while snapping was switched off.
+        local prefs = Prefs()
+        local snapLine
+        if not prefs.snap then
+            snapLine = "|cffff4040Snapping is off|r - Tools, then Snapping."
+        elseif prefs.snapToGrid then
+            snapLine = string.format(
+                "Snaps to the other bars, the screen edges and a %d grid. "
+                .. "Hold Alt to place it free.", prefs.gridStep or 40)
+        else
+            snapLine = "Snaps to the other bars and the screen edges. "
+                .. "Hold Alt to place it free."
+        end
+
         inspector:SetText("Drag a bar. Arrow keys nudge it, Shift for 10.\n"
-            .. "Alt while dragging switches snapping off.\n"
+            .. snapLine .. "\n"
             .. "The cog attaches a bar to another one, so it moves along.")
         return
     end

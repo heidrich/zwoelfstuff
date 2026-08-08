@@ -1039,6 +1039,20 @@ local function TestDesignSystem()
     --
     -- The lists are walked rather than copied. A second list of names here
     -- would be a list that goes stale the first time one is added.
+    -- Edit mode reads its working habits through one function that fills in
+    -- anything a profile is missing. That function used to carry its OWN list
+    -- of four keys next to the seven the profile declares, and `snapToGrid`
+    -- was in one list and not the other - so grid snapping was permanently off
+    -- on any profile older than the key, with nothing on screen saying why.
+    --
+    -- It fills from ns.DEFAULTS.editMode now. This is the check that the keys
+    -- the panel reads are all actually in there.
+    for _, key in ipairs({ "grid", "gridStep", "snap", "snapDistance",
+        "snapToGrid", "dim", "showCoords" }) do
+        Check("Edit mode default: " .. key,
+            ns.DEFAULTS.editMode[key] ~= nil)
+    end
+
     local marked = {
         { "Arrangement", ns.LAYOUTS }, { "Fill order", ns.FLOWS },
         { "Across", ns.GROW_X }, { "Down", ns.GROW_Y },

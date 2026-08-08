@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.23.0**. Read this first.
+State as of **2026-08-08**, version **4.24.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~129 checks in
+**Run `/zs test` before you believe anything below.** ~136 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -28,6 +28,29 @@ what, and why none of them can reach the others.
 Version 4.22.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
+
+## 4.24.0 — two lists of the same defaults
+
+**A defaults function that carried its own list.** `Prefs()` in
+`Core/EditMode.lua` exists so a profile predating a key still gets one — and it
+listed four of the seven keys `ns.DEFAULTS.editMode` declares. `snapToGrid` was
+in the profile list and not in `Prefs()`, so on any older profile it read nil:
+grid snapping permanently off, and nothing on screen saying it had never been
+on. That was the owner's *"das geht nämlich nicht"*.
+
+`Prefs()` now fills from `ns.DEFAULTS.editMode` in a loop. **Two lists of the
+same thing drift — the fix is one list, not a second careful list.** `/zs test`
+checks every key the panel reads has a default.
+
+Also found while in there, all three real:
+
+- **The grid drew no guide when it caught.** Element snapping showed the line it
+  matched; the grid — the one kind that pulls from any distance — showed
+  nothing, so the snapping that worked looked like the snapping that did not.
+- **Every candidate was an ALIGNMENT.** Centre-on-centre, left-edge-on-left-edge.
+  There was no *flush* candidate, so two bars could line up but never sit side
+  by side, which is how a row of bars is built.
+- **The screen edges were not candidates at all.**
 
 ## 4.23.0 — pinning, and a mask that was never doing anything
 

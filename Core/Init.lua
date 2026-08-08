@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.23.0"
+ns.version = "4.24.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -156,7 +156,7 @@ ns.DEFAULTS = {
         gridStep     = 40,
         snap         = true,
         snapDistance = 10,
-        snapToGrid   = false,
+        snapToGrid   = true,
         dim          = 0.35,
         showCoords   = false,
     },

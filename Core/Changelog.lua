@@ -8,6 +8,21 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.24.0",
+        date = "2026-08-08",
+        lines = {
+            "SNAP TO GRID WAS NEVER ON, AND COULD NOT BE TURNED ON PROPERLY. Edit mode fills in any setting your profile is missing - and it carried its own list of four keys next to the seven the profile actually declares. snapToGrid was in one list and not the other, so on any profile older than that key it read as nothing at all: switched off, with no way to tell it had never been on. It fills from the one list now, and grid snapping is on by default.",
+            "",
+            "AND THE GRID NEVER DREW A LINE WHEN IT CAUGHT. Snapping to another bar showed you the line it lined up with; the grid, which is the one kind that always pulls, showed nothing - so the snapping that was working looked like the snapping that was not. It draws its line too.",
+            "",
+            "BARS SNAP AGAINST EACH OTHER NOW, NOT JUST INTO LINE WITH EACH OTHER. Every target used to be an ALIGNMENT - your left edge onto their left edge, your middle onto their middle. So two bars could line up but never sit flush side by side, which is how a row of bars is actually built. Your edge against their edge is a target now, on both axes.",
+            "",
+            "AND THE SCREEN EDGES CATCH. Pushing a bar into a corner had nothing to snap to at all.",
+            "",
+            "THE OVERLAY SAYS WHAT SNAPPING IS DOING. The state lives on two switches in a panel you have to open first, and the line above them explained how to hold Alt to suspend snapping - while snapping was switched off. It now says what it snaps to, or that it is off and where the switch is.",
+        },
+    },
+    {
         version = "4.23.0",
         date = "2026-08-08",
         lines = {
