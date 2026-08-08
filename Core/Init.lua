@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.24.0"
+ns.version = "4.25.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -151,10 +151,14 @@ ns.DEFAULTS = {
     -- grid with snapping off wants that again tomorrow, and re-setting it at
     -- the top of every session is the kind of small tax that makes a tool
     -- feel like it is not on your side.
+    -- `snap` was here and is gone in 4.25.0: snapping is what dragging does,
+    -- and Alt suspends it for one drag. A switch whose off position makes a
+    -- feature silently do nothing is the switch that gets left off and then
+    -- reported as a broken feature. A profile that still carries the key is
+    -- harmless - nothing reads it.
     editMode = {
         grid         = false,
         gridStep     = 40,
-        snap         = true,
         snapDistance = 10,
         snapToGrid   = true,
         dim          = 0.35,

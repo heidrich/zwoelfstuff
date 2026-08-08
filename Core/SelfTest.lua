@@ -1047,7 +1047,7 @@ local function TestDesignSystem()
     --
     -- It fills from ns.DEFAULTS.editMode now. This is the check that the keys
     -- the panel reads are all actually in there.
-    for _, key in ipairs({ "grid", "gridStep", "snap", "snapDistance",
+    for _, key in ipairs({ "grid", "gridStep", "snapDistance",
         "snapToGrid", "dim", "showCoords" }) do
         Check("Edit mode default: " .. key,
             ns.DEFAULTS.editMode[key] ~= nil)
@@ -1071,6 +1071,78 @@ local function TestDesignSystem()
     end
 end
 
+---------------------------------------------------------------------------
+-- Snapping
+--
+-- It went wrong three times and every diagnosis was reading the code, because
+-- the arithmetic was welded to live frames and saved variables and could not
+-- be run. EditMode.SnapAxis is the pure half now: plain numbers in, plain
+-- numbers out. These are the cases the owner actually reported.
+--
+-- Everything is an offset from the SCREEN CENTRE, which is how a bar's
+-- position is stored. Our own bar is `half` wide either side of `value`.
+---------------------------------------------------------------------------
+local function TestSnapping()
+    local SnapAxis = ns.EditMode.SnapAxis
+    local SCREEN = 960          -- half of a 1920 screen
+    local loose = { snapDistance = 10, snapToGrid = false }
+
+    -- Nothing near, nothing asked for: the value comes back untouched. A snap
+    -- function that always moves something is worse than none.
+    local free = SnapAxis(137, 50, SCREEN, {}, loose)
+    Check("Nothing near leaves it where it is", free == 137, tostring(free))
+
+    -- The screen centre, which is the one candidate that was always there.
+    local centred = SnapAxis(4, 50, SCREEN, {}, loose)
+    Check("Near the middle it centres", centred == 0, tostring(centred))
+
+    -- A second bar 200 wide sitting at +300. Its edges are 200 and 400.
+    local other = { { centre = 300, half = 100 } }
+
+    local aligned = SnapAxis(296, 50, SCREEN, other, loose)
+    Check("It lines up with another bar's middle", aligned == 300,
+        tostring(aligned))
+
+    -- Our left edge onto their left edge: our centre at 200 + our half.
+    local leftEdges = SnapAxis(248, 50, SCREEN, other, loose)
+    Check("Left edge lines up with their left edge", leftEdges == 250,
+        tostring(leftEdges))
+
+    -- FLUSH, the case that did not exist: our right edge against their left,
+    -- so our centre sits at 200 - 50. Two bars side by side, which is how a
+    -- row is built and what "snap to other elements" was asked for.
+    local flush = SnapAxis(146, 50, SCREEN, other, loose)
+    Check("It sits flush against another bar", flush == 150, tostring(flush))
+
+    -- The screen edge, with our edge on it rather than our centre.
+    local edge = SnapAxis(-905, 50, SCREEN, {}, loose)
+    Check("It sits flush against the screen edge", edge == -910,
+        tostring(edge))
+
+    -- Out of catch range on every one of them.
+    local far = SnapAxis(500, 50, SCREEN, other, loose)
+    Check("Beyond the catch distance nothing pulls", far == 500, tostring(far))
+
+    -- The grid is the FALLBACK: it fires from any distance, but never over a
+    -- bar that caught. Both halves of that are load-bearing.
+    local grid = { snapDistance = 10, snapToGrid = true, gridStep = 40 }
+
+    -- 490 rather than 500: 500 sits exactly between two lines and the answer
+    -- would be a statement about which way .5 rounds, not about snapping.
+    local onGrid, gridGuide = SnapAxis(490, 50, SCREEN, other, grid)
+    Check("The grid pulls from any distance", onGrid == 480, tostring(onGrid))
+    Check("The grid says which line caught", gridGuide == 480,
+        tostring(gridGuide))
+
+    local barWins = SnapAxis(296, 50, SCREEN, other, grid)
+    Check("A bar beats the grid", barWins == 300, tostring(barWins))
+
+    -- A grid step of zero is a division waiting to happen.
+    local noStep = SnapAxis(137, 50, SCREEN, {},
+        { snapDistance = 10, snapToGrid = true, gridStep = 0 })
+    Check("A zero grid step is ignored", noStep == 137, tostring(noStep))
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -1087,6 +1159,7 @@ function Test:Run()
         { "Active states", TestActiveStates },
         { "Spell identity", TestSpellIdentity },
         { "Design system",  TestDesignSystem },
+        { "Snapping",      TestSnapping },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

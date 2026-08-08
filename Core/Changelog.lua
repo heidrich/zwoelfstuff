@@ -8,6 +8,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.25.0",
+        date = "2026-08-08",
+        lines = {
+            "SNAPPING IS NOT A SETTING ANY MORE. It is what dragging does. The switch is gone from the tools panel, because a switch whose off position makes a feature silently do nothing is the switch that gets left off by accident and then reported as a broken feature - which is exactly what happened. Hold Alt while you drag to place a bar freehand; that is the escape hatch, and it is per drag rather than per profile.",
+            "",
+            "AND THE ARITHMETIC CAN BE TESTED NOW. Snapping went wrong three times, and every single diagnosis was reading the code and reasoning about it, because none of it could be RUN - the maths was welded to live frames and saved settings. It is split in two now: one half measures the bars on screen, the other half is plain numbers in and plain numbers out. /zs test puts two bars four pixels apart and asserts where the second one lands, including the case that never existed - one bar sitting flush against another.",
+        },
+    },
+    {
         version = "4.24.0",
         date = "2026-08-08",
         lines = {

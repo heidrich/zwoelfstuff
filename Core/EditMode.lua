@@ -100,50 +100,49 @@ end
 -- Measured off the live frames rather than off the saved x/y: a bar pinned by
 -- its left edge stores a number that is not its centre, and lining two bars up
 -- is about where they ARE.
-local function Candidates(index, half, axis)
+-- PURE, AND THAT IS THE POINT.
+--
+-- Snapping went wrong three times and every diagnosis was reading the code and
+-- reasoning about it, because none of it could be run: the arithmetic was
+-- welded to live frames and saved variables. This half takes plain numbers and
+-- returns plain numbers, so /zs test can put two bars 4 units apart and assert
+-- where the second one lands.
+--
+--   value       where our centre wants to go, offset from the screen centre
+--   half        half our width (or height)
+--   screenHalf  half the screen's
+--   others      { { centre = n, half = n }, ... }  the OTHER bars
+--   prefs       { snapDistance, snapToGrid, gridStep }
+--
+-- Returns the value to use, and where to draw the line - or nil for no line.
+function EditMode.SnapAxis(value, half, screenHalf, others, prefs)
     local list = { { value = 0, guide = 0 } }   -- the screen centre
 
     -- The screen's own edges, with our edge flush against them. Pushing a bar
     -- into a corner is one of the two things everybody does with a bar, and
     -- there was nothing there to catch it.
-    local screenHalf = ((axis == "x") and UIParent:GetWidth()
-        or UIParent:GetHeight()) / 2
     list[#list + 1] = { value = -screenHalf + half, guide = -screenHalf }
     list[#list + 1] = { value = screenHalf - half,  guide = screenHalf }
 
-    for otherIndex in ipairs(ns.db.bars) do
-        local bar = ns.Screen:BarFrame(otherIndex)
-        if otherIndex ~= index and bar and bar:IsShown() then
-            local offsetX, offsetY = ns.Screen:CentreOffset(otherIndex)
-            if offsetX then
-                local centre = (axis == "x") and offsetX or offsetY
-                local otherHalf = ((axis == "x") and bar:GetWidth() or bar:GetHeight()) / 2
-                local near, far = centre - otherHalf, centre + otherHalf
+    for _, other in ipairs(others) do
+        local near, far = other.centre - other.half, other.centre + other.half
 
-                -- ALIGNED: our centre or one of our edges on one of theirs.
-                list[#list + 1] = { value = centre, guide = centre }
-                list[#list + 1] = { value = near + half, guide = near }
-                list[#list + 1] = { value = far - half,  guide = far }
+        -- ALIGNED: our centre or one of our edges on one of theirs.
+        list[#list + 1] = { value = other.centre, guide = other.centre }
+        list[#list + 1] = { value = near + half, guide = near }
+        list[#list + 1] = { value = far - half,  guide = far }
 
-                -- FLUSH: our edge against theirs, the two side by side with
-                -- nothing between. This was the missing half of "snap to
-                -- another bar" - every candidate was an ALIGNMENT, so two bars
-                -- could line up their left edges but never sit next to each
-                -- other, which is how a row of bars is actually built.
-                list[#list + 1] = { value = near - half, guide = near }
-                list[#list + 1] = { value = far + half,  guide = far }
-            end
-        end
+        -- FLUSH: our edge against theirs, the two side by side with nothing
+        -- between. This was the missing half of "snap to another bar" - every
+        -- candidate was an ALIGNMENT, so two bars could line up their left
+        -- edges but never sit next to each other, which is how a row of bars
+        -- is actually built.
+        list[#list + 1] = { value = near - half, guide = near }
+        list[#list + 1] = { value = far + half,  guide = far }
     end
 
-    return list
-end
-
-local function Snap(value, index, half, axis)
-    local prefs = Prefs()
     local best, bestDistance, guide = value, prefs.snapDistance, nil
-
-    for _, candidate in ipairs(Candidates(index, half, axis)) do
+    for _, candidate in ipairs(list) do
         local distance = math.abs(candidate.value - value)
         if distance < bestDistance then
             bestDistance, best, guide = distance, candidate.value, candidate.guide
@@ -168,6 +167,34 @@ local function Snap(value, index, half, axis)
     end
 
     return best, guide
+end
+
+-- The frame-reading half: measure the other bars, then hand the numbers over.
+--
+-- Measured off the live frames rather than off the saved x/y, because a bar
+-- pinned by its left edge stores a number that is not its centre, and lining
+-- two bars up is about where they ARE.
+local function Snap(value, index, half, axis)
+    local others = {}
+
+    for otherIndex in ipairs(ns.db.bars) do
+        local bar = ns.Screen:BarFrame(otherIndex)
+        if otherIndex ~= index and bar and bar:IsShown() then
+            local offsetX, offsetY = ns.Screen:CentreOffset(otherIndex)
+            if offsetX then
+                others[#others + 1] = {
+                    centre = (axis == "x") and offsetX or offsetY,
+                    half = ((axis == "x") and bar:GetWidth()
+                        or bar:GetHeight()) / 2,
+                }
+            end
+        end
+    end
+
+    local screenHalf = ((axis == "x") and UIParent:GetWidth()
+        or UIParent:GetHeight()) / 2
+
+    return EditMode.SnapAxis(value, half, screenHalf, others, Prefs())
 end
 
 ---------------------------------------------------------------------------
@@ -933,10 +960,14 @@ local function OnUpdate()
     local x = dragging.originX + (cursorX - dragging.cursorX)
     local y = dragging.originY + (cursorY - dragging.cursorY)
 
-    -- Free movement with Alt held: snapping is right almost always, and
-    -- "almost" is why there has to be a way to switch it off in the moment.
+    -- SNAPPING IS NOT A SETTING ANY MORE. It is what dragging DOES.
+    --
+    -- It used to hang off a switch in a panel you have to open first, and a
+    -- feature that silently does nothing until you find its switch is a
+    -- feature that does not work - which is exactly how it was reported. Alt
+    -- is the escape hatch, held in the moment, on the drag that needs it.
     local lineX, lineY
-    if Prefs().snap and not (dragging.anchored or IsAltKeyDown()) then
+    if not (dragging.anchored or IsAltKeyDown()) then
         -- Snapped in CENTRE terms and written back in pinned-point terms, so
         -- a bar pinned by its left edge still lines up by its middle.
         local centreX, guideLineX = Snap(x + dragging.toCentreX, mover.index,
@@ -1323,16 +1354,15 @@ local function BuildTools()
         end,
     })
 
-    Switch("Snapping", function() return Prefs().snap end,
-        function(value)
-            Prefs().snap = value
-            RefreshInspector()
-        end, half)
+    -- There was a "Snapping" switch here, and it is gone on purpose: snapping
+    -- is what dragging does now, and Alt suspends it for one drag. A switch
+    -- whose off position makes a feature silently do nothing is the switch
+    -- that gets left off by accident and then reported as a broken feature.
     Switch("Coordinates", function() return Prefs().showCoords end,
         function(value)
             Prefs().showCoords = value
             EditMode:Refresh()
-        end, half, true)
+        end, WIDTH)
 
     Slider({
         label = "Catch", labelWidth = 60, min = 2, max = 40, step = 1,
@@ -1643,9 +1673,7 @@ function RefreshInspector()
         -- suspend snapping while snapping was switched off.
         local prefs = Prefs()
         local snapLine
-        if not prefs.snap then
-            snapLine = "|cffff4040Snapping is off|r - Tools, then Snapping."
-        elseif prefs.snapToGrid then
+        if prefs.snapToGrid then
             snapLine = string.format(
                 "Snaps to the other bars, the screen edges and a %d grid. "
                 .. "Hold Alt to place it free.", prefs.gridStep or 40)

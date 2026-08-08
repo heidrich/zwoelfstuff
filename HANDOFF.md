@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.24.0**. Read this first.
+State as of **2026-08-08**, version **4.25.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~136 checks in
+**Run `/zs test` before you believe anything below.** ~146 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -28,6 +28,36 @@ what, and why none of them can reach the others.
 Version 4.22.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
+
+## 4.25.0 — snapping is not a setting, and the maths is testable
+
+Reported three times in a row as not working. Three separate causes were found
+and fixed (4.24.0), and it **still** did not work — because the switch in the
+tools panel was off in the owner's profile and I had deliberately not touched a
+saved preference.
+
+That was the wrong call. **A switch whose off position makes a feature silently
+do nothing is not a preference, it is a way for the feature to be broken.** The
+switch is gone. Snapping is what dragging does; Alt suspends it for the length
+of one drag. `snap` is out of `ns.DEFAULTS.editMode` — a profile that still
+carries the key is harmless, nothing reads it.
+
+**And the arithmetic is testable now, which it never was.** Every diagnosis in
+this whole sequence was reading code and reasoning about it, because the maths
+was welded to live frames and saved variables. Split in two:
+
+- `Snap(value, index, half, axis)` — measures the bars on screen.
+- `EditMode.SnapAxis(value, half, screenHalf, others, prefs)` — **pure**. Plain
+  numbers in, plain numbers out.
+
+`/zs test` now puts two bars four units apart and asserts where the second one
+lands: centre alignment, edge alignment, flush, the screen edge, out of range,
+the grid fallback, a bar beating the grid, and a zero grid step. One of those
+expectations was wrong on the first run (500 sits exactly between two grid
+lines) — which is the point of writing them down.
+
+**If a rule cannot be run, it will be diagnosed by reading. Reading was wrong
+three times here.**
 
 ## 4.24.0 — two lists of the same defaults
 

@@ -8,6 +8,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.25.0] - 2026-08-08
+
+### Changed
+
+- SNAPPING IS NOT A SETTING ANY MORE. It is what dragging does. The switch is
+  gone from the tools panel, because a switch whose off position makes a
+  feature silently do nothing is the switch that gets left off by accident and
+  then reported as a broken feature - which is exactly what happened. Hold Alt
+  while you drag to place a bar freehand; that is the escape hatch, and it is
+  per drag rather than per profile.
+
+### Added
+
+- THE ARITHMETIC CAN BE TESTED NOW. Snapping went wrong three times, and every
+  diagnosis was reading the code and reasoning about it, because none of it
+  could be RUN - the maths was welded to live frames and saved settings. It is
+  split in two: `Snap` measures the bars on screen, `EditMode.SnapAxis` is
+  plain numbers in and plain numbers out. `/zs test` puts two bars four pixels
+  apart and asserts where the second one lands - centre alignment, edge
+  alignment, flush, the screen edge, out of range, the grid fallback, a bar
+  beating the grid, and a zero grid step. 146 checks, up from 136.
+
 ## [4.24.0] - 2026-08-08
 
 ### Fixed
