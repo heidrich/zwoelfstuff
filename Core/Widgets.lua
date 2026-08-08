@@ -1400,7 +1400,9 @@ function UI.CellGrid(parent, cfg)
                 end
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine("Click to change it", 0.62, 0.64, 0.68)
-                GameTooltip:AddLine("Drag onto another cell to swap", 0.62, 0.64, 0.68)
+                GameTooltip:AddLine("Drag it to sort the bar", 0.62, 0.64, 0.68)
+                GameTooltip:AddLine("Hold Shift while dropping to swap the two",
+                    0.62, 0.64, 0.68)
                 GameTooltip:AddLine("Right click to clear", 0.62, 0.64, 0.68)
             else
                 GameTooltip:AddLine(string.format("Cell %d", self.dkIndex or 0))
@@ -1442,7 +1444,10 @@ function UI.CellGrid(parent, cfg)
             grid.dragFrom = nil
             local target = CellUnderCursor()
             if from and target and target ~= from and cfg.onMove then
-                cfg.onMove(from, target)
+                -- Read at the DROP, not at the pick-up: the modifier is a
+                -- statement about where it is landing, and people press it
+                -- while they are already dragging.
+                cfg.onMove(from, target, IsShiftKeyDown())
             end
         end)
 

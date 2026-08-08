@@ -316,13 +316,90 @@ local function TestPerSpec()
     ns.Layout.SetOffset(layout, 2, 17, -9)
     layout.cells[1], layout.cells[2] = 201, 202
 
-    -- The swap MoveCell performs, without needing a bar in the real list.
-    layout.cells[1], layout.cells[2] = layout.cells[2], layout.cells[1]
+    -- Asked of the real reorder rather than by swapping two fields here: a
+    -- test that performs the operation itself proves only that it can.
+    ns.Bars:Reorder(layout, 1, 2)
     local x, y = ns.Layout.GetOffset(layout, 2)
     Check("The per-cell look stays with the slot, not the spell",
         Near(x, 17) and Near(y, -9))
     Check("Nothing about the look is filed per spec",
         layout.cellOptsBySpec == nil)
+end
+
+---------------------------------------------------------------------------
+-- Sorting a bar by dragging
+--
+-- Dragging a spell up a list has to leave the others in THEIR order. Swapping
+-- cannot do that - every swap disturbs a second cell nobody pointed at - so
+-- sorting four spells would take six drags and a plan.
+---------------------------------------------------------------------------
+local function TestReorder()
+    local function Bar(...)
+        local cfg = Fresh({ layout = "grid", rows = 1, columns = 6 })
+        local ids = { ... }
+        for slot = 1, #ids do
+            if ids[slot] ~= 0 then cfg.cells[slot] = ids[slot] end
+        end
+        return cfg
+    end
+    local function Reads(cfg, count)
+        local out = {}
+        for slot = 1, count do out[slot] = cfg.cells[slot] or 0 end
+        return table.concat(out, ",")
+    end
+
+    -- The owner's case: three spells, drag the third to the front.
+    local cfg = Bar(101, 102, 103)
+    ns.Bars:Reorder(cfg, 3, 1)
+    Check("Dragging the last spell to the front keeps the others in order",
+        Reads(cfg, 3) == "103,101,102", Reads(cfg, 3))
+
+    cfg = Bar(101, 102, 103)
+    ns.Bars:Reorder(cfg, 1, 3)
+    Check("Dragging the first spell to the end keeps the others in order",
+        Reads(cfg, 3) == "102,103,101", Reads(cfg, 3))
+
+    cfg = Bar(101, 102, 103, 104)
+    ns.Bars:Reorder(cfg, 2, 3)
+    Check("A one-place move touches only those two",
+        Reads(cfg, 4) == "101,103,102,104", Reads(cfg, 4))
+
+    -- Nothing is ever lost, which is the property that matters most: a drag
+    -- that drops a spell is worse than a drag that does nothing.
+    cfg = Bar(101, 102, 103, 104, 105)
+    for _, move in ipairs({ { 5, 1 }, { 2, 4 }, { 1, 5 }, { 3, 2 } }) do
+        ns.Bars:Reorder(cfg, move[1], move[2])
+    end
+    local seen = {}
+    for slot = 1, 5 do if cfg.cells[slot] then seen[cfg.cells[slot]] = true end end
+    local all = true
+    for id = 101, 105 do if not seen[id] then all = false end end
+    Check("Four drags in a row lose nothing", all, Reads(cfg, 5))
+
+    -- A hole is a position like any other. It travels rather than being
+    -- silently filled, or a bar with a deliberate gap closes up by itself.
+    cfg = Bar(101, 0, 102)
+    ns.Bars:Reorder(cfg, 3, 1)
+    Check("A hole moves with the sequence instead of being filled",
+        Reads(cfg, 3) == "102,101,0", Reads(cfg, 3))
+
+    -- Out of bounds and no-ops report failure rather than corrupting the row.
+    cfg = Bar(101, 102, 103)
+    Check("A drag onto itself does nothing", ns.Bars:Reorder(cfg, 2, 2) == false)
+    Check("A drop outside the bar is refused",
+        ns.Bars:Reorder(cfg, 2, 99) == false and ns.Bars:Reorder(cfg, 0, 2) == false)
+    Check("Neither left the row disturbed", Reads(cfg, 3) == "101,102,103")
+
+    -- Swapping still exists, because "these two are in each other's places"
+    -- is a real thing to want. It is Shift on the drop, and it has to be a
+    -- DIFFERENT answer to the same drag or the modifier is decoration.
+    local sorted = Bar(101, 102, 103)
+    local swapped = Bar(101, 102, 103)
+    ns.Bars:Reorder(sorted, 3, 1)
+    ns.Bars:Swap(swapped, 3, 1)
+    Check("Sorting and swapping answer the same drag differently",
+        Reads(sorted, 3) == "103,101,102" and Reads(swapped, 3) == "103,102,101",
+        Reads(sorted, 3) .. "  vs  " .. Reads(swapped, 3))
 end
 
 ---------------------------------------------------------------------------
@@ -787,6 +864,7 @@ function Test:Run()
         { "Coordinates",   TestOffsets },
         { "Pattern switch", TestPatternRoundTrip },
         { "Rows and columns", TestGridSliders },
+        { "Sorting by drag", TestReorder },
         { "Per character", TestPerSpec },
         { "Bar fill",      TestFill },
         { "Stack colours", TestStackThresholds },

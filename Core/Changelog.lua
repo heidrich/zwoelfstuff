@@ -8,6 +8,21 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.17.0",
+        date = "2026-08-08",
+        lines = {
+            "DRAG A SPELL TO SORT A BAR. You asked for drag and drop in the bar cards - it was already there, and it was doing the wrong thing, which is very likely why it did not feel like sorting.",
+            "It SWAPPED the two cells. Drag the third spell onto the first and you got third, second, first: the spell you never touched had moved as well. That is right for 'these two are in each other's places' and useless for putting a list in order - sorting four spells that way takes six drags and a plan.",
+            "It reorders now. The spell you drag lands where you dropped it and everything else keeps its own order, one place along. Sorting a bar is one drag per spell.",
+            "Hold SHIFT while dropping for the old swap. Both are worth having; only one of them can be the plain drag, and sorting is what you asked for.",
+            "",
+            "A gap in a bar counts as a position and travels with the sequence rather than being quietly filled, so a deliberate hole stays a hole.",
+            "The cell's LOOK does not travel. Scale, nudge and kind belong to the slot, so a spell dragged to the front wears the front slot's look - which is the whole point of a slot having one.",
+            "",
+            "The tooltip on a filled cell now says all of this, since a drag nobody knows about is a drag nobody uses.",
+        },
+    },
+    {
         version = "4.16.0",
         date = "2026-08-07",
         lines = {

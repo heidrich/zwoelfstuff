@@ -516,12 +516,62 @@ end
 -- and the spells did not: a slot scaled to 150% is part of a bar every
 -- character sees, so dragging a spell on one of them must not rearrange it
 -- for the rest.
-function Bars:MoveCell(index, from, to)
-    local cfg = self:Get(index)
+function Bars:Swap(cfg, from, to)
     if not cfg or from == to then return false end
 
-    cfg.cells[from], cfg.cells[to] = cfg.cells[to], cfg.cells[from]
+    local count = self:CellCount(cfg)
+    if from < 1 or to < 1 or from > count or to > count then return false end
 
+    cfg.cells[from], cfg.cells[to] = cfg.cells[to], cfg.cells[from]
+    return true
+end
+
+function Bars:MoveCell(index, from, to)
+    if not self:Swap(self:Get(index), from, to) then return false end
+    self:Changed(index)
+    return true
+end
+
+-- SORTING, which is not the same as swapping.
+--
+-- Dragging the third spell onto the first should leave the other two in the
+-- order they were in, one place further down - that is what "sort this list"
+-- means and it is what a single drag has to do, or putting four spells in
+-- order takes six swaps and a diagram.
+--
+-- Swapping was what the drag did before, and it is still right for "these two
+-- are in each other's places". It just cannot sort: every swap disturbs a
+-- second cell nobody pointed at.
+--
+-- ONLY THE SPELLS MOVE. A cell's own look - its scale, its nudge, its kind -
+-- belongs to the SLOT and stays where it is, the same rule MoveCell follows.
+-- Drag a spell to the front of a bar and it wears the front slot's look,
+-- which is the whole point of a slot having one.
+-- The model operation takes a CONFIG, and only the wrapper below needs an
+-- index - so the rule can be checked on a throwaway bar rather than by
+-- creating a real one and leaving it behind. Same split as Reshape/Relayout.
+function Bars:Reorder(cfg, from, to)
+    if not cfg or from == to then return false end
+
+    local count = self:CellCount(cfg)
+    if from < 1 or to < 1 or from > count or to > count then return false end
+
+    local moving = cfg.cells[from]
+
+    -- Everything between the two closes up by one. Holes travel with it,
+    -- because a hole is a position in the sequence like any other - dropping
+    -- a spell in front of one must not quietly fill it.
+    if to > from then
+        for cell = from, to - 1 do cfg.cells[cell] = cfg.cells[cell + 1] end
+    else
+        for cell = from, to + 1, -1 do cfg.cells[cell] = cfg.cells[cell - 1] end
+    end
+    cfg.cells[to] = moving
+    return true
+end
+
+function Bars:ReorderCell(index, from, to)
+    if not self:Reorder(self:Get(index), from, to) then return false end
     self:Changed(index)
     return true
 end

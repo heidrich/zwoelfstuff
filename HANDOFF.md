@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-07**, version **4.16.0**. Read this first.
+State as of **2026-08-08**, version **4.17.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~91 checks in
+**Run `/zs test` before you believe anything below.** ~100 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.16.0 is statically clean over 25 files and passes its own checks.
+Version 4.17.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -920,6 +920,13 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **A feature that exists but does the wrong thing reads as missing.** The
+  owner asked for drag and drop in the bar cards. It had been there all along
+  — `UI.CellGrid` has the marker, the hit test and both handlers, and the
+  tooltip said so — but it SWAPPED, and swapping cannot sort: every swap
+  disturbs a second cell nobody pointed at. Before building a request, check
+  whether the thing already exists and is simply answering a different
+  question.
 - **A comment asserting the data is not there is a claim, not a fact.** Our
   live pass carried "a frame pool is not a sorted list" as its reason for
   supplying no order — and every one of those frames had a `layoutIndex` on

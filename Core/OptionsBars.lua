@@ -241,8 +241,16 @@ local function BuildCard(parent, width)
             Workspace:SelectCell(card.dkIndex, cell)
             ns.Options:Refresh()
         end,
-        onMove = function(from, to)
-            Bars:MoveCell(card.dkIndex, from, to)
+        -- Reorder, not swap: dragging a spell up the list has to leave the
+        -- others in their own order, or sorting a bar is a puzzle rather than
+        -- a drag. Shift held means "these two change places" instead, which is
+        -- the other thing people mean by dragging one icon onto another.
+        onMove = function(from, to, swap)
+            if swap then
+                Bars:MoveCell(card.dkIndex, from, to)
+            else
+                Bars:ReorderCell(card.dkIndex, from, to)
+            end
             Workspace:SelectCell(card.dkIndex, to)
         end,
     })
