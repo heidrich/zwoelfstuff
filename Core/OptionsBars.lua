@@ -145,7 +145,7 @@ local function BuildCard(parent, width)
 
     local title = UI.Label(card, "", 13.5, C.text)
     title:SetPoint("LEFT", number, "RIGHT", 8, 0)
-    title:SetWidth(width - 300)      -- never under the header's three actions
+    title:SetWidth(140)              -- the tabs start right after it
     title:SetWordWrap(false)
 
     -- Two-step, because one stray click would otherwise throw away a bar the
@@ -176,10 +176,48 @@ local function BuildCard(parent, width)
     end, C.textFaint)
     remove:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD + 6, -10)
 
-    local options = UI.GhostButton(card, "Options", function()
-        if card.dkIndex then Workspace:ShowOptions(card.dkIndex) end
-    end)
-    options:SetPoint("RIGHT", remove, "LEFT", -2, 0)
+    -- THE CARD CARRIES ITS OWN TABS.
+    --
+    -- What the right column shows used to be decided by a button called
+    -- "Options" here and another called "Just this one" over there, which
+    -- between them never said what they were scoped to. Three tabs on the card
+    -- say it: the thing you are looking at chooses what is being edited, and
+    -- the answer appears beside it.
+    --
+    -- Only the CURRENT card lights one. Three cards each showing an active tab
+    -- would claim three things are being edited at once.
+    local tabs = {}
+    local function Tab(text, mode, anchorTo)
+        local button = UI.GhostButton(card, text, function()
+            if not card.dkIndex then return end
+            if mode == "cell" then
+                -- Nothing to talk about without a cell; say so rather than
+                -- opening an empty panel.
+                if not Workspace.cell then
+                    ns.Print("Pick a cell in the bar first - then this tab is its own settings.")
+                    return
+                end
+                Workspace:ShowCell(card.dkIndex, Workspace.cell)
+            elseif mode == "options" then
+                Workspace:ShowOptions(card.dkIndex)
+            else
+                Workspace:Select(card.dkIndex)
+                Workspace:ShowSpells()
+            end
+        end, C.textDim)
+        if anchorTo then
+            button:SetPoint("LEFT", anchorTo, "RIGHT", 10, 0)
+        else
+            button:SetPoint("LEFT", title, "RIGHT", 12, 0)
+        end
+        tabs[#tabs + 1] = { button = button, mode = mode }
+        return button
+    end
+
+    local spellsTab = Tab("Spells", "spells")
+    local barTab    = Tab("Bar", "options", spellsTab)
+    local cellTab   = Tab("Cell", "cell", barTab)
+    card.tabs, card.cellTab = tabs, cellTab
 
     -- Straight from the card onto the screen. An arrangement is something you
     -- judge by looking at it where it will live, not in a preview.
@@ -193,7 +231,10 @@ local function BuildCard(parent, width)
         Workspace:Select(card.dkIndex)
         ns.EditMode:OpenBuild()
     end, C.accentCool)
-    build:SetPoint("RIGHT", options, "LEFT", -2, 0)
+    -- Beside Delete now that Options is gone: the two ACTIONS live on the
+    -- right of the header and the three tabs on the left, so a click that
+    -- changes the bar and a click that changes the view are never neighbours.
+    build:SetPoint("RIGHT", remove, "LEFT", -2, 0)
 
     local headerLine = UI.Separator(card)
     headerLine:SetPoint("TOPLEFT", card, "TOPLEFT", 0, -HEADER_H)
@@ -379,8 +420,19 @@ local function BuildCard(parent, width)
             active and C.text[1] or C.textDim[1],
             active and C.text[2] or C.textDim[2],
             active and C.text[3] or C.textDim[3])
-        options:SetBaseColor((active and Workspace.mode == "options")
-            and C.accent or C.textDim)
+        -- The Cell tab names the spell it would edit, so it is obvious what
+        -- "Cell" means before you press it - and stays dim when there is none.
+        local cellID = Workspace.cell and cfg.cells and cfg.cells[Workspace.cell]
+        cellTab:SetText(active and cellID
+            and (ns.SpellName(cellID) or "Cell") or "Cell")
+
+        for _, tab in ipairs(card.tabs) do
+            local on = active and Workspace.mode == tab.mode
+            local reachable = active
+                and (tab.mode ~= "cell" or Workspace.cell ~= nil)
+            tab.button:SetBaseColor(on and C.accent
+                or (reachable and C.textDim or C.textFaint))
+        end
 
         local height = HEADER_H + 12 + gridHeight + 14 + SLIDER_H + CARD_PAD
         card:SetHeight(height)
@@ -1761,22 +1813,50 @@ function Workspace:BuildSide(parent, pad)
 
     local width = parent:GetWidth() - pad * 2
 
+    -- Under the path, which is a line of small type above it.
     local title = UI.Label(side, "", 15, C.text)
-    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -18)
+    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -42)
     title:SetWidth(width - 56)       -- never under the Done button
     title:SetWordWrap(false)
 
     local subtitle = UI.Label(side, "", 11, C.textDim)
-    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
     subtitle:SetWidth(width - 56)
     subtitle:SetWordWrap(false)
 
-    -- Below the close button, not beside it: both want the top right corner
-    -- and the close button owns it.
-    local back = UI.GhostButton(side, "Done", function()
-        Workspace:ShowSpells()
+    -- THE PATH, under the title.
+    --
+    -- The tabs on the card choose what is edited; this says where you ended
+    -- up and is the way back out. It replaced two buttons that shared one
+    -- corner and swapped places depending on the mode - which read as the
+    -- window moving under your hand.
+    --
+    -- Every part is clickable, so you can go from a cell to its bar without
+    -- passing through the spell list, which the old "Done" forced.
+    local crumbs = {}
+    local function Crumb(text, index, onClick)
+        local button = UI.GhostButton(side, text, onClick, C.textDim)
+        if index == 1 then
+            button:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -20)
+        else
+            button:SetPoint("LEFT", crumbs[index - 1].sep, "RIGHT", 2, 0)
+        end
+        -- Plain ASCII on purpose: a chevron glyph has to survive being written
+        -- by a tool, read back, and rendered in whatever font the user
+        -- picked. This one always does.
+        local sep = UI.Label(side, ">", 11, C.textFaint)
+        sep:SetPoint("LEFT", button, "RIGHT", 4, 0)
+        crumbs[index] = { button = button, sep = sep }
+        return button
+    end
+
+    local crumbSpells = Crumb("Spells", 1, function() Workspace:ShowSpells() end)
+    local crumbBar = Crumb("Bar", 2, function()
+        Workspace:ShowOptions(Workspace.index or 1)
     end)
-    back:SetPoint("TOPRIGHT", side, "TOPRIGHT", -pad + 6, -40)
+    local crumbCell = Crumb("Cell", 3, function()
+        if Workspace.cell then Workspace:ShowCell(Workspace.index or 1, Workspace.cell) end
+    end)
 
     local host = CreateFrame("Frame", nil, side)
     host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
@@ -1785,15 +1865,6 @@ function Workspace:BuildSide(parent, pad)
     local spells = self:BuildSpellPane(host, width)
     local options = self:BuildOptionsPane(host, width)
     local cellPane = self:BuildCellPane(host, width)
-
-    -- The way in to one cell's settings. It lives here rather than on the card
-    -- because it only means anything while a cell is picked, and this is where
-    -- you are looking the moment after you pick one.
-    local editCell = UI.GhostButton(side, "Just this one", function()
-        local index = Workspace.index or 1
-        if Workspace.cell then Workspace:ShowCell(index, Workspace.cell) end
-    end, C.accentCool)
-    editCell:SetPoint("TOPRIGHT", side, "TOPRIGHT", -pad + 6, -40)
 
     side.Refresh = function()
         local bars = Bars:Count() > 0
@@ -1806,11 +1877,24 @@ function Workspace:BuildSide(parent, pad)
         spells:SetShown(not onOptions and not onCell)
         options:SetShown(onOptions)
         cellPane:SetShown(onCell)
-        back:SetShown(onOptions or onCell)
 
-        -- Offered only when there is a cell to talk about, and never on top of
-        -- the Done button it shares a corner with.
-        editCell:SetShown(not onOptions and not onCell and Workspace.cell ~= nil)
+        -- The path names the real things rather than the levels: the bar's
+        -- own name and the spell in the cell, so it reads as where you are.
+        crumbBar:SetText(cfg and cfg.name or "Bar")
+        local cellID = Workspace.cell and cfg and cfg.cells
+            and cfg.cells[Workspace.cell]
+        crumbCell:SetText(cellID and (ns.SpellName(cellID) or "Cell") or "Cell")
+
+        -- ONLY THE WAY BACK. The title below already says where you are, so
+        -- a path that repeated it would print the same word twice, one line
+        -- apart. Every part shown is somewhere you can go.
+        local depth = onCell and 3 or (onOptions and 2 or 1)
+        for position, crumb in ipairs(crumbs) do
+            local shown = position < depth
+            crumb.button:SetShown(shown)
+            crumb.sep:SetShown(shown)
+            crumb.button:SetBaseColor(C.textDim)
+        end
 
         if onCell then
             local spellID = cfg and cfg.cells and cfg.cells[Workspace.cell]

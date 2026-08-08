@@ -8,6 +8,22 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.20.0",
+        date = "2026-08-08",
+        lines = {
+            "THE NAVIGATION IS STRAIGHTENED OUT. You said it was a muddle - where the buttons are, what they are called - and you were right. It had grown rather than been designed.",
+            "",
+            "What was wrong, plainly: \"Done\" and \"Just this one\" sat on the SAME spot in the top right and swapped places depending on what you were doing, which reads as the window moving under your hand. \"Options\" meant this bar, \"Just this one\" meant this cell, and nothing said how the two were related. And from a cell you could not get to its bar at all - Done always threw you back to the spell list.",
+            "",
+            "EACH CARD NOW CARRIES ITS OWN THREE TABS: Spells, Bar, and the cell's own name. The thing you are looking at chooses what is being edited, and the answer appears beside it. Only the card you are working on lights a tab, because three lit cards would claim three things are being edited at once. The Cell tab shows the spell it would edit, so you know what it means before you press it.",
+            "\"Options\" is gone - the tab replaced it. Build on screen and Delete stay on the right of the header, so a click that changes the view and a click that changes the bar are never neighbours.",
+            "",
+            "A PATH UNDER THE HEADING shows the way back: Spells > Bars 2. Every part is clickable, so a cell can reach its bar without going through the spell list. It shows only where you can GO, never where you already are - the heading below says that, and printing the same word twice one line apart is how the old one got confusing.",
+            "",
+            "AND THE CELL SETTINGS ARE IN EDIT MODE TOO. Colour, size and the fill direction now sit in the tool panel, where you are looking at the real bar instead of a preview - a colour is something you judge against the screen it will live on. Both places write the same setting through the same code, so neither can know a value the other does not. A star next to the name means that cell wears something of its own.",
+        },
+    },
+    {
         version = "4.19.0",
         date = "2026-08-08",
         lines = {

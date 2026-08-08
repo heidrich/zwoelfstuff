@@ -1,6 +1,6 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.18.0**. Read this first.
+State as of **2026-08-08**, version **4.20.0**. Read this first.
 
 **Run `/zs test` before you believe anything below.** ~115 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.18.0 is statically clean over 25 files and passes its own checks.
+Version 4.20.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -920,6 +920,18 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **Two buttons that share one position and swap by mode read as a broken
+  window.** `Done` and `Just this one` were both anchored TOPRIGHT and shown
+  by opposite conditions, so they never overlapped and it still felt wrong:
+  the eye learns a position, not a condition. If two controls are alternatives,
+  they belong in one control; if they are not, they belong in two places.
+- **Name a control after its SCOPE, not its action.** "Options" (this bar) and
+  "Just this one" (this cell) never said what they applied to, so nothing
+  revealed that the two were levels of the same thing. Three tabs named Spells
+  / Bar / <the spell> say it without a sentence.
+- **A breadcrumb shows where you can GO, not where you are.** Including the
+  current level duplicates the heading directly under it. The path is the way
+  back; the title is the position.
 - **A per-cell override is a PROXY over the bar, never a copy of it.**
   `Bars:CellStyle` builds `setmetatable({}, { __index = cfg })` and writes only
   the overridden keys. Style reads and never writes, so this is both cheaper

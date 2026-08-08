@@ -1286,10 +1286,113 @@ local function BuildTools()
     end, 2)
     y = y - 25
 
+    -----------------------------------------------------------------------
+    -- The cell you picked
+    --
+    -- The same overrides the options window offers, HERE - because this is
+    -- where you are looking at the real bar rather than at a preview of it,
+    -- and a colour is a thing you judge against the screen it will live on.
+    -- Both write the same fields through the same model calls, so neither can
+    -- know a value the other does not.
+    -----------------------------------------------------------------------
+    local cellHeading = Heading("Nothing picked")
+
+    -- Returns the bar INDEX as well, so nothing below has to reach back into
+    -- `picked` - which the checker cannot prove is still there, and which a
+    -- deselect between the two reads really would empty.
+    local function PickedCell()
+        if not picked then return nil end
+        local cfg = BarConfig(picked.bar)
+        if not cfg then return nil end
+        return cfg, picked.cell, picked.bar
+    end
+
+    -- Reads the cell's own value, or the bar's while it is still following.
+    local function CellGet(key, fallback)
+        return function()
+            local cfg, cell = PickedCell()
+            if not cfg then return fallback end
+            local opts = ns.Layout.CellOpts(cfg, cell)
+            local look = opts and opts.look
+            if look and look[key] ~= nil then return look[key] end
+            if cfg[key] ~= nil then return cfg[key] end
+            return fallback
+        end
+    end
+    local function CellSet(key)
+        return function(value)
+            local cfg, cell, barIndex = PickedCell()
+            if not cfg then return end
+            ns.Bars:SetCellLook(cfg, cell, key, value)
+            ns.Bars:Changed(barIndex)
+        end
+    end
+
+    local cellScale = Slider({
+        label = "Size", labelWidth = 60, min = 0.5, max = 3, step = 0.05,
+        get = function()
+            local cfg, cell = PickedCell()
+            local opts = cfg and ns.Layout.CellOpts(cfg, cell)
+            return (opts and opts.scale) or 1
+        end,
+        set = function(value)
+            local cfg, cell, barIndex = PickedCell()
+            if not cfg then return end
+            ns.Layout.EnsureCellOpts(cfg, cell).scale = value
+            ns.Layout.TidyCellOpts(cfg, cell)
+            ns.Bars:Changed(barIndex)
+        end,
+    })
+
+    local cellColour = UI.Swatch({ slot = tools },
+        function()
+            local colour = CellGet("fillColor", { 1, 1, 1 })()
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) CellSet("fillColor")({ r, g, b }) end)
+    cellColour:ClearAllPoints()
+    cellColour:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+    local colourLabel = UI.Label(tools, "Colour", 11, C.textFaint)
+    colourLabel:SetPoint("LEFT", cellColour, "RIGHT", 8, 0)
+    y = y - 24
+
+    local cellGrow = Switch("Fill up",
+        function() return CellGet("fillGrow", false)() end,
+        function(value) CellSet("fillGrow")(value) end)
+    local cellSide = Switch("From the right",
+        function() return CellGet("fillSide", false)() end,
+        function(value) CellSet("fillSide")(value) end)
+
+    local cellReset = UI.Button(tools, "Follow the bar again", WIDTH, function()
+        local cfg, cell, barIndex = PickedCell()
+        if not cfg then return end
+        ns.Bars:ClearCellLook(cfg, cell)
+        ns.Bars:Changed(barIndex)
+        tools.Refresh()
+    end, "soft")
+    cellReset:SetHeight(21)
+    cellReset:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+    y = y - 25
+
     tools:SetHeight(-y + 10)
 
     tools.Refresh = function()
         local index, cfg = CurrentBar()
+
+        -- The picked cell's own row of controls. They stand down entirely
+        -- when nothing is picked rather than editing whatever was last
+        -- touched, which is the one way this panel could do real damage.
+        local cellCfg, cellIndex = PickedCell()
+        local spellID = cellCfg and cellCfg.cells and cellCfg.cells[cellIndex]
+        cellHeading:SetText(cellCfg
+            and ((spellID and (ns.SpellName(spellID) or "CELL") or "EMPTY CELL")
+                .. (ns.Bars:CellHasLook(cellCfg, cellIndex) and "  |cffff7a3d*|r" or ""))
+            or "|cff888888NOTHING PICKED|r")
+
+        for _, widget in ipairs({ cellScale, cellColour, colourLabel,
+            cellGrow, cellSide, cellReset }) do
+            widget:SetShown(cellCfg ~= nil)
+        end
 
         barHeading:SetText(cfg and (cfg.name or ("BAR " .. index)):upper()
             or "|cff888888NOTHING SELECTED|r")
