@@ -219,7 +219,15 @@ function Reminders:State(cfg)
 
     local item = ns.CDM:ItemForSpell(cfg.spellID)
     if not item then
-        return nil, "the Cooldown Manager is not tracking this spell"
+        -- "Not tracking" was the wrong words and sent people looking in the
+        -- wrong place. Most spells the Cooldown Manager KNOWS sit in its
+        -- Hidden category by default - our picker lists them, under "Not
+        -- shown by Blizzard" - and a spell with no frame on screen has
+        -- nothing for us to read. The fix is one drag in Blizzard's own
+        -- settings, so that is what the sentence says.
+        return nil, "Blizzard is not showing this spell in its Cooldown "
+            .. "Manager, so there is no frame to read. Drag it into one of "
+            .. "its viewers in Blizzard's own Cooldown Manager settings"
     end
 
     local active = ns.CDM:ItemIsActive(item)

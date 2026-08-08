@@ -8,6 +8,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.34.1] - 2026-08-09
+
+### Fixed
+
+- **The picker was still missing most of the spell list, and this is the half
+  that mattered.** 4.34.0 fixed the source that contributed nothing; the real
+  gap was the one it deliberately threw away.
+
+  A cooldown Blizzard's Cooldown Manager knows but is not displaying reports a
+  category we do not map, and every one of those was dropped on the reading
+  that it was a spell you had chosen to remove. On a real character that is
+  **65 of 74**: Blizzard's own default leaves nearly everything in Hidden, and
+  the handful you arranged are the exception, not the rule. So the picker
+  offered nine entries next to a settings panel listing every spell in the
+  spec.
+
+  They are listed now, in a group of their own at the bottom - **"Not shown by
+  Blizzard"**, with its own filter chip - under the spells you arranged, in the
+  order you arranged them. The old complaint was that they were mixed in;
+  being mixed in was the fault, not being present.
+
+  What they cannot do yet is stated on the entry itself rather than discovered
+  later: with no frame on screen there is nothing for a bar cell to adopt or a
+  reminder to read, and it takes one drag in Blizzard's own Cooldown Manager
+  settings to change that.
+
+- `/zs test` now checks that every cooldown the catalogue walk counts is
+  actually handed to the caller. That is the check that would have caught
+  this: the hidden ones were counted and never passed on.
+
 ## [4.34.0] - 2026-08-09
 
 ### Added

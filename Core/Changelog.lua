@@ -8,6 +8,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.34.1",
+        date = "2026-08-09",
+        lines = {
+            "THE SPELL LIST WAS STILL MISSING MOST OF ITSELF, and this is the half that mattered. Yesterday's fix repaired the source that turned out to contribute nothing; the real gap was the one the addon was throwing away on purpose.",
+            "A spell Blizzard's Cooldown Manager knows but is not currently displaying was dropped, on the reading that you had chosen to remove it. On a real character that is 65 spells out of 74 - Blizzard's own default leaves nearly everything hidden, and the few you arranged are the exception. So the picker showed nine entries next to a settings panel listing the whole spec.",
+            "They are all there now, in a group of their own at the bottom - NOT SHOWN BY BLIZZARD, with its own filter - underneath the spells you arranged, in the order you arranged them. Being mixed in was the fault; being present was never the fault.",
+            "What they cannot do yet is written on the entry rather than left to be discovered: with no icon on screen there is nothing for a bar to adopt or a reminder to read. One drag in Blizzard's own Cooldown Manager settings changes that.",
+        },
+    },
+    {
         version = "4.34.0",
         date = "2026-08-09",
         lines = {

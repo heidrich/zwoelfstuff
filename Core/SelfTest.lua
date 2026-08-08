@@ -774,13 +774,26 @@ local function TestSpellIdentity()
     -- through the second one. Handed the same cooldownID twice, the picker
     -- would list the spell once anyway (it keys by spell) and quietly award it
     -- two positions, so this is the only place the fault is visible.
-    local emitted, twice = {}, nil
+    local emitted, twice, count = {}, nil, 0
     local arranged, extra, hidden = CDM:ForEachCatalogued(function(cooldownID)
         if emitted[cooldownID] then twice = cooldownID end
         emitted[cooldownID] = true
+        count = count + 1
     end)
     Check("No cooldown is catalogued twice", not twice,
         twice and ("cooldown " .. tostring(twice)) or nil)
+
+    -- NOTHING THE WALK SEES IS DROPPED ON THE FLOOR.
+    --
+    -- The counters and the callback have to agree, and this is the check that
+    -- would have caught the real fault: cooldowns Blizzard is not displaying
+    -- were COUNTED and never handed over, so a picker with nine entries sat
+    -- next to a Cooldown Manager settings panel listing seventy-four. Every
+    -- one of the three numbers is now something the caller was told about.
+    Check("Every catalogued cooldown reaches the caller",
+        count == arranged + extra + hidden,
+        string.format("%d handed over, %d+%d+%d counted",
+            count, arranged, extra, hidden))
     Check("The catalogue walk reports what each source gave",
         type(arranged) == "number" and type(extra) == "number"
         and type(hidden) == "number")

@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsBars - the cooldown workspace.
 --
 -- Three columns, and each one has exactly one job:
@@ -653,6 +653,10 @@ local GROUPS = {
     -- Not from the Cooldown Manager: procs this character has been seen to
     -- raise. What is shown is the aura; what drives it is the glow underneath.
     { key = "aura",      label = "Auras" },
+    -- Everything Blizzard's Cooldown Manager knows and is not showing. On a
+    -- default setup that is most of the spec, so it is a GROUP rather than a
+    -- footnote - it is just the last one, under the spells you arranged.
+    { key = ns.CDM.HIDDEN_KEY, label = "Not shown by Blizzard" },
     { key = "other",     label = "Other" },
 }
 
@@ -714,6 +718,7 @@ function Workspace:BuildSpellPane(parent, width, host)
             { key = "buffIcon",  text = "Buffs" },
             { key = "buffBar",   text = "Buff bars" },
             { key = "aura",      text = "Auras" },
+            { key = ns.CDM.HIDDEN_KEY, text = "Not shown" },
         },
         current = function() return filter end,
         onSelect = function(key)
@@ -904,6 +909,23 @@ function Workspace:BuildSpellPane(parent, width, host)
                                 .. "bar - useful when you are about to switch "
                                 .. "into the build that has it.",
                             r = 0.62, g = 0.64, b = 0.68,
+                        }
+                    end
+
+                    -- WHAT "NOT SHOWN" COSTS, said on the entry rather than
+                    -- discovered later. A bar cell adopts Blizzard's frame,
+                    -- and a reminder reads it - neither has anything to work
+                    -- with while the spell sits in Blizzard's Hidden
+                    -- category. It is one drag in their settings to fix, so
+                    -- the line says where.
+                    if entry.viewer == ns.CDM.HIDDEN_KEY then
+                        row.dkLines[#row.dkLines + 1] = {
+                            text = "Blizzard's Cooldown Manager knows this spell "
+                                .. "but is not displaying it, so there is no "
+                                .. "frame to adopt or read. Drag it into one of "
+                                .. "its viewers in Blizzard's own Cooldown "
+                                .. "Manager settings first.",
+                            r = 1.00, g = 0.478, b = 0.239,
                         }
                     end
 

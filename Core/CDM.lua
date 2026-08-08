@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- CDM - the Cooldown Manager layer.
 --
 -- THE CHANGE OF APPROACH, and why.
@@ -47,6 +47,17 @@ CDM.VIEWERS = {
     { key = "buffIcon",  global = "BuffIconCooldownViewer",  label = "Buffs",     kind = "icon" },
     { key = "buffBar",   global = "BuffBarCooldownViewer",   label = "Buff bars", kind = "bar"  },
 }
+
+-- The fifth group, which is not a viewer: everything the Cooldown Manager
+-- knows and is not showing anywhere. Named here and read by the picker, so
+-- the two cannot disagree about what the string is.
+--
+-- Deliberately NOT in VIEWERS: there is no frame pool behind it, and every
+-- loop over VIEWERS would then be asking Blizzard for a global that does not
+-- exist. ViewerRank falls through to #VIEWERS for it, which is exactly the
+-- band we want - after all four.
+CDM.HIDDEN_KEY = "hidden"
+local HIDDEN_KEY = CDM.HIDDEN_KEY
 
 function CDM:GetViewer(key)
     for _, viewer in ipairs(self.VIEWERS) do
@@ -536,13 +547,26 @@ function CDM:ForEachCatalogued(fn)
                 local category = okInfo and type(entry) == "table" and entry.category or nil
                 local viewerKey = category ~= nil and self:CategoryViewer(category) or nil
                 spokenFor[cooldownID] = true
-                -- No viewer means Hidden, or a category we do not show. Both
-                -- are things the user chose not to see.
                 if viewerKey then
                     arranged = arranged + 1
                     fn(cooldownID, viewerKey, Order(viewerKey))
                 else
+                    -- NOT DISPLAYED, AND STILL OFFERED. These used to be
+                    -- dropped, on the reading that a category we do not map
+                    -- means the user chose not to see it. On a real character
+                    -- that is 65 spells out of 74: Blizzard's own default
+                    -- leaves nearly everything in Hidden, and the handful you
+                    -- arranged are the exception. Dropping them left a picker
+                    -- with nine entries next to a Cooldown Manager settings
+                    -- panel showing every one.
+                    --
+                    -- They go in a group of their OWN, ranked after all four
+                    -- viewers, so the arranged spells keep the order you gave
+                    -- them at the top and these sit underneath, labelled. The
+                    -- old complaint was that they were mixed in; being mixed
+                    -- in was the fault, not being present.
                     hidden = hidden + 1
+                    fn(cooldownID, HIDDEN_KEY, Order(HIDDEN_KEY))
                 end
             end
         end
@@ -723,8 +747,13 @@ function CDM:Dump()
     -- unreachable.
     local arranged, extra, hidden = self:ForEachCatalogued(function() end)
     ns.Print(string.format("Sources: |cffffd100%d|r arranged, |cffffd100%d|r " ..
-        "only in the category set, |cff888888%d not displayed|r.",
+        "only in the category set, |cffffd100%d|r not displayed by Blizzard.",
         arranged, extra, hidden))
+    if hidden > 0 then
+        ns.Print("   |cff888888The last group is listed too, under \"Not shown|r")
+        ns.Print("   |cff888888by Blizzard\" - they have no frame, so they can be|r")
+        ns.Print("   |cff888888picked but not yet tracked.|r")
+    end
     if arranged == 0 then
         ns.Print("   |cff888888No arrangement read - Blizzard's Cooldown Manager|r")
         ns.Print("   |cff888888settings have not been opened this session.|r")
