@@ -1224,6 +1224,41 @@ local function TestFillDirection()
     Check("The fallback is left to right", fallback.value == "right",
         tostring(fallback.value))
 
+    -- THE TWO AXES MUST NOT SOUND LIKE ONE.
+    --
+    -- Direction is space and "Over time" is the clock, and the owner asked
+    -- whether they were the same setting twice - because the second one was
+    -- called "Fill up", which is a direction word, sitting one row under a
+    -- control offering "Bottom to top". Both answers are written out now, and
+    -- no word may appear in both lists.
+    Check("There are two answers about the clock", #ns.FILL_CLOCKS == 2,
+        tostring(#ns.FILL_CLOCKS))
+
+    local sawFalse, sawTrue = false, false
+    for _, entry in ipairs(ns.FILL_CLOCKS) do
+        if entry.value == false then sawFalse = true end
+        if entry.value == true then sawTrue = true end
+        Check("The clock answer '" .. tostring(entry.value) .. "' is named",
+            type(entry.text) == "string" and entry.text ~= "")
+    end
+    Check("Draining is one of them", sawFalse)
+    Check("Filling is the other", sawTrue)
+
+    for _, clock in ipairs(ns.FILL_CLOCKS) do
+        for _, direction in ipairs(ns.FILL_DIRECTIONS) do
+            Check("'" .. clock.text .. "' is not also a direction",
+                clock.text ~= direction.text)
+        end
+    end
+
+    -- Driving a bar off a duration handle is asked about, never assumed. A
+    -- client without the method must fall back to the value mirror rather
+    -- than raise on the first cooldown that starts.
+    Check("Nothing cannot be driven by a timer",
+        ns.CDM:CanDriveTimer(nil) == false)
+    Check("A bar with no SetTimerDuration cannot be driven",
+        ns.CDM:CanDriveTimer({}) == false)
+
     -- ASKING TWICE MUST NOT CHANGE THE ANSWER.
     --
     -- Bars:Style resolves this once and stores the entry, so a caller reading

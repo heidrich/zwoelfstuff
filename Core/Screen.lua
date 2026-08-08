@@ -845,14 +845,66 @@ local function RefreshFill(cell)
         end
         aura.timer:SetShown(timerText ~= nil)
 
-        local function Tick(self)
+        -- FILL UP, ON A BAR WHOSE CLOCK IS BLIZZARD'S.
+        --
+        -- Copying a draining value can only be made to grow by subtracting it
+        -- from its maximum, and that is arithmetic on a secret. So this
+        -- setting did nothing at all here - on most bars - and the owner
+        -- reported exactly that: "die funktion fill up macht irgendwie nix".
+        --
+        -- The engine does it instead. A duration handle plus
+        -- Enum.StatusBarTimerDirection.ElapsedTime IS "fill up"; the same call
+        -- with RemainingTime is "drain away", and the client animates both
+        -- without any number reaching Lua. See CDM:DurationHandle.
+        --
+        -- Only when it is ASKED for. A drained bar keeps the value mirror it
+        -- has always had - that path is proven, and a handle that goes stale
+        -- shows a bar running to the wrong clock rather than not running.
+        local engine = ns.CDM:CanDriveTimer(fill) and aura.grow
+        local armed, armedAt
+
+        local function Arm(self, now)
+            local durObj = ns.CDM:DurationHandle(cell.mirrorItem, cell.spellID)
+            if not durObj then return false end
+            if durObj == armed then return true end
+
+            local interp = Enum.StatusBarInterpolation
+                and Enum.StatusBarInterpolation.None
             local ok = pcall(function()
-                self:SetMinMaxValues(mirror:GetMinMaxValues())
-                self:SetValue(mirror:GetValue())
+                self:SetMinMaxValues(0, 1)
+                self:SetTimerDuration(durObj, interp,
+                    Enum.StatusBarTimerDirection.ElapsedTime)
             end)
-            if not ok then
-                self:SetScript("OnUpdate", nil)
-                return
+            if not ok then return false end
+            armed, armedAt = durObj, now
+            return true
+        end
+
+        local function Tick(self)
+            local now = GetTime()
+
+            -- RE-ARMED, NOT RE-READ. The handle keeps ticking on its own, so
+            -- between fetches this costs nothing. It goes stale when a
+            -- cooldown is reduced or reset, which no event of ours sees - the
+            -- reference revalidates on a second and so does this.
+            local driven = false
+            if engine then
+                if not armed or now - (armedAt or 0) > 1 then
+                    driven = Arm(self, now)
+                else
+                    driven = true
+                end
+            end
+
+            if not driven then
+                local ok = pcall(function()
+                    self:SetMinMaxValues(mirror:GetMinMaxValues())
+                    self:SetValue(mirror:GetValue())
+                end)
+                if not ok then
+                    self:SetScript("OnUpdate", nil)
+                    return
+                end
             end
 
             if timerText then
@@ -873,6 +925,11 @@ local function RefreshFill(cell)
             if active ~= nil and active ~= cell.active then
                 cell.active = active
                 PaintAura(cell, active)
+                -- A NEW BUFF IS A NEW HANDLE. The aura instance changes on
+                -- every fresh application, and the old handle would run the
+                -- bar off the previous cast's clock - which looks like the
+                -- bar simply refusing to reset.
+                armed = nil
             end
         end
 

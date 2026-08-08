@@ -8,6 +8,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.35.0",
+        date = "2026-08-09",
+        lines = {
+            "\"FILL UP\" IS CALLED \"OVER TIME\" NOW, AND IT ACTUALLY DOES SOMETHING. Two complaints, one row: it looked like a second copy of Direction, and it did nothing.",
+            "It was never a duplicate. DIRECTION is space - which end the bar is anchored to, so which way the fill runs. OVER TIME is the clock - whether the bar is filling or emptying while the cooldown runs. A bar can drain downwards, or fill downwards. Both answers are written out now instead of a switch whose off position had no name, because \"Fill up\" is a direction word and it sat one row under a control offering \"Bottom to top\".",
+            "And it was inert on most bars, which was real. Our bar copies Blizzard's value for anything the Cooldown Manager times, and a draining value can only be made to grow by subtracting it from its maximum - arithmetic this patch does not allow on protected numbers. So the switch had nothing to act on.",
+            "The game does it now instead: it is handed the duration itself and told which way to run it. Filling and draining are the same instruction with one word changed, animated by the client, with no number ever read. A bar set to drain keeps exactly the behaviour it had.",
+        },
+    },
+    {
         version = "4.34.2",
         date = "2026-08-09",
         lines = {

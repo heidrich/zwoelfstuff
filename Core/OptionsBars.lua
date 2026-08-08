@@ -1454,8 +1454,17 @@ function Workspace:BuildOptionsPane(parent, width)
         grid:FullRow("Direction", { controlWidth = 190 }),
         ns.FILL_DIRECTIONS, Get("fillDirection"), Set("fillDirection"),
         { apply = Apply })
-    fillRows[#fillRows + 1] = Switch("Fill up", "fillGrow",
-        "Grow as time passes instead of draining away")
+    -- OVER TIME, not "Fill up". The old label read as a direction, one row
+    -- under a control called Direction whose answers include "Bottom to top"
+    -- - and the owner reasonably asked whether the two were the same setting
+    -- twice. They are space and time; see ns.FILL_CLOCKS.
+    fillRows[#fillRows + 1] = UI.Dropdown(
+        grid:FullRow("Over time", { controlWidth = 190 }),
+        ns.FILL_CLOCKS, Get("fillGrow"), Set("fillGrow"), { apply = Apply })
+    fillRows[#fillRows + 1] = grid:Note("Direction is which way the bar "
+        .. "runs; this is whether it is filling or emptying while it runs. "
+        .. "A bar can drain downwards, or fill downwards - the two settings "
+        .. "are space and time, and neither implies the other.")
     -- Stack colours ----------------------------------------------------------
     --
     -- Three bands rather than a list editor with add and remove buttons. A
@@ -2195,7 +2204,9 @@ function Workspace:BuildCellPane(parent, width)
     UI.Dropdown(grid:FullRow("Direction", { controlWidth = 190 }),
         ns.FILL_DIRECTIONS, Get("fillDirection", "right"),
         Set("fillDirection"), { apply = Apply })
-    Switch("Fill up", "fillGrow", "Grow as time passes instead of draining")
+    UI.Dropdown(grid:FullRow("Over time", { controlWidth = 190 }),
+        ns.FILL_CLOCKS, Get("fillGrow", false), Set("fillGrow"),
+        { apply = Apply })
     Switch("Spark", "showSpark", "A bright line on the moving edge")
     Switch("Charge marks", "chargeMarks", "One line per charge boundary")
 

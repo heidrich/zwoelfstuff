@@ -1262,6 +1262,70 @@ function CDM:ItemIsActive(item)
     return nil
 end
 
+---------------------------------------------------------------------------
+-- The duration HANDLE, which is how a bar can run backwards
+--
+-- Mirroring Blizzard's bar copies its value, and a value that drains can only
+-- be made to grow by subtracting it from its maximum. On this patch that is
+-- arithmetic on a secret and it is exactly what an addon may not do. So the
+-- switch called "Fill up" did nothing at all on any bar the Cooldown Manager
+-- times, which is most of them - a setting that silently does nothing, and
+-- the owner reported it as such.
+--
+-- The engine already knows how to do this. A StatusBar takes a DURATION
+-- OBJECT and a direction: SetTimerDuration(durObj, interpolation, direction)
+-- with Enum.StatusBarTimerDirection.RemainingTime or .ElapsedTime. Drain and
+-- grow are the same call with one argument changed, the client animates it,
+-- and no number is ever read into Lua. Read off working code
+-- (EllesmereUICdmBuffBars.lua:4501-4518 and :4088-4094), never invented.
+--
+-- TWO SOURCES, because a bar cell holds one of two things:
+--
+--   a tracked BUFF   C_UnitAuras.GetAuraDuration(unit, auraInstanceID) - the
+--                    aura's own remaining time. The instance ID can be a
+--                    secret, and passing a secret to the query hard errors on
+--                    a restricted unit, so ns.CanCompute guards it exactly as
+--                    ItemStacks does.
+--   a COOLDOWN       C_Spell.GetSpellCooldownDuration(spellID) - the handle
+--                    tracks haste and cooldown reduction on its own.
+--
+-- The aura is asked FIRST. A buff-bar cell is showing you the buff, not the
+-- cooldown of the spell that applied it, and asking in the other order would
+-- fill the bar to the wrong clock while looking entirely plausible.
+--
+-- Returns nil when nothing answers, and every caller falls back to the value
+-- mirror - which is today's behaviour, unchanged.
+---------------------------------------------------------------------------
+function CDM:DurationHandle(item, spellID)
+    if item then
+        local get = C_UnitAuras and C_UnitAuras.GetAuraDuration
+        local instanceID, unit = item.auraInstanceID, item.auraDataUnit
+        if get and unit and ns.CanCompute(instanceID) then
+            local ok, durObj = pcall(get, unit, instanceID)
+            if ok and durObj then return durObj end
+        end
+    end
+
+    if Usable(spellID) then
+        local get = C_Spell and C_Spell.GetSpellCooldownDuration
+        if get then
+            local ok, durObj = pcall(get, spellID)
+            if ok and durObj then return durObj end
+        end
+    end
+    return nil
+end
+
+-- Can this client drive a StatusBar off a duration handle at all? Asked once
+-- per bar rather than assumed, because the whole path is newer than the rest
+-- of this file and a missing Enum member is one greyed row, not an error.
+function CDM:CanDriveTimer(bar)
+    return bar and type(bar.SetTimerDuration) == "function"
+        and Enum and Enum.StatusBarTimerDirection
+        and Enum.StatusBarTimerDirection.ElapsedTime ~= nil
+        and true or false
+end
+
 -- style comes from ns.Bars:Style, so every number here has already been
 -- resolved the same way it will be for our own drawn cells.
 --

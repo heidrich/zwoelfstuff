@@ -96,6 +96,31 @@ ns.FILL_DIRECTIONS = {
       orientation = "VERTICAL",   reverse = true },
 }
 
+-- THE OTHER AXIS, and it lives here so the two cannot be read apart.
+--
+-- The owner asked whether this and the four directions above are the same
+-- setting twice, which is a fair question about a switch that was called
+-- "Fill up" - that reads as a DIRECTION, sitting one row under a control
+-- called Direction whose answers include "Bottom to top".
+--
+-- They are two axes of one motion and neither implies the other:
+--
+--   Direction is SPACE. Which end of the bar is nailed down, and therefore
+--   which way the fill runs - left to right, right to left, bottom to top,
+--   top to bottom.
+--
+--   This is TIME. Whether the bar is filling or emptying while the cooldown
+--   runs. A bar can drain to the left or drain downwards; it can equally
+--   fill to the left or fill downwards.
+--
+-- Named after the clock, with BOTH answers written out. The off state of a
+-- switch has no name, and an unnamed state is one you have to work out - so
+-- a switch was the wrong control for a question with two real answers.
+ns.FILL_CLOCKS = {
+    { value = false, text = "Drains away" },
+    { value = true,  text = "Fills up" },
+}
+
 -- Takes the stored NAME and hands back the entry. It also takes an entry and
 -- hands it straight back, and that second half is not politeness.
 --

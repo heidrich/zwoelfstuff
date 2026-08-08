@@ -8,6 +8,46 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.35.0] - 2026-08-09
+
+### Fixed
+
+- **"Fill up" did nothing, and it was not a duplicate of Direction.** Both
+  halves of that came from the owner in one breath: "ist das nicht die
+  laufrichtung?" and "die funktion macht irgendwie nix".
+
+  They are two axes of one motion and neither implies the other. **Direction
+  is space** - which end the bar is anchored to, so which way the fill runs.
+  **Over time is the clock** - whether the bar is filling or emptying while
+  the cooldown runs. A bar can drain downwards, or fill downwards.
+
+  The setting is called **"Over time"** now, with both of its answers written
+  out ("Drains away" / "Fills up") instead of a switch whose off state had no
+  name. "Fill up" was a direction word sitting one row under a control called
+  Direction whose answers include "Bottom to top" - the question was the
+  label's fault, not the reader's.
+
+  And it now does something. On a bar the Cooldown Manager times, our bar
+  mirrors Blizzard's value - and a draining value can only be made to grow by
+  subtracting it from its maximum, which is arithmetic on a secret and
+  forbidden on this patch. So the switch was inert on most bars.
+
+  The engine does it instead: a duration handle plus
+  `Enum.StatusBarTimerDirection.ElapsedTime` **is** "fills up", the same call
+  with `RemainingTime` is "drains away", and the client animates both without
+  a number reaching Lua. The handle comes from
+  `C_UnitAuras.GetAuraDuration` for a tracked buff and
+  `C_Spell.GetSpellCooldownDuration` for a cooldown, asked in that order because a
+  buff bar is showing you the buff and not the cooldown of the spell that
+  applied it.
+
+  Every step is guarded, and a bar that is draining keeps the value mirror it
+  has always had - so nothing that worked yesterday changed.
+
+- `/zs test` now checks that no word appears in both the Direction list and
+  the Over time list. That is the check that keeps the question from coming
+  back.
+
 ## [4.34.2] - 2026-08-09
 
 ### Fixed
