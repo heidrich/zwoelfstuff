@@ -2303,38 +2303,33 @@ function UI.CellGrid(parent, cfg)
                     -- you nothing about the bar you are actually building.
                     local inset = (place == "hidden") and 0 or h
                     local area = math.max(1, w - inset)
-                    local start = (place == "right") and 0 or inset
+                    local leftPad = (place == "right") and 0 or inset
+                    local rightPad = (place == "right") and -inset or 0
 
-                    -- WHICH END THE FILL STARTS FROM, read off the same
-                    -- one-of-four the screen uses. It was still asking
-                    -- `style.fillSide` - the boolean that fillDirection
-                    -- REPLACED in 4.29.0. Nothing writes it any more, so the
-                    -- card ignored the Direction control entirely and drew
-                    -- every bar left-to-right while the screen drew it the way
-                    -- you asked. ApplyDefaults still seeds fillSide = false on
-                    -- every bar, which is why it looked deliberate.
-                    cell.fill:ClearAllPoints()
+                    -- WHICH WAY THE FILL RUNS, read off the same one-of-four
+                    -- the screen uses - both ends AND both axes.
+                    --
+                    -- It was asking `style.fillSide`, the boolean that
+                    -- fillDirection REPLACED in 4.29.0: nothing writes it any
+                    -- more, so the card ignored the Direction control
+                    -- entirely. And when that was put right it still only
+                    -- swapped left for right, so a bar set to fill upwards
+                    -- previewed lying down. Both halves of the answer come
+                    -- from Layout now.
                     local runs = ns.Layout.FillDirection(style and style.fillDirection)
-                    if runs.reverse then
-                        cell.fill:SetPoint("TOPRIGHT", cell, "TOPLEFT",
-                            start + area, 0)
-                        cell.fill:SetPoint("BOTTOMRIGHT", cell, "BOTTOMLEFT",
-                            start + area, 0)
-                    else
-                        cell.fill:SetPoint("TOPLEFT", cell, "TOPLEFT", start, 0)
-                        cell.fill:SetPoint("BOTTOMLEFT", cell, "BOTTOMLEFT", start, 0)
-                    end
-                    cell.fill:SetWidth(math.max(1, area * 0.7))
+                    local corner, pad, fillW, fillH =
+                        ns.Layout.PreviewFill(runs, leftPad, rightPad, area, h)
+                    cell.fill:ClearAllPoints()
+                    cell.fill:SetPoint(corner, cell, corner, pad, 0)
+                    cell.fill:SetSize(fillW, fillH)
 
-                    -- The whole run of the bar, under the part-full fill, so
-                    -- its LENGTH is visible whether or not there is a backdrop
-                    -- behind it. Anchored across the same area rather than
-                    -- given a width, so it follows the cell.
+                    -- The whole run of the bar, under the part-full fill.
+                    -- Only ever seen when nothing else shows how long the bar
+                    -- is - see the colour below. Anchored across the same area
+                    -- rather than given a width, so it follows the cell.
                     cell.track:ClearAllPoints()
-                    cell.track:SetPoint("TOPLEFT", cell, "TOPLEFT",
-                        (place == "right") and 0 or inset, 0)
-                    cell.track:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT",
-                        (place == "right") and -inset or 0, 0)
+                    cell.track:SetPoint("TOPLEFT", cell, "TOPLEFT", leftPad, 0)
+                    cell.track:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", rightPad, 0)
 
                     if style then
                         local fill = style.fillTexture
@@ -2355,15 +2350,24 @@ function UI.CellGrid(parent, cfg)
                         ns.Tint(cell.fill, colour, style.fillAlpha,
                             style.fillGradient)
 
-                        -- The track stays FLAT on purpose: it is the bar's
-                        -- own colour at 16% standing in for the part that is
-                        -- not filled, and ramping it would draw a second
-                        -- gradient nobody asked for behind the first.
+                        -- THE EMPTY PART OF A BAR IS THE BACKDROP, and the
+                        -- track is not part of the bar at all - it is the
+                        -- editor saying how far the bar reaches when nothing
+                        -- else does. So it wears the EDITOR's colour, one step
+                        -- off the card behind it, and never the bar's own: at
+                        -- 16% of the fill colour a green bar previewed as
+                        -- bright green then dark green, where on screen it is
+                        -- bright green and then the plate. That is the
+                        -- preview inventing a look the bar does not have,
+                        -- which is the one thing it may never do.
                         cell.track:SetTexture(ns.WHITE)
-                        cell.track:SetVertexColor(colour[1], colour[2], colour[3],
-                            0.16)
+                        cell.track:SetVertexColor(C.control[1], C.control[2],
+                            C.control[3], 1)
                     end
-                    cell.track:Show()
+                    -- Hidden whenever the backdrop is already showing the
+                    -- bar's length, which is the usual case and the one the
+                    -- screen matches exactly.
+                    cell.track:SetShown(ns.Layout.PreviewTrack(style))
                     cell.fill:Show()
 
                     if style and style.spellName.show then

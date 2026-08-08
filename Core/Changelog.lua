@@ -8,6 +8,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.32.1",
+        date = "2026-08-08",
+        lines = {
+            "THE EMPTY PART OF A BAR IN THE PREVIEW WAS THE WRONG COLOUR, and it was the card's own invention. It washed the unfilled run in your bar's own colour at 16%, so a green bar previewed as bright green and then dark green - where on screen it is bright green and then whatever your backdrop is. Nothing on screen has ever drawn that second colour.",
+            "It was put there for a real reason: with the backdrop switched off there is nothing behind a part-full fill at all, so the bar simply looked shorter than it is. That still holds - so the mark is still drawn, but only when the backdrop is not already showing the length, and in the settings window's own grey rather than in your bar's colour. It reads as the editor saying \"the bar reaches to here\" instead of as a colour somebody chose.",
+            "",
+            "AND THE PREVIEW CAN FILL UPWARDS NOW. Direction offers four ways for a bar to run and the card only ever knew two of them: set to fill bottom-to-top or top-to-bottom, the bar stood up on screen and went on lying down in the preview.",
+        },
+    },
+    {
         version = "4.32.0",
         date = "2026-08-08",
         lines = {

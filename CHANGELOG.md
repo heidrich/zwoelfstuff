@@ -8,6 +8,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.32.1] - 2026-08-08
+
+Two more ways the preview card disagreed with the screen, both reported by
+looking at it: "das scheint immer noch nicht zu passen".
+
+### Fixed
+
+- **The unfilled run of a bar was painted in the bar's own colour at 16%.**
+  Nothing on screen draws that: the empty part of a bar is the backdrop and
+  nothing else - a StatusBar's fill over the plate behind it, with no third
+  thing in between. A green bar previewed as bright green then dark green
+  where the screen shows bright green then black.
+
+  The track exists for a case that is still real - with the backdrop off
+  there is nothing behind the part-full fill and the bar looks shorter than
+  it is - so it is kept for exactly that case, and painted in the editor's
+  own control grey. A preview may show you MORE than the screen does, as
+  long as what it adds cannot be mistaken for something you chose.
+
+- **The preview could not fill upwards.** Direction has offered four ways for
+  a bar to run since 4.29.0 and the card only ever swapped left for right, so
+  a bar set to bottom-to-top or top-to-bottom stood up on screen and went on
+  lying down in the editor. `Layout.PreviewFill` answers it for both axes
+  now, beside the screen's half of the same rule.
+
+Both were invisible to the harness, which answers `GetWidth`/`GetHeight` with
+fixed numbers whatever was set. Both are pure functions with checks now
+(`Layout.PreviewFill`, `Layout.PreviewTrack`), which is this project's
+standing answer to a rule the harness cannot see.
+
 ## [4.32.0] - 2026-08-08
 
 Twenty confirmed findings from a five-lens adversarial sweep of the new

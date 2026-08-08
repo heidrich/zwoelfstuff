@@ -1185,6 +1185,82 @@ local function TestFillDirection()
 end
 
 ---------------------------------------------------------------------------
+-- THE PREVIEW CARD MUST DRAW THE BAR THE SCREEN WOULD DRAW.
+--
+-- Both of these were faults the harness could not have seen as pixels: the
+-- card is drawn with textures whose sizes this stub does not honour. As pure
+-- functions they are four arguments in and four out, so they are checked
+-- here - which is the standing answer in this project to "the harness is
+-- blind to geometry".
+---------------------------------------------------------------------------
+local function TestPreviewBar()
+    local Layout = ns.Layout
+
+    -- Every direction the settings page offers must place the fill somewhere.
+    -- Left and right were the whole of it, so up and down previewed lying
+    -- down while the bar on screen stood up.
+    local corners, axes = {}, {}
+    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
+        local corner, pad, w, h = Layout.PreviewFill(entry, 20, -0, 100, 24)
+        Check("Preview places the '" .. entry.value .. "' fill",
+            corner and w and h, tostring(corner))
+        -- The corner alone does not separate them and must not be asked to:
+        -- left-to-right and top-to-bottom BOTH hang off the top left, and
+        -- rightly so. What has to be its own is the corner together with the
+        -- axis the fraction goes on.
+        local key = corner .. ":" .. entry.orientation
+        Check("Preview '" .. entry.value .. "' draws unlike the others",
+            not corners[key], key .. " already used by "
+            .. tostring(corners[key]))
+        corners[key] = entry.value
+        axes[entry.orientation] = (axes[entry.orientation] or 0) + 1
+
+        -- The fraction goes on the axis the bar runs along and the other
+        -- dimension stays full. Getting that the wrong way round is a bar
+        -- that previews at 70% HEIGHT and full length.
+        if entry.orientation == "VERTICAL" then
+            Check("Preview '" .. entry.value .. "' is short, not narrow",
+                w == 100 and h < 24, tostring(w) .. "x" .. tostring(h))
+        else
+            Check("Preview '" .. entry.value .. "' is narrow, not short",
+                h == 24 and w < 100, tostring(w) .. "x" .. tostring(h))
+        end
+        Check("Preview '" .. entry.value .. "' clears the icon",
+            pad ~= nil, tostring(pad))
+    end
+    Check("Both axes are previewed", (axes.VERTICAL or 0) == 2
+        and (axes.HORIZONTAL or 0) == 2)
+
+    -- A right-hand icon is cleared from the right, and the reversed fill is
+    -- the one that has to know it.
+    local corner, pad = Layout.PreviewFill(Layout.FillDirection("left"),
+        0, -24, 100, 24)
+    Check("A reversed fill starts at the right edge", corner == "TOPRIGHT",
+        tostring(corner))
+    Check("...inside the icon on that side", pad == -24, tostring(pad))
+
+    -- THE EMPTY PART OF A BAR IS THE BACKDROP. The card painted it in the
+    -- bar's own colour at 16%, so a green bar previewed as green then dark
+    -- green where the screen shows green then plate: "das scheint immer noch
+    -- nicht zu passen".
+    local style = { backdrop = true, backdropAlpha = 0.9 }
+    Check("With a backdrop the card adds nothing of its own",
+        Layout.PreviewTrack(style) == false)
+
+    style.backdrop = false
+    Check("With the backdrop off the bar's length is still shown",
+        Layout.PreviewTrack(style) == true)
+
+    -- A backdrop that is on but invisible is the same case, and it is the one
+    -- a rule written as "if not style.backdrop" gets wrong.
+    style.backdrop, style.backdropAlpha = true, 0
+    Check("A backdrop at zero opacity counts as off",
+        Layout.PreviewTrack(style) == true)
+
+    Check("No style, nothing to mark", Layout.PreviewTrack(nil) == false)
+end
+
+---------------------------------------------------------------------------
 -- Gradients
 --
 -- The whole of "which way round do the two colours go" is four strings in and
@@ -2007,6 +2083,7 @@ function Test:Run()
         { "Snapping",      TestSnapping },
         { "Menu filter",   TestMenuFilter },
         { "Fill direction", TestFillDirection },
+        { "Preview bar",   TestPreviewBar },
         { "Gradients",     TestGradients },
         { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },
