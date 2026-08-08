@@ -178,9 +178,13 @@ local function Announce(spellID)
             or (count .. " new procs")
         wipe(newProcs)
 
+        -- It ends with what to DO with it. Somebody collecting procs for
+        -- someone else has no reason to know the command, and "open Auras to
+        -- see them" told them where to look at a list rather than how to hand
+        -- it over - which is the whole reason they are running this.
         ns.Print(string.format("|cff40ff40%s|r seen for the first time on this "
-            .. "spec, and recorded. Nothing is wrong - open Auras to see them.",
-            what))
+            .. "spec, and recorded. Nothing is wrong. |cffffd100/zs report|r "
+            .. "when you are done, and paste what it shows you.", what))
     end)
 end
 
