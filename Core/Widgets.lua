@@ -2647,9 +2647,18 @@ function Grid:Note(text, height)
         if self.tooltipNotes then self:WireTooltip(self.lastRow) end
         return self:Wide(note, 0, 0, 0, NOTE_INDENT)
     end
-    -- Width is set, so GetStringHeight reports the WRAPPED height. Measured
-    -- after the width, never before: the unwrapped height is one line, and
-    -- everything below would be laid out on top of the other two.
+    -- MEASURED AT LAYOUT TIME, NOT HERE - unless a height was given outright.
+    --
+    -- A note's height is a WRAPPED height, so it depends on the font. Fonts
+    -- arrive late: another addon registering one with LibSharedMedia, or the
+    -- panel font being changed, re-wraps every note on the page. Measured once
+    -- when the note was written, the page then lays the next section out on
+    -- top of it - three notes and a heading drawn over each other, which is
+    -- exactly what came back in a screenshot.
+    --
+    -- Width is set first either way: the unwrapped height is one line, and
+    -- measuring before the width has always been the same bug in miniature.
+    note.dkMeasure = height == nil
     return self:Wide(note, height or note:GetStringHeight(), 3, 11, NOTE_INDENT)
 end
 
@@ -2778,8 +2787,17 @@ function Grid:Layout()
             end
             -- dkHeight lets a block that grows with its content - a grid
             -- gaining a row - report its real height instead of the one it
-            -- happened to have when it was recorded.
-            y = y - ((region and region.dkHeight) or item.height)
+            -- happened to have when it was recorded. dkMeasure does the same
+            -- for a note, whose height depends on a font that can change
+            -- under it: it is asked again here, every pass.
+            local height = item.height
+            if region and region.dkMeasure then
+                region:SetWidth(self.width - (item.indent or 0))
+                height = math.max(region:GetStringHeight() or 0, height)
+            elseif region and region.dkHeight then
+                height = region.dkHeight
+            end
+            y = y - height
             pending = item.padBottom or UI.ROW_GAP
         else
             if column == 0 then OpenGap(item.padTop) end

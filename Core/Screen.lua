@@ -205,6 +205,16 @@ local function BuildAuraVisual(cell)
     ns.Media.ApplyFont(aura.charges, nil, 11)
     aura.charges:Hide()
 
+    -- HOW MANY STACKS ARE ON IT. Same story as the charge count above, and
+    -- found the same way: the Stacks settings moved nothing on a bar because
+    -- there was no stack number on a bar to move. Adopted icons wear
+    -- Blizzard's own Applications frame; a cell we draw had nothing at all,
+    -- and the whole section of the panel drove a renderer that did not exist.
+    aura.stacks = aura.textLayer:CreateFontString(nil, "OVERLAY")
+    aura.stacks:SetWordWrap(false)
+    ns.Media.ApplyFont(aura.stacks, nil, 11)
+    aura.stacks:Hide()
+
     cell.aura = aura
     return aura
 end
@@ -285,9 +295,12 @@ local function StyleAuraVisual(aura, style, isBar)
     -- shape. Same anchor and same inset as an adopted icon's, from the same
     -- function, so the two renderers cannot drift apart on it.
     ns.PlaceText(aura.charges, aura, style.charges)
-    -- Read by ApplyChargeCount, which runs on its own event and has no style
-    -- table in hand - the same arrangement as the spark and the marks above.
+    ns.PlaceText(aura.stacks, aura, style.stacks)
+    -- Read by ApplyChargeCount and ApplyStackCount, which run on their own
+    -- clocks and have no style table in hand - the same arrangement as the
+    -- spark and the marks above.
     aura.showCharges = style.charges.show
+    aura.showStacks = style.stacks.show
 end
 
 -- WHERE THE SPELL NAME SITS ON A BAR CELL.
@@ -363,9 +376,19 @@ local function LayoutAuraVisual(aura, cfg, slot)
         PlaceLabel(aura.label, aura, cfg.spellName, width, leftInset, rightInset)
         aura.label:SetShown((cfg.spellName or {}).show ~= false)
 
-        aura.timer:ClearAllPoints()
-        aura.timer:SetPoint("RIGHT", aura, "RIGHT",
-            (shown and placement == "right") and -(height + 5) or -5, 0)
+        -- THE COUNTDOWN ON A MIRRORED BAR, and its position was thrown away.
+        --
+        -- This font string is what a bar-shaped cell actually shows: the cell
+        -- takes its timing from Blizzard's own bar, so it has no duration of
+        -- its own to give the Cooldown widget and the number is copied here
+        -- instead. It took its font and colour from the countdown settings and
+        -- was then anchored hard to RIGHT - so Position and both nudges moved
+        -- nothing at all on a bar, which is exactly what was reported.
+        --
+        -- It shares the band with the spell name, so it gets the same
+        -- treatment: the position decides the end and the justification, and
+        -- the two can be told apart by putting them at opposite ends.
+        PlaceLabel(aura.timer, aura, cfg.countdown, width, leftInset, rightInset)
 
         aura.cd:ClearAllPoints()
         if shown then
@@ -556,6 +579,43 @@ local function ApplyChargeCount(cell)
     else
         aura.charges:SetText("")
         aura.charges:Hide()
+    end
+end
+
+-- HOW MANY STACKS ARE ON IT, on a cell we draw ourselves.
+--
+-- The count comes out of the aura, so it is a secret value in combat and
+-- travels the same road as the charge count: never read, only handed to
+-- SetFormattedText, which the engine formats without ever showing it to us.
+--
+-- The one difference is the "not worth a number" rule. Blizzard's own display
+-- hides a single application, and it can do that because it makes the
+-- comparison inside the game. When the count IS readable - out of combat, or
+-- straight out of the cache - the same rule is applied here. When it is not,
+-- the number is shown, because a secret may not be compared and guessing that
+-- it is 1 would hide a real stack count for the whole fight.
+local function ApplyStackCount(cell)
+    local aura = cell.aura
+    if not (aura and aura.stacks) then return end
+
+    local value, show = nil, false
+
+    if aura.showStacks then
+        local item = cell.mirrorItem or cell.item
+        local count = item and ns.CDM:ItemStacks(item)
+
+        if ns.CanCompute(count) and type(count) == "number" then
+            if count > 1 then value, show = count, true end
+        elseif ns.CanDisplay(count) then
+            value, show = count, true
+        end
+    end
+
+    if show and pcall(aura.stacks.SetFormattedText, aura.stacks, "%d", value) then
+        aura.stacks:Show()
+    else
+        aura.stacks:SetText("")
+        aura.stacks:Hide()
     end
 end
 
@@ -793,6 +853,7 @@ local function RefreshFill(cell)
             -- Bone Shield charge falls off while the timer runs on - so it is
             -- read here rather than on a render pass.
             FeedThresholds(cell)
+            ApplyStackCount(cell)
 
             -- Whether the buff is up is Blizzard's answer as well, and it
             -- changes without any render pass - so it is asked here rather
@@ -1245,6 +1306,8 @@ function Screen:BlankCell(cell)
         -- own event, which would go on writing a number for the spell that
         -- used to be here.
         cell.aura.charges:SetText("")
+        cell.aura.stacks:SetText("")
+        cell.aura.stacks:Hide()
         cell.aura.charges:Hide()
     end
     if cell.caption then cell.caption:Hide() end
@@ -1355,6 +1418,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
             PaintAura(cell, true)
             RefreshFill(cell)
             ApplyChargeCount(cell)
+            ApplyStackCount(cell)
         elseif cell.aura then
             cell.aura:Hide()
         end
@@ -1445,6 +1509,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     PaintAura(cell, cell.active and true or false)
     RefreshFill(cell)
     ApplyChargeCount(cell)
+    ApplyStackCount(cell)
 
     -- Ours, so the effects get a real remaining time out of the clock we run
     -- ourselves. Adopted frames deliberately do not - see Core/Effects.lua.
@@ -1519,6 +1584,7 @@ function Screen:RefreshCharges()
         for _, cell in ipairs(bar.cells) do
             if cell.aura and cell.aura:IsShown() then
                 ApplyChargeCount(cell)
+                ApplyStackCount(cell)
             end
         end
     end
@@ -1711,6 +1777,79 @@ function Screen:DumpCells()
     ns.Print("|cff888888ours = we draw it (an aura proc, or a cooldown whose "
         .. "frame is not pooled right now). Those are dimmed while inactive - "
         .. "that is on purpose, not a size.|r")
+end
+
+---------------------------------------------------------------------------
+-- Where the text ACTUALLY IS, against where the setting says it should be
+--
+-- Three separate fixes for "the position does nothing" have now been made by
+-- reading the code and reasoning about it, and the owner has reported each of
+-- them still broken. That is the snapping lesson arriving a second time: a
+-- rule that cannot be run gets diagnosed by reading, and reading keeps being
+-- wrong. So this asks the frames.
+--
+-- Per text element it prints what the setting says, what the font string's
+-- own first anchor point actually is, and which way it reads. A line where
+-- those disagree is the answer; a line where they AGREE means the placement
+-- is right and something else - the width, the band, the justification - is
+-- what makes it look unmoved.
+---------------------------------------------------------------------------
+function Screen:DumpText()
+    ns.Print("|cffffd100--- text: asked for / actually ---|r")
+
+    local function Report(what, fontString, wanted)
+        if not fontString then
+            ns.Print(string.format("   %-10s |cff888888no font string on this "
+                .. "cell - nothing to place|r", what))
+            return
+        end
+
+        local point, relativeTo, _, x, y = fontString:GetPoint(1)
+        local justify = fontString.GetJustifyH and fontString:GetJustifyH()
+        local askedFor = (wanted and wanted.anchor) or "?"
+
+        -- Compared against the POINT, not the offsets: the nudge is added to
+        -- an inset that differs per element, so a mismatch there is expected
+        -- and only the point can be judged from here.
+        local agrees = point ~= nil and (point == askedFor
+            or (wanted and ns.Layout.LabelAnchor(askedFor) == point))
+
+        ns.Print(string.format("   %-10s %s asked |cff7ec6d4%s|r  got "
+            .. "|cff7ec6d4%s|r on %s  offset %.0f,%.0f  reads %s  shown %s",
+            what,
+            agrees and "|cff40ff40ok|r" or "|cffff4040NO|r",
+            askedFor, tostring(point),
+            relativeTo and (relativeTo:GetName() or "an unnamed frame") or "nothing",
+            x or 0, y or 0, tostring(justify), tostring(fontString:IsShown())))
+    end
+
+    for index, cfg in ipairs(ns.db.bars) do
+        local bar = barFrames[index]
+        if bar then
+            for cellIndex, cell in ipairs(bar.cells) do
+                if cell:IsShown() and cell.spellID then
+                    local aura = cell.aura
+                    ns.Print(string.format("|cffffd100%d.%d %s|r  %s", index,
+                        cellIndex, ns.SpellName(cell.spellID) or "?",
+                        cell.item and "|cff40ff40adopted|r"
+                            or (aura and "|cffffd100ours|r" or "?")))
+
+                    if aura then
+                        Report("name", aura.label, cfg.spellName)
+                        Report("countdown", aura.timer, cfg.countdown)
+                        Report("stacks", aura.stacks, cfg.stacks)
+                        Report("charges", aura.charges, cfg.charges)
+                    elseif cell.caption then
+                        Report("name", cell.caption, cfg.spellName)
+                    end
+                end
+            end
+        end
+    end
+
+    ns.Print("|cff888888A cell marked 'adopted' wears Blizzard's own frame, "
+        .. "and its numbers are Blizzard's - only the name is ours there. "
+        .. "'ours' means every line above is something this addon placed.|r")
 end
 
 ---------------------------------------------------------------------------

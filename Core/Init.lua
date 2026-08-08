@@ -811,6 +811,12 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         ns.Screen:DumpCells()
         ns.CDM:DumpSkin()
 
+    -- "Position does nothing" has now been answered three times by reading the
+    -- code, and been wrong three times. This asks the frames instead: what the
+    -- setting says against where the font string actually ended up.
+    elseif cmd == "text" then
+        ns.Screen:DumpText()
+
     elseif cmd == "test" then
         ns.SelfTest:Run()
 

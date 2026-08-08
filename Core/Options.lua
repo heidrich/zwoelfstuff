@@ -402,6 +402,7 @@ local function BuildAboutPage(page, width)
         "  /zs auras icon <glowID> <spellID>    which icon a proc shows",
         "  /zs auras bind <glowID> <auraID>     name the buff itself (12.1 route)",
         "  /zs auras forget <glowID>            drop a recording",
+        "  /zs text               where each number and name actually ended up",
         "  /zs minimap            show or hide the minimap button",
         "  /zs reset              restore defaults, keeping recorded procs",
     }, "\n"), 12, C.text)
