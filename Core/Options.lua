@@ -548,6 +548,43 @@ function Options:Create()
         C.textGhost)
     clientVersion:SetPoint("RIGHT", foot, "RIGHT", -UI.PAD, 0)
 
+    -- DISCORD, above the foot rule.
+    --
+    -- The click cannot open a browser - no addon can, the client has no call
+    -- for it - so it opens the copy box with the invite already selected. That
+    -- is the honest version of a link here: one Ctrl+C and it is in the
+    -- address bar. A row that looked like a link and did nothing would be
+    -- worse than no row.
+    local DISCORD_URL = "https://discord.gg/d2EnXGNbGu"
+
+    local discord = CreateFrame("Button", nil, rail)
+    discord:SetHeight(UI.NAV_ITEM_H)
+    discord:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 6)
+    discord:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 6)
+
+    local discordMark = UI.Glyph(discord, "brand-discord", 14, C.textDim)
+    -- The same 16 the rail's own heading uses, past where the active row's
+    -- accent bar sits, so it lines up with the nav above it.
+    discordMark:SetPoint("LEFT", discord, "LEFT", 15, 0)
+
+    local discordLabel = UI.Label(discord, "Discord", UI.FS.row, C.textDim)
+    discordLabel:SetPoint("LEFT", discord, "LEFT", 40, 0)
+
+    discord:SetScript("OnEnter", function()
+        discordLabel:SetTextColor(C.text[1], C.text[2], C.text[3])
+        discordMark:SetColor(C.accentCool[1], C.accentCool[2], C.accentCool[3])
+    end)
+    discord:SetScript("OnLeave", function()
+        discordLabel:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        discordMark:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
+    end)
+    discord:SetScript("OnClick", function()
+        UI.CopyBox("Discord", DISCORD_URL,
+            "Ctrl+C copies it, then paste it into your browser. Esc closes. "
+            .. "An addon cannot open a browser itself - the client has no "
+            .. "call for it, by design.")
+    end)
+
     -- ONE rule, across the whole window. Three separate lines with three sets
     -- of padding never quite agree, and the eye reads the disagreement as
     -- sloppiness even when the heights match.

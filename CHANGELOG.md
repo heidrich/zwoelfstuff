@@ -8,6 +8,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.28.0] - 2026-08-08
+
+### Added
+
+- DISCORD IN THE LEFT COLUMN, above the version. Clicking it opens the invite
+  in a copy box with the whole link already selected. No addon can open a
+  browser - the client has no call for it, on purpose - and a row that looked
+  like a link and did nothing would be worse than no row.
+
+- The mark next to it is `brand-discord`, drawn here rather than traced from
+  Discord's brand kit, and it is NOT their official logo: a chat blob with two
+  eyes. Solid rather than the 1.4 stroke the rest of the set uses, because a
+  brand mark is solid and an outlined blob is mush at 14 pixels. To use the
+  real one, drop Discord's own SVG into the design icons folder as
+  `brand-discord.svg` and run the same pipeline; the name is already wired up
+  and nothing else changes.
+
 ## [4.27.0] - 2026-08-08
 
 ### Added
