@@ -451,7 +451,7 @@ local function CreateMover(index)
     mover.cog:SetSize(20, 20)
     mover.cog:SetPoint("TOPRIGHT", mover, "TOPRIGHT", -2, -2)
     mover.cog:SetFrameLevel(mover:GetFrameLevel() + 4)
-    local cogGlyph = UI.Glyph(mover.cog, "sliders", 12, C.textDim)
+    local cogGlyph = UI.Glyph(mover.cog, "ui-gear", 12, C.textDim)
     cogGlyph:SetPoint("CENTER", mover.cog, "CENTER", 0, 0)
     mover.cog:SetScript("OnEnter", function()
         cogGlyph:SetColor(C.accent[1], C.accent[2], C.accent[3])
@@ -1553,7 +1553,11 @@ end
 
 local function BuildToolbar()
     toolbar = CreateFrame("Frame", nil, overlay)
-    toolbar:SetSize(360, 168)
+    -- 460, not 360. At 360 the bottom row ran to x=332 and Done, anchored to
+    -- the right edge, started at 276 - so in BUILD mode the primary button sat
+    -- on top of Spells and the two shared 56 pixels. It only showed up in build
+    -- mode, because Spells is the button that is hidden the rest of the time.
+    toolbar:SetSize(460, 168)
     toolbar:SetPoint("TOP", UIParent, "TOP", 0, -120)
     toolbar:SetFrameLevel(overlay:GetFrameLevel() + 40)
     toolbar:EnableMouse(true)
@@ -1570,11 +1574,15 @@ local function BuildToolbar()
     -- The mode switch, and it is the first thing in the panel because it
     -- changes what every other control in it means.
     local moveBtn, buildBtn
-    moveBtn = UI.Button(toolbar, "Move bars", 108, function() SetMode("bars") end)
+    -- The same two marks the options window puts on the same two words, so
+    -- the pair is recognisable in both places.
+    moveBtn = UI.Button(toolbar, "Move bars", 128, function() SetMode("bars") end)
     moveBtn:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -12)
+    moveBtn:SetIcon("action-move-bars")
 
-    buildBtn = UI.Button(toolbar, "Build", 84, function() SetMode("build") end)
+    buildBtn = UI.Button(toolbar, "Build", 104, function() SetMode("build") end)
     buildBtn:SetPoint("LEFT", moveBtn, "RIGHT", 6, 0)
+    buildBtn:SetIcon("action-build")
 
     local addBtn = UI.Button(toolbar, "Add slot", 88, function()
         if picked then
@@ -1593,7 +1601,7 @@ local function BuildToolbar()
 
     inspector = UI.Label(toolbar, "", 11, C.textDim)
     inspector:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -58)
-    inspector:SetWidth(336)
+    inspector:SetWidth(toolbar:GetWidth() - 24)
     inspector:SetJustifyH("LEFT")
     inspector:SetJustifyV("TOP")
 
@@ -1638,10 +1646,12 @@ local function BuildToolbar()
     end)
     spellsBtn:SetPoint("LEFT", toolsBtn, "RIGHT", 6, 0)
 
-    local doneBtn = UI.Button(toolbar, "Done", 72, function()
+    -- The padlock, because that is what Done DOES: it locks the bars again.
+    local doneBtn = UI.Button(toolbar, "Done", 92, function()
         EditMode:SetUnlocked(false)
     end, "primary")
     doneBtn:SetPoint("BOTTOMRIGHT", toolbar, "BOTTOMRIGHT", -12, 12)
+    doneBtn:SetIcon("ui-lock")
 
     toolbar.Refresh = function()
         -- The active mode is the one that reads as pressed. Two buttons and a

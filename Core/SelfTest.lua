@@ -1029,6 +1029,32 @@ local function TestDesignSystem()
         UI.OnTab("Look", nil) and UI.OnTab("Reuse", nil))
     Check("A row shows only on its own tab",
         UI.OnTab("Look", "Look") and not UI.OnTab("Look", "Reuse"))
+
+    -- Every icon named in a DATA table has to resolve to a file.
+    --
+    -- An unknown name does not throw and does not draw nothing: UI.Glyph falls
+    -- back to four rectangles in the shape of a grid. So a typo, or a file
+    -- dropped from Media/icons, ships as the wrong mark and looks deliberate -
+    -- which is exactly the failure that started this whole redesign.
+    --
+    -- The lists are walked rather than copied. A second list of names here
+    -- would be a list that goes stale the first time one is added.
+    local marked = {
+        { "Arrangement", ns.LAYOUTS }, { "Fill order", ns.FLOWS },
+        { "Across", ns.GROW_X }, { "Down", ns.GROW_Y },
+        { "Places", ns.SHOW_WHERE },
+    }
+    for _, pair in ipairs(marked) do
+        local label, list = pair[1], pair[2]
+        local bad
+        for _, entry in ipairs(list or {}) do
+            if not (entry.icon and UI.HasIcon(entry.icon)) then
+                bad = entry.icon or (entry.text or entry.key or "?")
+                break
+            end
+        end
+        Check(label .. " marks all resolve to a file", not bad, bad)
+    end
 end
 
 function Test:Run()

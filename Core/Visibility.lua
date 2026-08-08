@@ -68,13 +68,16 @@ ns.SHOW_RESTING = {
 --
 -- Delves report as a scenario, so the two share a line rather than getting a
 -- key that the client never returns and that would therefore never match.
+-- `icon` is the design's mark for the place. Six rows that differ by one word
+-- each is a list you have to read from the top every time; with a mark you
+-- find the raid switch without reading any of them.
 ns.SHOW_WHERE = {
-    { key = "none",     text = "Out in the world" },
-    { key = "party",    text = "Dungeons" },
-    { key = "raid",     text = "Raids" },
-    { key = "scenario", text = "Scenarios and delves" },
-    { key = "pvp",      text = "Battlegrounds" },
-    { key = "arena",    text = "Arenas" },
+    { key = "none",     text = "Out in the world",     icon = "place-world" },
+    { key = "party",    text = "Dungeons",             icon = "place-dungeon" },
+    { key = "raid",     text = "Raids",                icon = "place-raid" },
+    { key = "scenario", text = "Scenarios and delves", icon = "place-scenario" },
+    { key = "pvp",      text = "Battlegrounds",        icon = "place-battleground" },
+    { key = "arena",    text = "Arenas",               icon = "place-arena" },
 }
 
 ns.SHOW_DEFAULTS = {

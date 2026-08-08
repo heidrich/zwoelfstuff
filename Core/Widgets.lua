@@ -284,6 +284,21 @@ function UI.Button(parent, text, width, onClick, style)
     label:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.label = label
 
+    -- An optional mark in front of the label, added after the fact so the four
+    -- weights above stay one signature. The PAIR is what gets centred: the
+    -- label moves right by half the mark's block and the mark hangs off its
+    -- left edge, so a button with one and a button without both read as
+    -- centred rather than one of them sitting off to the side.
+    btn.SetIcon = function(self, kind)
+        if self.mark then
+            self.mark:SetKind(kind)
+            return
+        end
+        self.mark = UI.Glyph(self, kind, 12, fg)
+        self.mark:SetPoint("RIGHT", label, "LEFT", -4, 0)
+        label:SetPoint("CENTER", self, "CENTER", 10, 0)
+    end
+
     local hoverFg = style == "link" and Lift(C.accentCool, 0.25)
         or (style == "ghost" and C.text or nil)
 
@@ -293,7 +308,10 @@ function UI.Button(parent, text, width, onClick, style)
             bg:SetColorTexture(hover[1], hover[2], hover[3], 1)
             bg:Show()
         end
-        if hoverFg then label:SetTextColor(hoverFg[1], hoverFg[2], hoverFg[3]) end
+        if hoverFg then
+            label:SetTextColor(hoverFg[1], hoverFg[2], hoverFg[3])
+            if btn.mark then btn.mark:SetColor(hoverFg[1], hoverFg[2], hoverFg[3]) end
+        end
     end)
     btn:SetScript("OnLeave", function()
         if base then
@@ -302,6 +320,7 @@ function UI.Button(parent, text, width, onClick, style)
             bg:Hide()
         end
         label:SetTextColor(fg[1], fg[2], fg[3])
+        if btn.mark then btn.mark:SetColor(fg[1], fg[2], fg[3]) end
     end)
     if onClick then btn:SetScript("OnClick", onClick) end
 
@@ -313,6 +332,7 @@ function UI.Button(parent, text, width, onClick, style)
         baseSetEnabled(self, enabled)
         local c = enabled and fg or C.textGhost
         label:SetTextColor(c[1], c[2], c[3])
+        if self.mark then self.mark:SetColor(c[1], c[2], c[3]) end
     end
 
     btn.SetText = function(_, value) label:SetText(value) end
@@ -367,6 +387,18 @@ function UI.Row(parent, text, opts)
     row.label = UI.Label(row, text, UI.FS.row, C.textBody)
     row.label:SetPoint("LEFT", row, "LEFT", 0, opts.sublabel and 8 or 0)
     row.label:SetWordWrap(false)
+
+    -- A mark in front of the label, for the runs of rows that are one KIND of
+    -- thing repeated: six places, four conditions. There the labels differ by
+    -- a single word and the eye has to read all six to find the one it wants;
+    -- with a mark it finds it without reading. Not on ordinary rows - a mark
+    -- next to every setting is decoration, and decoration next to a real
+    -- signal makes the signal worth less.
+    if opts.icon then
+        row.mark = UI.Glyph(row, opts.icon, 12, C.textFaint)
+        row.mark:SetPoint("LEFT", row, "LEFT", -2, opts.sublabel and 8 or 0)
+        row.label:SetPoint("LEFT", row, "LEFT", 22, opts.sublabel and 8 or 0)
+    end
 
     if opts.sublabel then
         row.sub = UI.Label(row, opts.sublabel, UI.FS.meta, C.textFaint)
@@ -546,13 +578,16 @@ end
 -- negotiable either: it was asked for directly, and a stepper without it is a
 -- worse slider - reaching 250 from 24 is 226 clicks. Click it and type.
 ---------------------------------------------------------------------------
-local function StepperButton(parent, glyph, onClick)
+local function StepperButton(parent, kind, onClick)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(UI.STEPPER_H, UI.STEPPER_H)
 
     local bg = Fill(btn, "BACKGROUND", C.control)
-    local label = UI.Label(btn, glyph, UI.FS.row, C.text)
-    label:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    -- The design's own marks, not the characters. A hyphen and a plus sign are
+    -- different weights on different baselines in every font, so the pair sat
+    -- crooked and never read as one control.
+    local mark = UI.Glyph(btn, kind, 12, C.text)
+    mark:SetPoint("CENTER", btn, "CENTER", 0, 0)
 
     btn:SetScript("OnClick", onClick)
     btn:SetScript("OnEnter", function(self)
@@ -570,7 +605,7 @@ local function StepperButton(parent, glyph, onClick)
     btn.SetEnabled = function(self, enabled)
         baseSetEnabled(self, enabled)
         local c = enabled and C.text or C.textGhost
-        label:SetTextColor(c[1], c[2], c[3])
+        mark:SetColor(c[1], c[2], c[3])
         if not enabled then
             bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
         end
@@ -632,10 +667,10 @@ local function BuildStepper(parent, cfg)
         if not cfg.silent then ns.Options:Refresh() end
     end
 
-    local minus = StepperButton(slider, "-", function() Step(-1) end)
+    local minus = StepperButton(slider, "ui-minus", function() Step(-1) end)
     minus:SetPoint("LEFT", slider, "LEFT", 0, 0)
 
-    local plus = StepperButton(slider, "+", function() Step(1) end)
+    local plus = StepperButton(slider, "ui-plus", function() Step(1) end)
     plus:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
 
     -- The wheel over the value is the third way in, and it is the fast one:
@@ -795,6 +830,15 @@ local function MenuEntry(menu, index)
     entry.swatchEdge = ns.CreateBorder(entry.swatchHost, 1, "OVERLAY")
     entry.swatchEdge:Hide()
 
+    -- An optional mark, for the menus that pick a THING rather than a value.
+    -- The arrangement list is five words that all mean "a shape", and the
+    -- shape is the whole of what is being chosen; a word alone makes you
+    -- remember which one "Stagger" was. Pooled with the row, so the kind is
+    -- set per item.
+    entry.mark = UI.Glyph(entry, "layout-grid", 12, C.textDim)
+    entry.mark:SetPoint("LEFT", entry, "LEFT", 8, 0)
+    entry.mark:Hide()
+
     entry.label = UI.Label(entry, "", 12, C.text)
     entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
     entry.label:SetWordWrap(false)
@@ -802,13 +846,13 @@ local function MenuEntry(menu, index)
     entry.del = CreateFrame("Button", nil, entry)
     entry.del:SetSize(18, 18)
     entry.del:SetPoint("RIGHT", entry, "RIGHT", -6, 0)
-    entry.del.label = UI.Label(entry.del, "x", 12, C.textFaint)
+    entry.del.label = UI.Glyph(entry.del, "ui-close", 12, C.textFaint)
     entry.del.label:SetPoint("CENTER", entry.del, "CENTER", 0, 0)
     entry.del:SetScript("OnEnter", function(self)
-        self.label:SetTextColor(C.danger[1], C.danger[2], C.danger[3])
+        self.label:SetColor(C.danger[1], C.danger[2], C.danger[3])
     end)
     entry.del:SetScript("OnLeave", function(self)
-        self.label:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+        self.label:SetColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
     end)
 
     menu.rows[index] = entry
@@ -856,6 +900,18 @@ local function ShowMenu(owner, spec)
         ns.StyleUIFont(entry.label, 12)
         entry.swatchHost:Hide()
         entry.swatchEdge:Hide()
+
+        -- A row with a mark indents its label past it; a row without one takes
+        -- the indent back, or the next menu through this pooled row would sit
+        -- 20 pixels in with nothing in front of it.
+        if item.icon and entry.mark:SetKind(item.icon) then
+            entry.mark:SetColor(colour[1], colour[2], colour[3])
+            entry.mark:Show()
+            entry.label:SetPoint("LEFT", entry, "LEFT", 30, 0)
+        else
+            entry.mark:Hide()
+            entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
+        end
 
         local preview = item.preview
         if preview == "font" then
@@ -1006,8 +1062,28 @@ function UI.MenuButton(parent, width, height)
     button.label:SetPoint("RIGHT", button, "RIGHT", -18, 0)
     button.label:SetWordWrap(false)
 
-    local arrow = UI.Label(button, "v", 9, C.textFaint)
-    arrow:SetPoint("RIGHT", button, "RIGHT", -8, 0)
+    -- The closed button shows the mark of what is currently chosen, when the
+    -- list has marks at all. Otherwise you pick a shape from a row of pictures
+    -- and the field you picked it in shows a word.
+    button.mark = UI.Glyph(button, "layout-grid", 12, C.textDim)
+    button.mark:SetPoint("LEFT", button, "LEFT", 6, 0)
+    button.mark:Hide()
+
+    button.SetMark = function(self, kind)
+        if kind and self.mark:SetKind(kind) then
+            self.mark:Show()
+            self.label:SetPoint("LEFT", self, "LEFT", 26, 0)
+        else
+            self.mark:Hide()
+            self.label:SetPoint("LEFT", self, "LEFT", 8, 0)
+        end
+    end
+
+    -- The design's chevron rather than a "v". The letter has a stem and a
+    -- baseline, so it sat low and to one side of the eight pixels it was
+    -- supposed to fill.
+    local arrow = UI.Glyph(button, "caretDOWN", 10, C.textFaint)
+    arrow:SetPoint("RIGHT", button, "RIGHT", -4, 0)
 
     -- Hover moves the FILL, not the outline. The outline going orange is the
     -- OPEN state, and if hovering did the same thing the two would be the same
@@ -1023,7 +1099,7 @@ function UI.MenuButton(parent, width, height)
     button.SetOpen = function(_, open)
         local c = open and C.accent or C.edge
         edge:SetColor(c[1], c[2], c[3], 1)
-        arrow:SetText(open and "^" or "v")
+        arrow:SetKind(open and "caretUP" or "caretDOWN")
     end
 
     return button
@@ -1132,7 +1208,7 @@ function UI.Dropdown(row, options, get, set, cfg)
         local items = {}
         for _, option in ipairs(Options()) do
             items[#items + 1] = {
-                text = option.text, value = option.value,
+                text = option.text, value = option.value, icon = option.icon,
                 onClick = function()
                     set(option.value)
                     if cfg.apply then cfg.apply() end
@@ -1145,11 +1221,15 @@ function UI.Dropdown(row, options, get, set, cfg)
 
     button.Refresh = function()
         local current = get()
-        local text = cfg.emptyText or "-"
+        local text, icon = cfg.emptyText or "-", nil
         for _, option in ipairs(Options()) do
-            if option.value == current then text = option.text break end
+            if option.value == current then
+                text, icon = option.text, option.icon
+                break
+            end
         end
         button.label:SetText(text)
+        button:SetMark(icon)
     end
 
     row.control = button
@@ -1171,6 +1251,7 @@ function UI.Picker(parent, cfg)
         for _, item in ipairs(cfg.items()) do
             items[#items + 1] = {
                 text = item.text, value = item.value, onDelete = item.onDelete,
+                icon = item.icon,
                 onClick = function() cfg.onSelect(item.value) end,
             }
         end
@@ -1496,6 +1577,21 @@ function UI.Input(parent, width, onSubmit, numeric, placeholder)
     end)
     input:SetScript("OnTextChanged", UpdateGhost)
     UpdateGhost()
+
+    -- An optional mark inside the field, at the left, with the text moved past
+    -- it. For the search boxes: a field you type into and a field you read is
+    -- the same rectangle otherwise, and the magnifier says which without
+    -- spending a word on it.
+    holder.SetIcon = function(self, kind)
+        if self.mark then
+            self.mark:SetKind(kind)
+            return
+        end
+        self.mark = UI.Glyph(self, kind, 12, C.textFaint)
+        self.mark:SetPoint("LEFT", self, "LEFT", 4, 0)
+        input:SetPoint("TOPLEFT", self, "TOPLEFT", 26, 0)
+        ghost:SetPoint("LEFT", self, "LEFT", 27, 0)
+    end
 
     holder.input = input
     holder.SetText = function(_, text)
@@ -2488,19 +2584,6 @@ local GLYPHS = {
     grid    = { {0,0,5,5}, {7,0,5,5}, {0,7,5,5}, {7,7,5,5} },
     bars    = { {0,0,12,3}, {0,5,8,3}, {0,10,12,3} },
 
-    -- A ring with a dot in it - a target, which is what an aura display is
-    -- pointed at.
-    --
-    -- Four sides and four turned corners. Four sides ALONE read as square
-    -- brackets round the middle, which is what they looked like; the corners
-    -- are what make it a ring. Counter-clockwise is positive, so the two
-    -- corners that rise left-to-right are positive and the two that fall are
-    -- negative.
-    aura    = { {4,0,4,2}, {4,10,4,2}, {0,4,2,4}, {10,4,2,4},
-                {0,1.5,5,2, 0.7854}, {7,1.5,5,2, -0.7854},
-                {0,8.5,5,2, -0.7854}, {7,8.5,5,2, 0.7854},
-                {5,5,2,2} },
-
     -- Two tracks, each with its own handle at a different place. The old one
     -- was two bars and two ticks that did not line up with either, and read as
     -- a list rather than as controls.
@@ -2509,8 +2592,13 @@ local GLYPHS = {
     pulse   = { {0,8,2,4}, {3,4,2,8}, {6,0,2,12}, {9,6,2,6} },
 
     -- An "i" INSIDE a ring, which is the sign everybody already knows. The
-    -- bare dot-and-stem it replaced read as a lower-case L. Same ring as the
-    -- aura mark, so the two are a family rather than two drawings.
+    -- bare dot-and-stem it replaced read as a lower-case L.
+    --
+    -- Four sides and four turned corners. Four sides ALONE read as square
+    -- brackets round the middle, which is what they looked like; the corners
+    -- are what make it a ring. Counter-clockwise is positive, so the two
+    -- corners that rise left-to-right are positive and the two that fall are
+    -- negative.
     info    = { {4,0,4,2}, {4,10,4,2}, {0,4,2,4}, {10,4,2,4},
                 {0,1.5,5,2, 0.7854}, {7,1.5,5,2, -0.7854},
                 {0,8.5,5,2, -0.7854}, {7,8.5,5,2, 0.7854},
@@ -2551,7 +2639,6 @@ local ICON_PATH = [[Interface\AddOns\ZwoelfStuff\Media\icons\]]
 
 local ICON_FILES = {
     grid    = "nav-cooldowns",
-    aura    = "nav-aura-display",
     move    = "nav-edit-mode",
     sliders = "nav-settings",
     pulse   = "nav-diagnostics",
@@ -2564,6 +2651,35 @@ local ICON_FILES = {
     caretRIGHT = "ui-chevron-right",
     caretLEFT  = "ui-chevron-right",   -- turned below; there is no left file
 }
+
+-- Everything else is asked for by the name the design gave it.
+--
+-- No second naming scheme and no translation table to drift: if the file is in
+-- Media/icons, the name works. The seven above keep semantic names only
+-- because the nav table names a FUNCTION ("settings"), not a drawing, and the
+-- function is what stays put when the drawing changes.
+for _, name in ipairs({
+    "action-build", "action-build-on-screen", "action-delete",
+    "action-duplicate", "action-eye", "action-grip", "action-move-bars",
+    "action-overflow",
+    "cell-clear", "cell-hide", "cell-scale",
+    "cond-combat", "cond-group", "cond-rested", "cond-target",
+    "dir-bottom-top", "dir-left-right", "dir-right-left", "dir-top-bottom",
+    "effect-edge", "effect-flash", "effect-glow", "effect-nag",
+    "flow-columns", "flow-rows",
+    "kind-bar", "kind-icon",
+    "layout-grid", "layout-puzzle", "layout-stagger",
+    "media-border", "media-font", "media-outline", "media-texture",
+    "menu-attach", "menu-export", "menu-import", "menu-snap", "menu-unlock",
+    "pivot-picker",
+    "place-arena", "place-battleground", "place-dungeon", "place-raid",
+    "place-scenario", "place-world",
+    "preset-apply", "preset-save",
+    "ui-arrow-right", "ui-check", "ui-close", "ui-drag-handle", "ui-gear",
+    "ui-lock", "ui-minus", "ui-plus", "ui-reset", "ui-search",
+}) do
+    ICON_FILES[name] = name
+end
 
 -- Which cut of a mark to load, and how big its frame is IN UI UNITS.
 --
@@ -2592,6 +2708,13 @@ local function IconCut(size)
     return dense and 28 or 14, 16
 end
 
+-- Whether a name resolves to a FILE. A name that does not still draws - four
+-- rectangles, silently, in the shape of a grid - so nothing throws and the
+-- wrong mark ships. This is what lets the self test catch that.
+function UI.HasIcon(kind)
+    return ICON_FILES[kind] ~= nil
+end
+
 function UI.Glyph(parent, kind, size, colour)
     size = size or 12
 
@@ -2607,6 +2730,18 @@ function UI.Glyph(parent, kind, size, colour)
         if kind == "caretLEFT" then tex:SetRotation(math.pi) end
 
         glyph.SetColor = function(_, r, g, b) tex:SetVertexColor(r, g, b, 1) end
+
+        -- Pooled rows reuse one glyph for a different mark each time they are
+        -- filled, so the KIND has to be settable after the fact. The cut is
+        -- already decided by the frame's size and does not change with it.
+        glyph.SetKind = function(_, newKind)
+            local swap = ICON_FILES[newKind]
+            if not swap then return false end
+            tex:SetTexture(ICON_PATH .. swap .. "-" .. drawn)
+            tex:SetRotation(newKind == "caretLEFT" and math.pi or 0)
+            return true
+        end
+
         local c = colour or C.textDim
         glyph:SetColor(c[1], c[2], c[3])
         return glyph
@@ -2639,6 +2774,11 @@ function UI.Glyph(parent, kind, size, colour)
     glyph.SetColor = function(_, r, g, b)
         for _, part in ipairs(parts) do part:SetColorTexture(r, g, b, 1) end
     end
+
+    -- The rectangle fallback cannot swap what it draws - the parts ARE the
+    -- mark. It reports the failure instead of pretending, and a caller that
+    -- pools rows only ever asks for names that have files.
+    glyph.SetKind = function() return false end
 
     local c = colour or C.textDim
     glyph:SetColor(c[1], c[2], c[3])
@@ -2722,15 +2862,33 @@ function UI.GhostButton(parent, text, onClick, colour)
 
     btn:SetScript("OnEnter", function()
         btn.label:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
+        if btn.mark then btn.mark:SetColor(C.accent[1], C.accent[2], C.accent[3]) end
     end)
     btn:SetScript("OnLeave", function()
         btn.label:SetTextColor(base[1], base[2], base[3])
+        if btn.mark then btn.mark:SetColor(base[1], base[2], base[3]) end
     end)
     if onClick then btn:SetScript("OnClick", onClick) end
 
+    -- A mark in front, with the button widened to hold it. The width is
+    -- measured from the label, so it has to be recomputed rather than nudged -
+    -- a SetText afterwards would otherwise shrink it back over the mark.
+    btn.SetIcon = function(self, kind)
+        if not self.mark then
+            self.mark = UI.Glyph(self, kind, 12, base)
+            self.mark:SetPoint("LEFT", self, "LEFT", -1, 0)
+            self.label:SetPoint("CENTER", self, "CENTER", 9, 0)
+            self.dkIconPad = 18
+        else
+            self.mark:SetKind(kind)
+        end
+        self:SetWidth(math.max(24, self.label:GetStringWidth() + 14 + 18))
+    end
+
     btn.SetText = function(self, value)
         self.label:SetText(value)
-        self:SetWidth(math.max(24, self.label:GetStringWidth() + 14))
+        self:SetWidth(math.max(24,
+            self.label:GetStringWidth() + 14 + (self.dkIconPad or 0)))
     end
 
     -- The resting colour, not just the current one: colouring the label

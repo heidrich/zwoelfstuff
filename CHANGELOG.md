@@ -8,6 +8,55 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.22.0] - 2026-08-08
+
+### Changed
+
+- THE REST OF THE DESIGN'S ICONS ARE IN. Sixty-eight were drawn and rendered;
+  the last release used eleven of them. Now the plus and minus on every
+  stepper, the close cross, the three-dot overflow, the chevron on every
+  dropdown and the cross that deletes a saved entry are all the design's own
+  marks instead of typed characters. A hyphen and a plus sign sit on different
+  baselines in any font, which is why that pair never looked like one control.
+
+- THE LISTS THAT PICK A SHAPE NOW SHOW THE SHAPE. Arrangement, fill order,
+  across, down, and the bar's kind draw their mark in front of the word - in
+  the open list and on the closed field. "Staggered" and "Puzzle" are both
+  just words until you have seen each one once.
+
+- SO DO THE ROWS THAT REPEAT. The six places a bar may show, the four
+  conditions, the effects and the media rows each carry their own mark. Six
+  rows that differ by one word are a list you read from the top every time;
+  with a mark you find the raid switch without reading any of them. Ordinary
+  settings rows do NOT get one - a mark next to everything is decoration, and
+  decoration next to a real signal makes the signal worth less.
+
+- The cog on each bar is the design's gear, Done wears a padlock, and Move
+  bars and Build carry the same two marks in edit mode that they carry in the
+  window - so the pair is recognisable in both places.
+
+### Removed
+
+- THE AURA DISPLAY PAGE IS GONE FOR GOOD. It was in the design and never in
+  the addon; the auras the Cooldown Manager does not carry are handled where
+  the bars are and need no page of their own. The glyph kind that pointed at
+  it is removed; the rendered file stays in the icon set.
+
+### Fixed
+
+- EDIT MODE: DONE WAS SITTING ON TOP OF SPELLS. The tool bar was 360 wide, the
+  bottom row of buttons ran to 332, and Done - anchored to the right edge -
+  started at 276. The two shared 56 pixels whenever you were in build mode,
+  which is the only mode where Spells is shown. The bar is 460 now and they no
+  longer touch.
+
+### Added
+
+- A CHECK THAT CATCHES A MISSING MARK. An unknown icon name never threw - it
+  quietly fell back to four rectangles, which is exactly how the wrong icons
+  shipped in the first place. `/zs test` now walks every list that names one
+  and fails if it does not resolve. 129 checks, up from 124.
+
 ## [4.21.0] - 2026-08-08
 
 ### Changed

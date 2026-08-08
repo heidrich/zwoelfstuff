@@ -52,30 +52,34 @@ local floor, max = math.floor, math.max
 -- and tested - so if either ever comes back, the fault to look for is in the
 -- panel around it, not in the arithmetic. A saved bar that still names one is
 -- migrated onto Grid; see Bars:Migrate.
+-- `icon` is the design's own name for the mark that goes with the choice; the
+-- menu draws it in front of the label. Every entry in these four lists picks a
+-- SHAPE, and a shape shown is worth more than a shape described - "Staggered"
+-- and "Puzzle" are both just words until you have seen each one once.
 ns.LAYOUTS = {
-    { value = "grid",     text = "Grid",
+    { value = "grid",     text = "Grid",      icon = "layout-grid",
       note = "Rows and columns. The straight answer." },
-    { value = "stagger",  text = "Staggered",
+    { value = "stagger",  text = "Staggered", icon = "layout-stagger",
       note = "Every other line pushed along by half a cell." },
-    { value = "free",     text = "Puzzle",
+    { value = "free",     text = "Puzzle",    icon = "layout-puzzle",
       note = "No rows, no columns. Every cell sits exactly where you dragged "
           .. "it, and you drag them in build mode." },
 }
 
 -- Which way a grid fills before it wraps.
 ns.FLOWS = {
-    { value = "rows",    text = "Fill rows first" },
-    { value = "columns", text = "Fill columns first" },
+    { value = "rows",    text = "Fill rows first",    icon = "flow-rows" },
+    { value = "columns", text = "Fill columns first", icon = "flow-columns" },
 }
 
 ns.GROW_X = {
-    { value = "right", text = "Left to right" },
-    { value = "left",  text = "Right to left" },
+    { value = "right", text = "Left to right", icon = "dir-left-right" },
+    { value = "left",  text = "Right to left", icon = "dir-right-left" },
 }
 
 ns.GROW_Y = {
-    { value = "down", text = "Top to bottom" },
-    { value = "up",   text = "Bottom to top" },
+    { value = "down", text = "Top to bottom", icon = "dir-top-bottom" },
+    { value = "up",   text = "Bottom to top", icon = "dir-bottom-top" },
 }
 
 -- Which point of the bar stays put when the bar changes size. The lattice

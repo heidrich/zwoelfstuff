@@ -3,8 +3,8 @@
 --
 -- Three columns, fixed:
 --
---   left    the functions. Cooldowns, the aura display, settings, and the
---           three read-only pages. It does NOT list your bars - that was the
+--   left    the functions. Cooldowns, Edit mode, settings, and the three
+--           read-only pages. It does NOT list your bars - that was the
 --           mistake in the last shape, because it made you pick a bar before
 --           you could see any of them.
 --   middle  what you are working on. For Cooldowns that is every bar you own,
@@ -572,13 +572,16 @@ function Options:Create()
     local close = CreateFrame("Button", nil, chrome)
     close:SetSize(24, 24)
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -19)
-    local closeLabel = UI.Label(close, "X", UI.FS.meta, C.textDim)
-    closeLabel:SetPoint("CENTER", close, "CENTER", 0, 0)
+    -- The design's cross, not the letter X. At 12 the two are hard to tell
+    -- apart until you look, and then the letter is unmistakable: it has serif
+    -- weight on one stroke and none on the other.
+    local closeMark = UI.Glyph(close, "ui-close", 12, C.textDim)
+    closeMark:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnEnter", function()
-        closeLabel:SetTextColor(C.danger[1], C.danger[2], C.danger[3])
+        closeMark:SetColor(C.danger[1], C.danger[2], C.danger[3])
     end)
     close:SetScript("OnLeave", function()
-        closeLabel:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        closeMark:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
     end)
     close:SetScript("OnClick", function() frame:Hide() end)
 
@@ -669,15 +672,25 @@ function Options:Create()
     -- The two ways into Edit Mode, in the header band where the page's own
     -- actions live. They are shortcuts, not a second home: the rail entry
     -- still opens edit mode, these two say which half of it you want.
-    local buildBtn = UI.Button(stageHost, "Build", 84, function()
+    --
+    -- Both carry their mark, because these two are the only pair in the window
+    -- whose names describe the same activity from two sides - "move them" and
+    -- "take them apart" - and the marks separate them faster than the words do.
+    -- The widths are named, because the subtitle below has to stop short of
+    -- them and a number typed twice is a number that drifts.
+    local BUILD_W, MOVE_W = 104, 124
+
+    local buildBtn = UI.Button(stageHost, "Build", BUILD_W, function()
         ns.EditMode:SetUnlocked(true, "build")
     end)
     buildBtn:SetPoint("TOPRIGHT", stageHost, "TOPRIGHT", -PAD, -18)
+    buildBtn:SetIcon("action-build")
 
-    local moveBtn = UI.Button(stageHost, "Move bars", 104, function()
+    local moveBtn = UI.Button(stageHost, "Move bars", MOVE_W, function()
         ns.EditMode:SetUnlocked(true, "bars")
     end)
     moveBtn:SetPoint("TOPRIGHT", buildBtn, "TOPLEFT", -6, 0)
+    moveBtn:SetIcon("action-move-bars")
 
     local body = CreateFrame("Frame", nil, stageHost)
     body:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -(HEADER_H + 16))
@@ -830,7 +843,7 @@ function Options:Create()
         -- The subtitle stops at the buttons rather than at the column edge,
         -- or a long one runs underneath them.
         local room = ((withSide or withExplain) and NARROW_W or WIDE_W) - PAD * 2
-        if withSide then room = room - (104 + 84 + 6 + UI.PAD) end
+        if withSide then room = room - (MOVE_W + BUILD_W + 6 + UI.PAD) end
         pageSubtitle:SetWidth(room)
 
         barList:SetShown(withSide)

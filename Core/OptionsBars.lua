@@ -174,13 +174,16 @@ local function BuildCard(parent, width)
     local menu = CreateFrame("Button", nil, card)
     menu:SetSize(24, 24)
     menu:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -8)
-    local menuLabel = UI.Label(menu, "...", UI.FS.row, C.textFaint)
-    menuLabel:SetPoint("CENTER", menu, "CENTER", 0, -3)
+    -- Three dots as a MARK, not as three full stops. Typed, they sit on the
+    -- baseline and had to be nudged up by three pixels to look centred, which
+    -- is the tell that a character was standing in for a drawing.
+    local menuMark = UI.Glyph(menu, "action-overflow", 12, C.textFaint)
+    menuMark:SetPoint("CENTER", menu, "CENTER", 0, 0)
     menu:SetScript("OnEnter", function()
-        menuLabel:SetTextColor(C.text[1], C.text[2], C.text[3])
+        menuMark:SetColor(C.text[1], C.text[2], C.text[3])
     end)
     menu:SetScript("OnLeave", function()
-        menuLabel:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+        menuMark:SetColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
     end)
     menu:SetScript("OnClick", function()
         if not card.dkIndex then return end
@@ -189,6 +192,7 @@ local function BuildCard(parent, width)
             items = {
                 {
                     text = "Delete this bar",
+                    icon = "action-delete",
                     colour = C.danger,
                     onClick = function()
                         Bars:Remove(card.dkIndex)
@@ -220,6 +224,7 @@ local function BuildCard(parent, width)
         ns.EditMode:OpenBuild()
     end, C.accentCool)
     build:SetPoint("RIGHT", options, "LEFT", -11, 0)
+    build:SetIcon("action-build-on-screen")
 
     -- ONE BUTTON FOR THE PICKED CELL, named after what the bar is made of.
     --
@@ -662,6 +667,7 @@ function Workspace:BuildSpellPane(parent, width)
     local search = UI.Input(pane, width, function() end, false, "Search")
     search:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
     search:SetHeight(28)
+    search:SetIcon("ui-search")
 
     local chips
     chips = UI.ChipRow(pane, width, {
@@ -1069,8 +1075,8 @@ function Workspace:BuildOptionsPane(parent, width)
     end
 
     UI.Dropdown(grid:FullRow("Kind", { controlWidth = 124 }), {
-        { value = "icon", text = "Icon bar" },
-        { value = "bar",  text = "Tracking bar" },
+        { value = "icon", text = "Icon bar",     icon = "kind-icon" },
+        { value = "bar",  text = "Tracking bar", icon = "kind-bar" },
     }, Get("kind"), Set("kind"), { apply = Apply })
 
     UI.Toggle(grid:FullRow("Shown", { controlWidth = 124 }), Get("enabled"),
@@ -1125,7 +1131,8 @@ function Workspace:BuildOptionsPane(parent, width)
     local growYRow = UI.Dropdown(grid:FullRow("Down", { controlWidth = 150 }),
         ns.GROW_Y, Get("growY"), Set("growY"), { apply = Apply })
 
-    UI.Dropdown(grid:FullRow("Pinned by", { controlWidth = 150 }),
+    UI.Dropdown(grid:FullRow("Pinned by",
+        { controlWidth = 150, icon = "pivot-picker" }),
         ns.PIVOTS, Get("point"), function(value)
             local index = Workspace:Current()
             if index then ns.Bars:SetPivot(index, value) end
@@ -1163,6 +1170,7 @@ function Workspace:BuildOptionsPane(parent, width)
             ns.Options:Refresh()
         end)
     straightenBtn:SetPoint("RIGHT", straightenRow.slot, "RIGHT", 0, 0)
+    straightenBtn:SetIcon("ui-reset")
 
     -- Which of the above apply right now. Recorded as one function so the
     -- rule lives in a single place rather than in nine SetRelevant calls
@@ -1209,7 +1217,8 @@ function Workspace:BuildOptionsPane(parent, width)
 
     Slide("Thickness", "borderSize", 0, 4, 1)
     Colour("Colour", "borderColor")
-    UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "border",
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-border" }), "border",
         Get("borderTexture"), Set("borderTexture"), Apply)
     grid:Note("None is a crisp one-pixel line drawn from colour textures, and "
         .. "it stays sharper than any edge file at small sizes. The rest come "
@@ -1220,7 +1229,8 @@ function Workspace:BuildOptionsPane(parent, width)
     Switch("Show", "backdrop", "A plate behind the icon")
     Colour("Colour", "backdropColor")
     Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent, 100)
-    UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-texture" }), "statusbar",
         Get("backdropTexture"), Set("backdropTexture"), Apply)
     -- Said out loud, because "I picked a texture and nothing happened" is
     -- otherwise an unanswerable question. The plate is BEHIND the art, and
@@ -1367,7 +1377,8 @@ function Workspace:BuildOptionsPane(parent, width)
             function(value) SetIn(group, "show")(value); Apply() end)
 
         rows[#rows + 1] = UI.MediaPicker(
-            grid:FullRow("Font", { controlWidth = 190 }), "font",
+            grid:FullRow("Font", { controlWidth = 190, icon = "media-font" }),
+            "font",
             GetIn(group, "font"), SetIn(group, "font"), Apply,
             "Same as everywhere")
 
@@ -1384,7 +1395,8 @@ function Workspace:BuildOptionsPane(parent, width)
             function(r, g, b) SetIn(group, "color")({ r, g, b }) end,
             Apply)
 
-        rows[#rows + 1] = UI.Dropdown(grid:FullRow("Outline", { controlWidth = 124 }),
+        rows[#rows + 1] = UI.Dropdown(grid:FullRow("Outline",
+            { controlWidth = 124, icon = "media-outline" }),
             ns.Media.OUTLINES, GetIn(group, "outline"), SetIn(group, "outline"),
             { apply = Apply })
 
@@ -1422,8 +1434,13 @@ function Workspace:BuildOptionsPane(parent, width)
             if cfg and cfg.effects then cfg.effects[key] = value end
         end
     end
-    local function FxSwitch(label, key, sublabel)
-        return UI.Toggle(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }),
+    -- `icon` goes on the switch that turns an EFFECT on, not on the colour and
+    -- size rows under it. That is what makes it readable: the mark says "this
+    -- is the effect", and the unmarked rows beneath it are plainly its
+    -- settings rather than four more effects.
+    local function FxSwitch(label, key, sublabel, icon)
+        return UI.Toggle(grid:FullRow(label,
+            { controlWidth = 124, sublabel = sublabel, icon = icon }),
             FxGet(key), function(value) FxSet(key)(value); Apply() end)
     end
     -- scale: what the DISPLAY multiplies by, so a typed number can be
@@ -1456,10 +1473,11 @@ function Workspace:BuildOptionsPane(parent, width)
     grid:Tab("Behaviour")
     grid:Section("When it comes back", "fx-ready")
 
-    FxSwitch("Flash", "readyFlash", "A pulse the moment the cooldown ends")
+    FxSwitch("Flash", "readyFlash", "A pulse the moment the cooldown ends",
+        "effect-flash")
     FxSlide("How many", "readyPulses", 1, 5, 1)
     FxColour("Flash colour", "readyColor")
-    FxSwitch("Keep an edge while it is up", "readyGlow")
+    FxSwitch("Keep an edge while it is up", "readyGlow", nil, "effect-edge")
     FxSwitch("Only in combat", "readyGlowCombatOnly")
     FxColour("Edge colour", "glowColor")
     FxSlide("Edge thickness", "glowSize", 1, 5, 1)
@@ -1468,7 +1486,13 @@ function Workspace:BuildOptionsPane(parent, width)
 
     grid:Section("Nag and warn", "fx-nag")
 
-    FxSlide("Remind me after", "reminderAfter", 0, 20, 1, Seconds)
+    -- The nag is a slider rather than a switch - zero means off - so its mark
+    -- goes on the row that IS the nag.
+    UI.Slider(grid:FullRow("Remind me after",
+        { controlWidth = 124, icon = "effect-nag" }), {
+        get = FxGet("reminderAfter"), set = FxSet("reminderAfter"),
+        min = 0, max = 20, step = 1, format = Seconds, apply = Apply,
+    })
     FxColour("Reminder colour", "reminderColor")
     grid:Note("A spell that has been ready this long IN COMBAT starts pulsing. "
         .. "For the defensive you keep forgetting.")
@@ -1479,10 +1503,10 @@ function Workspace:BuildOptionsPane(parent, width)
         .. "remaining time is a number we own. Blizzard's frames do not hand "
         .. "one out on this patch, so their icons do not carry it.")
 
-    FxSwitch("Glow while the aura is up", "activeGlow")
+    FxSwitch("Glow while the aura is up", "activeGlow", nil, "effect-glow")
     FxColour("Aura colour", "activeColor")
 
-    FxSwitch("Glow in the refresh window", "pandemicGlow")
+    FxSwitch("Glow in the refresh window", "pandemicGlow", nil, "effect-glow")
     FxColour("Refresh colour", "pandemicColor")
     -- The dependency is stated rather than discovered. "I switched it on and
     -- nothing happens" is otherwise a question with no answer on this screen.
@@ -1521,19 +1545,27 @@ function Workspace:BuildOptionsPane(parent, width)
         return row
     end
 
-    Rule(UI.Dropdown(grid:FullRow("Combat", { controlWidth = 150 }),
+    -- The four conditions carry their mark for the same reason the six places
+    -- below do: they are one kind of thing, four times, and the word is the
+    -- only thing telling them apart.
+    Rule(UI.Dropdown(grid:FullRow("Combat",
+        { controlWidth = 150, icon = "cond-combat" }),
         ns.SHOW_COMBAT, RuleGet("combat"), RuleSet("combat"), { apply = Apply }))
-    Rule(UI.Dropdown(grid:FullRow("Group", { controlWidth = 150 }),
+    Rule(UI.Dropdown(grid:FullRow("Group",
+        { controlWidth = 150, icon = "cond-group" }),
         ns.SHOW_GROUP, RuleGet("group"), RuleSet("group"), { apply = Apply }))
-    Rule(UI.Dropdown(grid:FullRow("Target", { controlWidth = 150 }),
+    Rule(UI.Dropdown(grid:FullRow("Target",
+        { controlWidth = 150, icon = "cond-target" }),
         ns.SHOW_TARGET, RuleGet("target"), RuleSet("target"), { apply = Apply }))
-    Rule(UI.Dropdown(grid:FullRow("Rested", { controlWidth = 150 }),
+    Rule(UI.Dropdown(grid:FullRow("Rested",
+        { controlWidth = 150, icon = "cond-rested" }),
         ns.SHOW_RESTING, RuleGet("resting"), RuleSet("resting"), { apply = Apply }))
 
     -- One switch per place, not a multi-select: six switches you can see the
     -- state of beat one control you have to open to find out what is in it.
     for _, place in ipairs(ns.SHOW_WHERE) do
-        Rule(UI.Toggle(grid:FullRow(place.text, { controlWidth = 124 }),
+        Rule(UI.Toggle(grid:FullRow(place.text,
+            { controlWidth = 124, icon = place.icon }),
             function()
                 local _, cfg = Workspace:Current()
                 local where = cfg and cfg.show and cfg.show.where
@@ -1638,7 +1670,8 @@ function Workspace:BuildOptionsPane(parent, width)
         copyPicker.label:SetText("another bar")
     end
 
-    local presetRow = grid:FullRow("Preset", { controlWidth = 130 })
+    local presetRow = grid:FullRow("Preset",
+        { controlWidth = 130, icon = "preset-apply" })
     local presetPicker = UI.Picker(presetRow.slot, {
         width = 130, height = 22, emptyText = "apply a preset",
         current = function() return nil end,
@@ -1672,7 +1705,8 @@ function Workspace:BuildOptionsPane(parent, width)
         presetPicker.label:SetText("apply a preset")
     end
 
-    local saveRow = grid:FullRow("Save as", { controlWidth = 130 })
+    local saveRow = grid:FullRow("Save as",
+        { controlWidth = 130, icon = "preset-save" })
     local saveInput
     saveInput = UI.Input(saveRow.slot, 130, function(text)
         if Bars:SavePreset(text, (Workspace:Current())) then
@@ -1818,7 +1852,7 @@ function Workspace:BuildCellPane(parent, width)
 
     -- Size and shape, which already had per-cell overrides of their own and
     -- are read from the same place rather than duplicated.
-    UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
+    UI.Slider(grid:FullRow("Size", { controlWidth = 124, icon = "cell-scale" }), {
         get = function()
             local cfg, index = Cell()
             local opts = cfg and index and ns.Layout.CellOpts(cfg, index)
@@ -1852,7 +1886,8 @@ function Workspace:BuildCellPane(parent, width)
     grid:Section("Bar fill", "cell-fill")
     Colour("Colour", "fillColor")
     Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent, 100)
-    UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-texture" }), "statusbar",
         Get("fillTexture", ""), Set("fillTexture"), Apply)
     Switch("Start on the right", "fillSide", "Which end the fill sits at")
     Switch("Fill up", "fillGrow", "Grow as time passes instead of draining")
@@ -1934,6 +1969,7 @@ function Workspace:BuildCellPane(parent, width)
             Apply()
         end)
     reset:SetPoint("RIGHT", reset:GetParent(), "RIGHT", 0, 0)
+    reset:SetIcon("ui-reset")
 
     pane.Refresh = function()
         grid:Layout()

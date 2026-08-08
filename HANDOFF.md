@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.21.0**. Read this first.
+State as of **2026-08-08**, version **4.22.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~124 checks in
+**Run `/zs test` before you believe anything below.** ~129 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,9 +25,22 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.21.0 is statically clean over 25 files and passes its own checks.
+Version 4.22.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
+
+## 4.22.0 — the rest of the icons, and one overlap
+
+The icon set is placed (the table under *The icon pipeline* says where and why),
+the aura page is gone for good, and edit mode had a real defect: at 360 wide the
+tool bar's bottom row ran to x=332 while **Done**, anchored to the right edge,
+started at 276 — so in build mode the primary button sat on 56 pixels of the
+Spells button. It only appeared in build mode, because Spells is hidden the rest
+of the time. The bar is 460 now.
+
+Found while placing icons, not by looking for it. That is the second bug this
+week that was invisible until something forced a second look at a frame nobody
+had measured since it was written.
 
 ## 4.21.0 — the design was built, and how it went wrong first
 
@@ -91,8 +104,40 @@ exists at the design size and at double; `IconCut` picks by
 `UIParent:GetEffectiveScale()` and the frame stays the same size in units, so
 the client downsamples instead of upsampling. 272 files in `Media/icons/`.
 
-Wired up so far: the seven nav marks, `kind-bar`, and four chevrons. The other
-~50 are rendered and waiting for the places the design shows them.
+**Where they are used — 4.22.0.** The design ships them as a contact sheet with
+family names, not placed in a screen, so placement was a judgement call. The
+rule taken: a mark goes where a WORD is doing a picture's job, and nowhere else.
+
+| Family | Where |
+| --- | --- |
+| `nav-*` | the rail |
+| `ui-plus` / `ui-minus` | every stepper button |
+| `ui-close` | the window's cross, and the one that deletes a saved entry |
+| `ui-chevron-*` | every dropdown; the nudge pad on a mover |
+| `ui-search` | the spell picker's field |
+| `ui-reset` | Straighten, and "Follow the bar again" |
+| `ui-gear` | the cog on each bar in edit mode |
+| `ui-lock` | Done, which is what Done does |
+| `action-*` | overflow, delete, Move bars, Build, Build on screen |
+| `layout-*` `flow-*` `dir-*` | the arrangement lists — in the menu AND on the closed field |
+| `kind-*` | the bar's kind |
+| `cond-*` `place-*` | the four conditions and the six places |
+| `effect-*` | the switch that turns each effect on, not its colour and size rows |
+| `media-*` `preset-*` `pivot-picker` `cell-scale` | one row each |
+
+Ordinary settings rows deliberately get **no** mark. A mark next to everything
+is decoration, and decoration beside a real signal makes the signal worth less.
+
+Still unplaced, and why: `action-grip` / `ui-drag-handle` (bars cannot be
+reordered — see below), `action-duplicate` (no such action exists yet),
+`action-eye`, `cell-clear` / `cell-hide` (right-click already clears a cell; a
+menu would be slower), `menu-*` (they belong to the overlay menu, screen 1h,
+which is still on the old layout), `ui-check` and `ui-arrow-right`.
+
+`UI.HasIcon(name)` says whether a name resolves to a file. **An unknown name
+never throws** — it silently falls back to four rectangles in the shape of a
+grid, which is exactly how the wrong icons shipped in the first place. `/zs
+test` walks every data table that names one and fails if it does not resolve.
 
 ### The harness now BUILDS THE WINDOW
 
@@ -136,8 +181,12 @@ escapes inside them. Better still: write paths with the editor, not a script.
   Upper case at 10 against a body of 13 carries the signal on its own.
 - **The card's 6-dot grip.** Bars cannot be reordered at all, and a handle that
   does nothing is a lie. Cell reordering exists; bar reordering does not.
-- **"Aura display" in the rail.** The design shows a page the addon does not
-  have. Its icon is rendered and waiting.
+- **"Aura display" in the rail.** The design shows it, the addon does not have
+  it, and it is not coming: the owner dropped the separate aura page. Auras that
+  the Cooldown Manager does not carry are handled inside `Core/Auras.lua` and
+  shown on the bars like anything else - there is nothing for a page to own.
+  `nav-aura-display.tga` stays in the icon set as one file among 68; the glyph
+  kind that pointed at it is gone.
 - **Screens 1d, 1f, 1g, 1h and 3a.** Empty state, Diagnostics, About/Changelog,
   the Edit Mode overlay and the texture dropdown still wear their old layout.
   3a is partly there: the menu scrolls now, but the search field, the two
