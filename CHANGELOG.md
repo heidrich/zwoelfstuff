@@ -8,6 +8,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.34.2] - 2026-08-09
+
+### Fixed
+
+- **The Reminders page threw the moment it was opened**, leaving the previous
+  page on screen - so clicking it looked like the Co-Tanks page had come back
+  empty. One line: the spell slot's `Refresh` was written to take `self` and is
+  called as a plain function, like every other `Refresh` in the widget layer.
+
+  It shipped because the desktop harness could not have caught it. The harness
+  set the page index and repainted, and repainting does not BUILD a page - so
+  "every page painted" was true and meaningless, and not one page builder had
+  ever run outside the game. It builds them properly now, and doing that
+  immediately found this.
+
+  The harness also took its file list from a hand-typed list that had drifted
+  from the TOC: `Core/Changelog.lua` was never in it, so the Changelog page
+  could not have been built either. The list comes from the TOC now, and a file
+  the TOC names that the harness does not load is a hard stop rather than a
+  quiet gap.
+
 ## [4.34.1] - 2026-08-09
 
 ### Fixed

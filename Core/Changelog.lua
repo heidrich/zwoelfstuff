@@ -8,6 +8,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.34.2",
+        date = "2026-08-09",
+        lines = {
+            "THE REMINDERS PAGE THREW THE MOMENT YOU CLICKED IT, so the page you were on stayed where it was - which looked like the co-tank page coming back empty. One line, in the slot you drop a spell onto.",
+            "It shipped because the desktop test could not have caught it: it switched pages and repainted, and repainting does not BUILD a page. So \"every page painted\" was true and meant nothing - no page builder had ever run outside the game. It builds them all now, which found this in one run.",
+        },
+    },
+    {
         version = "4.34.1",
         date = "2026-08-09",
         lines = {

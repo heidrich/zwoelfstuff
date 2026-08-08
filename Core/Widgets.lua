@@ -2206,19 +2206,22 @@ function UI.SpellSlot(parent, cfg)
         if GameTooltip then GameTooltip:Hide() end
     end)
 
-    slot.Refresh = function(self)
+    -- NO SELF, and it closes over `slot`. Every Refresh in this file is called
+    -- as a plain function - Grid:Refresh does `widget.Refresh()` - so one
+    -- written as `function(self)` gets nil and raises on its first field.
+    slot.Refresh = function()
         local spellID = cfg.get and cfg.get()
         if spellID then
-            self.icon:SetTexture(ns.SpellTexture(spellID))
-            self.icon:Show()
-            self.mark:Hide()
+            slot.icon:SetTexture(ns.SpellTexture(spellID))
+            slot.icon:Show()
+            slot.mark:Hide()
         else
-            self.icon:Hide()
-            self.mark:Show()
+            slot.icon:Hide()
+            slot.mark:Show()
         end
     end
 
-    slot:Refresh()
+    slot.Refresh()
     return slot
 end
 
