@@ -337,7 +337,15 @@ end
 ---------------------------------------------------------------------------
 local MIN_NAME = 5
 
-local pending, namers = {}, nil
+-- namersGen counts how often the cache has been declared stale. Namers()
+-- reads it before it starts and compares afterwards, because the thing that
+-- clears the cache can fire IN THE MIDDLE of building it - see there.
+local pending, namers, namersGen = {}, nil, 0
+
+local function ForgetNamers()
+    namers = nil
+    namersGen = namersGen + 1
+end
 
 local function Description(spellID)
     if not (C_Spell and C_Spell.GetSpellDescription) then return nil end
@@ -404,7 +412,20 @@ end
 local function Namers()
     if namers then return namers end
 
-    namers = {}
+    -- BUILT INTO A LOCAL AND PUBLISHED AT THE END, never filled in place.
+    --
+    -- Description() below asks the client to load a talent's spell data, and
+    -- the client answers with SPELL_DATA_LOAD_RESULT - sometimes on the spot,
+    -- inside that very call. The handler for it clears this cache. So the
+    -- table being filled turned into nil half way down the loop and the next
+    -- index threw: "attempt to index upvalue 'namers' (a nil value)".
+    --
+    -- It did not fail small. This runs under Boot("Bars"), so the error took
+    -- Screen:Start with it and the bars sat on screen with no clock at all -
+    -- reported as "die bars bewegen sich nicht mehr". A cache slot used as the
+    -- working buffer, in a function that can re-enter itself through an event.
+    local generation = namersGen
+    local built = {}
 
     local names = {}
     for _, entry in ipairs(ns.CDM:Catalogue()) do
@@ -421,10 +442,10 @@ local function Namers()
             local own = (ns.SpellName(talentID) or ""):lower()
             for _, candidate in ipairs(names) do
                 if candidate.key ~= own and haystack:find(candidate.key, 1, true) then
-                    local list = namers[candidate.spellID]
+                    local list = built[candidate.spellID]
                     if not list then
                         list = {}
-                        namers[candidate.spellID] = list
+                        built[candidate.spellID] = list
                     end
                     list[#list + 1] = talentID
                 end
@@ -432,7 +453,12 @@ local function Namers()
         end
     end
 
-    return namers
+    -- Only REMEMBERED if nothing declared the cache stale while it was being
+    -- built. The answer is still handed back either way - it is the best that
+    -- could be worked out from what was loaded at the time - but a list built
+    -- across an invalidation must not outlive the event that said so.
+    if generation == namersGen then namers = built end
+    return built
 end
 
 -- The talent most likely to be the one behind a proc on this ability. Several
@@ -449,7 +475,7 @@ local function SuggestDisplay(glowSpellID)
 end
 
 function Auras:Invalidate()
-    namers = nil
+    ForgetNamers()
     ns.ForgetSpecKey()
 end
 
@@ -815,7 +841,9 @@ watcher:SetScript("OnEvent", function(_, event, arg1, _, arg3)
         -- Only for a description this addon asked for.
         if arg1 and pending[arg1] then
             pending[arg1] = nil
-            namers = nil
+            -- THIS is the one that can arrive inside Namers' own loop, which
+            -- is why it counts rather than only clearing. See there.
+            ForgetNamers()
         end
 
     else

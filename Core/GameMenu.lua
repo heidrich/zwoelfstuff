@@ -173,10 +173,18 @@ function GameMenu:Create()
 
     button.label = button:CreateFontString(nil, "OVERLAY")
     button.label:SetPoint("CENTER")
-    button.label:SetText(LABEL)
-    -- Until the first Place borrows the neighbour's font. A font string with
-    -- no font at all draws nothing, so this is not a nicety.
+
+    -- THE FONT BEFORE THE TEXT, and that order is not a preference: SetText on
+    -- a font string that has no font RAISES. It is written down two files
+    -- away, in Core/Screen.lua where the same mistake was made once before,
+    -- and it was made again here - the whole game menu entry failed to start
+    -- because of it, which Boot caught and reported as one dead feature
+    -- instead of a dead addon.
+    --
+    -- This is only the starting font; the first Place borrows the neighbouring
+    -- menu button's instead.
     ns.StyleUIFont(button.label, 14)
+    button.label:SetText(LABEL)
 
     -- The one thing a bare frame does lose: any sign that it can be pressed.
     -- A faint lift on hover rather than a border or a plate - enough to say

@@ -12,6 +12,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- THE WHOLE BARS FEATURE COULD FAIL TO START, and did. `Namers()` in
+  `Core/Auras.lua` filled its own cache slot in place, and `Description()`
+  inside its loop asks the client to load a talent's spell data - which answers
+  with `SPELL_DATA_LOAD_RESULT`, sometimes synchronously, and that handler
+  clears the cache. The table being filled became nil mid-loop and the next
+  index threw. It runs under `Boot("Bars")`, so the throw took `Screen:Start`
+  with it: bars on screen with no clock, reported as "die bars bewegen sich
+  nicht mehr". Built into a local and published at the end now, with a
+  generation counter so a list built across an invalidation is returned but
+  never cached.
+
+- THE GAME MENU ENTRY FAILED TO START AT ALL: `SetText` before the font was
+  set, which raises rather than doing nothing. The rule is written down in
+  `Core/Screen.lua`, where the same mistake was made once before.
+
 - THE SPARK WAS NEVER DRAWN, on any bar, in any direction, since it shipped.
   It anchored its own `TOP` and its own `BOTTOM` both to the fill texture's
   `RIGHT` - one point, the middle of that edge - so both of its edges landed

@@ -11,6 +11,8 @@ ns.CHANGELOG = {
         version = "4.30.0",
         date = "2026-08-08",
         lines = {
+            "THE BARS COULD STOP MOVING ENTIRELY, and this is why: while working out which talent is behind which proc, the addon asks the game to load a talent's description. The game sometimes answers on the spot, and that answer clears a list the addon is in the middle of writing - so the next line wrote into nothing and threw. That happens inside the startup step that starts the clock, so the bars were drawn and then never moved again. If you have ever seen \"Bars failed to start\" in chat, that was this.",
+            "",
             "FOUR CONTROLS THAT DID NOTHING NOW DO SOMETHING. Countdown position and nudge, stack position and nudge, the spell name's position and nudge, and the spark. All reported by the owner in one sitting, and all four turned out to be different faults that happened to look identical from the chair.",
             "",
             "THE SPARK WAS NEVER ON SCREEN. Not on any bar, in any direction, since it was added. It was pinned by its top AND its bottom to the same point - the middle of the fill's leading edge - so both of its own edges landed on one line: ten pixels wide and nothing tall. It hangs off the two CORNERS of that edge now and is as tall as the bar.",
