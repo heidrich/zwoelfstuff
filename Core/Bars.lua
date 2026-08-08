@@ -936,6 +936,83 @@ function Bars:ChargeDivisions(charges)
     return math.floor(count) - 1
 end
 
+-- What ONE CELL may wear differently from the bar it sits on.
+--
+-- Deliberately the look and nothing else. Rows, columns, spacing and the
+-- arrangement describe the bar as a whole and cannot be per cell without
+-- meaning something different; these are all "what does this rectangle look
+-- like", which every cell can answer for itself.
+--
+-- Text is absent on purpose: three elements times seven controls is a panel
+-- nobody can read, and a bar whose cells use four different fonts is not a
+-- design. If one cell needs its own countdown, that is a real request and can
+-- be added here - but it should be asked for rather than assumed.
+ns.CELL_LOOK_KEYS = {
+    "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "borderSize", "borderColor", "borderTexture",
+    "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
+    "iconZoom", "swipeColor", "swipeAlpha",
+    "showSpark", "chargeMarks", "chargeMarkColor",
+    "stackThresholds",
+}
+
+-- The cell's own look, over the bar's.
+--
+-- A PROXY rather than a copy. Style only ever READS its config, so a table
+-- that falls through to the bar costs one metatable instead of copying every
+-- field of the bar on each call - and a field added to a bar tomorrow is
+-- carried without this function being told about it. Both are true of a
+-- rebuilt copy as well; the proxy is simply the cheaper way to be right.
+function Bars:CellStyle(cfg, index, height)
+    local opts = ns.Layout.CellOpts(cfg, index)
+    local look = opts and opts.look
+
+    -- The common case by far: no overrides, so the bar's own style is the
+    -- answer and the caller's cache does its job.
+    if not (look and next(look)) then return self:Style(cfg, height) end
+
+    local proxy = setmetatable({}, { __index = cfg })
+    for _, key in ipairs(ns.CELL_LOOK_KEYS) do
+        if look[key] ~= nil then proxy[key] = look[key] end
+    end
+    return self:Style(proxy, height)
+end
+
+-- Whether this cell wears anything of its own. Used by the panel to show that
+-- a cell has been changed without having to compare every value.
+function Bars:CellHasLook(cfg, index)
+    local opts = ns.Layout.CellOpts(cfg, index)
+    return (opts and opts.look and next(opts.look)) ~= nil
+end
+
+-- Write one override. A nil value REMOVES it, which is how a control says
+-- "follow the bar again" - and it is why nothing here stores a copy of the
+-- bar's value as a default: a stored copy stops following.
+function Bars:SetCellLook(cfg, index, key, value)
+    if not cfg then return end
+
+    if value == nil then
+        local opts = ns.Layout.CellOpts(cfg, index)
+        if not (opts and opts.look) then return end
+        opts.look[key] = nil
+        ns.Layout.TidyCellOpts(cfg, index)
+        return
+    end
+
+    local opts = ns.Layout.EnsureCellOpts(cfg, index)
+    opts.look = opts.look or {}
+    opts.look[key] = value
+end
+
+-- Back to the bar's look entirely.
+function Bars:ClearCellLook(cfg, index)
+    local opts = ns.Layout.CellOpts(cfg, index)
+    if not (opts and opts.look) then return false end
+    opts.look = nil
+    ns.Layout.TidyCellOpts(cfg, index)
+    return true
+end
+
 function Bars:Style(cfg, height)
     height = height or 40
 

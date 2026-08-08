@@ -1501,7 +1501,9 @@ function UI.CellGrid(parent, cfg)
             -- The bar's OWN look, resolved by the same function the screen
             -- calls. Asked for per cell, because a cell can be scaled and the
             -- automatic text size follows the cell rather than the bar.
-            local style = cfg.style and cfg.style(h)
+            -- Per CELL, so a cell wearing its own colour previews in that
+            -- colour rather than in the bar's.
+            local style = cfg.style and cfg.style(h, index)
             local isBar = slots[index].kind == "bar"
 
             if spellID and style then

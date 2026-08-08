@@ -8,6 +8,22 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.18.0",
+        date = "2026-08-08",
+        lines = {
+            "NEW: EVERY CELL CAN BE EDITED ON ITS OWN. Click a cell in a bar card and press \"Just this one\" - colour, opacity, texture, which end the fill starts at, whether it fills up, border, backdrop, spark, charge marks, size, shape, and its own stack colours. So Bone Shield can be red with bands at five and ten while the two bars under it stay exactly as they were.",
+            "",
+            "EVERYTHING FOLLOWS THE BAR UNTIL YOU TOUCH IT. Change the bar's colour and every cell that has not been given its own follows along, including cells you edited something ELSE on - a cell that owns its colour still follows the bar for everything it does not own. \"Follow the bar again\" at the bottom hands the whole cell back.",
+            "There is no per-setting inherit switch on purpose. Twenty rows each with two states to read is a panel nobody can use; one clear way back is better.",
+            "",
+            "The overrides belong to the SLOT, not to the spell sitting in it - the same rule as the size and the nudge. Drag Bone Shield to the top of the bar and the red stays where it was, because that is what lets a layout be handed to another character at all.",
+            "",
+            "The card previews it. A cell wearing its own colour is drawn in that colour in the editor, not just on screen.",
+            "",
+            "Text is deliberately not per-cell yet: three elements times seven controls each is a panel that cannot be read, and a bar whose cells use four fonts is not a design. If one cell needs its own countdown, say so and it gets added.",
+        },
+    },
+    {
         version = "4.17.0",
         date = "2026-08-08",
         lines = {

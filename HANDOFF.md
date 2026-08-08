@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.17.0**. Read this first.
+State as of **2026-08-08**, version **4.18.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~100 checks in
+**Run `/zs test` before you believe anything below.** ~115 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -25,7 +25,7 @@ on top of it, effects that react to the cooldown, and rules that decide when it
 is on screen at all. See *Arrangements, effects and rules* for which file owns
 what, and why none of them can reach the others.
 
-Version 4.17.0 is statically clean over 25 files and passes its own checks.
+Version 4.18.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
 
@@ -920,6 +920,17 @@ The scan survives, demoted to suggesting a caption in the reverse direction
 
 ## Lessons that cost real time — do not repeat
 
+- **A per-cell override is a PROXY over the bar, never a copy of it.**
+  `Bars:CellStyle` builds `setmetatable({}, { __index = cfg })` and writes only
+  the overridden keys. Style reads and never writes, so this is both cheaper
+  than copying every field per call and immune to a setting added to bars
+  later. The keys a cell may own are `ns.CELL_LOOK_KEYS` — the LOOK only;
+  rows, columns, spacing and the arrangement describe the whole bar and would
+  mean something else per cell.
+- **`nil` is how an override says "follow again".** `Bars:SetCellLook` with a
+  nil value removes the key and tidies the cell away if nothing is left. Never
+  store a copy of the bar's current value as a per-cell default — a stored
+  copy stops following, which reads as the bar's setting being broken.
 - **A feature that exists but does the wrong thing reads as missing.** The
   owner asked for drag and drop in the bar cards. It had been there all along
   — `UI.CellGrid` has the marker, the hit test and both handlers, and the

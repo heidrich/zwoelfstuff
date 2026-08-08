@@ -327,6 +327,70 @@ local function TestPerSpec()
 end
 
 ---------------------------------------------------------------------------
+-- One cell wearing its own look
+--
+-- Every setting follows the bar until the cell is given its own, and going
+-- back has to be possible. The failure mode is silent in both directions: a
+-- cell that stops following looks like the bar setting is broken, and a cell
+-- that never starts looks like the cell setting is.
+---------------------------------------------------------------------------
+local function TestCellLook()
+    local cfg = Fresh({ kind = "bar", fillColor = { 1, 0, 0 }, fillAlpha = 0.5 })
+
+    Check("A fresh cell wears nothing of its own",
+        not ns.Bars:CellHasLook(cfg, 2))
+    Check("It follows the bar's colour",
+        ns.Bars:CellStyle(cfg, 2, 24).fillColor[1] == 1)
+
+    ns.Bars:SetCellLook(cfg, 2, "fillColor", { 0, 0, 1 })
+    Check("A cell can wear its own colour", ns.Bars:CellHasLook(cfg, 2))
+    Check("Its own colour is what the renderer gets",
+        ns.Bars:CellStyle(cfg, 2, 24).fillColor[3] == 1)
+
+    -- The half that is easy to lose: everything NOT overridden still has to
+    -- follow, including settings changed after the override was made.
+    Check("Everything else still follows the bar",
+        Near(ns.Bars:CellStyle(cfg, 2, 24).fillAlpha, 0.5))
+    cfg.fillAlpha = 0.9
+    Check("A change to the bar reaches the cell that did not override it",
+        Near(ns.Bars:CellStyle(cfg, 2, 24).fillAlpha, 0.9))
+
+    Check("Its neighbours are untouched",
+        ns.Bars:CellStyle(cfg, 1, 24).fillColor[1] == 1
+        and not ns.Bars:CellHasLook(cfg, 1))
+    Check("And the bar itself is untouched", cfg.fillColor[1] == 1)
+
+    -- Nil means "follow again", which is how a control hands a setting back.
+    ns.Bars:SetCellLook(cfg, 2, "fillColor", nil)
+    Check("Clearing one override goes back to following",
+        ns.Bars:CellStyle(cfg, 2, 24).fillColor[1] == 1)
+    Check("A cell with nothing left is tidied away",
+        not ns.Bars:CellHasLook(cfg, 2) and cfg.cellOpts[2] == nil,
+        "an empty override table must not survive")
+
+    -- Reset, and the rule that a cell's look belongs to the SLOT: the scale
+    -- and the nudge live in the same table and must survive it.
+    ns.Bars:SetCellLook(cfg, 3, "fillColor", { 0, 1, 0 })
+    ns.Layout.EnsureCellOpts(cfg, 3).scale = 1.5
+    Check("Reset gives the look back", ns.Bars:ClearCellLook(cfg, 3))
+    Check("Reset keeps the size, which is not part of the look",
+        ns.Layout.CellOpts(cfg, 3) and ns.Layout.CellOpts(cfg, 3).scale == 1.5)
+    Check("Resetting a cell that wears nothing reports so",
+        ns.Bars:ClearCellLook(cfg, 1) == false)
+
+    -- Only the look travels. Rows and spacing describe the whole bar and
+    -- would mean something different per cell.
+    local allowed = {}
+    for _, key in ipairs(ns.CELL_LOOK_KEYS) do allowed[key] = true end
+    Check("A cell may not override the bar's shape",
+        not allowed.rows and not allowed.columns and not allowed.spacing
+        and not allowed.layout)
+    Check("A cell may override the things you can see",
+        allowed.fillColor and allowed.borderColor and allowed.fillGrow
+        and allowed.stackThresholds)
+end
+
+---------------------------------------------------------------------------
 -- Sorting a bar by dragging
 --
 -- Dragging a spell up a list has to leave the others in THEIR order. Swapping
@@ -865,6 +929,7 @@ function Test:Run()
         { "Pattern switch", TestPatternRoundTrip },
         { "Rows and columns", TestGridSliders },
         { "Sorting by drag", TestReorder },
+        { "One cell's look", TestCellLook },
         { "Per character", TestPerSpec },
         { "Bar fill",      TestFill },
         { "Stack colours", TestStackThresholds },

@@ -120,10 +120,14 @@ function Layout.TidyCellOpts(cfg, index)
     local opts = cfg.cellOpts and cfg.cellOpts[index]
     if not opts then return end
 
+    -- A look table that has been emptied counts as nothing, so clearing the
+    -- last override on a cell tidies the cell away with it.
+    if opts.look and not next(opts.look) then opts.look = nil end
+
     local interesting = (opts.scale and opts.scale ~= 1)
         or (opts.x and opts.x ~= 0) or (opts.y and opts.y ~= 0)
         or (opts.px and opts.px ~= 0) or (opts.py and opts.py ~= 0)
-        or opts.kind or opts.hidden
+        or opts.kind or opts.hidden or opts.look
     if not interesting then cfg.cellOpts[index] = nil end
 end
 

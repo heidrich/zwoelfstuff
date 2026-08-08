@@ -886,8 +886,15 @@ function Screen:Render()
         -- it gets a bigger number on that one. Cached by height, because most
         -- bars have exactly one size and building the table per cell would be
         -- a table per cell per pass.
+        -- Cached by height, because most cells share one. A cell wearing a
+        -- look of its own is asked for separately and NOT cached: it is the
+        -- rare case, and keying the cache by cell as well would cost every
+        -- ordinary bar a table per cell to serve the one that is different.
         local styles = {}
-        local function StyleFor(height)
+        local function StyleFor(height, cellIndex)
+            if ns.Bars:CellHasLook(cfg, cellIndex) then
+                return ns.Bars:CellStyle(cfg, cellIndex, height)
+            end
             local key = math.floor(height + 0.5)
             local style = styles[key]
             if not style then
@@ -934,7 +941,7 @@ function Screen:Render()
                 self:BlankCell(cell)
             else
                 self:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell,
-                    StyleFor(slot.h), factor)
+                    StyleFor(slot.h, cellIndex), factor)
             end
         end
 

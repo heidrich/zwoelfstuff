@@ -39,7 +39,7 @@ local ADD_H     = 34
 -- always acts on that pair, which is what makes "click a cell, click a
 -- spell" work without any drag, dialog or confirmation.
 ---------------------------------------------------------------------------
-Workspace.mode = "spells"          -- "spells" | "options"
+Workspace.mode = "spells"          -- "spells" | "options" | "cell"
 
 function Workspace:Current()
     local index = self.index or 1
@@ -62,8 +62,9 @@ function Workspace:SelectCell(index, cell)
     self.cell = cell
     -- Picking a cell means you are about to fill it, so the spells come back
     -- by themselves rather than leaving you on a settings pane wondering why
-    -- clicking did nothing.
-    if cell then self.mode = "spells" end
+    -- clicking did nothing. Editing one cell and clicking the NEXT is the
+    -- exception: that is "now this one", not "I want the spell list".
+    if cell and self.mode ~= "cell" then self.mode = "spells" end
     ns.Options:Refresh()
 end
 
@@ -76,6 +77,15 @@ end
 
 function Workspace:ShowSpells()
     self.mode = "spells"
+    ns.Options:Refresh()
+end
+
+-- One cell's own look. Reached from the spells pane while a cell is picked,
+-- because that is the moment you are already looking at the cell you mean.
+function Workspace:ShowCell(index, cell)
+    self.index = index
+    self.cell = cell
+    self.mode = "cell"
     ns.Options:Refresh()
 end
 
@@ -214,9 +224,10 @@ local function BuildCard(parent, width)
         -- The bar's real look, from the same function the screen calls. This
         -- is what makes the card a preview of what you built rather than a
         -- diagram of it: pick a texture and you see that texture, here.
-        style = function(height)
+        style = function(height, cell)
             local cfg = Cfg()
-            return cfg and ns.Bars:Style(cfg, height) or nil
+            if not cfg then return nil end
+            return ns.Bars:CellStyle(cfg, cell, height)
         end,
         iconPlacement = function()
             local cfg = Cfg()
@@ -1539,6 +1550,202 @@ end
 -- parent is the whole column, not an inset frame: the heading has to sit in
 -- the window's header band so its rule lands on the same line as the ones in
 -- the other two columns.
+---------------------------------------------------------------------------
+-- One cell, on its own
+--
+-- Everything here FOLLOWS THE BAR until you touch it. The moment you do, this
+-- cell owns that setting and stops following - which is why there is a Reset
+-- rather than twenty little "inherit" switches: one clear way back beats a
+-- panel where every row has two states to read.
+--
+-- The overrides belong to the SLOT, not to the spell in it, exactly like the
+-- scale and the nudge. Drag Bone Shield somewhere else and the red stays
+-- where it was. That is the rule from 4.10.0 and it is why a layout can be
+-- handed to another character at all.
+---------------------------------------------------------------------------
+function Workspace:BuildCellPane(parent, width)
+    local pane = CreateFrame("Frame", nil, parent)
+    pane:SetAllPoints(parent)
+
+    local grid = UI.Page(pane, width)
+
+    local function Cell()
+        local _, cfg = Workspace:Current()
+        return cfg, Workspace.cell
+    end
+
+    -- Reads the cell's own value, or the bar's while it is still following.
+    local function Get(key, fallback)
+        return function()
+            local cfg, index = Cell()
+            if not (cfg and index) then return fallback end
+            local opts = ns.Layout.CellOpts(cfg, index)
+            local look = opts and opts.look
+            if look and look[key] ~= nil then return look[key] end
+            if cfg[key] ~= nil then return cfg[key] end
+            return fallback
+        end
+    end
+    local function Set(key)
+        return function(value)
+            local cfg, index = Cell()
+            if cfg and index then ns.Bars:SetCellLook(cfg, index, key, value) end
+        end
+    end
+
+    local function Slide(label, key, min, max, step, format)
+        return UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
+            get = Get(key, min), set = Set(key),
+            min = min, max = max, step = step, format = format, apply = Apply,
+        })
+    end
+    local function Switch(label, key, sublabel)
+        return UI.Toggle(grid:FullRow(label, { controlWidth = 124, sublabel = sublabel }),
+            Get(key, false), function(value) Set(key)(value); Apply() end)
+    end
+    local function Colour(label, key)
+        return UI.Swatch(grid:FullRow(label, { controlWidth = 124 }),
+            function()
+                local colour = Get(key, { 0, 0, 0 })()
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b) Set(key)({ r, g, b }) end,
+            Apply)
+    end
+
+    local function Percent(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end
+
+    grid:Section("This one only")
+    grid:Note("Every setting here follows the bar until you change it. After "
+        .. "that this cell keeps its own, and Reset below hands it all back.")
+
+    -- Size and shape, which already had per-cell overrides of their own and
+    -- are read from the same place rather than duplicated.
+    UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
+        get = function()
+            local cfg, index = Cell()
+            local opts = cfg and index and ns.Layout.CellOpts(cfg, index)
+            return (opts and opts.scale) or 1
+        end,
+        set = function(value)
+            local cfg, index = Cell()
+            if not (cfg and index) then return end
+            ns.Layout.EnsureCellOpts(cfg, index).scale = value
+            ns.Layout.TidyCellOpts(cfg, index)
+        end,
+        min = 0.5, max = 3, step = 0.05, apply = Apply,
+        format = function(v) return string.format("%.2fx", v) end,
+    })
+
+    UI.Dropdown(grid:FullRow("Shape", { controlWidth = 160 }), {
+        { value = "",     text = "Follow the bar" },
+        { value = "icon", text = "Icon" },
+        { value = "bar",  text = "Tracking bar" },
+    }, function()
+        local cfg, index = Cell()
+        local opts = cfg and index and ns.Layout.CellOpts(cfg, index)
+        return (opts and opts.kind) or ""
+    end, function(value)
+        local cfg, index = Cell()
+        if not (cfg and index) then return end
+        ns.Layout.EnsureCellOpts(cfg, index).kind = (value ~= "" and value) or nil
+        ns.Layout.TidyCellOpts(cfg, index)
+    end, { apply = Apply })
+
+    grid:Section("Bar fill", "cell-fill")
+    Colour("Colour", "fillColor")
+    Slide("Opacity", "fillAlpha", 0, 1, 0.05, Percent)
+    UI.MediaPicker(grid:FullRow("Texture", { controlWidth = 190 }), "statusbar",
+        Get("fillTexture", ""), Set("fillTexture"), Apply)
+    Switch("Start on the right", "fillSide", "Which end the fill sits at")
+    Switch("Fill up", "fillGrow", "Grow as time passes instead of draining")
+    Switch("Spark", "showSpark", "A bright line on the moving edge")
+    Switch("Charge marks", "chargeMarks", "One line per charge boundary")
+
+    grid:Section("Border and backdrop", "cell-edge")
+    Slide("Thickness", "borderSize", 0, 4, 1)
+    Colour("Border colour", "borderColor")
+    Colour("Backdrop colour", "backdropColor")
+    Slide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05, Percent)
+
+    -- Stack colours per cell, because this is the setting that most obviously
+    -- belongs to ONE spell: Bone Shield wants bands and the two bars under it
+    -- do not.
+    grid:Section("Stack colours", "cell-stacks")
+    grid:Note("Same as the bar's, but for this cell alone. Below the lowest "
+        .. "band it wears the fill colour above. 0 switches a band off.")
+
+    local BAND_COLOURS = {
+        { 0.85, 0.15, 0.15 },
+        { 1.00, 0.78, 0.20 },
+        { 0.30, 0.85, 0.35 },
+    }
+
+    local function Bands()
+        local cfg, index = Cell()
+        if not (cfg and index) then return {} end
+        local opts = ns.Layout.CellOpts(cfg, index)
+        local look = opts and opts.look
+        -- The bar's list is the starting point, copied on first edit so the
+        -- two can never share a table.
+        return (look and look.stackThresholds) or cfg.stackThresholds or {}
+    end
+    local function WriteBand(slot, field, value)
+        local cfg, index = Cell()
+        if not (cfg and index) then return end
+
+        local list = {}
+        for position, entry in ipairs(Bands()) do
+            list[position] = {
+                value = entry.value, alpha = entry.alpha,
+                color = { (entry.color or {})[1] or 0,
+                          (entry.color or {})[2] or 0,
+                          (entry.color or {})[3] or 0 },
+            }
+        end
+        list[slot] = list[slot] or { value = 0, color = BAND_COLOURS[slot] }
+        list[slot][field] = value
+        ns.Bars:SetCellLook(cfg, index, "stackThresholds", list)
+    end
+
+    for slot = 1, 3 do
+        UI.Slider(grid:FullRow("At ... stacks", { controlWidth = 124 }), {
+            get = function() return (Bands()[slot] or {}).value or 0 end,
+            set = function(value) WriteBand(slot, "value", value) end,
+            min = 0, max = 20, step = 1, apply = Apply,
+            format = function(v)
+                if (v or 0) < 1 then return "off" end
+                return string.format("%d+", v)
+            end,
+        })
+        local fallback = BAND_COLOURS[slot]
+        UI.Swatch(grid:FullRow("Colour", { controlWidth = 124 }),
+            function()
+                local colour = (Bands()[slot] or {}).color or fallback
+                return colour[1], colour[2], colour[3]
+            end,
+            function(r, g, b) WriteBand(slot, "color", { r, g, b }) end,
+            Apply)
+    end
+
+    grid:Section("Back to normal")
+    local reset = UI.Button(grid:FullRow("", { controlWidth = 200 }).slot,
+        "Follow the bar again", 200, function()
+            local cfg, index = Cell()
+            if not (cfg and index) then return end
+            ns.Bars:ClearCellLook(cfg, index)
+            Apply()
+        end, "soft")
+    reset:SetPoint("RIGHT", reset:GetParent(), "RIGHT", 0, 0)
+
+    pane.Refresh = function()
+        grid:Layout()
+        grid:Refresh()
+    end
+
+    return pane
+end
+
 function Workspace:BuildSide(parent, pad)
     local side = CreateFrame("Frame", nil, parent)
     side:SetAllPoints(parent)
@@ -1568,16 +1775,43 @@ function Workspace:BuildSide(parent, pad)
 
     local spells = self:BuildSpellPane(host, width)
     local options = self:BuildOptionsPane(host, width)
+    local cellPane = self:BuildCellPane(host, width)
+
+    -- The way in to one cell's settings. It lives here rather than on the card
+    -- because it only means anything while a cell is picked, and this is where
+    -- you are looking the moment after you pick one.
+    local editCell = UI.GhostButton(side, "Just this one", function()
+        local index = Workspace.index or 1
+        if Workspace.cell then Workspace:ShowCell(index, Workspace.cell) end
+    end, C.accentCool)
+    editCell:SetPoint("TOPRIGHT", side, "TOPRIGHT", -pad + 6, -40)
 
     side.Refresh = function()
-        local onOptions = Workspace.mode == "options" and Bars:Count() > 0
+        local bars = Bars:Count() > 0
+        local onOptions = Workspace.mode == "options" and bars
+        local onCell = Workspace.mode == "cell" and bars and Workspace.cell ~= nil
+        -- Called for its clamping side effect as well as for the config: it
+        -- pulls the selection back into range after a bar is deleted.
         local _, cfg = Workspace:Current()
 
-        spells:SetShown(not onOptions)
+        spells:SetShown(not onOptions and not onCell)
         options:SetShown(onOptions)
-        back:SetShown(onOptions)
+        cellPane:SetShown(onCell)
+        back:SetShown(onOptions or onCell)
 
-        if onOptions then
+        -- Offered only when there is a cell to talk about, and never on top of
+        -- the Done button it shares a corner with.
+        editCell:SetShown(not onOptions and not onCell and Workspace.cell ~= nil)
+
+        if onCell then
+            local spellID = cfg and cfg.cells and cfg.cells[Workspace.cell]
+            title:SetText(spellID and (ns.SpellName(spellID) or "This cell")
+                or string.format("Cell %d", Workspace.cell))
+            subtitle:SetText(ns.Bars:CellHasLook(cfg, Workspace.cell)
+                and "Wearing its own look"
+                or "Following the bar")
+            cellPane.Refresh()
+        elseif onOptions then
             title:SetText(cfg and cfg.name or "Bar")
             subtitle:SetText("How this bar looks")
             options.Refresh()
