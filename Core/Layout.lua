@@ -77,6 +77,32 @@ ns.GROW_X = {
     { value = "left",  text = "Right to left", icon = "dir-right-left" },
 }
 
+-- Which way a tracking bar's FILL runs. Same four marks as the reading
+-- directions above, and deliberately the same words: a direction is a
+-- direction, and two vocabularies for one idea is how a settings page starts
+-- needing to be learned.
+--
+-- The pairs are what the renderer needs - a StatusBar has an orientation and
+-- a reverse flag, and SetReverseFill alone only ever flips a horizontal bar.
+-- Kept HERE, next to the names, so the mapping cannot drift from the list.
+ns.FILL_DIRECTIONS = {
+    { value = "right", text = "Left to right", icon = "dir-left-right",
+      orientation = "HORIZONTAL", reverse = false },
+    { value = "left",  text = "Right to left", icon = "dir-right-left",
+      orientation = "HORIZONTAL", reverse = true },
+    { value = "up",    text = "Bottom to top", icon = "dir-bottom-top",
+      orientation = "VERTICAL",   reverse = false },
+    { value = "down",  text = "Top to bottom", icon = "dir-top-bottom",
+      orientation = "VERTICAL",   reverse = true },
+}
+
+function Layout.FillDirection(value)
+    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
+        if entry.value == value then return entry end
+    end
+    return ns.FILL_DIRECTIONS[1]
+end
+
 ns.GROW_Y = {
     { value = "down", text = "Top to bottom", icon = "dir-top-bottom" },
     { value = "up",   text = "Bottom to top", icon = "dir-bottom-top" },

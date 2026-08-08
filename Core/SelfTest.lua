@@ -1144,6 +1144,47 @@ local function TestSnapping()
 end
 
 ---------------------------------------------------------------------------
+-- Which way the fill runs
+--
+-- Four names, and each one has to land on a DIFFERENT pair of (orientation,
+-- reverse). Two of them are new: SetReverseFill only ever flips a horizontal
+-- bar, so up and down were unreachable before and the obvious mistake is to
+-- give one of them the same pair as an existing one - which looks like the
+-- setting doing nothing.
+---------------------------------------------------------------------------
+local function TestFillDirection()
+    local seen = {}
+    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
+        local key = entry.orientation .. ":" .. tostring(entry.reverse)
+        Check("Fill direction '" .. entry.value .. "' is its own pair",
+            not seen[key], key .. " already taken by " .. tostring(seen[key]))
+        seen[key] = entry.value
+
+        Check("Fill direction '" .. entry.value .. "' has a mark",
+            entry.icon and ns.UI.HasIcon(entry.icon), tostring(entry.icon))
+    end
+
+    Check("All four directions are offered", #ns.FILL_DIRECTIONS == 4,
+        tostring(#ns.FILL_DIRECTIONS))
+
+    -- Both axes are used. Four horizontal variants would pass the test above
+    -- and still mean the vertical fill was never built.
+    local vertical = false
+    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
+        if entry.orientation == "VERTICAL" then vertical = true end
+    end
+    Check("Two of them are vertical", vertical)
+
+    -- An unknown name must not return nil - the renderer reads .orientation
+    -- straight off whatever comes back.
+    local fallback = ns.Layout.FillDirection("sideways")
+    Check("An unknown direction falls back rather than returning nil",
+        fallback and fallback.orientation ~= nil)
+    Check("The fallback is left to right", fallback.value == "right",
+        tostring(fallback.value))
+end
+
+---------------------------------------------------------------------------
 -- The menu filter
 --
 -- Pure, for the same reason the snapping arithmetic is: the rule that is easy
@@ -1200,6 +1241,7 @@ function Test:Run()
         { "Design system",  TestDesignSystem },
         { "Snapping",      TestSnapping },
         { "Menu filter",   TestMenuFilter },
+        { "Fill direction", TestFillDirection },
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },

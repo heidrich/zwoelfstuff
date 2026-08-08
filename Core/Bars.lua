@@ -159,6 +159,21 @@ ns.BAR_DEFAULTS = {
     fillSide    = false,       -- true starts the fill at the right-hand end
     fillGrow    = false,       -- true fills up as time passes
 
+    -- WHICH WAY THE FILL RUNS, as one setting with four answers instead of a
+    -- pair of switches you have to combine in your head. It replaced
+    -- `fillSide` as the thing the panel offers - fillSide is still read, and
+    -- still migrated, because a profile written before this carries it.
+    --
+    -- Two of the four are NEW: a StatusBar's SetReverseFill only ever flips a
+    -- horizontal bar, so up and down needed SetOrientation as well and were
+    -- simply not reachable before.
+    --
+    --   "right"  left to right   HORIZONTAL, not reversed
+    --   "left"   right to left   HORIZONTAL, reversed
+    --   "up"     bottom to top   VERTICAL,   not reversed
+    --   "down"   top to bottom   VERTICAL,   reversed
+    fillDirection = "right",
+
     -- A bright line riding the leading edge of the fill. Anchored TO the
     -- fill's texture, so it follows the clock without costing a frame.
     showSpark   = false,
@@ -834,6 +849,7 @@ ns.BAR_STYLE_KEYS = {
     "iconZoom", "inactiveAlpha", "inactiveDesaturate",
     "swipeColor", "swipeAlpha", "showEdge",
     "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "fillDirection",
     "showSpark", "chargeMarks", "chargeMarkColor",
     "stackThresholds",
     "countdown", "stacks", "spellName",
@@ -961,6 +977,7 @@ end
 -- be added here - but it should be asked for rather than assumed.
 ns.CELL_LOOK_KEYS = {
     "fillColor", "fillAlpha", "fillTexture", "fillSide", "fillGrow",
+    "fillDirection",
     "borderSize", "borderColor", "borderTexture",
     "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
     "iconZoom", "swipeColor", "swipeAlpha",
@@ -1058,6 +1075,10 @@ function Bars:Style(cfg, height)
             or cfg.backdropTexture,
         fillSide    = cfg.fillSide and true or false,
         fillGrow    = cfg.fillGrow and true or false,
+        -- Resolved to the orientation and the reverse flag HERE, so the
+        -- renderer never has to know the four names and the four names live
+        -- in exactly one place.
+        fillDirection = ns.Layout.FillDirection(cfg.fillDirection),
 
         showSpark       = cfg.showSpark and true or false,
         chargeMarks     = cfg.chargeMarks and true or false,
@@ -1482,6 +1503,16 @@ end
 
 function Bars:Prepare()
     for _, cfg in ipairs(ns.db.bars) do
+        -- `fillSide` becomes one of four directions. BEFORE the defaults, not
+        -- in Migrate: a bar that has already been through Migrate would come
+        -- back here on the next login with no fillDirection, and ApplyDefaults
+        -- would hand it "right" - quietly undoing a bar that filled from the
+        -- other end. Replay-safe by construction: it only writes where the
+        -- new key is still absent.
+        if cfg.fillDirection == nil and cfg.fillSide ~= nil then
+            cfg.fillDirection = cfg.fillSide and "left" or "right"
+        end
+
         ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
         if not cfg.id or cfg.id == 0 then cfg.id = self:NextID() end
 

@@ -1,8 +1,8 @@
 # ZwoelfStuff — Handoff
 
-State as of **2026-08-08**, version **4.26.0**. Read this first.
+State as of **2026-08-08**, version **4.27.0**. Read this first.
 
-**Run `/zs test` before you believe anything below.** ~154 checks in
+**Run `/zs test` before you believe anything below.** ~166 checks in
 `Core/SelfTest.lua`, on throwaway configs plus a read-only pass over the real
 bars. It never touches saved data. It was written by reverting the fixes in a
 scratch copy of `Core/` until it went red, so it is a regression test and not a
@@ -28,6 +28,47 @@ what, and why none of them can reach the others.
 Version 4.22.0 is statically clean over 25 files and passes its own checks.
 Parts of it HAVE now been seen running — see *What is confirmed in game* below,
 which is the list that matters, because the rest has only ever been read.
+
+## 4.27.0 — fill direction, and a report a tester can post
+
+**`/zs report` opens a copy box.** `UI.CopyBox(title, text, hint)` — a real
+multi-line EditBox, focused and fully selected on open. Every "export" that
+prints to the chat frame is an export only the person holding the source file
+can use: chat text cannot be selected, colour codes would come with it, and
+thirty lines scroll off the top. The report carries the addon version and the
+client build, because a proc list without a build is worth much less later.
+`Auras:ExportText()` builds the plain string; `Auras:Export()` opens the box.
+
+**The fill runs one of four ways**, replacing "Start on the right" + "Fill up"
+as the direction question. Two of the four are new capability: `SetReverseFill`
+only ever flips a HORIZONTAL bar, so a vertical fill needed `SetOrientation`
+and was unreachable before. The spark and the charge marks both had to learn
+the axis — three lines running *down* a vertical bar divide nothing.
+
+`ns.FILL_DIRECTIONS` in `Core/Layout.lua` holds the name, the mark, the
+orientation and the reverse flag together, so the mapping cannot drift from the
+list. **The migration runs in `Bars:Prepare`, before `ApplyDefaults`** — in
+`Migrate` it would have been overwritten by the default on the next login,
+which is the whole class of bug that eats a saved setting silently.
+
+### Still open from the owner's list of 2026-08-08
+
+Reported in one message; these three are **not** done and are the next work:
+
+1. **Charge count** — not displayed at all. Wants its own text element with
+   font, size, colour, outline, position and nudge, like `countdown` and
+   `stacks` already have in `TextStyle`.
+2. **Gradients** — every colour setting should offer solid *or* gradient, and a
+   gradient needs its own direction and stops. `UI.Swatch` and every
+   `SetColorTexture`/`SetStatusBarColor` caller are in scope.
+3. **"The settings all do nothing."** Not reproduced, and the honest state is
+   that I have a hypothesis and no proof: the fill settings only reach cells
+   **this addon draws** (`aura.fill`, `Screen.lua:115`). A cooldown adopted
+   from Blizzard's Cooldown Manager brings Blizzard's own status bar, and none
+   of `fillColor` / `fillTexture` / `fillSide` / `showSpark` / `chargeMarks`
+   touches it. `/zs skin` prints "ours" or "adopted" per cell — **that is the
+   command that settles it, and it should be run before any of this is
+   redesigned.**
 
 ## 4.26.0 — screen 3a, and the harness opens popups now
 

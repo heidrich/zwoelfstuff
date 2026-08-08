@@ -1338,6 +1338,101 @@ function UI.MenuButton(parent, width, height)
 end
 
 ---------------------------------------------------------------------------
+-- CopyBox - text somebody can actually get out of the game
+--
+-- The chat frame is not a way to hand anything over: you cannot select text in
+-- it, the colour codes come along if you could, and thirty lines scroll past
+-- the top. Every "export" that prints to chat is an export only the person who
+-- wrote it can use, because they are the one reading the file instead.
+--
+-- So: a real EditBox, multi-line, focused and fully selected the moment it
+-- opens, so the whole thing is one Ctrl+C. Plain text, no colour codes - what
+-- is on screen is exactly what lands in the paste.
+---------------------------------------------------------------------------
+local copyBox
+
+function UI.CopyBox(title, text, hint)
+    if not copyBox then
+        copyBox = CreateFrame("Frame", "ZwoelfStuffCopyBox", UIParent)
+        copyBox:SetSize(620, 460)
+        copyBox:SetPoint("CENTER")
+        copyBox:SetFrameStrata("FULLSCREEN_DIALOG")
+        copyBox:EnableMouse(true)
+        copyBox:SetMovable(true)
+        copyBox:RegisterForDrag("LeftButton")
+        copyBox:SetScript("OnDragStart", copyBox.StartMoving)
+        copyBox:SetScript("OnDragStop", copyBox.StopMovingOrSizing)
+        copyBox:SetClampedToScreen(true)
+
+        Fill(copyBox, "BACKGROUND", C.windowBg)
+        local edge = ns.CreateBorder(copyBox, 1, "BORDER")
+        edge:SetColor(C.overlayEdge[1], C.overlayEdge[2], C.overlayEdge[3], 1)
+
+        copyBox.title = UI.Label(copyBox, "", UI.FS.card, C.text)
+        copyBox.title:SetPoint("TOPLEFT", copyBox, "TOPLEFT", UI.PAD, -18)
+
+        local close = CreateFrame("Button", nil, copyBox)
+        close:SetSize(24, 24)
+        close:SetPoint("TOPRIGHT", copyBox, "TOPRIGHT", -UI.PAD, -14)
+        local cross = UI.Glyph(close, "ui-close", 12, C.textDim)
+        cross:SetPoint("CENTER", close, "CENTER", 0, 0)
+        close:SetScript("OnEnter", function()
+            cross:SetColor(C.danger[1], C.danger[2], C.danger[3])
+        end)
+        close:SetScript("OnLeave", function()
+            cross:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        end)
+        close:SetScript("OnClick", function() copyBox:Hide() end)
+
+        local rule = Tex(copyBox, "ARTWORK", C.separator[1], C.separator[2],
+            C.separator[3], 1)
+        rule:SetHeight(1)
+        rule:SetPoint("TOPLEFT", copyBox, "TOPLEFT", 0, -UI.HEADER_H)
+        rule:SetPoint("TOPRIGHT", copyBox, "TOPRIGHT", 0, -UI.HEADER_H)
+
+        copyBox.hint = UI.Label(copyBox, "", UI.FS.meta, C.textFaint)
+        copyBox.hint:SetPoint("BOTTOMLEFT", copyBox, "BOTTOMLEFT", UI.PAD, 14)
+
+        local scroll = CreateFrame("ScrollFrame", nil, copyBox,
+            "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", copyBox, "TOPLEFT", UI.PAD,
+            -(UI.HEADER_H + 12))
+        scroll:SetPoint("BOTTOMRIGHT", copyBox, "BOTTOMRIGHT", -30, 40)
+
+        -- SetAutoFocus(false), and focused by hand when the box opens. On
+        -- true it steals the keyboard the moment the frame is created, which
+        -- is at login.
+        local input = CreateFrame("EditBox", nil, scroll)
+        input:SetMultiLine(true)
+        input:SetAutoFocus(false)
+        input:SetFontObject("GameFontHighlightSmall")
+        input:SetWidth(560)
+        input:SetScript("OnEscapePressed", function() copyBox:Hide() end)
+        -- Read-only in the way that matters: typing changes nothing that is
+        -- kept, and any edit is undone so the paste is always the real thing.
+        input:SetScript("OnTextChanged", function(self, byUser)
+            if byUser then
+                self:SetText(copyBox.dkText or "")
+                self:HighlightText()
+            end
+        end)
+        scroll:SetScrollChild(input)
+        copyBox.input = input
+
+        table.insert(UISpecialFrames, "ZwoelfStuffCopyBox")
+    end
+
+    copyBox.title:SetText(title or "Copy")
+    copyBox.hint:SetText(hint or "Ctrl+C copies it. Esc closes.")
+    copyBox.dkText = text or ""
+    copyBox.input:SetText(copyBox.dkText)
+    copyBox:Show()
+    copyBox.input:SetFocus()
+    copyBox.input:HighlightText()
+    return copyBox
+end
+
+---------------------------------------------------------------------------
 -- MediaPicker - fonts, bar textures and border textures
 --
 -- A list of names is useless here. "Empyrean" says nothing about a texture,

@@ -8,6 +8,20 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.27.0",
+        date = "2026-08-08",
+        lines = {
+            "THE FILL RUNS WHICHEVER WAY YOU WANT NOW - left to right, right to left, bottom to top, top to bottom. One setting with four answers, where it used to be two switches you had to combine in your head, neither of which named the thing you actually wanted to say.",
+            "TWO OF THE FOUR ARE NEW. A status bar's reverse flag only ever flips a HORIZONTAL bar, so a vertical fill was not reachable at all, whichever way the old switch was thrown. The spark rides the right edge on a vertical bar now, and the charge marks lie across it instead of running down it - three lines parallel to the fill divide nothing.",
+            "",
+            "A bar you had set to start from the right keeps doing that: it becomes \"right to left\" when the profile is read, once, and nothing is lost.",
+            "",
+            "STACK COLOURS: THE ROWS SAID \"At ... stacks\", which reads as a label that has been cut off - that is what an ellipsis in the middle of a phrase looks like. They say \"From\", and the number is in the control beside them where it always was.",
+            "",
+            "/ZS REPORT OPENS A BOX YOU CAN COPY OUT OF. Every proc this addon has watched you set off, on this character and spec, with the addon version and the client build so the list means something later. Select-all is already done; Ctrl+C takes the lot. It used to print to the chat frame, which is not a way to hand anything over - you cannot select chat text, and thirty lines scroll off the top. If you are testing this for me, that is the command: play normally, then /zs report and paste it back.",
+        },
+    },
+    {
         version = "4.26.0",
         date = "2026-08-08",
         lines = {

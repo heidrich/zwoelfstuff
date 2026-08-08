@@ -693,7 +693,13 @@ end
 -- Prints the recorded set as a block that can be pasted straight into
 -- KNOWN_PROCS. This is how one player's session becomes everybody's default
 -- for that spec.
-function Auras:Export()
+-- The report, as PLAIN TEXT. No colour codes, because this string is written
+-- to be pasted somewhere that is not a chat frame.
+--
+-- It carries the version and the client build with it: a proc list is only
+-- worth anything if you know which build recorded it, and a tester will not
+-- think to say. Returns nil when there is nothing to report.
+function Auras:ExportText()
     local key = self:SpecKey()
 
     -- The MERGED view, never the raw recording. Reading the raw store meant
@@ -701,17 +707,23 @@ function Auras:Export()
     -- guess and the export would have overwritten a correct entry with it -
     -- Blood Boil came out as Hemostasis instead of Boiling Point.
     local procs = self:Procs()
-    if not next(procs) then
-        ns.Print("Nothing recorded for", key or "this spec", "yet.")
-        return
-    end
+    if not next(procs) then return nil, key end
 
     local ids = {}
     for spellID in pairs(procs) do ids[#ids + 1] = spellID end
     table.sort(ids)
 
-    ns.Print("|cffffd100--- paste into ns.KNOWN_PROCS in Core/KnownProcs.lua ---|r")
-    ns.Print(string.format('    ["%s"] = {', key))
+    local out = {}
+    local function Line(text) out[#out + 1] = text end
+
+    local version, build = ns.version or "?", (GetBuildInfo())
+    Line(("-- ZwoelfStuff %s, client %s, %s")
+        :format(version, tostring(build), key or "unknown spec"))
+    Line(("-- %d proc%s recorded. Paste into ns.KNOWN_PROCS in Core/KnownProcs.lua.")
+        :format(#ids, #ids == 1 and "" or "s"))
+    Line("")
+    Line(('    ["%s"] = {'):format(key))
+
     for _, spellID in ipairs(ids) do
         local entry = procs[spellID]
         local display = entry.display or SuggestDisplay(spellID) or spellID
@@ -720,7 +732,7 @@ function Auras:Export()
         local confirmed = entry.expired ~= nil
             and entry.expired >= (entry.floor or 0)
 
-        ns.Print(string.format(
+        Line(string.format(
             "        [%d] = { display = %d, auraID = %s, duration = %d },  -- %s -> %s%s",
             spellID, display,
             entry.auraID and tostring(entry.auraID) or "nil",
@@ -728,12 +740,29 @@ function Auras:Export()
             ns.SpellName(spellID) or "?", ns.SpellName(display) or "?",
             confirmed and "" or "  [duration UNCONFIRMED]"))
     end
-    ns.Print("    },")
-    ns.Print("|cffffd100---------------------------------------------------|r")
-    ns.Print("Check the names first: what is shown is a choice, and the one on")
-    ns.Print("the right is only the talent whose text mentions the left one.")
-    ns.Print("|cffffd100auraID = nil|r means the 12.1 engine has nothing to bind yet -")
-    ns.Print("set it with |cffffd100/zs auras bind <glowID> <auraID>|r.")
+
+    Line("    },")
+    return table.concat(out, "\n"), key
+end
+
+-- Opens the report in a box you can actually copy out of.
+--
+-- It used to print to the chat frame, which is not a way to hand anything
+-- over: chat text cannot be selected, the colour codes would come with it if
+-- it could, and thirty lines scroll off the top. That made "export" a command
+-- only the person with the source file could use.
+function Auras:Export()
+    local text, key = self:ExportText()
+    if not text then
+        ns.Print("Nothing recorded for", key or "this spec", "yet.")
+        ns.Print("Play normally - every ability that lights up is written down.")
+        return
+    end
+
+    ns.UI.CopyBox("Proc report - " .. (key or "this spec"), text,
+        "Ctrl+C copies all of it. Esc closes. Check the names first: what is "
+        .. "shown is a choice, and the one on the right is only the talent "
+        .. "whose text mentions the left one.")
 end
 
 ---------------------------------------------------------------------------

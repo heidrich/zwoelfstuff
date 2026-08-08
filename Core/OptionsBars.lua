@@ -1272,8 +1272,16 @@ function Workspace:BuildOptionsPane(parent, width)
             if type(colour) ~= "table" then return end
             return colour[1], colour[2], colour[3]
         end)
-    fillRows[#fillRows + 1] = Switch("Start on the right", "fillSide",
-        "Which end the fill sits at")
+    -- ONE SETTING WITH FOUR ANSWERS, not two switches you have to combine in
+    -- your head. "Start on the right" plus "Fill up" was four states spelled
+    -- as two questions, and neither question named the thing you actually want
+    -- to say, which is which way the bar runs. Two of the four - up and down -
+    -- were not reachable at all before: SetReverseFill only flips a horizontal
+    -- bar, so the renderer needed an orientation as well.
+    fillRows[#fillRows + 1] = UI.Dropdown(
+        grid:FullRow("Direction", { controlWidth = 190 }),
+        ns.FILL_DIRECTIONS, Get("fillDirection"), Set("fillDirection"),
+        { apply = Apply })
     fillRows[#fillRows + 1] = Switch("Fill up", "fillGrow",
         "Grow as time passes instead of draining away")
     -- Stack colours ----------------------------------------------------------
@@ -1338,7 +1346,11 @@ function Workspace:BuildOptionsPane(parent, width)
 
     for index = 1, 3 do
         fillRows[#fillRows + 1] = UI.Slider(
-            grid:FullRow("At ... stacks", { controlWidth = 124 }), {
+            -- "At ... stacks" READ as a label that had been cut off, because
+            -- that is what an ellipsis in the middle of a phrase looks like.
+            -- The number it was standing in for is in the control two inches
+            -- to the right, where it says "5+".
+            grid:FullRow("From", { controlWidth = 124 }), {
                 get = GetThreshold(index, "value", 0),
                 set = SetThreshold(index, "value"),
                 min = 0, max = 20, step = 1, apply = Apply,
@@ -1906,7 +1918,11 @@ function Workspace:BuildCellPane(parent, width)
     UI.MediaPicker(grid:FullRow("Texture",
         { controlWidth = 190, icon = "media-texture" }), "statusbar",
         Get("fillTexture", ""), Set("fillTexture"), Apply)
-    Switch("Start on the right", "fillSide", "Which end the fill sits at")
+    -- The same one-of-four the bar has, so a cell override reads as the same
+    -- question with the same answers rather than as a different setting.
+    UI.Dropdown(grid:FullRow("Direction", { controlWidth = 190 }),
+        ns.FILL_DIRECTIONS, Get("fillDirection", "right"),
+        Set("fillDirection"), { apply = Apply })
     Switch("Fill up", "fillGrow", "Grow as time passes instead of draining")
     Switch("Spark", "showSpark", "A bright line on the moving edge")
     Switch("Charge marks", "chargeMarks", "One line per charge boundary")
@@ -1958,7 +1974,7 @@ function Workspace:BuildCellPane(parent, width)
     end
 
     for slot = 1, 3 do
-        UI.Slider(grid:FullRow("At ... stacks", { controlWidth = 124 }), {
+        UI.Slider(grid:FullRow("From", { controlWidth = 124 }), {
             get = function() return (Bands()[slot] or {}).value or 0 end,
             set = function(value) WriteBand(slot, "value", value) end,
             min = 0, max = 20, step = 1, apply = Apply,

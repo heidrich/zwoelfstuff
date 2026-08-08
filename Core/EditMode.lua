@@ -1584,9 +1584,27 @@ local function BuildTools()
     local cellGrow = Switch("Fill up",
         function() return CellGet("fillGrow", false)() end,
         function(value) CellSet("fillGrow")(value) end)
-    local cellSide = Switch("From the right",
-        function() return CellGet("fillSide", false)() end,
-        function(value) CellSet("fillSide")(value) end)
+
+    -- Four answers, so it cycles rather than switching. Same shape as the
+    -- Pattern button above it: you are looking at the bar while you press it,
+    -- and one more press is always the way back.
+    local cellSide = UI.Button(tools, "Direction", WIDTH, function()
+        local at = 1
+        local current = CellGet("fillDirection", "right")()
+        for position, entry in ipairs(ns.FILL_DIRECTIONS) do
+            if entry.value == current then at = position end
+        end
+        CellSet("fillDirection")(
+            ns.FILL_DIRECTIONS[(at % #ns.FILL_DIRECTIONS) + 1].value)
+    end)
+    cellSide:SetHeight(21)
+    cellSide:SetPoint("TOPLEFT", tools, "TOPLEFT", INNER, y)
+    y = y - 25
+    cellSide.Refresh = function()
+        local entry = ns.Layout.FillDirection(CellGet("fillDirection", "right")())
+        cellSide:SetText("Fill:  " .. entry.text)
+    end
+    refreshers[#refreshers + 1] = cellSide
 
     local cellReset = UI.Button(tools, "Follow the bar again", WIDTH, function()
         local cfg, cell, barIndex = PickedCell()

@@ -221,7 +221,17 @@ local function StyleAuraVisual(aura, style, isBar)
     -- confusing them was the reported "fillup richtung stimmt nicht": this call
     -- moves the fill to the other end of the bar and has nothing to do with
     -- whether it grows or drains. The clock is in RefreshFill.
-    aura.fill:SetReverseFill(style.fillSide)
+    -- WHICH WAY IT RUNS, not which direction in time. Those are two settings
+    -- and confusing them was the reported "fillup richtung stimmt nicht": this
+    -- pair decides where the fill starts and along which axis, and has nothing
+    -- to do with whether it grows or drains. The clock is in RefreshFill.
+    --
+    -- The orientation is why up and down are new: SetReverseFill on its own
+    -- only ever flips a HORIZONTAL bar, so a vertical fill was unreachable no
+    -- matter which way the old switch was thrown.
+    local direction = style.fillDirection or ns.Layout.FillDirection("right")
+    aura.fill:SetOrientation(direction.orientation)
+    aura.fill:SetReverseFill(direction.reverse)
     aura.grow = style.fillGrow and true or false
     -- Handed to the overlays through the frame rather than as an argument:
     -- they are applied from RefreshFill, which owns everything about the
@@ -431,7 +441,12 @@ local function ApplyChargeMarks(cell)
     if wanted == 0 and #aura.marks == 0 then return end
 
     local colour = aura.chargeMarkColor or { 0, 0, 0 }
-    local width = aura.fill:GetWidth()
+    -- A division runs ACROSS the bar, so which axis it spans depends on which
+    -- way the bar runs. On a vertical fill the old code drew vertical lines
+    -- down a vertical bar - three lines parallel to the fill instead of across
+    -- it, which divides nothing.
+    local vertical = aura.fill:GetOrientation() == "VERTICAL"
+    local span = vertical and aura.fill:GetHeight() or aura.fill:GetWidth()
 
     for index = 1, wanted do
         local mark = aura.marks[index]
@@ -441,13 +456,19 @@ local function ApplyChargeMarks(cell)
         end
         mark:SetColorTexture(colour[1], colour[2], colour[3], 0.85)
         mark:ClearAllPoints()
-        -- One pixel, from the left edge, so the divisions stay where they are
+
+        -- Measured from one fixed corner, so the divisions stay where they are
         -- whichever end the fill starts from.
-        mark:SetPoint("TOPLEFT", aura.fill, "TOPLEFT",
-            math.floor(width * index / (wanted + 1) + 0.5), 0)
-        mark:SetPoint("BOTTOMLEFT", aura.fill, "BOTTOMLEFT",
-            math.floor(width * index / (wanted + 1) + 0.5), 0)
-        mark:SetWidth(1)
+        local at = math.floor(span * index / (wanted + 1) + 0.5)
+        if vertical then
+            mark:SetPoint("BOTTOMLEFT", aura.fill, "BOTTOMLEFT", 0, at)
+            mark:SetPoint("BOTTOMRIGHT", aura.fill, "BOTTOMRIGHT", 0, at)
+            mark:SetHeight(1)
+        else
+            mark:SetPoint("TOPLEFT", aura.fill, "TOPLEFT", at, 0)
+            mark:SetPoint("BOTTOMLEFT", aura.fill, "BOTTOMLEFT", at, 0)
+            mark:SetWidth(1)
+        end
         mark:Show()
     end
 
@@ -470,12 +491,23 @@ local function ApplySpark(cell)
     end
 
     aura.spark:ClearAllPoints()
-    aura.spark:SetWidth(10)
     -- Anchored to the END the fill grows towards, so it sits on the moving
-    -- edge rather than on the fixed one.
-    local edge = aura.fill:GetReverseFill() and "LEFT" or "RIGHT"
-    aura.spark:SetPoint("TOP", texture, edge, 0, 0)
-    aura.spark:SetPoint("BOTTOM", texture, edge, 0, 0)
+    -- edge rather than on the fixed one - and on a vertical bar that end is a
+    -- top or a bottom, not a left or a right. The spark also has to lie ACROSS
+    -- the bar, so its 10 pixels are its width one way round and its height the
+    -- other.
+    local reverse = aura.fill:GetReverseFill()
+    if aura.fill:GetOrientation() == "VERTICAL" then
+        aura.spark:SetHeight(10)
+        local edge = reverse and "BOTTOM" or "TOP"
+        aura.spark:SetPoint("LEFT", texture, edge, 0, 0)
+        aura.spark:SetPoint("RIGHT", texture, edge, 0, 0)
+    else
+        aura.spark:SetWidth(10)
+        local edge = reverse and "LEFT" or "RIGHT"
+        aura.spark:SetPoint("TOP", texture, edge, 0, 0)
+        aura.spark:SetPoint("BOTTOM", texture, edge, 0, 0)
+    end
     aura.spark:Show()
 end
 

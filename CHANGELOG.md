@@ -8,6 +8,48 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.27.0] - 2026-08-08
+
+### Added
+
+- THE FILL RUNS WHICHEVER WAY YOU WANT - left to right, right to left, bottom
+  to top, top to bottom. One setting with four answers where it used to be two
+  switches ("Start on the right", "Fill up") you had to combine in your head,
+  neither of which named the thing you actually wanted to say.
+
+- TWO OF THE FOUR ARE NEW CAPABILITY, not a relabelling. `SetReverseFill` only
+  ever flips a HORIZONTAL bar, so a vertical fill was unreachable whichever way
+  the old switch was thrown; the renderer needed `SetOrientation` as well. The
+  spark rides the top or bottom edge on a vertical bar now, and the charge
+  marks lie across it instead of running down it - three lines parallel to the
+  fill divide nothing.
+
+- `/zs test` checks all four land on a DIFFERENT (orientation, reverse) pair,
+  that both axes are actually used, and that an unknown name falls back rather
+  than returning nil. 166 checks, up from 154.
+
+### Changed
+
+- STACK COLOURS: the rows said `At ... stacks`, which reads as a label that has
+  been cut off - that is what an ellipsis in the middle of a phrase looks like.
+  They say `From`, and the number is in the control beside them.
+
+- `/zs report` OPENS A BOX YOU CAN COPY OUT OF - every proc the addon has
+  watched you set off on this character and spec, with the addon version and
+  the client build so the list still means something a month later. Focused
+  and fully selected on open, so it is one Ctrl+C. It used to print to the
+  chat frame, which is not a way to hand anything over: chat text cannot be
+  selected, the colour codes would come with it if it could, and thirty lines
+  scroll off the top - which made "export" a command only the person holding
+  the source file could use. `/zs auras export` still works and does the same.
+
+### Fixed
+
+- A bar set to start from the right keeps doing so: `fillSide` is converted to
+  `fillDirection` in `Bars:Prepare`, before the defaults are applied. Doing it
+  in `Migrate` would have left it to `ApplyDefaults` on the next login, which
+  would have quietly reset it.
+
 ## [4.26.0] - 2026-08-08
 
 ### Changed

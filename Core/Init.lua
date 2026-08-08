@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.26.0"
+ns.version = "4.27.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -646,7 +646,8 @@ local usage = {
     "",
     "  Auras",
     "  |cffffd100/zs auras|r - the procs seen on this spec, and what drives them",
-    "  |cffffd100/zs auras export|r - hand this spec's set back so it ships",
+    "  |cffffd100/zs report|r - open the proc report in a box you can copy from",
+    "  |cffffd100/zs auras export|r - the same thing, under its older name",
     "  |cffffd100/zs auras icon <glowID> <spellID>|r - which icon a proc shows",
     "  |cffffd100/zs auras bind <glowID> <auraID>|r - name the buff (12.1 route)",
     "  |cffffd100/zs auras forget <glowID>|r - drop one, shipped ones included",
@@ -700,6 +701,11 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
 
     elseif cmd == "test" then
         ns.SelfTest:Run()
+
+    -- Its own top-level name, because this is the one command a TESTER runs
+    -- and "auras export" is filed under a word they have no reason to look in.
+    elseif cmd == "report" then
+        ns.Auras:Export()
 
     elseif cmd == "auras" then
         local sub, arg = rest:match("^(%S*)%s*(.-)$")
