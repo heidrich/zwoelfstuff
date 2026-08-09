@@ -1053,6 +1053,45 @@ local function TestDeath()
     local empty = Death.Analyse(nil, nil, {}, {})
     Check("An empty recap still gets an honest sentence", #empty.lines == 1)
 
+    -- The row filter. The first live death drew hits from five minutes
+    -- earlier under a subtitle promising ten seconds - the recap hands over
+    -- more history than its name says.
+    local recent, stale = Death.RecentEvents({
+        { t = 309.8 }, { t = 2.1 }, { t = 0 },
+    }, 10)
+    Check("Events older than the window are kept off the rows",
+        #recent == 2 and stale == false)
+    local old, oldStale = Death.RecentEvents({ { t = 300 } }, 10)
+    Check("A recap with only old events comes back whole, and flagged",
+        #old == 1 and oldStale == true)
+    local none, noneStale = Death.RecentEvents(nil, 10)
+    Check("No events at all is an empty list, flagged",
+        #none == 0 and noneStale == true)
+
+    -- The mob's name in the verdict, when the recap gave one.
+    local named = Death.Analyse({
+        { t = 1, amount = 900000, heal = false, name = "Melee",
+          who = "Heavyweight Golem" },
+    }, 1000000, {}, {})
+    Check("The killer's name lands in the sentence",
+        named.lines[1]:find("from Heavyweight Golem", 1, true) ~= nil)
+
+    -- The session log. One rule, three promises: a new death is appended,
+    -- the cap drops the oldest, and a RETRY replaces instead of appending -
+    -- or one fall would sit in the pager twice.
+    local log = {}
+    for i = 1, 12 do Death.Remember(log, { n = i }, 10) end
+    Check("The log keeps the cap and no more", #log == 10)
+    Check("The oldest deaths fall out, the newest stay",
+        log[1].n == 3 and log[10].n == 12)
+    Death.Remember(log, { n = 99 }, 10, true)
+    Check("A replace overwrites the newest rather than appending",
+        #log == 10 and log[10].n == 99)
+    local fresh = {}
+    Death.Remember(fresh, { n = 1 }, 10, true)
+    Check("A replace on an empty log still records the death",
+        #fresh == 1 and fresh[1].n == 1)
+
     -- SafeName: the fallback words come from the event type.
     Check("A withheld melee name says Melee",
         Death.SafeName(nil, "SWING_DAMAGE") == "Melee")

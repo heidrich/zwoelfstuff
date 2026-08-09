@@ -4,6 +4,34 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.45.0] - 2026-08-09
+
+### Added
+
+- **The skull on the screen.** A small icon that appears with your first
+  death of the session and counts them in its corner. Click opens the death
+  window. Drag it wherever you want, any time - or lock it on the Deaths
+  page. It never shows before anything has happened.
+
+- **The window keeps the last ten deaths** of the session, and the arrows
+  beside its close cross page through them. Share posts the death you are
+  looking at, not blindly the newest. A capture retried for the same death
+  replaces its entry rather than listing one fall twice.
+
+- **The rows tell the whole story now**: every hit carries an icon - a
+  melee swing gets the sword rather than a hole - and the attacker's name
+  in quiet grey beside the spell's. The verdict names the killer too:
+  "Melee from Heavyweight Golem for 109.5k". The chat share leads with
+  "killed by".
+
+### Fixed
+
+- **The row list honours its own subtitle.** The recap hands over more
+  history than "the last seconds" - the first live death showed hits from
+  five minutes earlier under a heading promising ten seconds. Rows outside
+  the window are kept off; when nothing recent is readable, the heading
+  says so instead of lying.
+
 ## [4.44.1] - 2026-08-09
 
 ### Fixed

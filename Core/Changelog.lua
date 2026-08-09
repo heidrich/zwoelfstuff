@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.45.0",
+        date = "2026-08-09",
+        lines = {
+            "THE SKULL. A small icon appears with your first death of the session and counts them in its corner. Click opens the death window; drag it anywhere, any time, or lock it on the Deaths page. It never shows before anything has happened.",
+            "The death window keeps the |cffffd100last ten deaths|r of the session - the arrows beside the close cross page through them, and Share posts the one you are looking at.",
+            "Every hit in the list carries its icon now - a melee swing gets the sword rather than a hole - and the attacker's name stands in quiet grey beside it. The verdict names the killer: \"Melee from Heavyweight Golem for 109.5k\".",
+            "The row list honours its own heading: hits older than the promised ten seconds stay off it, and when nothing recent was readable the heading says so instead of lying.",
+        },
+    },
+    {
         version = "4.44.1",
         date = "2026-08-09",
         lines = {

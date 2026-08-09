@@ -29,13 +29,34 @@ ns.Death = Death
 
 local UI -- ns.UI, taken late: Widgets loads after this file
 
--- The last capture, kept for the session only. Deaths are not saved
--- variables: an analysis is read in the minute after dying, not archived.
+-- The deaths of this session, oldest first, capped - the owner asked to
+-- page through "the last 10 or so". Session only, not saved variables: an
+-- analysis is read in the minutes after dying, not archived across days.
+-- Death.snapshot stays the NEWEST entry, because half the wiring asks
+-- "did the last capture find anything" and that question has one answer.
+Death.log = {}
 Death.snapshot = nil
+local DEATHS_KEPT = 10
 
 -- How far back the quick analysis looks, in seconds. The recap itself
 -- decides how many events it hands over; this only bounds OUR arithmetic.
 local WINDOW = 10
+
+-- One rule for how a capture enters the log, pure and tested. `replace` is
+-- the retry and the Blizzard-recap hook speaking: the SAME death got a
+-- better answer, and pushing it again would show one fall twice in the
+-- pager. A plain push is a new death; the cap drops the oldest.
+function Death.Remember(log, snapshot, cap, replace)
+    if replace and #log > 0 then
+        log[#log] = snapshot
+    else
+        log[#log + 1] = snapshot
+        while #log > (cap or DEATHS_KEPT) do
+            table.remove(log, 1)
+        end
+    end
+    return snapshot
+end
 
 ---------------------------------------------------------------------------
 -- Names, made safe
@@ -87,7 +108,9 @@ function Death.Analyse(events, maxHP, avail, items)
                 out.totalIn = out.totalIn + (ev.amount or 0)
                 out.hits = out.hits + 1
                 if not out.biggest or (ev.amount or 0) > out.biggest.amount then
-                    out.biggest = { amount = ev.amount or 0, name = ev.name }
+                    out.biggest = {
+                        amount = ev.amount or 0, name = ev.name, who = ev.who,
+                    }
                 end
             end
         end
@@ -117,9 +140,16 @@ function Death.Analyse(events, maxHP, avail, items)
 
     if out.hits > 0 then
         if out.biggest and out.biggest.pct and out.biggest.pct >= 0.4 then
+            -- The mob's name belongs in the sentence when the recap gave
+            -- one: "Melee for 109k" answers what, "Melee from Heavyweight
+            -- Golem" answers what AND who.
+            local hit = out.biggest.name or "a spell"
+            if out.biggest.who then
+                hit = hit .. " from " .. out.biggest.who
+            end
             lines[#lines + 1] = string.format(
                 "One hit did most of it: %s for %s - %d%% of your health.",
-                out.biggest.name or "a spell", ns.ShortNumber(out.biggest.amount),
+                hit, ns.ShortNumber(out.biggest.amount),
                 math.floor(out.biggest.pct * 100 + 0.5))
         else
             lines[#lines + 1] = string.format(
@@ -148,6 +178,22 @@ function Death.Analyse(events, maxHP, avail, items)
     end
 
     return out
+end
+
+-- The events inside the promised window, oldest first - what the row list
+-- shows. Its own function because the first live death displayed rows from
+-- FIVE MINUTES earlier: the recap hands over more history than its name
+-- says, and a window subtitled "the last 10 seconds" showing -309.8s is
+-- lying about one of the two. When nothing falls inside the window the full
+-- list comes back rather than an empty frame - with a flag, so the caller
+-- can re-title instead of quietly breaking the same promise again.
+function Death.RecentEvents(events, window)
+    local out = {}
+    for _, ev in ipairs(events or {}) do
+        if ev.t <= window then out[#out + 1] = ev end
+    end
+    if #out > 0 then return out, false end
+    return events or {}, true
 end
 
 ---------------------------------------------------------------------------
@@ -287,20 +333,25 @@ function Death.ReadRecap(recapID)
         end
     end
 
-    -- WHO. The owner wants the killer on the window, and the recap MAY name
-    -- a source - the field is unmeasured on this client, so three likely
-    -- names are tried and the first readable one wins. /zs probe death dumps
-    -- the real fields; when it has been run once, this list becomes one line.
-    local killer
-    for i = 1, #raw do
-        local ev = raw[i]
+    -- WHO. The recap names sources readably - "killed by Heavyweight Golem"
+    -- stood on the owner's screen off this very loop - so every event gets
+    -- its who, not just the window title. Three candidate field names until
+    -- a probe dump settles which one is real; the first readable wins.
+    local function WhoOf(ev)
         for _, key in ipairs({ "sourceName", "casterName", "caster" }) do
             local who = ev[key]
             if ns.CanCompute(who) and type(who) == "string" and who ~= "" then
-                killer = who
-                break
+                return who
             end
         end
+        return nil
+    end
+
+    -- The killer is the newest event's readable source - raw arrives newest
+    -- first, so the first hit of this loop is the one that landed last.
+    local killer
+    for i = 1, #raw do
+        killer = WhoOf(raw[i])
         if killer then break end
     end
 
@@ -320,6 +371,7 @@ function Death.ReadRecap(recapID)
             hp = (ns.CanCompute(hp) and type(hp) == "number") and hp or nil,
             heal = kind == "SPELL_HEAL" or kind == "SPELL_PERIODIC_HEAL",
             name = Death.SafeName(ev.spellName, kind),
+            who = WhoOf(ev),
             spellID = (ns.CanCompute(ev.spellId) and type(ev.spellId) == "number"
                 and ev.spellId > 0) and ev.spellId or nil,
             overkill = (ns.CanCompute(overkill) and type(overkill) == "number"
@@ -329,7 +381,7 @@ function Death.ReadRecap(recapID)
     return events, maxHP, nil, killer
 end
 
-function Death:Capture(overrideID)
+function Death:Capture(overrideID, replace)
     local now = GetTime()
     local recapID, why
     if overrideID then
@@ -348,7 +400,7 @@ function Death:Capture(overrideID)
     local avail = Availability(now)
     local items = ItemsInBags()
 
-    self.snapshot = {
+    self.snapshot = Death.Remember(self.log, {
         at = now,
         when = date("%H:%M:%S"),
         events = events,
@@ -358,7 +410,12 @@ function Death:Capture(overrideID)
         items = items,
         reason = events == nil and (readWhy or why) or nil,
         analysis = Death.Analyse(events, maxHP, avail, items),
-    }
+    }, DEATHS_KEPT, replace)
+
+    -- The pager may be standing on an older death; a new one must not yank
+    -- it. Only a view of the newest follows the newest.
+    if self.showing and not replace then self.showing = nil end
+    Death.RefreshIcon()
     return self.snapshot
 end
 
@@ -383,11 +440,14 @@ function Death.ShareLines(snapshot)
     if not snapshot then return nil end
     local a = snapshot.analysis
     local lines = {}
+    -- The killer is in the lead line when the recap named one readably -
+    -- it is the first thing the group asks, so it goes first.
+    local by = snapshot.killer and (" by " .. snapshot.killer) or ""
     if a.hits > 0 then
-        lines[#lines + 1] = string.format("Death %s: %s in %ds (%d hits).",
-            snapshot.when or "", ns.ShortNumber(a.totalIn), WINDOW, a.hits)
+        lines[#lines + 1] = string.format("Death %s%s: %s in %ds (%d hits).",
+            snapshot.when or "", by, ns.ShortNumber(a.totalIn), WINDOW, a.hits)
     else
-        lines[#lines + 1] = string.format("Death %s.", snapshot.when or "")
+        lines[#lines + 1] = string.format("Death %s%s.", snapshot.when or "", by)
     end
     for _, line in ipairs(a.lines) do
         lines[#lines + 1] = line
@@ -396,11 +456,14 @@ function Death.ShareLines(snapshot)
 end
 
 function Death:Share()
-    if not self.snapshot then
+    -- The death being LOOKED AT, not blindly the newest: sharing while
+    -- paged back to an earlier one must post the one on screen.
+    local snapshot = self.log[self.showing or #self.log]
+    if not snapshot then
         ns.Print("No death recorded yet this session.")
         return
     end
-    local lines = Death.ShareLines(self.snapshot) or {}
+    local lines = Death.ShareLines(snapshot) or {}
     local channel = ShareChannel()
     -- C_ChatInfo is the living call on this client (BigWigs' Loader uses
     -- it); the bare global is deprecated and only kept as the fallback.
@@ -460,6 +523,33 @@ local function BuildWindow()
     local closeMark = UI.Glyph(close, "ui-close", 12, C.textDim)
     closeMark:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnClick", function() frame:Hide() end)
+
+    -- The pager: this session keeps the last deaths, and the arrows walk
+    -- them. Sat beside the close cross where every windowed list puts its
+    -- paging, with the position read out loud between the arrows.
+    local function PagerArrow(glyphName, step)
+        local btn = CreateFrame("Button", nil, frame)
+        btn:SetSize(24, 24)
+        local mark = UI.Glyph(btn, glyphName, 12, C.textDim)
+        mark:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        btn:SetScript("OnEnter", function()
+            mark:SetColor(C.text[1], C.text[2], C.text[3])
+        end)
+        btn:SetScript("OnLeave", function()
+            mark:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        end)
+        btn:SetScript("OnClick", function()
+            Death:Show((Death.showing or #Death.log) + step)
+        end)
+        return btn
+    end
+
+    frame.pageLabel = UI.Label(frame, "", 11, C.textFaint)
+    frame.next = PagerArrow("caretRIGHT", 1)
+    frame.next:SetPoint("RIGHT", close, "LEFT", -2, 0)
+    frame.pageLabel:SetPoint("RIGHT", frame.next, "LEFT", -2, 0)
+    frame.prev = PagerArrow("caretLEFT", -1)
+    frame.prev:SetPoint("RIGHT", frame.pageLabel, "LEFT", -6, 0)
 
     -- The verdict block, above the event rows: the analysis is the point of
     -- the window, so it does not sit under a scroll.
@@ -522,13 +612,25 @@ local function BuildWindow()
     dismiss:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -16, 12)
 end
 
-function Death:Show()
-    local snapshot = self.snapshot
-    if not snapshot then
+function Death:Show(index)
+    if #self.log == 0 then
         ns.Print("No death recorded yet this session.")
         return
     end
+
+    -- Clamped, not wrapped: paging past the oldest death and landing on the
+    -- newest reads as the list jumping, not as an edge.
+    index = index or self.showing or #self.log
+    if index < 1 then index = 1 end
+    if index > #self.log then index = #self.log end
+    self.showing = index
+    local snapshot = self.log[index]
+
     if not frame then BuildWindow() end
+
+    frame.pageLabel:SetText(string.format("%d of %d", index, #self.log))
+    frame.prev:SetShown(#self.log > 1)
+    frame.next:SetShown(#self.log > 1)
 
     -- The killer, when the recap named one readably. The name is already
     -- through SafeName's door or it would not be in the snapshot.
@@ -542,8 +644,15 @@ function Death:Show()
 
     frame.verdict:SetText(table.concat(snapshot.analysis.lines, "\n"))
 
-    -- Rows: the LAST events win the visible slots; oldest of those on top.
-    local events = snapshot.events or {}
+    -- Rows: only what falls inside the promised window - the first live
+    -- death showed hits from five minutes earlier under a subtitle saying
+    -- ten seconds. The LAST of those win the visible slots, oldest on top.
+    local events, stale = Death.RecentEvents(snapshot.events, WINDOW)
+    if stale and #events > 0 then
+        -- Nothing recent, so the promise is re-worded rather than broken.
+        frame.sub:SetText((snapshot.when or "")
+            .. "  -  nothing in the last seconds; the events below are older")
+    end
     local first = math.max(1, #events - ROWS_MAX + 1)
     local shown = 0
     local maxHP = snapshot.maxHP
@@ -561,14 +670,23 @@ function Death:Show()
             -(top + (shown - 1) * (ROW_H + 2)))
 
         row.when:SetText(string.format("-%.1fs", ev.t))
+
+        -- A melee hit carries no spell id, and Blizzard's own recap draws a
+        -- sword for it rather than a hole. 135274 is the fallback icon
+        -- EllesmereUI's recap tooltip ships with, for the same case.
         local icon = ev.spellID and ns.SpellTexture(ev.spellID)
-        if icon then
-            row.icon:SetTexture(icon)
-            row.icon:Show()
+        row.icon:SetTexture(icon or 135274)
+        row.icon:Show()
+
+        -- What, then who, in the quiet grey: "Melee - Heavyweight Golem".
+        -- The mob's name is part of the story and the owner asked for it by
+        -- name; inline and dimmed so the amounts stay the loudest column.
+        if ev.who then
+            row.what:SetText((ev.name or "")
+                .. "  |cff9ba3af" .. ev.who .. "|r")
         else
-            row.icon:Hide()
+            row.what:SetText(ev.name or "")
         end
-        row.what:SetText(ev.name or "")
         local sign = ev.heal and "+" or "-"
         local extra = ev.overkill
             and string.format("  (%s overkill)", ns.ShortNumber(ev.overkill))
@@ -610,6 +728,103 @@ function Death:Show()
     end
 
     frame:Show()
+end
+
+---------------------------------------------------------------------------
+-- The icon on the screen - the owner's ask in his words: "ein kleines
+-- death icon auf dem screen, das wir jederzeit frei bewegen oder locken
+-- können. beim klick öffnet sich das dann."
+--
+-- Deliberately NOT an Edit Mode mover: "jederzeit frei bewegen" is the
+-- minimap button's contract, not the bars' - drag it whenever it is not
+-- locked, and the lock lives on the Deaths page. It appears with the first
+-- death and not before: an always-on skull promising nothing is furniture.
+---------------------------------------------------------------------------
+local iconButton
+
+local function IconConfig()
+    ns.db.death = ns.db.death or {}
+    ns.db.death.icon = ns.db.death.icon or {}
+    return ns.db.death.icon
+end
+
+local function BuildIcon()
+    local C = ns.UI.C
+
+    iconButton = CreateFrame("Button", "ZwoelfStuffDeathIcon", UIParent)
+    iconButton:SetSize(30, 30)
+    iconButton:SetFrameStrata("MEDIUM")
+    iconButton:SetClampedToScreen(true)
+    iconButton:SetMovable(true)
+    iconButton:RegisterForDrag("LeftButton")
+    iconButton:Hide()
+
+    local bg = iconButton:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(iconButton)
+    bg:SetColorTexture(C.windowBg[1], C.windowBg[2], C.windowBg[3], 0.85)
+
+    local edge = ns.CreateBorder(iconButton, 1, "BORDER")
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    -- The client's own skull, shipped since the beginning of time - not a
+    -- traced one, for the same reason the Discord row carries no mark.
+    local skull = iconButton:CreateTexture(nil, "ARTWORK")
+    skull:SetPoint("TOPLEFT", iconButton, "TOPLEFT", 3, -3)
+    skull:SetPoint("BOTTOMRIGHT", iconButton, "BOTTOMRIGHT", -3, 3)
+    skull:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
+
+    -- How many this session, in the corner. The number is the reason to
+    -- click at all after a rough pull.
+    iconButton.count = iconButton:CreateFontString(nil, "OVERLAY")
+    ns.Media.ApplyFont(iconButton.count, nil, 10, "OUTLINE")
+    iconButton.count:SetPoint("BOTTOMRIGHT", iconButton, "BOTTOMRIGHT", -1, 1)
+
+    iconButton:SetScript("OnClick", function() Death:Show() end)
+
+    iconButton:SetScript("OnDragStart", function(self)
+        if IconConfig().locked then return end
+        self:StartMoving()
+    end)
+    iconButton:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Written back in CENTRE terms and reapplied, so the saved numbers
+        -- and the frame never disagree about what was just dragged.
+        local cfg = IconConfig()
+        local x, y = self:GetCenter()
+        local px, py = UIParent:GetCenter()
+        cfg.x = math.floor(x - px + 0.5)
+        cfg.y = math.floor(y - py + 0.5)
+        Death.RefreshIcon()
+    end)
+
+    iconButton:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Deaths this session: " .. #Death.log, 1, 1, 1)
+        GameTooltip:AddLine(IconConfig().locked
+            and "Click to open. The position is locked on the Deaths page."
+            or "Click to open. Drag to move it.", 0.6, 0.63, 0.69, true)
+        GameTooltip:Show()
+    end)
+    iconButton:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+end
+
+function Death.RefreshIcon()
+    if not ns.UI then return end
+    local cfg = (ns.db and ns.db.death and ns.db.death.icon) or {}
+    if #Death.log == 0 or cfg.show == false then
+        if iconButton then iconButton:Hide() end
+        return
+    end
+    if not iconButton then BuildIcon() end
+
+    iconButton:ClearAllPoints()
+    iconButton:SetPoint("CENTER", UIParent, "CENTER",
+        cfg.x or 320, cfg.y or -180)
+    iconButton.count:SetText(tostring(#Death.log))
+    iconButton:Show()
 end
 
 ---------------------------------------------------------------------------
@@ -714,8 +929,10 @@ local function TryHookBlizzardRecap()
         local snapshot = Death.snapshot
         if snapshot and snapshot.events == nil
             and (GetTime() - snapshot.at) < 120 then
-            Death:Capture(recapID)
-            if frame and frame:IsShown() then Death:Show() end
+            -- replace: this is the SAME death getting a better answer, not
+            -- a new one for the pager.
+            Death:Capture(recapID, true)
+            if frame and frame:IsShown() then Death:Show(#Death.log) end
         end
     end)
 end
@@ -738,11 +955,13 @@ watcher:SetScript("OnEvent", function(_, event)
         local open = not (ns.db and ns.db.death) or ns.db.death.openOnDeath ~= false
         if snapshot.events == nil then
             C_Timer.After(2.0, function()
-                snapshot = Death:Capture()
-                if open then Death:Show() end
+                -- replace: the same death, asked again once the meter had
+                -- time to write - not a second entry in the pager.
+                snapshot = Death:Capture(nil, true)
+                if open then Death:Show(#Death.log) end
             end)
         elseif open then
-            Death:Show()
+            Death:Show(#Death.log)
         end
     end)
 end)
