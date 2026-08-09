@@ -8,6 +8,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.41.0",
+        date = "2026-08-09",
+        lines = {
+            "A MOB THAT CASTS NAMES ITSELF. With its GUID, name, health, creature type and every position withheld in a dungeon, one door was left: MDT records the spells each enemy uses, and 666 of 701 of them - 95% - belong to exactly ONE enemy. A readable spell id is an identity.",
+            "Spells that two enemies share are thrown away rather than guessed at. A badge on the wrong pack is worse than no badge, because it gets acted on.",
+            "Once a nameplate is identified it stays identified until that plate is handed to another mob, so the badge does not flash up mid-cast and vanish again.",
+            "|cffffd100/zs route probe|r says what a mob is casting, whether the id is readable, and whether that spell belongs to one enemy here.",
+        },
+    },
+    {
         version = "4.40.1",
         date = "2026-08-09",
         lines = {

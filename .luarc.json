@@ -67,6 +67,8 @@
     "UIParent",
     "UISpecialFrames",
     "UnitAffectingCombat",
+    "UnitCastingInfo",
+    "UnitChannelInfo",
     "UnitClass",
     "UnitClassification",
     "UnitDistanceSquared",

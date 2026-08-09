@@ -98,6 +98,8 @@ Routes.pulls = {}
 Routes.byNpc = {}          -- npcID -> { pull = index, want = how many }
 Routes.killed = {}         -- npcID -> how many have died this run
 Routes.nameToNpc = {}      -- what the mob is called -> its npcID
+Routes.spellToNpc = {}     -- a spell only one enemy here casts -> its npcID
+Routes.plateNpc = {}       -- nameplate unit -> the npcID we worked out for it
 Routes.index = 1
 
 ---------------------------------------------------------------------------
@@ -226,6 +228,37 @@ function Routes:Sync()
                 self.nameToNpc[shown] = enemy.id
             end
         end
+    end
+
+    -- WHAT EACH MOB CASTS, which may be the last door left.
+    --
+    -- MDT records the spells every enemy uses, and across all of its dungeons
+    -- 666 of 701 distinct spells - 95% - belong to exactly ONE enemy. A mob
+    -- that casts therefore names itself, without the game having to say what
+    -- it is.
+    --
+    -- ONLY THE UNAMBIGUOUS ONES ARE KEPT. A spell two enemies share is thrown
+    -- away rather than guessed at: a badge on the wrong pack is worse than no
+    -- badge, because it is acted on.
+    wipe(self.spellToNpc)
+    wipe(self.plateNpc)
+    local owner = {}
+    for _, enemy in pairs(enemies) do
+        if enemy and enemy.id and type(enemy.spells) == "table" then
+            for spellID in pairs(enemy.spells) do
+                local sid = tonumber(spellID)
+                if sid then
+                    if owner[sid] == nil then
+                        owner[sid] = enemy.id
+                    elseif owner[sid] ~= enemy.id then
+                        owner[sid] = false
+                    end
+                end
+            end
+        end
+    end
+    for sid, npcID in pairs(owner) do
+        if npcID then self.spellToNpc[sid] = npcID end
     end
 
     for order, pull in ipairs(pulls) do
@@ -373,16 +406,54 @@ end
 -- diagnostic has to be able to say which - a route working off names is
 -- worth knowing about before it surprises somebody.
 ---------------------------------------------------------------------------
+-- The spell a unit is casting or channelling right now, or nil. Guarded like
+-- everything else read off a unit: a spell id that may not be looked at may
+-- not be a table key either.
+function Routes.CastSpell(unit)
+    local get = UnitCastingInfo
+    if type(get) == "function" then
+        local ok, _, _, _, _, _, _, _, _, spellID = pcall(get, unit)
+        if ok and ns.CanCompute(spellID) and type(spellID) == "number" then
+            return spellID
+        end
+    end
+    get = UnitChannelInfo
+    if type(get) == "function" then
+        local ok, _, _, _, _, _, _, _, spellID = pcall(get, unit)
+        if ok and ns.CanCompute(spellID) and type(spellID) == "number" then
+            return spellID
+        end
+    end
+    return nil
+end
+
 function Routes:NpcForUnit(unit)
     if not unit then return nil, nil end
+
+    -- Worked out once, kept until the plate is handed to another mob. A mob
+    -- only casts now and then, and a badge that appears mid-cast and leaves
+    -- again is worse than one that never came.
+    local remembered = self.plateNpc[unit]
+    if remembered then return remembered, "remembered" end
 
     local byID = Routes.NpcFromGUID(UnitGUID(unit))
     if byID then return byID, "id" end
 
     local name = UnitName(unit)
-    if not ns.CanCompute(name) or type(name) ~= "string" then return nil, nil end
-    local byName = self.nameToNpc[name]
-    if byName then return byName, "name" end
+    if ns.CanCompute(name) and type(name) == "string" then
+        local byName = self.nameToNpc[name]
+        if byName then return byName, "name" end
+    end
+
+    -- LAST DOOR: what it is casting. See the spell index in Sync.
+    local spellID = Routes.CastSpell(unit)
+    if spellID then
+        local byCast = self.spellToNpc[spellID]
+        if byCast then
+            self.plateNpc[unit] = byCast
+            return byCast, "cast"
+        end
+    end
     return nil, nil
 end
 
@@ -737,11 +808,38 @@ function Routes:Start()
         -- The enemy forces counter moved. The better half of progress, and
         -- the only half that needs nothing from a unit.
         "SCENARIO_CRITERIA_UPDATE",
+        -- A mob naming itself. See Routes.CastSpell and the spell index.
+        "UNIT_SPELLCAST_START",
+        "UNIT_SPELLCAST_CHANNEL_START",
     }) do
         pcall(self.events.RegisterEvent, self.events, event)
     end
 
-    self.events:SetScript("OnEvent", function(_, event)
+    self.events:SetScript("OnEvent", function(_, event, unit, _, spellID)
+        -- A plate handed back to the pool must forget what it was, or the
+        -- next mob on that token inherits the last one's badge.
+        if event == "NAME_PLATE_UNIT_REMOVED" or event == "NAME_PLATE_UNIT_ADDED" then
+            if unit then Routes.plateNpc[unit] = nil end
+            Routes:Sweep()
+            return
+        end
+
+        -- A cast is the moment a mob names itself, and it is over in a second
+        -- or two - far too short to be caught by a sweep that runs four times
+        -- a second and only looks at what is casting right then.
+        if event == "UNIT_SPELLCAST_START"
+            or event == "UNIT_SPELLCAST_CHANNEL_START" then
+            if type(unit) ~= "string" or not unit:match("^nameplate") then return end
+            local id = ns.CanCompute(spellID) and type(spellID) == "number"
+                and spellID or Routes.CastSpell(unit)
+            local npcID = id and Routes.spellToNpc[id]
+            if npcID then
+                Routes.plateNpc[unit] = npcID
+                Routes:Sweep()
+            end
+            return
+        end
+
         if event == "COMBAT_LOG_EVENT_UNFILTERED" then
             -- Guarded like every other client call in this addon: the desktop
             -- harness has no combat log, and a missing global must cost this
@@ -922,6 +1020,23 @@ function Routes:Probe()
             ns.Print("   nameplate text    " .. Ask(fs.GetText, fs))
         else
             ns.Print("   nameplate text    |cff888888no such font string|r")
+        end
+
+        -- WHAT IS IT CASTING. The last door: MDT records every enemy's
+        -- spells and 95% of them belong to exactly one enemy, so a readable
+        -- spell id is an identity. Only answers while the mob is casting.
+        local spellID = Routes.CastSpell(unit)
+        if spellID then
+            ns.Print("   casting           " .. tostring(spellID)
+                .. (self.spellToNpc[spellID]
+                    and (" |cff40ff40-> npc " .. self.spellToNpc[spellID] .. "|r")
+                    or " |cff888888(not one of this dungeon's, or shared)|r"))
+        elseif type(UnitCastingInfo) == "function" then
+            local ok, name = pcall(UnitCastingInfo, unit)
+            ns.Print("   casting           " .. (ok and name ~= nil
+                and ("|cffff8040casting, but the spell id is " .. Describe(ok, name)
+                    .. " and unreadable|r")
+                or "|cff888888nothing right now|r"))
         end
 
         -- CAN WE PLACE THIS MOB. The whole of the coordinate idea rests here.

@@ -8,6 +8,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.41.0] - 2026-08-09
+
+### Added
+
+- **A mob that casts names itself.** With the GUID, the name, the health, the
+  creature type and every position all withheld in a dungeon, one door was
+  left unopened: MDT records the spells each enemy uses, and across all of its
+  dungeons **666 of 701 distinct spells - 95% - belong to exactly one enemy**.
+  So a readable spell id is an identity.
+
+  `Routes:CastSpell` reads `UnitCastingInfo` / `UnitChannelInfo` for a
+  nameplate unit, guarded like everything else. `UNIT_SPELLCAST_START` and
+  `UNIT_SPELLCAST_CHANNEL_START` are listened to as well, because a cast is
+  over in a second or two - too short to be caught reliably by a sweep that
+  looks only at what is casting at that instant.
+
+  **Spells two enemies share are thrown away rather than guessed at.** A badge
+  on the wrong pack is worse than no badge, because it gets acted on.
+
+  Once a nameplate has been identified it is remembered until that plate is
+  handed to another mob, so the badge does not appear mid-cast and vanish
+  again. `NAME_PLATE_UNIT_ADDED` and `_REMOVED` both clear it.
+
+- `/zs route probe` reports what a mob is casting, whether the spell id is
+  readable, and whether that spell belongs to exactly one enemy here.
+
 ## [4.40.1] - 2026-08-09
 
 ### Added
