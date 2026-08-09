@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.41.1",
+        date = "2026-08-09",
+        lines = {
+            "Six files the addon never loads were being packaged with it. They did nothing on your machine, but they were dead weight in the download. The build leaves them behind now.",
+        },
+    },
+    {
         version = "4.41.0",
         date = "2026-08-09",
         lines = {

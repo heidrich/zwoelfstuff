@@ -4,6 +4,15 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.41.1] - 2026-08-09
+
+### Fixed
+
+- **Six files the addon never loads were being packaged with it.** They did
+  nothing on your machine - they are not in the load list - but they were
+  dead weight in the download, and one of them was a feature that had been
+  taken out. The build now leaves them behind.
+
 ## [4.41.0] - 2026-08-09
 
 First public release. Everything below is new to anyone installing it now.

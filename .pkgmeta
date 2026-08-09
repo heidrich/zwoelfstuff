@@ -28,3 +28,23 @@ ignore:
     # AddOns folder.
     - .luarc.json
     - .markdownlint.json
+
+    # PARKED FILES. Not in the TOC, so the game never loads them - but the
+    # packager copies the repository, it does not read the TOC, so without
+    # these lines they shipped anyway. 4.41.0 went out carrying all six.
+    #
+    # Anything parked belongs in BOTH places: the comment block at the bottom
+    # of the TOC, which explains why, and here, which keeps it out of the
+    # build.
+    #
+    # THIS LIST IS COMPUTED, NOT COPIED. The TOC's comment block also names
+    # Engine.lua and CoTanks.lua, and both of those are LOADED - listing them
+    # here from that block would have shipped a broken addon. Read the TOC's
+    # actual load lines and subtract; /zs test would not catch this, because
+    # on a checkout every file is present either way.
+    - Core/Catalog.lua
+    - Core/Groups.lua
+    - Core/OptionsGroups.lua
+    - Core/OptionsRoutes.lua
+    - Core/Probe.lua
+    - Core/Routes.lua
