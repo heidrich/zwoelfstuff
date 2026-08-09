@@ -8,6 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.39.1] - 2026-08-09
+
+### Changed
+
+- **`/zs route` says why the name fallback found nothing.** "0 mobs found by
+  name instead" has three causes that look identical from the outside: the
+  name index was never built, the client withholds the name as well, or the
+  name it gives is spelled differently from the one MDT stores. The command
+  now reports how many names it knows for this dungeon and, for the first
+  nameplate it could not place, which of the three it was - naming the string
+  it got in quotes so a mismatch is visible rather than inferred.
+
+  Confirmed on the way in: the forces counter reads as **counted**, meaning
+  `quantity` and `totalQuantity` come back as real numbers rather than needing
+  the string parsed. Both paths stay, but the exact one is what runs.
+
 ## [4.39.0] - 2026-08-09
 
 ### Added

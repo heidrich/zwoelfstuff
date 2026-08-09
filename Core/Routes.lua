@@ -908,6 +908,17 @@ function Routes:Dump()
     local lines = {}
     local matched, unreadable, byName = 0, 0, 0
     local secretGuids, oddGuids = 0, 0
+
+    -- WHAT THE NAME PATH ACTUALLY SAW, for the first nameplate it failed on.
+    --
+    -- "0 found by name" has three causes that look identical from outside:
+    -- the index was never built, the client withholds the name as well, or
+    -- the name it gives is spelled differently from the one MDT stores. This
+    -- says which, in one line, and it goes at the bottom where a chat window
+    -- cannot scroll it away.
+    local probe
+    local indexed = 0
+    for _ in pairs(self.nameToNpc) do indexed = indexed + 1 end
     local plateCount = self:ForEachPlate(function(unit)
         local guid = UnitGUID(unit)
         local npcID, how = self:NpcForUnit(unit)
@@ -933,6 +944,19 @@ function Routes:Dump()
             oddGuids = oddGuids + 1
         end
         if trouble and not npcID then unreadable = unreadable + 1 end
+
+        if not npcID and not probe then
+            local name = UnitName(unit)
+            if not ns.CanCompute(name) then
+                probe = "the client will not give us its name either"
+            elseif type(name) ~= "string" then
+                probe = "its name came back as a " .. type(name)
+            else
+                probe = string.format("its name is \"%s\", which is %s this "
+                    .. "dungeon's list", name,
+                    self.nameToNpc[name] and "IN" or "|cffff4040NOT in|r")
+            end
+        end
 
         local verdict
         if pullIndex then
@@ -974,6 +998,10 @@ function Routes:Dump()
     if secretGuids > 0 then
         ns.Print(string.format("|cff888888%d GUID(s) withheld by the client; "
             .. "%d mob(s) found by name instead.|r", secretGuids, byName))
+    end
+    if probe then
+        ns.Print(string.format("Names: |cffffd100%d|r known in this dungeon. "
+            .. "The first one we could not place - %s.", indexed, probe))
     end
     if oddGuids > 0 then
         ns.Print(string.format("|cffff8040%d GUID(s) were readable but had no "

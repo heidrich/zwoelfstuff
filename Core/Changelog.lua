@@ -8,6 +8,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.39.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100/zs route|r SAYS WHY THE NAME FALLBACK FOUND NOTHING. \"0 found by name\" has three causes that look the same from outside: the list was never built, the client withholds the name too, or it spells the name differently from MDT. It now says how many names it knows here, and for the first mob it could not place, which of the three - with the actual text in quotes.",
+        },
+    },
+    {
         version = "4.39.0",
         date = "2026-08-09",
         lines = {
