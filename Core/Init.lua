@@ -130,7 +130,21 @@ ns.DEFAULTS = {
         cooldowns = true,
         cotanks   = true,
         reminders = true,
+        externals = true,
         deaths    = true,
+    },
+
+    -- EXTERNAL COOLDOWNS: the ones somebody else presses on you. Empty, and
+    -- never seeded - the panel draws nothing until you have picked something,
+    -- which is the right silence for a feature that puts icons on the screen.
+    externals  = {
+        picked   = {},
+        assigned = {},
+        size     = 40,
+        gap      = 4,
+        perLine  = 6,
+        growth   = "right",
+        onlyInGroup = true,
     },
 
     -- Which round of modules this character has already been shown. Absent
@@ -1166,6 +1180,7 @@ local usage = {
     "  Tank stuff",
     "  |cffffd100/zs tanks|r - the co-tank panel (|cffffd100test|r fakes a raid)",
     "  |cffffd100/zs reminders|r - every reminder, and why each one is or is not up",
+    "  |cffffd100/zs externals|r - who each external slot would whisper (|cffffd100test|r shows the panel)",
     -- /zs route was listed here after Routes was parked, so the help printed a
     -- command that had no handler at all. A menu naming something that does
     -- nothing is worse than one that is short.
@@ -1275,6 +1290,19 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
 
     elseif cmd == "welcome" then
         ns.Welcome:Show()
+
+    -- External cooldowns. The diagnostic rather than a toggle, for the same
+    -- reason the reminders one is: "who would this button whisper" is the
+    -- only question anybody has about it, and it has a printable answer.
+    elseif cmd == "externals" or cmd == "external" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "test" then
+            ns.Externals:SetTestMode(not ns.Externals.testing)
+            ns.Print("External cooldowns test mode",
+                ns.Externals.testing and "|cff40ff40on|r" or "|cff888888off|r")
+        else
+            ns.Externals:Dump()
+        end
 
     -- Reminders. One command, and it is the diagnostic rather than a toggle:
     -- "why is my reminder not showing" is the only question anybody has about

@@ -4,6 +4,41 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.58.0] - 2026-08-09
+
+### Added
+
+- **External cooldowns - a fifth module.** The cooldowns somebody ELSE presses
+  on you: fourteen spells, cross-checked against Method Raid Tools' own
+  `DEFTAR` set ("defensive on a target"), which is the same idea under another
+  name. Pick some, arrange them into a panel, place it in Edit Mode, and a
+  click whispers whoever in the group can cast it.
+- **Who a click asks**, in the owner's words: "in 5 mann dungeons werden
+  heiler der klasse angewispert. im raid sollte man das zuweisen koennen." So
+  an assignment wins whenever one exists, and with none it is the healer of
+  that class - which in a five-man is the only person who has it. An
+  assignment to somebody who has left the group falls back to the rule and
+  the tooltip says which of the two answered.
+- **A slot nobody can fill is not drawn.** The owner's choice: with no
+  paladin in the group there is no Blessing of Sacrifice icon on your screen.
+  The page's list says "nobody here" beside it so the absence has an
+  explanation.
+- `/zs externals` prints who each slot would whisper. `/zs externals test`
+  shows the panel with nobody around.
+
+### Changed
+
+- **This is deliberately NOT a cooldown tracker**, and that is the whole
+  design. MRT shows other people's cooldowns by reading
+  `COMBAT_LOG_EVENT_UNFILTERED` - checked in its own `ExCD2.lua`. That log is
+  closed to addons on 12.0, and since 12.0.5 another player's INSTANT cast is
+  not announced at all. Every one of these spells is instant. "Ironbark, ready
+  in 1:12" is a number this addon cannot know, and it would be believed in the
+  one moment it matters.
+- The welcome window's generation moved to 2, so everybody who has already
+  answered is asked once more - about this one entry, marked NEW, and nothing
+  else. That is what it was built for.
+
 ## [4.57.2] - 2026-08-09
 
 ### Added

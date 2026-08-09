@@ -3691,7 +3691,12 @@ local function TestModules()
     if not Modules then return end
 
     local list = Modules:All()
-    Check("Four modules are registered", #list == 4, tostring(#list))
+
+    -- Not a fixed number. This said "four" and went red the day a fifth was
+    -- added, which is a test failing at the exact moment the code was right -
+    -- the count is not the rule. The rule is that the registry and the
+    -- window's page list agree, and that is checked below in both directions.
+    Check("There are modules registered", #list >= 4, tostring(#list))
 
     local seen = {}
     for _, entry in ipairs(list) do
@@ -3802,11 +3807,120 @@ local function TestModules()
     Check("A nonsense flag does not open the window every login", not due)
 end
 
+---------------------------------------------------------------------------
+-- External cooldowns
+--
+-- The rule that decides WHO a click whispers, and it is the whole feature: a
+-- panel that asks the wrong person is worse than no panel, because you spend
+-- the two seconds you had believing help is coming.
+--
+-- Pure, and it takes the roster as a plain list - which is the only way this
+-- can ever be tested. A five-man with two paladins in it, one of them a
+-- healer, is not something a self test can arrange in the game.
+---------------------------------------------------------------------------
+local function TestExternals()
+    local X = ns.Externals
+    Check("The externals list exists", X ~= nil)
+    if not X then return end
+
+    Check("Every external names a spell and a class", (function()
+        for _, entry in ipairs(X.SPELLS) do
+            if type(entry.spellID) ~= "number" or type(entry.class) ~= "string" then
+                return false
+            end
+        end
+        return #X.SPELLS > 0
+    end)())
+
+    -- No duplicates: the panel keys its assignment table by spell id, and two
+    -- entries with one id would share an assignment silently.
+    local seen, twice = {}, nil
+    for _, entry in ipairs(X.SPELLS) do
+        if seen[entry.spellID] then twice = entry.spellID end
+        seen[entry.spellID] = true
+    end
+    Check("No external is listed twice", twice == nil, tostring(twice))
+
+    local sacrifice = X.Get(6940)
+    Check("Blessing of Sacrifice is in the list", sacrifice ~= nil)
+    Check("It belongs to the paladin",
+        sacrifice and sacrifice.class == "PALADIN")
+
+    ---------------------------------------------------------------------
+    -- Who gets asked
+    ---------------------------------------------------------------------
+    local ROSTER = {
+        { name = "Zwoelf",  class = "DEATHKNIGHT", role = "TANK",   isPlayer = true },
+        { name = "Heiler",  class = "PALADIN",     role = "HEALER" },
+        { name = "Schaden", class = "PALADIN",     role = "DAMAGER" },
+        { name = "Baum",    class = "DRUID",       role = "HEALER" },
+    }
+
+    local who = X.Whom(sacrifice, ROSTER)
+    Check("The healing paladin is asked, not the other one",
+        who and who.name == "Heiler", who and who.name or "nobody")
+
+    local named, why = X.Whom(sacrifice, ROSTER, "Schaden")
+    Check("A name you assigned wins over the rule",
+        named and named.name == "Schaden", named and named.name or "nobody")
+    Check("And it says it was an assignment", why == "assigned", tostring(why))
+
+    -- The assigned player left the group. Falling back is right; silently
+    -- whispering somebody else without saying so would not be.
+    local gone, goneWhy = X.Whom(sacrifice, ROSTER, "Somebody Else")
+    Check("An assignment to somebody who left falls back",
+        gone and gone.name == "Heiler", gone and gone.name or "nobody")
+    Check("And the fallback does not claim to be the assignment",
+        goneWhy ~= "assigned", tostring(goneWhy))
+
+    Check("Nobody of that class means nobody is asked",
+        X.Whom(X.Get(116849), ROSTER) == nil)   -- Life Cocoon, no monk here
+
+    -- THE PLAYER IS NEVER ASKED. A paladin tank whispering himself for a
+    -- Blessing of Sacrifice is the panel answering its own question.
+    local SELF_ONLY = {
+        { name = "Zwoelf", class = "PALADIN", role = "TANK", isPlayer = true },
+    }
+    Check("You are never a candidate for your own external",
+        X.Whom(sacrifice, SELF_ONLY) == nil)
+    Check("And that leaves no candidates at all",
+        #X.Candidates(sacrifice, SELF_ONLY) == 0)
+
+    Check("An unknown spell has no candidates",
+        #X.Candidates(nil, ROSTER) == 0)
+
+    ---------------------------------------------------------------------
+    -- What the whisper says
+    ---------------------------------------------------------------------
+    local cfg = X.Config()
+    local was = cfg.message
+
+    cfg.message = nil
+    Check("The default message names the spell",
+        X.Message("Ironbark"):find("Ironbark", 1, true) ~= nil,
+        X.Message("Ironbark"))
+
+    cfg.message = "%s jetzt bitte"
+    Check("A message you wrote is used",
+        X.Message("Ironbark") == "Ironbark jetzt bitte", X.Message("Ironbark"))
+
+    -- The case somebody will create by deleting the placeholder: the spell
+    -- has to be named anyway, or every slot sends one sentence and nobody
+    -- knows which of four buttons is being asked for.
+    cfg.message = "HILFE"
+    Check("A message with no placeholder still names the spell",
+        X.Message("Ironbark"):find("Ironbark", 1, true) ~= nil,
+        X.Message("Ironbark"))
+
+    cfg.message = was
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
     local suites = {
         { "Modules",       TestModules },
+        { "Externals",     TestExternals },
         { "Arrangements",  TestLayout },
         { "Coordinates",   TestOffsets },
         { "Pattern switch", TestPatternRoundTrip },

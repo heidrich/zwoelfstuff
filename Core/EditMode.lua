@@ -1076,6 +1076,39 @@ local function RefreshPanelMover(mover, getPanel, x, y)
     mover:Show()
 end
 
+-- THE EXTERNALS PANEL, placed the same way the co-tank one is. Same three
+-- functions, same rule about a module that is not running: its frame exists
+-- once the module has booted, so "is there a panel" and "is this feature on"
+-- are two different questions and both get asked.
+local externalMover
+
+local function ExternalPanel()
+    local panel = ns.Externals and ns.Externals.Frame()
+    if panel and panel:IsShown() then return panel end
+    return nil
+end
+
+local function RefreshExternalMover()
+    if not ns.Modules:IsOn("externals") then
+        if externalMover then externalMover:Hide() end
+        return
+    end
+    if not externalMover then
+        externalMover = CreatePanelMover("External cooldowns", function()
+            local cfg = ns.Externals.Config()
+            return cfg.x or 0, cfg.y or 0
+        end)
+    end
+    local cfg = ns.Externals.Config()
+    RefreshPanelMover(externalMover, ExternalPanel, cfg.x, cfg.y)
+end
+
+local function ApplyExternalMove(x, y)
+    local cfg = ns.Externals.Config()
+    cfg.x, cfg.y = x, y
+    ns.Externals.Refresh()
+end
+
 local function RefreshTankMover()
     -- A module that is not running has nothing on screen to place. Its frames
     -- still EXIST once it has run at all, so "is there a panel" is not the
@@ -1231,6 +1264,7 @@ end
 local function OnUpdate()
     if cellDrag then DragCell() end
     DragPanel(tankMover, TankPanel, ApplyTankMove)
+    DragPanel(externalMover, ExternalPanel, ApplyExternalMove)
     DragReminders()
     if not dragging then return end
 
@@ -2281,6 +2315,7 @@ function EditMode:Refresh()
     end
 
     RefreshTankMover()
+    RefreshExternalMover()
     RefreshReminderMovers()
 
     -- The selection can outlive what it pointed at: delete a bar, or shrink a

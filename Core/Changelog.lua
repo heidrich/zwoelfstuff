@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.58.0",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100EXTERNAL COOLDOWNS - a new module, under Tank stuff.|r The cooldowns somebody ELSE presses on you: Blessing of Sacrifice, Pain Suppression, Ironbark, Life Cocoon and ten more. Pick the ones you care about, arrange them into a panel, place it where you want it.",
+            "|cffffd100One click asks for one.|r In a five-man it whispers the healer of that class - the only person who has it. In a raid you can name somebody per spell.",
+            "A slot nobody in the group can fill is not drawn at all, so the panel is only ever as wide as the help that actually exists.",
+            "|cffffd100It does not count anybody's cooldown down, and it never will on this patch.|r Another player's instant cast is not announced to addons since 12.0.5, so \"ready in 1:12\" would be a guess - in the one moment you would believe it.",
+            "|cffffd100/zs externals|r says who each slot would whisper.",
+        },
+    },
+    {
         version = "4.57.2",
         date = "2026-08-09",
         lines = {

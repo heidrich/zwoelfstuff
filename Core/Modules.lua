@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Modules - which parts of this addon are actually running.
 --
 -- Owner, 2026-08-09: "danach gehen wir die struktur an, das wir module bauen
@@ -49,7 +49,10 @@ ns.Modules = Modules
 -- update brings a module that character has never been offered. Each entry
 -- below carries the generation it appeared in; bump this number and the
 -- entry's `since` together, and only the new one is called out.
-Modules.GENERATION = 1
+-- 2: the externals panel. The first module added AFTER the welcome window
+--    existed, which is what it was built for: everybody who already answered
+--    gets asked once more, about this one entry and nothing else.
+Modules.GENERATION = 2
 
 local LIST = {
     {
@@ -80,6 +83,13 @@ local LIST = {
             ns.Reminders:Start()
         end,
         Apply = function() ns.Reminders:Refresh() end,
+    },
+    {
+        key = "externals", title = "External cooldowns", glyph = "tanks", since = 2,
+        blurb = "The cooldowns other people can cast on YOU, and one click to ask for one.",
+        detail = "Off, the panel never appears.",
+        Boot = function() ns.Externals:Create() end,
+        Apply = function() ns.Externals.Refresh() end,
     },
     {
         key = "deaths", title = "Death-log", glyph = "skull", since = 1,

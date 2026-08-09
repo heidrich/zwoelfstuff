@@ -337,6 +337,15 @@ local PAGES = {
       subtitle = "Text on your screen when a buff has fallen off.",
       build = function(page, width) return ns.OptionsReminders:BuildPage(page, width) end },
 
+    -- The cooldowns SOMEBODY ELSE presses on you. Its third column is our own
+    -- fourteen spells rather than the Cooldown Manager's catalogue - that
+    -- list is YOUR spells, and every spell on this page belongs to another
+    -- player.
+    { key = "externals", title = "External cooldowns", glyph = "tanks",
+      externals = true, module = "externals",
+      subtitle = "What the group can cast on you, and one click to ask.",
+      build = function(page, width) return ns.OptionsExternals:BuildPage(page, width) end },
+
     -- The death log, and with it the DEFENSIVES LIST that used to live on a
     -- Timeline page of its own. That page is gone: what it drew live was the
     -- fight's next scheduled hit, and the replay answers the same question
@@ -484,7 +493,7 @@ end
 
 function Options.HasThirdColumn(entry)
     return (entry.side or entry.explain or entry.tanks or entry.reminders
-        or entry.deaths) and true or false
+        or entry.deaths or entry.externals) and true or false
 end
 
 function Options.PageWidth(entry, narrow, wide)
@@ -783,6 +792,7 @@ function Options:Create()
     local tankSide = ns.OptionsCoTanks:BuildSide(sideHost, PAD)
     local reminderSide = ns.OptionsReminders:BuildSide(sideHost, PAD)
     local deathSide = ns.OptionsDeaths:BuildSide(sideHost, PAD)
+    local externalSide = ns.OptionsExternals:BuildSide(sideHost, PAD)
 
     -- Over the middle column, and built here so it is above every page frame
     -- created below it.
@@ -845,6 +855,7 @@ function Options:Create()
         { eyebrow = "Tank stuff" },
         { page = "cotanks" },
         { page = "reminders" },
+        { page = "externals" },
         { page = "deaths" },
         { eyebrow = "System" },
         { page = "settings" },
@@ -905,6 +916,7 @@ function Options:Create()
         local withTanks = entry.tanks and moduleOn or false
         local withReminders = entry.reminders and moduleOn or false
         local withDeaths = entry.deaths and moduleOn or false
+        local withExternals = entry.externals and moduleOn or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
@@ -914,7 +926,7 @@ function Options:Create()
         -- the half that is still live is the half that edits settings for
         -- something that is not running.
         local third = withSide or withExplain or withTanks or withReminders
-            or withDeaths
+            or withDeaths or withExternals
         SetStageWidth(third)
         sideHost:SetShown(third)
         side:SetShown(withSide)
@@ -922,9 +934,11 @@ function Options:Create()
         tankSide:SetShown(withTanks)
         reminderSide:SetShown(withReminders)
         deathSide:SetShown(withDeaths)
+        externalSide:SetShown(withExternals)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
         if withDeaths then ns.OptionsDeaths:Refresh() end
+        if withExternals then externalSide.Refresh() end
 
         pageTitle:SetText(entry.title)
         if entry.status then
