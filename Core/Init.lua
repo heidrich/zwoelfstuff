@@ -1005,7 +1005,7 @@ local usage = {
     -- /zs route was listed here after Routes was parked, so the help printed a
     -- command that had no handler at all. A menu naming something that does
     -- nothing is worse than one that is short.
-    "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100clear|r empties the list)",
+    "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100clear|r empties the list, |cffffd100cds|r says why a press has no bar)",
     "  |cffffd100/zs timeline|r - the next-hit panel's state (|cffffd100probe|r measures)",
     "",
     "  |cffffd100/zs test|r - run the addon's own checks and report failures",
@@ -1101,6 +1101,10 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Death:Share()
         elseif sub == "probe" then
             ns.Death:Probe()
+        -- Why a press has no bar under it. Four different causes wear the
+        -- same symptom, and only the client can say which one it is.
+        elseif sub == "cds" or sub == "cd" then
+            ns.History:Dump()
         elseif sub == "clear" then
             ns.Death:Clear()
         else

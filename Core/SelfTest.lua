@@ -1505,11 +1505,22 @@ local function TestDeath()
     local wrongOnes = Death.Analyse(
         { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {},
         { { name = "Death Strike" }, { name = "Heart Strike" } })
-    Check("Pressing something that was not a defensive says which",
+    -- The judgement and the evidence are two lines, not one sentence: a
+    -- rotation of seven abilities wrapped the old one over three lines and
+    -- the verdict disappeared into the middle of a list.
+    Check("Pressing no defensive is its own sentence",
         (function()
             for _, line in ipairs(wrongOnes.lines) do
-                if line:find("No defensive was used", 1, true)
-                    and line:find("Death Strike", 1, true) then return true end
+                if line == "No defensive was used." then return true end
+            end
+            return false
+        end)())
+    Check("What you did cast is listed on a line of its own",
+        (function()
+            for _, line in ipairs(wrongOnes.lines) do
+                local plain = Death.PlainText(line)
+                if plain:find("Your casts:", 1, true)
+                    and plain:find("Death Strike", 1, true) then return true end
             end
             return false
         end)())

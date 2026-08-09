@@ -4,6 +4,27 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.51.2] - 2026-08-09
+
+### Added
+
+- **`/zs death cds`** - why a press has no bar under it. Four causes wear
+  that one symptom: the Cooldown Manager is not up, its buff viewers hold
+  nothing (so no window can ever be recorded, however long you play), the
+  item spell ids are secret, or the death on screen predates the recorder
+  and carries no windows. `History:Dump` reports **the switch first and
+  then everything else anyway** - a diagnostic that stops at the first
+  problem answers one question and leaves three, and on the desktop harness
+  it would never exercise its own body.
+
+### Changed
+
+- **"Your casts" is its own line**, not the tail of `No defensive was used -
+  you cast …`. A rotation of seven abilities wrapped that sentence over
+  three lines and the judgement vanished into the middle of the evidence.
+  The cast list is now printed whenever there were casts, including under
+  `Defensives used:`.
+
 ## [4.51.1] - 2026-08-09
 
 ### Changed

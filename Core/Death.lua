@@ -481,11 +481,20 @@ function Death.Analyse(events, maxHP, avail, items, casts)
         if #pressed == 0 then
             lines[#lines + 1] = "You pressed nothing in those seconds."
         elseif #defensives == 0 then
-            lines[#lines + 1] = "No defensive was used - you cast "
-                .. Death.SpellList(pressed) .. "."
+            lines[#lines + 1] = "No defensive was used."
         else
             lines[#lines + 1] = "Defensives used: "
                 .. Death.SpellList(defensives) .. "."
+        end
+
+        -- EVERYTHING you cast, on a line of its own. It used to be the tail
+        -- of the verdict - "No defensive was used - you cast ..." - and a
+        -- rotation of seven abilities wrapped that sentence over three
+        -- lines, so the verdict and the list read as one paragraph. They
+        -- are two different statements: one is the judgement, the other is
+        -- the evidence.
+        if #pressed > 0 then
+            lines[#lines + 1] = "Your casts: " .. Death.SpellList(pressed) .. "."
         end
     end
 

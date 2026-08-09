@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.51.2",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100/zs death cds|r says why a press has no bar under it. Four different things wear that one symptom - the Cooldown Manager is off, its buff section holds nothing, the ids are withheld, or the death you are looking at is older than the recorder - and only the game can say which. It prints all four.",
+            "Worth knowing either way: a death captured before this build carries no measured windows and cannot be given any afterwards. The bars appear on the |cffffd100next|r death after a defensive has been up and fallen off once.",
+            "|cffffd100Your casts|r is a line of its own now, instead of the tail of the verdict. Seven abilities wrapped that sentence over three lines and the judgement disappeared into the middle of a list.",
+        },
+    },
+    {
         version = "4.51.1",
         date = "2026-08-09",
         lines = {

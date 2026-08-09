@@ -288,3 +288,114 @@ listener:SetScript("OnUpdate", function(_, elapsed)
     since = 0
     Sweep()
 end)
+
+---------------------------------------------------------------------------
+-- WHY IS THERE NO BAR - the diagnostic, and it reports the SWITCH first
+--
+-- The owner looked at a replay with no bars under the presses and could not
+-- tell why, and neither could I from a screenshot. There are four different
+-- reasons for the same symptom and only the client can say which:
+--
+--   1. the Cooldown Manager is not up at all
+--   2. its BUFF viewers have no items - nothing to watch, so no window is
+--      ever recorded, and nothing will change however long he plays
+--   3. the items are there but their spell ids are secret
+--   4. everything works and the death he is looking at is simply OLDER than
+--      this recorder, so it carries no windows and never will
+--
+-- Four causes, one symptom - that is the case that has cost this project
+-- the most time, and the rule from it is: build the diagnostic instead of
+-- reading the code again. /zs death cds.
+---------------------------------------------------------------------------
+function History:Dump()
+    ns.Print("|cffffd100defensive durations|r - where the bars come from.")
+
+    -- THE SWITCH FIRST, and then everything else anyway. A diagnostic that
+    -- stops at the first thing it finds wrong prints one line and leaves
+    -- the other three questions unanswered - and on a desktop, where there
+    -- is no Cooldown Manager at all, it would never exercise its own body.
+    local up = ns.CDM and ns.CDM.IsAvailable and ns.CDM:IsAvailable()
+    if not up then
+        ns.Print("  |cffff4040The Cooldown Manager is not up|r: "
+            .. ((ns.CDM and ns.CDM:UnavailableReason()) or "no CDM module")
+            .. ". Nothing new can be measured until it is.")
+    else
+        -- The buff viewers ARE the source. If they hold nothing, no amount
+        -- of playing will ever produce a window, and that is worth knowing
+        -- at once rather than after an evening.
+        local watched = 0
+        for _, key in ipairs({ "buffIcon", "buffBar" }) do
+            local shown, secret, active = 0, 0, 0
+            pcall(ns.CDM.ForEachItem, ns.CDM, key, function(item)
+                shown = shown + 1
+                local spellID = ns.CDM:ItemSpellID(item)
+                if not (spellID and ns.CanCompute(spellID)) then
+                    secret = secret + 1
+                elseif ns.CDM:ItemIsActive(item) then
+                    active = active + 1
+                end
+            end)
+            watched = watched + shown
+            ns.Print(string.format("  %s: |cff40ff40%d|r tracked, %d up now%s",
+                key, shown, active,
+                secret > 0
+                    and (", |cffff8040" .. secret .. " with a secret id|r")
+                    or ""))
+        end
+        if watched == 0 then
+            ns.Print("  |cffff8040Both buff viewers are empty.|r Blizzard's "
+                .. "Cooldown Manager has a buff section - switch it on in "
+                .. "Edit Mode, or no defensive window can ever be measured.")
+        end
+    end
+
+    local windows = History.actives
+    ns.Print(string.format("  windows recorded this session: |cff40ff40%d|r",
+        #windows))
+    for i = math.max(1, #windows - 5), #windows do
+        local entry = windows[i]
+        ns.Print(string.format("    %s  |cff9ba3af%.1fs|r",
+            ns.SpellName(entry.spellID) or ("Spell " .. entry.spellID),
+            entry.to - entry.from))
+    end
+
+    local open = 0
+    for spellID in pairs(openSince) do
+        open = open + 1
+        ns.Print("    up RIGHT NOW: "
+            .. (ns.SpellName(spellID) or ("Spell " .. spellID)))
+    end
+    if open == 0 and #windows == 0 then
+        ns.Print("    |cff888888Nothing yet. Press a defensive and wait for "
+            .. "it to fall off, then run this again.|r")
+    end
+
+    local store, count = self:Measured(), 0
+    for spellID, seconds in pairs(store) do
+        count = count + 1
+        ns.Print(string.format("    measured: %s = |cff40ff40%.1fs|r",
+            ns.SpellName(spellID) or ("Spell " .. spellID), seconds))
+    end
+    if count == 0 then
+        ns.Print("    |cff888888No lengths measured on this spec yet.|r")
+    end
+
+    -- And the death actually on screen, which is the other half: a death
+    -- captured before this recorder existed carries no windows and cannot
+    -- be given any afterwards.
+    local snapshot = ns.Death and ns.Death.log
+        and ns.Death.log[ns.Death.showing or #ns.Death.log]
+    if not (snapshot and snapshot.casts) then
+        ns.Print("  No death on screen to check against.")
+        return
+    end
+    ns.Print("  the death on screen, press by press:")
+    for _, cast in ipairs(snapshot.casts) do
+        local length, source
+        if ns.Replay then length, source = ns.Replay.BarLength(cast) end
+        ns.Print(string.format("    %s: %s", cast.name or "?",
+            length and string.format("|cff40ff40%.1fs|r (%s)", length,
+                source or "?")
+                or "|cffff8040no length - draws as a mark|r"))
+    end
+end
