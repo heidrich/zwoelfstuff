@@ -120,6 +120,10 @@ function Page:BuildPage(page, width)
             row:SetShown(spellID ~= nil)
             if spellID then
                 row.label:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
+                -- Icon and the client's own tooltip, the same two the picker
+                -- shows: choosing from a list with icons and then living
+                -- with a list without them was the owner's report.
+                UI.MakeRowASpell(row, spellID)
             end
         end
 

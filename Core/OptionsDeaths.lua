@@ -33,8 +33,9 @@ function Page:BuildPage(page, width)
         .. "you fall - what hit you, how hard, the health you had left after "
         .. "each blow - plus which of your defensives were still ready by "
         .. "our own clock, and whether a healthstone or a potion was in the "
-        .. "bags. Nothing is saved between sessions: this is for the minute "
-        .. "after dying, not for an archive.")
+        .. "bags. The last ten are kept for this character and survive a "
+        .. "reload; anything older than that falls off the end, and "
+        .. "|cffffd100Clear list|r in the window empties them.")
 
     UI.Toggle(grid:Row("Open the window right away"),
         function() return Config().openOnDeath ~= false end,
@@ -42,7 +43,9 @@ function Page:BuildPage(page, width)
 
     grid:Note("The window with the quick analysis, up before you release. "
         .. "Switched off, the death is still recorded and "
-        .. "|cffffd100/zs death|r opens it when you want it.")
+        .. "|cffffd100/zs death|r opens it when you want it. Its size is the "
+        .. "|cffffd100Size|r button in the window itself - the moment you "
+        .. "want it smaller is the moment it is in front of you.")
 
     ---------------------------------------------------------------------
     -- The icon on the screen

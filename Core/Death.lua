@@ -41,6 +41,9 @@ local DEATHS_KEPT = 10
 -- How far back the quick analysis looks, in seconds. The recap itself
 -- decides how many events it hands over; this only bounds OUR arithmetic.
 local WINDOW = 10
+-- Exported, because the replay window reads the same ten seconds and two
+-- files each carrying their own copy of "ten" is how they end up disagreeing.
+Death.WINDOW = WINDOW
 
 -- One rule for how a capture enters the log, pure and tested. `replace` is
 -- the retry and the Blizzard-recap hook speaking: the SAME death got a
@@ -168,6 +171,128 @@ function Death.ClearLog(log)
 end
 
 ---------------------------------------------------------------------------
+-- Surviving a reload
+--
+-- The list was session-only and the skull with it, so the owner reloaded to
+-- test the new build and both were gone. A /reload is not a new evening: it
+-- happens after every settings change, every addon update and every error.
+-- Losing the analysis of the pull you just wiped on to one is a defect, not
+-- a design.
+--
+-- So the last ten are written to the saved variables, PER CHARACTER, and
+-- read back at login. Two rules make that safe:
+--
+--   1. Only what is READABLE goes in. A secret value in a saved variable is
+--      an error at logout, i.e. at the one moment nobody is watching. Every
+--      field is copied by name and verified rather than the table being
+--      handed over whole.
+--   2. A death nothing could be read out of is not kept. It says "not
+--      enough was readable" today and it will say the same next week, and
+--      keeping it would let the recap hook mistake it for a fresh fall.
+---------------------------------------------------------------------------
+
+local function Plain(value, kind)
+    if value == nil or not ns.CanCompute(value) then return nil end
+    if type(value) ~= kind then return nil end
+    return value
+end
+
+-- The whitelist. The analysis is NOT stored: it is derived from the events
+-- and re-run on the way back in, so a better verdict written next month
+-- applies to the deaths already on disk.
+function Death.Persist(snapshot)
+    if not (snapshot and snapshot.events and #snapshot.events > 0) then
+        return nil
+    end
+
+    local events = {}
+    for _, ev in ipairs(snapshot.events) do
+        events[#events + 1] = {
+            t = Plain(ev.t, "number") or 0,
+            amount = Plain(ev.amount, "number") or 0,
+            hp = Plain(ev.hp, "number"),
+            heal = ev.heal and true or nil,
+            name = Plain(ev.name, "string"),
+            who = Plain(ev.who, "string"),
+            spellID = Plain(ev.spellID, "number"),
+            overkill = Plain(ev.overkill, "number"),
+        }
+    end
+
+    local avail = {}
+    for _, entry in ipairs(snapshot.avail or {}) do
+        avail[#avail + 1] = {
+            spellID = Plain(entry.spellID, "number"),
+            name = Plain(entry.name, "string") or "?",
+            remaining = Plain(entry.remaining, "number"),
+            why = Plain(entry.why, "string"),
+        }
+    end
+
+    local items = {}
+    for _, item in ipairs(snapshot.items or {}) do
+        items[#items + 1] = {
+            name = Plain(item.name, "string") or "?",
+            count = Plain(item.count, "number") or 0,
+        }
+    end
+
+    local casts = {}
+    for _, cast in ipairs(snapshot.casts or {}) do
+        casts[#casts + 1] = {
+            t = Plain(cast.t, "number") or 0,
+            spellID = Plain(cast.spellID, "number"),
+            name = Plain(cast.name, "string") or "?",
+            defensive = cast.defensive and true or nil,
+        }
+    end
+
+    local art = snapshot.killerArt
+    return {
+        when = Plain(snapshot.when, "string"),
+        day = Plain(snapshot.day, "string"),
+        where = Plain(snapshot.where, "string"),
+        whereShort = Plain(snapshot.whereShort, "string"),
+        killer = Plain(snapshot.killer, "string"),
+        killerArt = art and {
+            creatureID = Plain(art.creatureID, "number"),
+            displayID = Plain(art.displayID, "number"),
+        } or nil,
+        maxHP = Plain(snapshot.maxHP, "number"),
+        events = events,
+        avail = avail,
+        items = items,
+        casts = casts,
+    }
+end
+
+-- Back out again, verdict rebuilt. `at` is deliberately absent: it is a
+-- GetTime stamp, and GetTime restarts with the client - a stored one would
+-- be a lie about how long ago this was.
+function Death.Restore(stored)
+    local log = {}
+    for _, entry in ipairs(stored or {}) do
+        if type(entry) == "table" and type(entry.events) == "table" then
+            entry.analysis = Death.Analyse(entry.events, entry.maxHP,
+                entry.avail, entry.items, entry.casts)
+            log[#log + 1] = entry
+        end
+    end
+    return log
+end
+
+-- How a death's time reads. Today it is a clock; older than that, the day
+-- goes in front of it - "16:10:54" on its own is a lie about last Tuesday.
+function Death.WhenLabel(snapshot, today)
+    local when = snapshot.when or ""
+    local day = snapshot.day
+    if day and today and day ~= today and #day == 10 then
+        return day:sub(9, 10) .. "." .. day:sub(6, 7) .. ".  " .. when
+    end
+    return when
+end
+
+---------------------------------------------------------------------------
 -- The analysis - pure, exported, tested
 --
 -- events: oldest first, each { t, amount, hp, heal, name, overkill }
@@ -177,7 +302,7 @@ end
 --         our clock, nil = cannot tell (why says why).
 -- items:  { { name, count } } - only what was actually in the bags.
 ---------------------------------------------------------------------------
-function Death.Analyse(events, maxHP, avail, items)
+function Death.Analyse(events, maxHP, avail, items, casts)
     local out = {
         totalIn = 0, totalHealed = 0, hits = 0,
         biggest = nil,          -- { amount, name, pct }
@@ -254,6 +379,29 @@ function Death.Analyse(events, maxHP, avail, items)
             "The last heal landed %.1fs before the end.", out.lastHealAgo)
     end
 
+    -- WHAT YOU PRESSED, which is the half of a death log every other line
+    -- here is only the setup for. The casts are the player's own, off
+    -- UNIT_SPELLCAST_SUCCEEDED - not the combat log, which is closed on
+    -- this patch, but a live event that survived it.
+    local pressed, defensives = {}, {}
+    for _, cast in ipairs(casts or {}) do
+        pressed[#pressed + 1] = cast.name
+        if cast.defensive then defensives[#defensives + 1] = cast.name end
+    end
+    out.pressed, out.defensivesPressed = pressed, defensives
+
+    if out.hits > 0 then
+        if #pressed == 0 then
+            lines[#lines + 1] = "You pressed nothing in those seconds."
+        elseif #defensives == 0 then
+            lines[#lines + 1] = "No defensive was pressed - you cast "
+                .. table.concat(pressed, ", ") .. "."
+        else
+            lines[#lines + 1] = "Defensives pressed: "
+                .. table.concat(defensives, ", ") .. "."
+        end
+    end
+
     if #out.readyDefensives > 0 then
         lines[#lines + 1] = "Ready and unpressed (by our own clock): "
             .. table.concat(out.readyDefensives, ", ") .. "."
@@ -269,6 +417,77 @@ function Death.Analyse(events, maxHP, avail, items)
     end
 
     return out
+end
+
+-- THE BAR BEHIND A ROW, as two pieces of one health bar: what you still
+-- had after the event, and the piece the event moved. Together they are the
+-- health you had BEFORE it - which is the thing a person actually reads off
+-- a death log, and what a single "health left" fill could never show.
+--
+-- Damage: [ left ][ taken ]  - the two add up to the health before the hit.
+-- Heal:   [ before ][ given ] - the same shape, the other direction, so a
+--         heal row reads as the bar growing rather than as an odd colour.
+--
+-- Both come back as fractions of the maximum, clamped so an overkill that
+-- ran to twice your health cannot draw past the end of the row.
+function Death.RowSpans(ev, maxHP)
+    if not (maxHP and maxHP > 0 and ev) then return 0, 0 end
+
+    local amount = math.max(0, ev.amount or 0)
+    local base
+    if ev.heal then
+        base = math.max(0, (ev.hp or 0) - amount)
+    else
+        base = math.max(0, ev.hp or 0)
+    end
+
+    local left = math.min(1, base / maxHP)
+    local chunk = math.min(1 - left, amount / maxHP)
+    return left, chunk
+end
+
+-- ONE STORY out of two lists: what hit you, and what you pressed, in the
+-- order it happened. Both carry `t` - seconds before the death - so the
+-- merge is a sort and nothing more. Oldest first, the way the table reads.
+--
+-- Kept apart until this point on purpose: the analysis totals damage, and
+-- a cast folded into the events list early would have to be excluded from
+-- every sum in it. One list for arithmetic, one for the eye.
+function Death.Storyline(events, casts)
+    local out = {}
+    for _, ev in ipairs(events or {}) do out[#out + 1] = ev end
+    for _, cast in ipairs(casts or {}) do
+        out[#out + 1] = {
+            t = cast.t, name = cast.name, spellID = cast.spellID,
+            cast = true, defensive = cast.defensive,
+        }
+    end
+    -- Descending t IS oldest first. A stable tie-break on the cast flag
+    -- puts your press before the hit it answered when both land in the
+    -- same instant, which is the order that reads correctly.
+    table.sort(out, function(a, b)
+        if a.t ~= b.t then return a.t > b.t end
+        return (a.cast and 1 or 0) > (b.cast and 1 or 0)
+    end)
+    return out
+end
+
+-- WHERE A REPLAY STANDS at a given moment. `now` counts DOWN, in seconds
+-- before the death, the same clock the rows are labelled with: it starts
+-- above the oldest event and ends at 0, the killing blow.
+--
+-- Returns how many events have landed by then and the health you had at
+-- that moment - which is the health after the last landed event, or the
+-- full bar before anything has happened.
+function Death.ReplayAt(events, now, maxHP)
+    local landed, hp = 0, maxHP
+    for index, ev in ipairs(events or {}) do
+        if ev.t >= now then
+            landed = index
+            if ev.hp then hp = ev.hp end
+        end
+    end
+    return landed, hp
 end
 
 -- The events inside the promised window, oldest first - what the row list
@@ -436,6 +655,32 @@ function Death.Where()
         KeyLevel(), Death.encounter, zone)
 end
 
+-- WHAT YOU PRESSED in the seconds before it, off ns.History - the player's
+-- own casts, recorded from UNIT_SPELLCAST_SUCCEEDED. Not the combat log:
+-- that is closed to addons on this patch. This is a live event about your
+-- own character, and the client still answers it readably.
+--
+-- `diedAt` is the moment PLAYER_DEAD fired, not the moment of the capture -
+-- the capture runs the better part of a second later, and offsetting every
+-- cast by that would put your last press after the hit that killed you.
+local function CastsBefore(diedAt, window)
+    local out = {}
+    if not (ns.History and diedAt) then return out end
+    local picked = (ns.db and ns.db.defensives) or {}
+    for _, cast in ipairs(ns.History.casts or {}) do
+        local ago = diedAt - cast.at
+        if ago >= 0 and ago <= window then
+            out[#out + 1] = {
+                t = ago,
+                spellID = cast.spellID,
+                name = ns.SpellName(cast.spellID) or ("Spell " .. cast.spellID),
+                defensive = picked[cast.spellID] and true or nil,
+            }
+        end
+    end
+    return out
+end
+
 -- What was still ready, off the defensives picked on the Timeline page.
 local function Availability(now)
     local out = {}
@@ -593,10 +838,12 @@ function Death:Capture(overrideID, replace)
     local avail = Availability(now)
     local items = ItemsInBags()
     local where, whereShort = Death.Where()
+    local casts = CastsBefore(Death.diedAt or now, WINDOW)
 
     self.snapshot = Death.Remember(self.log, {
         at = now,
         when = date("%H:%M:%S"),
+        day = date("%Y-%m-%d"),
         where = where,
         whereShort = whereShort,
         events = events,
@@ -605,15 +852,50 @@ function Death:Capture(overrideID, replace)
         killerArt = art,
         avail = avail,
         items = items,
+        casts = casts,
         reason = events == nil and (readWhy or why) or nil,
-        analysis = Death.Analyse(events, maxHP, avail, items),
+        analysis = Death.Analyse(events, maxHP, avail, items, casts),
     }, DEATHS_KEPT, replace)
 
     -- The pager may be standing on an older death; a new one must not yank
     -- it. Only a view of the newest follows the newest.
     if self.showing and not replace then self.showing = nil end
     Death.RefreshIcon()
+    Death.Save()
     return self.snapshot
+end
+
+-- The store, per character. Deaths are a character's - they happened to
+-- that tank, in that spec, with those defensives - so they live under the
+-- character key rather than in the profile, which two characters may share.
+local function Store()
+    if not ns.account then return nil end
+    ns.account.deaths = ns.account.deaths or {}
+    return ns.account.deaths
+end
+
+function Death.Save()
+    local store = Store()
+    local key = ns.CharacterKey()
+    if not (store and key) then return end
+
+    local out = {}
+    for _, snapshot in ipairs(Death.log) do
+        local kept = Death.Persist(snapshot)
+        if kept then out[#out + 1] = kept end
+    end
+    store[key] = out
+end
+
+function Death.Load()
+    local store = Store()
+    local key = ns.CharacterKey()
+    if not (store and key) then return end
+
+    Death.log = Death.Restore(store[key])
+    Death.snapshot = Death.log[#Death.log]
+    Death.showing = nil
+    Death.RefreshIcon()
 end
 
 ---------------------------------------------------------------------------
@@ -701,11 +983,26 @@ local ROWS_MAX = 12
 -- session's deaths down the right so you can walk them without paging. The
 -- numbers are the left column's content width and the side list's width;
 -- everything else is measured off them.
-local MAIN_W = 430
+-- The gutter is the same on both sides of the divider. It was not, and the
+-- verdict, the Close button and the availability footer all ran right up
+-- against the line while the list had air to spare.
+local MAIN_W = 510
 local SIDE_W = 186
-local SIDE_X = 16 + MAIN_W + 14
+local GUTTER = 16
+local DIVIDER_X = 16 + MAIN_W + GUTTER
+local SIDE_X = DIVIDER_X + GUTTER
 local SIDE_ROW_H = 34
 local HEADER_BOTTOM = 82
+
+-- The four columns of the event table, measured from the row's left edge.
+-- The header labels and the cells read the SAME numbers, or a header is a
+-- decoration that drifts away from what it names.
+local COL_ICON = 52
+local COL_WHAT = 74
+local COL_WHAT_W = 180
+local COL_AMOUNT_R = -132
+local COL_LEFT_R = -6
+local COL_LEFT_W = 118
 
 local function BuildWindow()
     UI = ns.UI
@@ -783,9 +1080,24 @@ local function BuildWindow()
         local row = CreateFrame("Frame", nil, frame)
         row:SetSize(MAIN_W, ROW_H)
 
+        -- Two pieces of one health bar: what was left, and what the event
+        -- moved, drawn end to end. See Death.RowSpans.
         row.fill = row:CreateTexture(nil, "BACKGROUND")
         row.fill:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
         row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+
+        row.chunk = row:CreateTexture(nil, "BACKGROUND")
+        row.chunk:SetPoint("TOPLEFT", row.fill, "TOPRIGHT", 0, 0)
+        row.chunk:SetPoint("BOTTOMLEFT", row.fill, "BOTTOMRIGHT", 0, 0)
+
+        -- A press of your own is not damage and must not be drawn as a bar
+        -- of it. It gets a mark on the edge instead, the way the selected
+        -- death is marked in the list beside it.
+        row.tick = row:CreateTexture(nil, "ARTWORK")
+        row.tick:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        row.tick:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        row.tick:SetWidth(3)
+        row.tick:Hide()
 
         row.when = UI.Label(row, "", 11, C.textDim)
         row.when:SetPoint("LEFT", row, "LEFT", 6, 0)
@@ -798,13 +1110,23 @@ local function BuildWindow()
         row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
         row.what = UI.Label(row, "", 12, C.text)
-        row.what:SetPoint("LEFT", row, "LEFT", 74, 0)
-        row.what:SetWidth(222)
+        row.what:SetPoint("LEFT", row, "LEFT", COL_WHAT, 0)
+        row.what:SetWidth(COL_WHAT_W)
         row.what:SetJustifyH("LEFT")
         row.what:SetWordWrap(false)
 
         row.amount = UI.Label(row, "", 12, C.text)
-        row.amount:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+        row.amount:SetPoint("RIGHT", row, "RIGHT", COL_AMOUNT_R, 0)
+        row.amount:SetJustifyH("RIGHT")
+
+        -- What you had left afterwards, in its own column rather than only
+        -- in the hover: the row is read while the healer is asking, and a
+        -- number you have to point at is a number nobody quotes.
+        row.left = UI.Label(row, "", 12, C.textDim)
+        row.left:SetPoint("RIGHT", row, "RIGHT", COL_LEFT_R, 0)
+        row.left:SetWidth(COL_LEFT_W)
+        row.left:SetJustifyH("RIGHT")
+        row.left:SetWordWrap(false)
 
         -- The client's own spell tooltip on hover, which is the whole
         -- point: a name tells you what hit, the tooltip tells you what it
@@ -848,14 +1170,51 @@ local function BuildWindow()
     end
 
     -----------------------------------------------------------------------
+    -- The table's head. Two lines: what the table IS, and what its columns
+    -- are. Without it the fill behind each row is a mystery bar and the
+    -- rightmost number could be anything.
+    -----------------------------------------------------------------------
+    frame.tableNote = UI.Label(frame, "", 11, C.textFaint)
+    frame.tableNote:SetWidth(MAIN_W)
+    frame.tableNote:SetJustifyH("LEFT")
+    frame.tableNote:SetWordWrap(false)
+
+    -- The replay is its own window - Core/Replay.lua. It was inline here
+    -- for one revision, as a bar that drained where this note sits; a
+    -- timeline with the incoming above it and your own presses below is a
+    -- different picture and it needs the room.
+
+    frame.head = CreateFrame("Frame", nil, frame)
+    frame.head:SetSize(MAIN_W, 16)
+    frame.head:Hide()
+
+    local function HeadLabel(text)
+        return UI.Eyebrow(frame.head, text)
+    end
+    frame.headWhen = HeadLabel("When")
+    frame.headWhen:SetPoint("LEFT", frame.head, "LEFT", 6, 0)
+    frame.headWhat = HeadLabel("What hit you")
+    frame.headWhat:SetPoint("LEFT", frame.head, "LEFT", COL_WHAT, 0)
+    frame.headAmount = HeadLabel("Damage")
+    frame.headAmount:SetPoint("RIGHT", frame.head, "RIGHT", COL_AMOUNT_R, 0)
+    frame.headLeft = HeadLabel("Health left")
+    frame.headLeft:SetPoint("RIGHT", frame.head, "RIGHT", COL_LEFT_R, 0)
+
+    local headRule = frame.head:CreateTexture(nil, "ARTWORK")
+    headRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    headRule:SetPoint("BOTTOMLEFT", frame.head, "BOTTOMLEFT", 0, -2)
+    headRule:SetPoint("BOTTOMRIGHT", frame.head, "BOTTOMRIGHT", 0, -2)
+    headRule:SetHeight(1)
+
+    -----------------------------------------------------------------------
     -- The list down the side: every death this session, newest first.
     -- The owner asked for it in as many words, and it replaces the arrows -
     -- a list you can see beats a counter you have to walk.
     -----------------------------------------------------------------------
     local divider = frame:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(C.edge[1], C.edge[2], C.edge[3], 1)
-    divider:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDE_X - 14, -14)
-    divider:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", SIDE_X - 14, 14)
+    divider:SetPoint("TOPLEFT", frame, "TOPLEFT", DIVIDER_X, -14)
+    divider:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", DIVIDER_X, 14)
     divider:SetWidth(1)
 
     frame.sideTitle = UI.Label(frame, "This session", 11, C.textDim)
@@ -946,10 +1305,56 @@ local function BuildWindow()
     end, "primary")
     share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 12)
 
+    -- The size, one click at a time. Not a slider and not a settings page:
+    -- this window is read in the ten seconds before you release, and the
+    -- moment you want it smaller is the moment it is in front of you.
+    local scale
+    scale = UI.Button(frame, "Size 100%", 96, function()
+        local cfg = ns.db.death or {}
+        ns.db.death = cfg
+        cfg.scale = Death.NextScale(cfg.scale)
+        Death.ApplyScale()
+        scale.label:SetText(string.format("Size %d%%",
+            math.floor((cfg.scale or 1) * 100 + 0.5)))
+    end)
+    scale:SetPoint("LEFT", share, "RIGHT", 8, 0)
+    frame.scaleButton = scale
+
+    -- The replay. The owner's words: "du kannst das live nachvollziehen".
+    local replay = UI.Button(frame, "Replay", 90, function()
+        ns.Replay:Open(Death.log[Death.showing or #Death.log])
+    end)
+    replay:SetPoint("LEFT", scale, "RIGHT", 8, 0)
+    frame.replayButton = replay
+
     local dismiss = UI.Button(frame, "Close", 90, function()
         frame:Hide()
     end)
     dismiss:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16 + MAIN_W - 90, 12)
+end
+
+-- The window the replay reads. It shows ONE death - whichever is on
+-- screen - and Core/Replay.lua opens on that snapshot.
+function Death.Showing()
+    return Death.log[Death.showing or #Death.log]
+end
+
+-- The steps the size button walks, and the rule for walking them. Pure and
+-- tested: a cycle that skips or sticks at an end is the kind of thing that
+-- is only ever noticed by the person clicking it.
+local SCALES = { 0.7, 0.8, 0.9, 1.0, 1.15, 1.3 }
+
+function Death.NextScale(current)
+    local at = 0
+    for index, value in ipairs(SCALES) do
+        if math.abs(value - (current or 1)) < 0.001 then at = index end
+    end
+    return SCALES[(at % #SCALES) + 1]
+end
+
+function Death.ApplyScale()
+    if not frame then return end
+    frame:SetScale((ns.db and ns.db.death and ns.db.death.scale) or 1)
 end
 
 -- The killer's face, or nothing at all. Two doors, both guarded: a creature
@@ -984,6 +1389,7 @@ end
 -- one being asked about nine times in ten.
 local function PaintSideList()
     local total = #Death.log
+    local today = date("%Y-%m-%d")
     for slot = 1, DEATHS_KEPT do
         local row = frame.sideRows[slot]
         local index = total - slot + 1
@@ -993,7 +1399,7 @@ local function PaintSideList()
             row:Hide()
         else
             row.index = index
-            row.when:SetText(snapshot.when or "")
+            row.when:SetText(Death.WhenLabel(snapshot, today))
             row.where:SetText(snapshot.whereShort or "")
             row.who:SetText(snapshot.killer or "|cff626a76no killer named|r")
             local selected = index == Death.showing
@@ -1028,15 +1434,19 @@ function Death:Show(index)
 
     if not frame then BuildWindow() end
     frame.disarmClear()
+    Death.ApplyScale()
+    frame.scaleButton.label:SetText(string.format("Size %d%%",
+        math.floor(((ns.db.death and ns.db.death.scale) or 1) * 100 + 0.5)))
 
     -- The killer, when the recap named one readably. The name is already
     -- through SafeName's door or it would not be in the snapshot.
+    local when = Death.WhenLabel(snapshot, date("%Y-%m-%d"))
     if snapshot.killer then
         frame.sub:SetText(string.format("%s  -  killed by %s  -  the last %d seconds",
-            snapshot.when or "", snapshot.killer, WINDOW))
+            when, snapshot.killer, WINDOW))
     else
         frame.sub:SetText(string.format("%s  -  the last %d seconds",
-            snapshot.when or "", WINDOW))
+            when, WINDOW))
     end
 
     frame.place:SetText(snapshot.where or "")
@@ -1058,7 +1468,7 @@ function Death:Show(index)
     local events, stale = Death.RecentEvents(snapshot.events, WINDOW)
     if stale and #events > 0 then
         -- Nothing recent, so the promise is re-worded rather than broken.
-        frame.sub:SetText((snapshot.when or "")
+        frame.sub:SetText(when
             .. "  -  nothing in the last seconds; the events below are older")
     end
     local first = math.max(1, #events - ROWS_MAX + 1)
@@ -1067,6 +1477,27 @@ function Death:Show(index)
 
     -- Anchored under the verdict, which wraps: measured, not guessed.
     local top = HEADER_BOTTOM + (frame.verdict:GetStringHeight() or 0) + 14
+
+    -- The table's head, and the sentence that says what the fill behind the
+    -- rows means. Both go with the table: no rows, no head.
+    frame.tableNote:ClearAllPoints()
+    frame.tableNote:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -top)
+    frame.head:ClearAllPoints()
+    frame.head:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -(top + 17))
+    if #events > 0 then
+        frame.tableNote:SetText(maxHP
+            and string.format("Oldest first. The bar is the health you had "
+                .. "going in - |cff8d97a6grey|r what was left, "
+                .. "|cffc45c5cred|r what the hit took - out of %s.",
+                ns.ShortNumber(maxHP))
+            or "Oldest first. The bar is the health you had going in: grey "
+                .. "what was left, red what the hit took.")
+        frame.head:Show()
+    else
+        frame.tableNote:SetText("")
+        frame.head:Hide()
+    end
+    top = top + 36
 
     for i = first, #events do
         shown = shown + 1
@@ -1100,21 +1531,46 @@ function Death:Show(index)
         else
             row.what:SetText(ev.name or "")
         end
+        -- The damage, and what share of your whole health bar it was. The
+        -- number alone means nothing without the pool it came out of -
+        -- "107.9k" is a scratch on one tank and a third of another.
         local sign = ev.heal and "+" or "-"
-        local extra = ev.overkill
-            and string.format("  (%s overkill)", ns.ShortNumber(ev.overkill))
+        local share = (maxHP and maxHP > 0)
+            and string.format("  |cff9ba3af%d%%|r",
+                math.floor(ev.amount / maxHP * 100 + 0.5))
             or ""
-        row.amount:SetText(sign .. ns.ShortNumber(ev.amount) .. extra)
+        row.amount:SetText(sign .. ns.ShortNumber(ev.amount) .. share)
 
-        -- The fill is the health AFTER this event, so the story reads as a
-        -- draining bar. A heal row paints the same bar in the green.
-        local pct = (maxHP and ev.hp) and math.min(1, ev.hp / maxHP) or 0
-        row.fill:SetWidth(math.max(1, MAIN_W * pct))
-        if ev.heal then
-            row.fill:SetColorTexture(0.10, 0.35, 0.12, 0.55)
+        -- What was left afterwards. On the killing blow there is nothing
+        -- left, so the column says what went past zero instead - that is
+        -- the number worth knowing about a hit you were never surviving.
+        if ev.overkill then
+            row.left:SetText("0  |cffe06c5e" .. ns.ShortNumber(ev.overkill)
+                .. " over|r")
+        elseif ev.hp then
+            local leftShare = (maxHP and maxHP > 0)
+                and string.format("  |cff626a76%d%%|r",
+                    math.floor(ev.hp / maxHP * 100 + 0.5))
+                or ""
+            row.left:SetText(ns.ShortNumber(ev.hp) .. leftShare)
         else
-            row.fill:SetColorTexture(0.42, 0.08, 0.08, 0.55)
+            row.left:SetText("")
         end
+
+        -- The bar IS a health bar: the slate piece is what you still had,
+        -- the coloured piece is what this event moved, and the two together
+        -- are the health you had before it landed. Read down the column and
+        -- the slate shrinks - that is the pull going wrong, drawn.
+        local left, chunk = Death.RowSpans(ev, maxHP)
+        row.fill:SetWidth(math.max(1, MAIN_W * left))
+        row.fill:SetColorTexture(0.20, 0.26, 0.34, 0.85)
+        row.chunk:SetWidth(math.max(1, MAIN_W * chunk))
+        if ev.heal then
+            row.chunk:SetColorTexture(0.12, 0.42, 0.16, 0.85)
+        else
+            row.chunk:SetColorTexture(0.55, 0.11, 0.11, 0.85)
+        end
+        row.chunk:SetShown(chunk > 0)
         row:Show()
     end
     for i = shown + 1, ROWS_MAX do
@@ -1156,6 +1612,7 @@ function Death:Clear()
     self.showing = nil
     if frame then frame:Hide() end
     Death.RefreshIcon()
+    Death.Save()
     ns.Print(had == 1 and "The one death this session is cleared."
         or string.format("%d deaths cleared.", had))
 end
@@ -1381,6 +1838,9 @@ end
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_DEAD")
 watcher:RegisterEvent("ADDON_LOADED")
+-- After every ADDON_LOADED, so the profile store is open and ns.account
+-- points at a real table. This is what puts the skull back after a reload.
+watcher:RegisterEvent("PLAYER_LOGIN")
 -- The only thing that knows a BOSS is what you are standing in front of.
 -- BigWigs runs its entire engage logic off this pair, so the name arrives
 -- readable; it is still put through the same door as every other string.
@@ -1389,6 +1849,11 @@ watcher:RegisterEvent("ENCOUNTER_END")
 watcher:SetScript("OnEvent", function(_, event, _, encounterName)
     if event == "ADDON_LOADED" then
         TryHookBlizzardRecap()
+        return
+    end
+
+    if event == "PLAYER_LOGIN" then
+        Death.Load()
         return
     end
 
@@ -1404,6 +1869,11 @@ watcher:SetScript("OnEvent", function(_, event, _, encounterName)
         Death.encounter = nil
         return
     end
+
+    -- The moment of the fall, before anything else: the capture runs the
+    -- better part of a second later, and every cast offset is measured
+    -- from here or your last press lands after the hit that killed you.
+    Death.diedAt = GetTime()
 
     if ns.db and ns.db.death and ns.db.death.record == false then return end
 

@@ -13,6 +13,20 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.47.0",
+        date = "2026-08-09",
+        lines = {
+            "REPLAY. A window of its own with a time axis down the middle: what came in above it, |cffffd100what you pressed below it|r. Play, pause, stop and a speed from a quarter to double. Icons, numbers and the client's own tooltips on every mark, a health bar that drains as the playhead crosses them, and a defensive of yours drawn in the accent colour so it can be found at a glance. Anybody looking at an empty lower half can see that no defensive was pressed - which is the whole point of it.",
+            "The presses are your own casts, recorded as you make them. The combat log is closed to addons on this patch; this is a live event about your own character that survived, so the addon knows what YOU did even where it cannot see what anybody else did.",
+            "The verdict says it too, in one line: \"You pressed nothing in those seconds\", \"No defensive was pressed - you cast Death Strike, Heart Strike\", or which defensives you did use.",
+            "YOUR DEATHS SURVIVE A RELOAD NOW. They were kept for the session only, so reloading - which happens after every settings change and every addon update - took the list and the skull with it. The last ten are kept for this character and read back when you log in. |cffffd100Clear list|r is still how they go.",
+            "The event table has a head that says what its columns are, and every hit now shows |cffffd100what share of your health it took|r and |cffffd100the health you had left|r - as a number and as a percentage, in the row itself rather than only in the hover. On the killing blow that last column says how far past zero it went.",
+            "A |cffffd100Size|r button beside Share, 70 to 130 percent. The moment you want this window smaller is the moment it is in front of you, not the moment you are in a settings page.",
+            "The list down the side had all the air and the analysis had none: the verdict, the Close button and the defensives line all ran into the divider. Even margins on both sides of it now.",
+            "The defensives you picked show their icons and answer a hover with the client's own tooltip - the picker had both since 4.44.1 and the list of what you picked did not.",
+        },
+    },
+    {
         version = "4.46.0",
         date = "2026-08-09",
         lines = {

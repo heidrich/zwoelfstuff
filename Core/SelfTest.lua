@@ -1165,6 +1165,211 @@ local function TestDeath()
     local mine = { { n = 1 }, { n = 2 } }
     Death.ClearLog(mine)
     Check("Clearing the list leaves nothing behind", #mine == 0)
+
+    ---------------------------------------------------------------------
+    -- Surviving a reload. The owner reloaded to test a build and the
+    -- skull went with the list, so the last ten are written to the saved
+    -- variables - which is only safe if nothing secret can get in.
+    ---------------------------------------------------------------------
+    local kept = Death.Persist({
+        when = "16:10:54", day = "2026-08-09",
+        where = "M+12 - Ara-Kara", whereShort = "M+12",
+        killer = "Heavyweight Golem",
+        killerArt = { creatureID = 213333 },
+        maxHP = 2000000,
+        events = {
+            { t = 2.0, amount = 81600, hp = 40000, name = "Melee",
+              who = "Heavyweight Golem", spellID = 195181 },
+        },
+        avail = { { spellID = 48792, name = "Icebound Fortitude", remaining = 0 } },
+        items = { { name = "Healthstone", count = 1 } },
+        analysis = { lines = { "derived, and not stored" } },
+    })
+    Check("A death worth keeping is kept whole",
+        kept ~= nil and kept.killer == "Heavyweight Golem"
+            and kept.where == "M+12 - Ara-Kara"
+            and kept.killerArt.creatureID == 213333
+            and #kept.events == 1 and kept.events[1].amount == 81600)
+    Check("The verdict is NOT stored - it is derived on the way back",
+        kept.analysis == nil)
+    Check("A death nothing was readable out of is not stored at all",
+        Death.Persist({ when = "16:11:00", events = nil }) == nil)
+
+    local back = Death.Restore({ kept })
+    Check("Restoring rebuilds the verdict from the stored events",
+        #back == 1 and back[1].analysis ~= nil and #back[1].analysis.lines > 0)
+    Check("A stored entry with no events is dropped on the way back",
+        #Death.Restore({ { when = "x" }, kept }) == 1)
+    Check("Restoring an empty store is an empty list",
+        #Death.Restore(nil) == 0)
+
+    -- Nothing but a plain readable value of the right type gets in. A
+    -- secret cannot be forged from Lua to test with directly, but it dies
+    -- at the same gate as a wrong type does - one function, one rule, and
+    -- this is the half of it that can be asked on a desktop.
+    local dirty = Death.Persist({
+        when = { "not a string" },
+        killer = 12345,
+        events = { { t = 0, amount = 100, name = {}, who = 7, spellID = "no" } },
+        avail = {}, items = {},
+    })
+    Check("Only plain values of the right type reach the saved variables",
+        dirty ~= nil and dirty.when == nil and dirty.killer == nil
+            and dirty.events[1].name == nil and dirty.events[1].who == nil
+            and dirty.events[1].spellID == nil
+            and dirty.events[1].amount == 100)
+
+    ---------------------------------------------------------------------
+    -- The bar behind a row: two pieces of ONE health bar, which together
+    -- are the health you had before the event landed.
+    ---------------------------------------------------------------------
+    local wasLeft, took = Death.RowSpans(
+        { amount = 400000, hp = 600000 }, 1000000)
+    Check("A hit draws what was left and what it took, side by side",
+        math.abs(wasLeft - 0.6) < 0.001 and math.abs(took - 0.4) < 0.001)
+
+    local healBefore, given = Death.RowSpans(
+        { amount = 300000, hp = 800000, heal = true }, 1000000)
+    Check("A heal draws the health BEFORE it and the piece it gave",
+        math.abs(healBefore - 0.5) < 0.001 and math.abs(given - 0.3) < 0.001)
+
+    local none, killing = Death.RowSpans(
+        { amount = 3000000, hp = 0 }, 1000000)
+    Check("An overkill cannot draw past the end of the row",
+        none == 0 and math.abs(killing - 1) < 0.001)
+    Check("With no maximum health there is no bar to draw",
+        select(2, Death.RowSpans({ amount = 100, hp = 50 }, nil)) == 0)
+
+    ---------------------------------------------------------------------
+    -- One story out of two lists, and where a replay stands in it.
+    ---------------------------------------------------------------------
+    local story = Death.Storyline(
+        { { t = 4.0, amount = 100, name = "First hit" },
+          { t = 0.0, amount = 900, name = "Killing blow" } },
+        { { t = 2.0, spellID = 48792, name = "Icebound Fortitude",
+            defensive = true } })
+    Check("What hit you and what you pressed become one order",
+        #story == 3 and story[1].name == "First hit"
+            and story[2].name == "Icebound Fortitude"
+            and story[3].name == "Killing blow")
+    Check("A press is marked as yours and keeps its defensive flag",
+        story[2].cast == true and story[2].defensive == true)
+    Check("A story with nothing in it is empty rather than nil",
+        #Death.Storyline(nil, nil) == 0)
+
+    -- A press landing in the same instant as the hit it answers reads
+    -- before it: you pressed, then it landed.
+    local tie = Death.Storyline({ { t = 2.0, name = "Hit" } },
+        { { t = 2.0, name = "Press" } })
+    Check("A press and a hit in the same instant read press first",
+        tie[1].name == "Press")
+
+    local rows = { { t = 4, hp = 900 }, { t = 2, hp = 500 }, { t = 0, hp = 0 } }
+    Check("Before anything lands the bar is still full",
+        select(2, Death.ReplayAt(rows, 9, 1000)) == 1000)
+    Check("Mid-replay the health is the last landed event's",
+        select(2, Death.ReplayAt(rows, 3, 1000)) == 900)
+    local landed = Death.ReplayAt(rows, 1.5, 1000)
+    Check("The count of what has landed follows the clock", landed == 2)
+    Check("At the end everything has landed",
+        Death.ReplayAt(rows, 0, 1000) == 3)
+
+    ---------------------------------------------------------------------
+    -- The replay window's own rules.
+    ---------------------------------------------------------------------
+    local Replay = ns.Replay
+    if Replay then
+        Check("The plot reaches past the oldest thing in the story",
+            Replay.Span({ { t = 8 }, { t = 2 } }) > 8)
+        Check("An empty story still has a plot to draw on",
+            Replay.Span({}) >= 1)
+        Check("The death sits at the right-hand end of the axis",
+            math.abs(Replay.Fraction(0, 10) - 1) < 0.001)
+        Check("The oldest moment sits at the left-hand end",
+            math.abs(Replay.Fraction(10, 10)) < 0.001)
+        Check("A moment off the end of the plot is clamped onto it",
+            Replay.Fraction(40, 10) == 0 and Replay.Fraction(-5, 10) == 1)
+
+        local speeds, at = {}, 1
+        for _ = 1, 4 do at = Replay.NextSpeed(at); speeds[at] = true end
+        local seenSpeeds = 0
+        for _ in pairs(speeds) do seenSpeeds = seenSpeeds + 1 end
+        Check("Every speed is reachable and the cycle wraps",
+            seenSpeeds == 4 and at == 1)
+
+        Check("A hit worth half your health draws half a column",
+            math.abs(Replay.ColumnHeight(500, 1000)
+                - Replay.ColumnHeight(1000, 1000) / 2) < 0.01)
+        Check("A tiny hit still draws a visible mark",
+            Replay.ColumnHeight(1, 1000000) >= 6)
+        Check("Without a maximum health there is nothing to scale by",
+            Replay.ColumnHeight(500, nil) == 6)
+        Check("The speed label does not invent precision",
+            Replay.SpeedLabel(1) == "Speed 1x"
+                and Replay.SpeedLabel(0.25) == "Speed 0.25x")
+    else
+        Skip("The replay window", "Replay.lua did not load")
+    end
+
+    ---------------------------------------------------------------------
+    -- What you pressed, in the verdict. This is the line the whole
+    -- feature is for: anybody reading it can see nothing was pressed.
+    ---------------------------------------------------------------------
+    local nothing = Death.Analyse(
+        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {}, {})
+    Check("Pressing nothing at all is said out loud",
+        (function()
+            for _, line in ipairs(nothing.lines) do
+                if line:find("pressed nothing", 1, true) then return true end
+            end
+            return false
+        end)())
+
+    local wrongOnes = Death.Analyse(
+        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {},
+        { { name = "Death Strike" }, { name = "Heart Strike" } })
+    Check("Pressing something that was not a defensive says which",
+        (function()
+            for _, line in ipairs(wrongOnes.lines) do
+                if line:find("No defensive was pressed", 1, true)
+                    and line:find("Death Strike", 1, true) then return true end
+            end
+            return false
+        end)())
+
+    local rightOne = Death.Analyse(
+        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {},
+        { { name = "Icebound Fortitude", defensive = true },
+          { name = "Death Strike" } })
+    Check("A defensive that WAS pressed is credited on its own",
+        #rightOne.defensivesPressed == 1
+            and rightOne.defensivesPressed[1] == "Icebound Fortitude")
+
+    -- The size button walks its steps and wraps at the end. A cycle that
+    -- sticks at one end is only ever found by the person clicking it.
+    local first = Death.NextScale(nil)
+    local seen, at = { [first] = true }, first
+    for _ = 1, 5 do
+        at = Death.NextScale(at)
+        seen[at] = true
+    end
+    local count = 0
+    for _ in pairs(seen) do count = count + 1 end
+    Check("Every size step is reachable by clicking", count == 6)
+    Check("The steps wrap rather than stopping at the largest",
+        Death.NextScale(at) == first)
+    Check("A size nobody recognises lands back on a real step",
+        seen[Death.NextScale(3.7)] == true)
+
+    -- The clock in the list. Today it is a time; older, the day goes first.
+    Check("A death from today reads as a clock",
+        Death.WhenLabel({ when = "16:10:54", day = "2026-08-09" },
+            "2026-08-09") == "16:10:54")
+    Check("A death from another day carries its date",
+        Death.WhenLabel({ when = "16:10:54", day = "2026-08-07" },
+            "2026-08-09") == "07.08.  16:10:54")
+    Check("A death with no day recorded still reads",
+        Death.WhenLabel({ when = "16:10:54" }, "2026-08-09") == "16:10:54")
 end
 
 ---------------------------------------------------------------------------

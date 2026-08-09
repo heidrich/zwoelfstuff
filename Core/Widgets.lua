@@ -429,6 +429,60 @@ function UI.Row(parent, text, opts)
     return row
 end
 
+-- Turns a settings ROW into one that stands for a spell: the client's own
+-- icon in front of the label, and the client's own tooltip on hover.
+--
+-- Not UI.SpellRow, which builds a row of the spell PALETTE from scratch and
+-- is a different thing with a confusingly similar name - this one dresses a
+-- row that already exists. The two collided under one name for a few
+-- minutes and the static check caught it: the later definition simply won,
+-- and the caller here would have got the palette's builder instead.
+--
+-- The picker got icon and tooltip in 4.44.1 and the list of what you picked
+-- did not, so choosing a defensive showed you an icon and living with the
+-- choice showed you a column of same-grey names. One rule, one place, and
+-- every future list of spells - the externals panel is next - calls this
+-- instead of growing its own copy.
+--
+-- Pooled rows are re-labelled rather than rebuilt, so the wiring happens
+-- once and the SPELL is a field the hover reads at hover time. A closure
+-- would answer for whichever spell the row was built with.
+function UI.MakeRowASpell(row, spellID, texture)
+    if not row.dkSpellIcon then
+        row.dkSpellIcon = row:CreateTexture(nil, "ARTWORK")
+        row.dkSpellIcon:SetSize(18, 18)
+        row.dkSpellIcon:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.dkSpellIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        row:HookScript("OnEnter", function(entered)
+            if not (entered.dkSpellID and GameTooltip) then return end
+            GameTooltip:SetOwner(entered, "ANCHOR_RIGHT")
+            -- pcall: a spell the client would rather not describe must cost
+            -- a missing tooltip, never an error thrown under the cursor.
+            if pcall(GameTooltip.SetSpellByID, GameTooltip, entered.dkSpellID) then
+                GameTooltip:Show()
+            else
+                GameTooltip:Hide()
+            end
+        end)
+        row:HookScript("OnLeave", function()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+    end
+
+    row.dkSpellID = spellID
+    local icon = texture or (spellID and ns.SpellTexture(spellID)) or nil
+    row.dkSpellIcon:SetTexture(icon)
+    row.dkSpellIcon:SetShown(icon ~= nil)
+
+    -- The label carries BOTH its points - left of the row and right of the
+    -- control - so it is re-anchored as a pair or it runs under the button.
+    row.label:ClearAllPoints()
+    row.label:SetPoint("LEFT", row, "LEFT", icon and 24 or 0, 0)
+    row.label:SetPoint("RIGHT", row.slot, "LEFT", -UI.GAP, 0)
+    return row
+end
+
 -- onToggle turns the header into a disclosure: the caption gains a marker
 -- and the whole strip becomes clickable. Used to fold away everything that
 -- is set once and then never touched again, so the page shows the work

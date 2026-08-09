@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.46.0"
+ns.version = "4.47.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -867,6 +867,14 @@ ns.ACCOUNT_DEFAULTS = {
     procs       = {},
     auraLinks   = {},
     procsHidden = {},
+
+    -- THE LAST TEN DEATHS, per character key. Not a setting and not really
+    -- a measurement either - it is a record, kept here because a /reload
+    -- used to take it and a reload happens after every settings change and
+    -- every addon update. Written by Core/Death.lua, which copies each
+    -- field by name rather than storing the live table: a secret value in
+    -- a saved variable throws at logout, when nobody is watching.
+    deaths      = {},
 
     -- CUSTOM ACTIVE STATES: [spellID] = seconds.
     --

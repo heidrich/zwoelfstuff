@@ -4,6 +4,67 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.47.0] - 2026-08-09
+
+### Added
+
+- **REPLAY**, in a window of its own (`Core/Replay.lua`). A time axis down
+  the middle, what came in above it, **what you pressed below it**. Play,
+  pause, stop, and a speed button from a quarter to double. Every mark
+  carries its icon, its number and the client's own tooltip; a health bar
+  across the top drains as the playhead crosses them; a defensive of your
+  own is drawn in the accent colour. Anybody looking at a bare lower lane
+  can see that no defensive was pressed - which is what the window is for.
+
+- **What you pressed** is now part of a death. It comes from
+  `UNIT_SPELLCAST_SUCCEEDED` for "player" (`ns.History`), **not** the combat
+  log - that is closed to addons on this patch. `Death.Storyline` merges it
+  with the incoming events into one order, tie-breaking a press before the
+  hit it answered. The verdict says the result in one line: "You pressed
+  nothing in those seconds", "No defensive was pressed - you cast Death
+  Strike, Heart Strike", or the defensives you did use.
+
+- **The row bar is a health bar now.** It was the health left after each
+  event, drawn in red, which said nothing about the hit itself. It is the
+  health you had **going in**, split: slate for what was left, red for what
+  the hit took, green for what a heal gave. `Death.RowSpans` is the rule,
+  clamped so an overkill cannot draw past the end of the row.
+
+- **The event table has a head**: When, What hit you, Damage, Health left -
+  and a line above it saying what the bar behind each row means.
+
+- **Damage and health left carry their percentage** and sit in the row
+  rather than only in the hover. "107.9k" is a scratch on one tank and a
+  third of another; "68%" is the same sentence on every character. On the
+  killing blow the last column says how far past zero the hit went.
+
+- **A Size button beside Share**, cycling 70 → 130 percent, saved per
+  profile. The moment you want this window smaller is the moment it is in
+  front of you.
+
+### Fixed
+
+- **A reload took your deaths, and the skull with them.** The list was kept
+  for the session only, which is a defensible rule for an evening and a
+  wrong one for a `/reload` - which happens after every settings change,
+  every addon update and every error. The last ten are written to the saved
+  variables **per character** and read back at login. Only readable values
+  go in, copied field by field rather than the live table being handed
+  over: a secret value in a saved variable throws at logout, when nobody is
+  watching. A death nothing could be read out of is not stored at all. The
+  verdict is **not** stored - it is derived from the events on the way back
+  in, so a better verdict written later applies to the deaths already on
+  disk.
+
+- **The divider had all the air on one side.** The verdict, the Close
+  button and the defensives line ran straight into it while the list had a
+  full gutter. Even margins on both sides now.
+
+- **The picked defensives were a column of same-grey names.** The picker
+  has shown icons and the client's tooltip since 4.44.1; the list of what
+  you picked did not. Both come from `UI.MakeRowASpell` now, one rule in one
+  place, and the next list of spells calls it instead of growing its own.
+
 ## [4.46.0] - 2026-08-09
 
 ### Added
