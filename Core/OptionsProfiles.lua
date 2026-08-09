@@ -145,12 +145,17 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- Deleting one. Two steps, because there is no undo.
     ---------------------------------------------------------------------
-    local armed, deleteStrip = false, nil
-    deleteStrip = grid:Buttons({
+    -- The button's own handle, filled right after the strip builds. The
+    -- closure reads the upvalue, so it is never nil by the time a click can
+    -- happen - and the static check can see that, which a strip variable
+    -- declared nil-first could not offer it.
+    local armed, deleteButton = false, nil
+    local _, firstDeleteButton = grid:Buttons({
         {
             text = "Delete this profile", width = 170, style = "primary",
             onClick = function()
-                local button = deleteStrip.buttons[1].frame
+                local button = deleteButton
+                if not button then return end
                 if not armed then
                     armed = true
                     button:SetText("Really delete it?")
@@ -179,7 +184,7 @@ function Page:BuildPage(page, width)
             end,
         },
     })
-    deleteStrip.button = select(1, deleteStrip:GetChildren())
+    deleteButton = firstDeleteButton
 
     grid:Note("Deletes the profile you are using, for every character using "
         .. "it - they each get a fresh one named after themselves on their "
@@ -388,13 +393,13 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Start over")
 
-    local resetArmed = false
-    local resetStrip
-    resetStrip = grid:Buttons({
+    local resetArmed, resetButton = false, nil
+    local _, firstResetButton = grid:Buttons({
         {
             text = "Reset all settings", width = 160, style = "primary",
             onClick = function()
-                local button = resetStrip.buttons[1].frame
+                local button = resetButton
+                if not button then return end
                 -- Two-step, because this throws away every bar, position and
                 -- colour the user has set.
                 if not resetArmed then
@@ -414,6 +419,7 @@ function Page:BuildPage(page, width)
             end,
         },
     })
+    resetButton = firstResetButton
 
     grid:Note("Resets the profile you are using to the defaults - bars, "
         .. "presets, positions, the minimap button - and every character "

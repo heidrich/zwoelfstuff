@@ -316,6 +316,16 @@ local PAGES = {
       subtitle = "Text on your screen when a buff has fallen off.",
       build = function(page, width) return ns.OptionsReminders:BuildPage(page, width) end },
 
+    -- The fight's next scheduled hit, over your defensives. No third
+    -- column: a panel switch and a list, nothing to drag in from.
+    { key = "timeline", title = "Timeline", glyph = "cond-combat",
+      subtitle = "The next scripted hit, and whether you are ready for it.",
+      build = function(page, width) return ns.OptionsBusters:BuildPage(page, width) end },
+
+    { key = "deaths", title = "Deaths", glyph = "effect-flash",
+      subtitle = "What killed you, and what could have prevented it.",
+      build = function(page, width) return ns.OptionsDeaths:BuildPage(page, width) end },
+
     -- The third page about the fight. No third column: what it shows is the
     -- state of a route, and there is no list to pick from.
     -- Its own page rather than a section of Settings. Everything on Settings
@@ -381,6 +391,12 @@ end
 function Options.PageWidth(entry, narrow, wide)
     if Options.HasThirdColumn(entry) then return narrow end
     return wide
+end
+
+-- The one place the window's scale is applied, so the row on Settings and
+-- the boot path cannot drift apart about what the setting means.
+function Options:ApplyScale()
+    if self.frame then self.frame:SetScale(ns.db.windowScale or 1) end
 end
 
 function Options:Create()
@@ -680,6 +696,7 @@ function Options:Create()
 
     self.frame = frame
     self.pageIndex = 1
+    self:ApplyScale()
 
     ---------------------------------------------------------------------
     -- Left column entries
@@ -724,6 +741,8 @@ function Options:Create()
         { eyebrow = "Tank stuff" },
         { page = "cotanks" },
         { page = "reminders" },
+        { page = "timeline" },
+        { page = "deaths" },
         { eyebrow = "System" },
         { page = "settings" },
         { page = "profiles" },

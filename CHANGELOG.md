@@ -4,6 +4,39 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.44.0] - 2026-08-09
+
+### Added
+
+- **Deaths.** When you die, a window opens with what actually happened: the
+  last ten seconds as a list you can read - each hit with its icon, its
+  damage and the health you had left after it, the killing blow with its
+  overkill - and a verdict on top: whether one hit did most of it or it was
+  death by a thousand cuts, when the last heal landed, which of your
+  defensives were STILL READY, and whether a healthstone or a potion sat
+  unused in the bags. A button shares the short version with your group;
+  words the client marks secret never go into chat. Everything comes from
+  Blizzard's own death recap and damage meter - the readable sources on this
+  patch - and readiness is our own estimate from your casts plus base
+  cooldowns, honestly labelled as such. The window opening by itself can be
+  switched off on the new Deaths page; `/zs death` opens it any time.
+
+- **Timeline.** A panel with whatever the fight has scheduled next - the
+  same feed the boss mods run on now - and your defensives under it,
+  coloured by whether they are back. Pick the defensives on the new Timeline
+  page; the same list tells the death window what counted as available. The
+  panel shows in combat and is placed in Edit Mode. What it cannot do,
+  honestly: the client marks event severity secret, so "tank busters only"
+  is a filter no addon can build.
+
+- **The options window can be scaled.** Settings, under This window: 60% to
+  125%, live while you drag it. Not everybody has the pixels for 1360x760 -
+  the owner's words.
+
+- `/zs death probe` and `/zs timeline probe` print, field by field, what
+  this client will actually reveal - run them once dead and once in a boss
+  fight, and the window fills in what the measurements allow.
+
 ## [4.43.0] - 2026-08-09
 
 ### Changed

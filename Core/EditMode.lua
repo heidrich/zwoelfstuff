@@ -955,7 +955,7 @@ end
 -- list, and nil is not a bar. So the panel lines up on the bars and the bars
 -- line up on it, which is the whole point of snapping to something.
 ---------------------------------------------------------------------------
-local tankMover
+local tankMover, busterMover
 
 local function TankPanel()
     local panel = ns.CoTanks and ns.CoTanks.panel
@@ -972,7 +972,24 @@ local function ApplyTankMove(x, y)
     ns.CoTanks:ApplyLayout()
 end
 
-local function CreateTankMover()
+-- The Timeline panel, moved by the same machinery. Its numbers were born in
+-- CENTRE terms, so Apply is one write and one refresh.
+local function BusterPanel()
+    local panel = ns.Busters and ns.Busters.panel
+    if panel and panel:IsShown() then return panel end
+    return nil
+end
+
+local function ApplyBusterMove(x, y)
+    local cfg = ns.Busters:Config()
+    cfg.x, cfg.y = math.floor(x + 0.5), math.floor(y + 0.5)
+    ns.Busters:ApplyPosition()
+end
+
+-- label and origin are the only things the two panel movers disagree about,
+-- so they are the only parameters. A third copy of this builder would be
+-- the drift the reminders section warns about one screen down.
+local function CreatePanelMover(label, getOrigin)
     local mover = CreateFrame("Button", nil, overlay)
     mover:SetFrameLevel(overlay:GetFrameLevel() + 10)
     mover:RegisterForDrag("LeftButton")
@@ -990,7 +1007,7 @@ local function CreateTankMover()
     text:SetFrameLevel(mover:GetFrameLevel() + 2)
     text:SetClipsChildren(true)
 
-    mover.name = UI.Label(text, "Co-tanks", 12, C.text)
+    mover.name = UI.Label(text, label, 12, C.text)
     mover.name:SetPoint("CENTER", text, "CENTER", 0, 0)
     mover.name:SetWordWrap(false)
 
@@ -999,13 +1016,11 @@ local function CreateTankMover()
     mover.coords:SetWordWrap(false)
 
     mover:SetScript("OnDragStart", function(self)
-        local panel = TankPanel()
-        if not panel then return end
         local cursorX, cursorY = CursorPosition()
+        local originX, originY = getOrigin()
         self.grab = {
             cursorX = cursorX, cursorY = cursorY,
-            originX = ns.db.coTanks.x or 0,
-            originY = ns.db.coTanks.y or 0,
+            originX = originX, originY = originY,
         }
     end)
 
@@ -1024,8 +1039,7 @@ end
 -- the button can be let go anywhere, including off the edge of the screen,
 -- and OnMouseUp only fires on the frame it went down on. Without this the
 -- panel stays glued to the cursor.
-local function DragTank()
-    local mover = tankMover
+local function DragPanel(mover, getPanel, apply)
     if not (mover and mover.grab) then return end
 
     if not IsMouseButtonDown("LeftButton") then
@@ -1035,7 +1049,7 @@ local function DragTank()
         return
     end
 
-    local panel = TankPanel()
+    local panel = getPanel()
     if not panel then return end
 
     local cursorX, cursorY = CursorPosition()
@@ -1055,28 +1069,45 @@ local function DragTank()
         lineX, lineY = guideLineX, guideLineY
     end
 
-    ApplyTankMove(x, y)
+    apply(x, y)
     ShowGuide(guideX, lineX, true)
     ShowGuide(guideY, lineY, false)
 end
 
--- Placed over the panel, sized to it, and only there at all when there is a
+-- Placed over its panel, sized to it, and only there at all when there is a
 -- panel to place it over.
-local function RefreshTankMover()
-    if not tankMover then tankMover = CreateTankMover() end
-
-    local panel = TankPanel()
+local function RefreshPanelMover(mover, getPanel, x, y)
+    local panel = getPanel()
     if not (panel and EditMode.overlayShown) then
-        tankMover:Hide()
+        mover:Hide()
         return
     end
 
-    tankMover:ClearAllPoints()
-    tankMover:SetAllPoints(panel)
-    tankMover.coords:SetText(string.format("%d, %d",
-        ns.db.coTanks.x or 0, ns.db.coTanks.y or 0))
-    tankMover.coords:SetShown(Prefs().showCoords or tankMover.grab ~= nil)
-    tankMover:Show()
+    mover:ClearAllPoints()
+    mover:SetAllPoints(panel)
+    mover.coords:SetText(string.format("%d, %d", x or 0, y or 0))
+    mover.coords:SetShown(Prefs().showCoords or mover.grab ~= nil)
+    mover:Show()
+end
+
+local function RefreshTankMover()
+    if not tankMover then
+        tankMover = CreatePanelMover("Co-tanks", function()
+            return ns.db.coTanks.x or 0, ns.db.coTanks.y or 0
+        end)
+    end
+    RefreshPanelMover(tankMover, TankPanel, ns.db.coTanks.x, ns.db.coTanks.y)
+end
+
+local function RefreshBusterMover()
+    if not busterMover then
+        busterMover = CreatePanelMover("Timeline", function()
+            local cfg = ns.Busters:Config()
+            return cfg.x or 0, cfg.y or -220
+        end)
+    end
+    local cfg = ns.Busters and ns.Busters:Config() or {}
+    RefreshPanelMover(busterMover, BusterPanel, cfg.x, cfg.y)
 end
 
 ---------------------------------------------------------------------------
@@ -1215,7 +1246,8 @@ end
 
 local function OnUpdate()
     if cellDrag then DragCell() end
-    DragTank()
+    DragPanel(tankMover, TankPanel, ApplyTankMove)
+    DragPanel(busterMover, BusterPanel, ApplyBusterMove)
     DragReminders()
     if not dragging then return end
 
@@ -2253,6 +2285,7 @@ function EditMode:Refresh()
     end
 
     RefreshTankMover()
+    RefreshBusterMover()
     RefreshReminderMovers()
 
     -- The selection can outlive what it pointed at: delete a bar, or shrink a
@@ -2340,6 +2373,10 @@ function EditMode:SetUnlocked(state, wanted)
     -- for Bone Shield to fall off in order to place the message about Bone
     -- Shield falling off is not a workflow.
     if ns.Reminders then ns.Reminders:SetPlacing(state) end
+
+    -- The Timeline panel too: it shows in combat, and edit mode is the one
+    -- moment it must be there with nothing scheduled and nobody swinging.
+    if ns.Busters then ns.Busters:SetPlacing(state) end
 
     if state then
         -- The window would sit behind the overlay, catching clicks that were

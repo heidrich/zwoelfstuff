@@ -949,6 +949,155 @@ end
 ---------------------------------------------------------------------------
 -- Your own bars. Read-only.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- Cast history - the estimate both the Timeline strip and the death window
+-- colour their answers with. The rule has one trap worth pinning: nil and 0
+-- are different answers ("cannot tell" against "ready"), and a caller that
+-- collapses them calls every unknown spell ready.
+---------------------------------------------------------------------------
+local function TestHistory()
+    local History = ns.History
+    if not History then
+        Skip("Cast history", "History.lua did not load")
+        return
+    end
+
+    Check("Still cooling is the seconds left",
+        History.Remaining(100, 60, 130) == 30)
+    Check("Elapsed answers exactly 0", History.Remaining(100, 60, 160) == 0)
+    Check("Long past stays 0, never negative",
+        History.Remaining(100, 60, 1000) == 0)
+    Check("Never cast answers nil, not 0",
+        History.Remaining(nil, 60, 130) == nil)
+    Check("No known cooldown answers nil, not 0",
+        History.Remaining(100, nil, 130) == nil)
+    Check("A zero-length cooldown answers nil - there is nothing to estimate",
+        History.Remaining(100, 0, 130) == nil)
+
+    local last, casts = {}, {}
+    for i = 1, 7 do History.Push(last, casts, 100 + i, i, 5) end
+    Check("The ring keeps the cap and no more", #casts == 5)
+    Check("The oldest fall out, the newest stay",
+        casts[1].spellID == 103 and casts[5].spellID == 107)
+    History.Push(last, casts, 103, 99, 5)
+    Check("The map remembers only the newest cast of a spell",
+        last[103] == 99)
+end
+
+---------------------------------------------------------------------------
+-- Death analysis - pure rules over a made-up recap. The capture path makes
+-- every field readable before this runs, so the analysis owes no guards -
+-- what it owes is the right sentence for each shape of death.
+---------------------------------------------------------------------------
+local function TestDeath()
+    local Death = ns.Death
+    if not Death then
+        Skip("Death analysis", "Death.lua did not load")
+        return
+    end
+
+    -- One big hit out of small ones: the verdict names it, with the share
+    -- of health it took.
+    local oneShot = Death.Analyse({
+        { t = 4.0, amount = 50000,  heal = false, name = "Scratch" },
+        { t = 1.2, amount = 900000, heal = false, name = "Crushing Blow" },
+        { t = 0.0, amount = 60000,  heal = false, name = "Scratch" },
+    }, 2000000, {}, {})
+    Check("The biggest hit is found",
+        oneShot.biggest and oneShot.biggest.amount == 900000)
+    Check("Its share of max health is computed",
+        oneShot.biggest.pct and math.abs(oneShot.biggest.pct - 0.45) < 0.001)
+    Check("A hit worth 40% or more is called out by name",
+        oneShot.lines[1] ~= nil
+            and oneShot.lines[1]:find("Crushing Blow", 1, true) ~= nil)
+
+    -- Death by a thousand cuts: no single hit is named.
+    local chip = Death.Analyse({
+        { t = 6, amount = 100000, heal = false, name = "Chip" },
+        { t = 4, amount = 100000, heal = false, name = "Chip" },
+        { t = 2, amount = 100000, heal = false, name = "Chip" },
+    }, 2000000, {}, {})
+    Check("Small hits are summed, not blamed one by one",
+        chip.lines[1] ~= nil and chip.lines[1]:find("No single killer", 1, true) ~= nil)
+
+    -- Heals count to their own total and the drought is measured.
+    local healed = Death.Analyse({
+        { t = 8.0, amount = 300000, heal = true,  name = "Heal" },
+        { t = 1.0, amount = 500000, heal = false, name = "Hit" },
+    }, 2000000, {}, {})
+    Check("A heal lands in the healed total, not the taken total",
+        healed.totalHealed == 300000 and healed.totalIn == 500000)
+    Check("A heal drought over 3s gets its own sentence",
+        (function()
+            for _, line in ipairs(healed.lines) do
+                if line:find("last heal", 1, true) then return true end
+            end
+            return false
+        end)())
+
+    -- Availability: ready by our clock is listed, unknown is not called
+    -- ready, and an unused healthstone is mentioned.
+    local avail = Death.Analyse({},  nil, {
+        { spellID = 1, name = "Icebound Fortitude", remaining = 0 },
+        { spellID = 2, name = "Vampiric Blood",     remaining = 25 },
+        { spellID = 3, name = "Lichborne",          remaining = nil, why = "not cast since login" },
+    }, { { name = "Healthstone", count = 1 } })
+    Check("Ready and unpressed is listed by name",
+        #avail.readyDefensives == 1 and avail.readyDefensives[1] == "Icebound Fortitude")
+    Check("Cannot-tell is never promoted to ready",
+        #avail.unknownDefensives == 1 and avail.unknownDefensives[1] == "Lichborne")
+    Check("What sat in the bags is said",
+        avail.itemsInBags[1] == "Healthstone")
+
+    -- Nothing readable at all still answers with a sentence.
+    local empty = Death.Analyse(nil, nil, {}, {})
+    Check("An empty recap still gets an honest sentence", #empty.lines == 1)
+
+    -- SafeName: the fallback words come from the event type.
+    Check("A withheld melee name says Melee",
+        Death.SafeName(nil, "SWING_DAMAGE") == "Melee")
+    Check("A withheld heal name says a heal",
+        Death.SafeName(nil, "SPELL_HEAL") == "a heal")
+    Check("A readable name passes through",
+        Death.SafeName("Crushing Blow", "SPELL_DAMAGE") == "Crushing Blow")
+
+    -- The share is built from analysed lines only, and leads with totals.
+    local lines = Death.ShareLines({
+        when = "20:15:01",
+        analysis = Death.Analyse({
+            { t = 1, amount = 500000, heal = false, name = "Hit" },
+        }, 1000000, {}, {}),
+    })
+    Check("The share leads with the totals line",
+        lines and lines[1] ~= nil and lines[1]:find("Death 20:15:01", 1, true) ~= nil)
+    Check("The verdict lines travel with it", lines and #lines >= 2)
+end
+
+---------------------------------------------------------------------------
+-- Timeline - the soonest-event rule and the panel's width rule, the two
+-- things the desktop can check without a timeline to ask.
+---------------------------------------------------------------------------
+local function TestBusters()
+    local Busters = ns.Busters
+    if not Busters then
+        Skip("Timeline", "Busters.lua did not load")
+        return
+    end
+
+    local id, remaining = Busters.Soonest({ a = 12.5, b = 3.2, c = 40 })
+    Check("The soonest event wins", id == "b" and remaining == 3.2)
+    Check("An empty timeline answers nil", Busters.Soonest({}) == nil)
+    Check("A negative remaining is not a candidate",
+        select(1, Busters.Soonest({ a = -1 })) == nil)
+    Check("A non-number never wins",
+        select(1, Busters.Soonest({ a = "soon", b = 9 })) == "b")
+
+    local wide = Busters.Extent(0)
+    Check("An empty strip still has the panel's minimum width", wide == 220)
+    local wider = Busters.Extent(12)
+    Check("Twelve icons outgrow the minimum", wider > 220)
+end
+
 local function TestLiveBars()
     if not (ns.db and ns.db.bars) then
         Skip("Your bars", "no saved data yet")
@@ -2860,6 +3009,9 @@ function Test:Run()
         { "Media",         TestMedia },
         { "Profile migration", TestProfileMigration },
         { "Sharing",       TestShare },
+        { "Cast history",  TestHistory },
+        { "Death analysis", TestDeath },
+        { "Timeline",      TestBusters },
         { "Your bars",     TestLiveBars },
     }
 

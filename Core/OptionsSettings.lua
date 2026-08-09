@@ -62,6 +62,30 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("This window")
 
+    -- The window is drawn at 1360x760 and not everybody has the pixels for
+    -- that - the owner's words: "nicht alle haben grosse screens". SetScale
+    -- is live, so the row shows its own effect while being dragged through.
+    UI.Slider(grid:Row("Scale"), {
+        get = function() return ns.db.windowScale or 1 end,
+        set = function(value) ns.db.windowScale = value end,
+        min = 0.6, max = 1.25, step = 0.05,
+        -- scale: the box shows and takes PERCENT. Without it a typed "80"
+        -- would store 80 and paint the window over four screens - the exact
+        -- fault the visibility slider shipped once already.
+        scale = 100,
+        -- floor()ed, not left to %d: handing a float to %d is a truncation
+        -- on the client's Lua 5.1 and an ERROR on the harness's 5.3, and the
+        -- harness is right - the rounding should be spelled out.
+        format = function(v)
+            return string.format("%d%%", math.floor((v or 1) * 100 + 0.5))
+        end,
+        apply = function() ns.Options:ApplyScale() end,
+    })
+
+    grid:Note("The size of this window on your screen, not of anything on "
+        .. "the bars. 100% is the size it was designed at; on a laptop 80% "
+        .. "keeps all three columns in view. Takes effect as you change it.")
+
     -- Two fonts, two jobs, two sections. Panel text is read in rows in a
     -- window; bar text is read at a glance over a moving scene. The design
     -- draws the window in a narrow grotesk, and the client's own face is not

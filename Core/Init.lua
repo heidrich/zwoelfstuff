@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.43.0"
+ns.version = "4.44.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -464,6 +464,21 @@ function ns.SpellTexture(spellID)
     end
     local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
     return info and info.iconID
+end
+
+-- 2314156 -> "2.31M". Damage numbers on this patch run to seven digits, and
+-- seven digits in a row of text is a wall, not a number. Pure, tested.
+-- Below a thousand the number is itself - "941" abbreviated is longer.
+function ns.ShortNumber(value)
+    if type(value) ~= "number" then return "0" end
+    local sign = value < 0 and "-" or ""
+    value = math.abs(value)
+    if value >= 1e6 then
+        return string.format("%s%.2fM", sign, value / 1e6)
+    elseif value >= 1e3 then
+        return string.format("%s%.1fk", sign, value / 1e3)
+    end
+    return sign .. string.format("%d", value)
 end
 
 -- Font paths are read from live font objects, so no hardcoded path can break.
@@ -982,6 +997,8 @@ local usage = {
     -- /zs route was listed here after Routes was parked, so the help printed a
     -- command that had no handler at all. A menu naming something that does
     -- nothing is worse than one that is short.
+    "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100probe|r measures)",
+    "  |cffffd100/zs timeline|r - the next-hit panel's state (|cffffd100probe|r measures)",
     "",
     "  |cffffd100/zs test|r - run the addon's own checks and report failures",
     "  |cffffd100/zs minimap|r - show or hide the minimap button",
@@ -1069,6 +1086,27 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- this feature, and it has a printable answer.
     elseif cmd == "reminders" or cmd == "reminder" then
         ns.Reminders:Dump()
+
+    elseif cmd == "death" then
+        local sub = rest:lower()
+        if sub == "share" then
+            ns.Death:Share()
+        elseif sub == "probe" then
+            ns.Death:Probe()
+        else
+            ns.Death:Show()
+        end
+
+    elseif cmd == "timeline" then
+        if rest:lower() == "probe" then
+            ns.Busters:Probe()
+        else
+            ns.Busters:Refresh()
+            ns.Print("Timeline panel "
+                .. (ns.Busters:ShouldShow() and "|cff40ff40on screen|r"
+                    or "|cff888888hidden by its rule|r")
+                .. " - it shows in combat, and Edit Mode forces it up.")
+        end
 
     elseif cmd == "test" then
         ns.SelfTest:Run()

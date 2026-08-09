@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.44.0",
+        date = "2026-08-09",
+        lines = {
+            "DEATHS. When you die, a window opens with what actually happened: the last ten seconds hit by hit - icon, damage, the health you had left after each - and a verdict on top. Whether one hit did most of it or it was a thousand cuts, when the last heal landed, which of your defensives were |cffffd100still ready|r, and whether a healthstone or a potion sat unused in the bags. |cffffd100Share in chat|r posts the short version to your group. The auto-open can be switched off on the Deaths page; |cffffd100/zs death|r opens it any time.",
+            "TIMELINE. A panel with whatever the fight has scheduled next - the feed the boss mods run on - and your defensives under it, coloured by whether they are back. Pick them on the Timeline page; the death window judges the same list. Shows in combat, placed in Edit Mode. The client keeps an event's severity secret, so \"tank busters only\" is a filter no addon can build - it shows the next thing, whatever it is.",
+            "Readiness is our own estimate - your last cast plus the spell's base cooldown - because live cooldowns are closed to addons on this patch. Charges and resets are not in it, so it says about, and means it.",
+            "This window can be scaled: Settings, under This window, 60 to 125 percent, live while you drag it.",
+        },
+    },
+    {
         version = "4.43.0",
         date = "2026-08-09",
         lines = {

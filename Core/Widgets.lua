@@ -984,6 +984,15 @@ local function ShowMenu(owner, spec)
     menu.owner = owner
     if owner.SetOpen then owner:SetOpen(true) end
     menu:ClearAllPoints()
+
+    -- THE POPUP WEARS THE OWNER'S SCALE. It is parented to UIParent so it can
+    -- escape the window bounds, which means the window's scale setting does
+    -- not reach it - and a 100% menu hanging off an 80% select is both the
+    -- wrong size and, because SetWidth below is in the popup's own units, the
+    -- wrong width. Matching effective scales makes every number below mean
+    -- what it says again.
+    menu:SetScale(owner:GetEffectiveScale() / UIParent:GetEffectiveScale())
+
     local anchor = spec.anchor or { "TOPRIGHT", "BOTTOMRIGHT", 0, -2 }
     menu:SetPoint(anchor[1], owner, anchor[2], anchor[3], anchor[4])
     menu:SetWidth(math.max(owner:GetWidth(), spec.width or 0))
@@ -3062,26 +3071,26 @@ end
 -- A strip of buttons that flows like any other block in the grid.
 --
 -- Two Options files each carried their own local copy of this. They had not
--- drifted yet, and the way to keep it that way is for there to be one. Each
--- spec gets its button back in `spec.frame`, and the strip keeps the specs in
--- `strip.buttons` - a two-step button ("Really delete it?") needs a handle on
--- itself, and fishing it back out with GetChildren was the old workaround.
+-- drifted yet, and the way to keep it that way is for there to be one.
+--
+-- The FIRST button comes back as a second return: a two-step button
+-- ("Really delete it?") needs a handle on itself to rewrite its own label,
+-- and fishing it out of GetChildren was the old workaround in both copies.
 function Grid:Buttons(buttons)
     local strip = CreateFrame("Frame", nil, self.content)
     strip:SetSize(self.width, 28)
 
-    local x = 0
+    local x, first = 0, nil
     for _, spec in ipairs(buttons) do
         local btn = UI.Button(strip, spec.text, spec.width or 120,
             spec.onClick, spec.style)
         btn:SetPoint("LEFT", strip, "LEFT", x, 0)
         x = x + (spec.width or 120) + 8
-        spec.frame = btn
+        if not first then first = btn end
     end
-    strip.buttons = buttons
 
     self:Wide(strip, 36)
-    return strip
+    return strip, first
 end
 
 -- Places everything and returns the y the next free line would start at.
