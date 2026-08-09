@@ -8,6 +8,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.40.1",
+        date = "2026-08-09",
+        lines = {
+            "THE PROBE NOW ASKS ABOUT PLACE, NOT ONLY IDENTITY. A coordinate is a different idea from a name and it may outlive it: if a mob has a position we can read, what it is called stops mattering - and a database of positions is exactly what MDT already is.",
+            "|cffffd100/zs route probe|r reports the player's |cffffd100UnitPosition|r in full, facing, map id and map position; and per nameplate its position, distance, interact range, and the plate's own centre and scale - geometry the engine already computed, which is a bearing and a rough range even when the unit says nothing.",
+        },
+    },
+    {
         version = "4.40.0",
         date = "2026-08-09",
         lines = {

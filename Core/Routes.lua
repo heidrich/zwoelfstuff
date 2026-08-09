@@ -841,6 +841,47 @@ end
 function Routes:Probe()
     ns.Print("|cffffd100--------- what this client will say about a mob ---------|r")
 
+    ---------------------------------------------------------------------
+    -- WHERE THINGS ARE.
+    --
+    -- Asked first and separately, because it is a different idea from
+    -- identity and it may outlive it: if a mob has a POSITION we can read,
+    -- then what it is called stops mattering. A coordinate plus a database
+    -- we build ourselves is exactly what MDT is - it never asks the game
+    -- what a mob is either, it stores where one stands.
+    --
+    -- So the questions are: can we place the PLAYER, can we place a MOB, and
+    -- failing both, is there anything geometric left - a bearing off the
+    -- nameplate's position on screen, a coarse distance from an interact
+    -- check.
+    ---------------------------------------------------------------------
+    ns.Print("|cffffd100the player|r")
+    if type(UnitPosition) == "function" then
+        -- All four, not just the first: x, y and the instance id together are
+        -- what a recorded position would consist of, so seeing one of them is
+        -- not the same as being able to store a place.
+        local ok, x, y, z, inst = pcall(UnitPosition, "player")
+        ns.Print("   UnitPosition      " .. Describe(ok, x) .. " / "
+            .. Describe(ok, y) .. " / " .. Describe(ok, z)
+            .. "  instance " .. Describe(ok, inst))
+    else
+        ns.Print("   UnitPosition      |cff888888no api|r")
+    end
+    ns.Print("   facing            " .. Ask(GetPlayerFacing))
+    local best = C_Map and C_Map.GetBestMapForUnit
+        and C_Map.GetBestMapForUnit("player") or nil
+    ns.Print("   map               " .. Describe(true, best))
+    if best and C_Map and C_Map.GetPlayerMapPosition then
+        local ok, pos = pcall(C_Map.GetPlayerMapPosition, best, "player")
+        if ok and type(pos) == "table" and pos.GetXY then
+            local got, x, y = pcall(pos.GetXY, pos)
+            ns.Print("   map position      " .. Describe(got, x)
+                .. " / " .. Describe(got, y))
+        else
+            ns.Print("   map position      " .. Describe(ok, pos))
+        end
+    end
+
     local shown = 0
     self:ForEachPlate(function(unit, plate)
         if shown >= 3 then return end
@@ -881,6 +922,31 @@ function Routes:Probe()
             ns.Print("   nameplate text    " .. Ask(fs.GetText, fs))
         else
             ns.Print("   nameplate text    |cff888888no such font string|r")
+        end
+
+        -- CAN WE PLACE THIS MOB. The whole of the coordinate idea rests here.
+        ns.Print("   UnitPosition      " .. Ask(UnitPosition, unit))
+        if C_Map and C_Map.GetPlayerMapPosition then
+            local ok, pos = pcall(C_Map.GetPlayerMapPosition, best or 0, unit)
+            ns.Print("   map position      " .. Describe(ok, pos))
+        end
+        ns.Print("   distance squared  " .. Ask(UnitDistanceSquared, unit))
+        -- A coarse ring: true inside about 28 yards. Not a position, but a
+        -- real fact about distance if everything else is shut.
+        ns.Print("   within ~28y       " .. Ask(CheckInteractDistance, unit, 4))
+
+        -- The nameplate's own geometry. The frame is ours to measure even
+        -- when the unit behind it is not: where it sits across the screen is
+        -- a BEARING to the mob, and Blizzard scales distant plates, so the
+        -- scale is a hint at range. Ugly, but it is geometry the engine has
+        -- already computed and has no reason to withhold.
+        if plate and type(plate.GetCenter) == "function" then
+            local ok, cx, cy = pcall(plate.GetCenter, plate)
+            ns.Print("   plate centre      " .. Describe(ok, cx)
+                .. " / " .. Describe(ok, cy))
+        end
+        if plate and type(plate.GetEffectiveScale) == "function" then
+            ns.Print("   plate scale       " .. Ask(plate.GetEffectiveScale, plate))
         end
     end)
 

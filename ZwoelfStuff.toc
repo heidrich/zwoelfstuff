@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.40.0
+## Version: 4.40.1
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo

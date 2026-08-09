@@ -8,6 +8,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.40.1] - 2026-08-09
+
+### Added
+
+- **The probe asks about PLACE as well as identity.** A coordinate is a
+  different idea from a name and it may outlive it: if a mob has a position we
+  can read, what it is called stops mattering, and a database of positions is
+  exactly what MDT already is - it never asks the game what a mob is either.
+
+  So `/zs route probe` now reports, for the player: `UnitPosition` in full
+  (x, y, z and instance id, because one of the four is not a place),
+  `GetPlayerFacing`, the map id and the normalised map position. And for each
+  nameplate: `UnitPosition`, `C_Map.GetPlayerMapPosition` against that unit,
+  `UnitDistanceSquared`, an interact-range check, and the nameplate frame's
+  own centre and effective scale - geometry the engine has already computed
+  and has no obvious reason to withhold, which is a bearing to the mob and a
+  hint at its range even when the unit behind it says nothing.
+
 ## [4.40.0] - 2026-08-09
 
 ### Added
