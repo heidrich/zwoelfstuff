@@ -3710,18 +3710,68 @@ end
 --   stretched to 25 and every 1.4px stroke goes soft. That is the blur, and
 --   no amount of care in the file fixes it - the file was simply too small.
 --
--- So each mark exists at the design size and at double, and the one nearer to
--- what the screen will draw wins. Downsampling loses far less than
--- upsampling: a 28px stroke squeezed into 25 still has an edge, a 14px stroke
--- pulled up to 25 cannot invent one.
-local function IconCut(size)
-    local scale = UIParent and UIParent:GetEffectiveScale() or 1
-    local dense = scale > 1.25
+-- So each mark exists at four cuts and the one that is BIG ENOUGH wins.
+-- Downsampling loses far less than upsampling: a 28px stroke squeezed into 25
+-- still has an edge, a 14px stroke pulled up to 25 cannot invent one.
+--
+-- HOW THIS WAS WRONG, and it made every mark in the window soft:
+--
+-- The test used to be `UIParent:GetEffectiveScale() > 1.25`, and that number
+-- is never above 1.25 on any normal setup - on 1440p it sits around 0.53 to
+-- 0.75. So "dense" was false on every machine, the SMALL cut was loaded every
+-- time, and a 14px file was then stretched across 21 real pixels. The blur
+-- the owner reported was not the art and not the colours; it was one
+-- comparison against a quantity that does not mean what it looks like it
+-- means.
+--
+-- WHAT ACTUALLY DECIDES IT: how many physical pixels one interface unit
+-- covers, which is the screen's real width divided by the width the interface
+-- thinks it has. Verified against EllesmereUI, which computes the same ratio
+-- the same way (`GetScreenWidth() / physW`, its baseScale) - including the
+-- guard, which is its own comment: GetPhysicalScreenSize can answer 0 or nil
+-- while the display mode is changing.
+-- The number in a file's name is the MARK inside it, not the file: measured,
+-- not assumed - nav-cooldowns-14.tga is a 16x16 image with a 14-pixel drawing
+-- in it, -22 and -28 are both 32x32, -44 is 64x64. So a cut is chosen by
+-- comparing the drawing to the box it will fill, in real pixels.
+UI.ICON_CUTS = { 14, 22, 28, 44 }
 
-    if size >= 19 then
-        return dense and 44 or 22, 32
+-- HOW MUCH SMALLER THAN ITS BOX A MARK MAY BE, and it is the design's own
+-- ratio rather than a tolerance somebody picked: 14 into 16 and 28 into 32 are
+-- both exactly this, which is the pairing every one of these files was drawn
+-- for. Anything under it is the file the design intended; anything over it is
+-- a stretch, and a stretch is what the owner saw.
+UI.ICON_SLACK = 14 / 16
+
+function UI.PixelsPerUnit()
+    local physical = GetPhysicalScreenSize and (GetPhysicalScreenSize()) or nil
+    local units = GetScreenWidth and GetScreenWidth() or nil
+    if not (physical and units) or physical <= 0 or units <= 0 then return 1 end
+    return physical / units
+end
+
+-- Pure, so the rule can be checked without a screen: the smallest cut the
+-- design would pair with a box this size, and the largest one when the screen
+-- is denser than anything we ship for.
+--
+-- It does NOT simply take the biggest available. A 44-pixel drawing squeezed
+-- into 16 real pixels is a 64x64 texture loaded to look no better than the
+-- 16x16 one, and there are sixty-eight of these marks.
+function UI.IconCutFor(canvas, perUnit, cuts)
+    cuts = cuts or UI.ICON_CUTS
+    local wanted = (canvas or 16) * (perUnit or 1)
+    for _, cut in ipairs(cuts) do
+        if cut >= wanted * UI.ICON_SLACK then return cut end
     end
-    return dense and 28 or 14, 16
+    return cuts[#cuts]
+end
+
+local function IconCut(size)
+    -- The FRAME is quantised to two sizes and always has been: a mark either
+    -- sits in a row or it heads a card, and giving each caller its own canvas
+    -- would move the rows it sits in.
+    local canvas = (size >= 19) and 32 or 16
+    return UI.IconCutFor(canvas, UI.PixelsPerUnit()), canvas
 end
 
 -- Whether a name resolves to a FILE. A name that does not still draws - four

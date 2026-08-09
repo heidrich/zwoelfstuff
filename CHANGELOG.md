@@ -4,6 +4,39 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.56.2] - 2026-08-09
+
+### Fixed
+
+- **Every mark in the window was soft, and it was one comparison.** The rule
+  that picks which cut of an icon to load asked
+  `UIParent:GetEffectiveScale() > 1.25` - a number that is never above 1.25 on
+  a real machine, since 1440p sits around 0.53 to 0.75. So the SMALLEST cut
+  was loaded on every screen there is: a 22-pixel drawing stretched across 43
+  real pixels in a card header, a 14 across 21 in a row. No amount of care in
+  the art fixes that; the file was simply too small.
+
+  What decides it is how many physical pixels one interface unit covers -
+  `GetPhysicalScreenSize()` over `GetScreenWidth()`, the same ratio
+  EllesmereUI computes for the same reason, guard included: that call answers
+  0 or nil while the display mode is changing.
+
+  Two facts were measured rather than assumed on the way: the number in a
+  file's name is the DRAWING inside it, not the file (`-14` is a 16x16 image),
+  and the design's own pairing is 14-into-16 and 28-into-32 - which is exactly
+  the slack the chooser now allows, so it never loads a 64x64 texture to draw
+  16 pixels.
+
+  `UI.IconCutFor` is pure and tested at eight densities: a rule that is a
+  screen measurement cannot be checked by reading it, which is how this
+  survived so long.
+
+### Added
+
+- **Diagnostics reports the icon sharpness** - pixels per unit and which two
+  cuts that picks. "Sieht matschig aus" is not something a screenshot can
+  settle, and now it does not have to.
+
 ## [4.56.1] - 2026-08-09
 
 ### Fixed

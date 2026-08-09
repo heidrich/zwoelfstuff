@@ -142,6 +142,20 @@ local function BuildDiagnosticsPage(page, width)
     cdmState:SetPoint("RIGHT", cdmRow.slot, "RIGHT", 0, 0)
     cdmState:SetJustifyH("RIGHT")
 
+    -- HOW SHARP THE MARKS IN THIS WINDOW ARE, and it is a measurement rather
+    -- than an opinion. Every icon here was soft for months because the rule
+    -- that picks a file guessed at this number instead of reading it, and
+    -- "sieht matschig aus" is not something a screenshot can settle. Now it
+    -- says which file it loaded and why.
+    -- The caveat belongs ON the row: a cut is chosen when a mark is BUILT, so
+    -- this line can be right while the window in front of you was drawn under
+    -- the old setting.
+    local sharpRow = grid:FullRow("Icon sharpness", { controlWidth = 300,
+        sublabel = "Chosen when the window is built - a UI scale change needs a /reload" })
+    local sharpState = UI.Label(sharpRow.slot, "", 12, C.text)
+    sharpState:SetPoint("RIGHT", sharpRow.slot, "RIGHT", 0, 0)
+    sharpState:SetJustifyH("RIGHT")
+
     local engineRow = grid:FullRow("Aura engine (12.1)", { controlWidth = 260 })
     local engineState = UI.Label(engineRow.slot, "", 12, C.text)
     engineState:SetPoint("RIGHT", engineRow.slot, "RIGHT", 0, 0)
@@ -164,6 +178,11 @@ local function BuildDiagnosticsPage(page, width)
         local rival = ns.CDM:RivalName()
         rivalState:SetText(rival and ("|cffff4040" .. rival .. "|r")
             or "|cff40ff40none found|r")
+
+        local perUnit = UI.PixelsPerUnit()
+        sharpState:SetText(string.format(
+            "%.2f px per unit - %dpx and %dpx files",
+            perUnit, UI.IconCutFor(16, perUnit), UI.IconCutFor(32, perUnit)))
 
         cdmState:SetText(ns.CDM:IsAvailable()
             and "|cff40ff40available|r"

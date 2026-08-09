@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.56.2",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100EVERY ICON IN THIS WINDOW WAS BLURRY,|r on every screen, and it was one wrong comparison: the addon asked whether your interface was dense and got an answer that is never yes. So it loaded the smallest drawing it ships and stretched it - a 22-pixel mark across 43 real pixels in a card header.",
+            "It now measures how many real pixels one interface unit covers and loads the drawing that fits. Nothing about the art changed; it was always there.",
+            "|cffffd100Diagnostics|r shows the measurement and which files it picked, so this never has to be argued from a screenshot again.",
+        },
+    },
+    {
         version = "4.56.1",
         date = "2026-08-09",
         lines = {

@@ -84,6 +84,8 @@
     "SOUNDKIT",
     "SECONDS_ABBR",
     "SetPortraitTexture",
+    "GetPhysicalScreenSize",
+    "GetScreenWidth",
     "SetRaidTargetIconTexture",
     "SlashCmdList",
     "UIParent",

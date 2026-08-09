@@ -1822,6 +1822,55 @@ local function TestDesignSystem()
         end
         Check(label .. " marks all resolve to a file", not bad, bad)
     end
+
+    -----------------------------------------------------------------------
+    -- WHICH CUT OF A MARK GETS LOADED
+    --
+    -- Every mark in the window was soft for months because this decision was
+    -- one comparison against `UIParent:GetEffectiveScale() > 1.25` - a number
+    -- that is never above 1.25 on a real machine, so the smallest file was
+    -- loaded every time and then stretched. A rule that is a screen
+    -- measurement cannot be checked by reading it, which is why it is pure
+    -- now and checked here.
+    --
+    -- THE ONE THING THAT MUST HOLD: never upscale by more than the slack.
+    -----------------------------------------------------------------------
+    local CUTS = ns.UI.ICON_CUTS
+    Check("There are four cuts of every mark", #CUTS == 4, tostring(#CUTS))
+
+    for _, canvas in ipairs({ 16, 32 }) do
+        for _, perUnit in ipairs({ 0.75, 1, 1.33, 1.5, 1.79, 2, 2.5, 4 }) do
+            local cut = ns.UI.IconCutFor(canvas, perUnit)
+            local wanted = canvas * perUnit
+            local biggest = CUTS[#CUTS]
+            -- Never stretched further than the design's own 14-into-16, and
+            -- the only permitted exception is a screen denser than the
+            -- largest file we ship, where there is nothing better to load.
+            local ok = cut >= wanted * ns.UI.ICON_SLACK or cut == biggest
+            Check(string.format("A %d box at %.2f px/unit is not stretched",
+                canvas, perUnit), ok,
+                string.format("picked %d for %.1f px", cut, wanted))
+        end
+    end
+
+    -- And it must not reach for a bigger file than it needs: that is a
+    -- download and a texture load for nothing.
+    Check("A 16 box at 1:1 takes the 14 cut",
+        ns.UI.IconCutFor(16, 1) == 14, tostring(ns.UI.IconCutFor(16, 1)))
+    Check("A 16 box on a dense screen takes the 22 cut",
+        ns.UI.IconCutFor(16, 1.33) == 22, tostring(ns.UI.IconCutFor(16, 1.33)))
+    Check("A 32 box at 1:1 takes the 28 cut",
+        ns.UI.IconCutFor(32, 1) == 28, tostring(ns.UI.IconCutFor(32, 1)))
+    Check("Nothing bigger than the biggest cut exists",
+        ns.UI.IconCutFor(32, 99) == CUTS[#CUTS])
+
+    -- The screen measurement itself. It cannot be predicted out here, but it
+    -- can be required to be a usable number - EllesmereUI's own comment says
+    -- GetPhysicalScreenSize answers 0 or nil during a display-mode change,
+    -- and a 0 would make every mark ask for the 14 cut.
+    local perUnit = ns.UI.PixelsPerUnit()
+    Check("Pixels per unit is a sane number",
+        Finite(perUnit) and perUnit > 0 and perUnit < 8, tostring(perUnit))
 end
 
 ---------------------------------------------------------------------------
