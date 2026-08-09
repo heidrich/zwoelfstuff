@@ -4237,6 +4237,86 @@ local function TestExternals()
     X.SetColumns(keptColumns)
 end
 
+---------------------------------------------------------------------------
+-- THE PANEL MOVERS
+--
+-- Owner, 2026-08-09, with a screenshot of the externals mover: "hier fehlt
+-- noch das zahnrad fuer einstellungen und das lock item!" A bar's mover had
+-- both and a panel's had neither, which is the sort of gap nobody notices
+-- while writing the second one.
+--
+-- Skipped rather than failed when edit mode has never been opened: the movers
+-- are made on the first refresh, and "not built yet" is not "built wrong".
+---------------------------------------------------------------------------
+local function TestPanelMovers()
+    if not ns.EditMode.PanelMovers then
+        Check("Edit mode can name its panel movers", false)
+        return
+    end
+
+    local movers = ns.EditMode:PanelMovers()
+    local any = false
+
+    for name, mover in pairs(movers) do
+        any = true
+        Check("The " .. name .. " mover has a cog", mover.cog ~= nil)
+        Check("The " .. name .. " mover has a padlock", mover.lock ~= nil)
+        Check("And it knows how to draw the padlock",
+            type(mover.RefreshLock) == "function")
+        Check("And it carries what its cog needs",
+            mover.spec ~= nil and mover.spec.page ~= nil
+            and mover.spec.module ~= nil and type(mover.spec.apply) == "function")
+
+        -- THE TWO KEYS HAVE TO NAME REAL THINGS. Both are strings handed to
+        -- something that looks them up and quietly does nothing when it does
+        -- not find them: Options:Open walks its page list and falls off the
+        -- end, Modules:Set returns. A cog entry that silently does nothing is
+        -- indistinguishable from a cog entry that is broken.
+        if mover.spec then
+            local page = false
+            for _, entry in ipairs(ns.Options.PAGES or {}) do
+                if entry.key == mover.spec.page then page = true break end
+            end
+            Check("Its cog opens a page that exists", page,
+                tostring(mover.spec.page))
+            Check("And names a module that exists",
+                ns.Modules:Get(mover.spec.module) ~= nil,
+                tostring(mover.spec.module))
+        end
+
+        -- PINNED MEANS IT DOES NOT MOVE, and that is the whole feature. Run
+        -- through the real handler rather than restating the rule: a test that
+        -- re-implements what it is checking passes the day the rule changes.
+        local cfg = mover.spec.config()
+        if cfg then
+            local was = cfg.pinned
+            local start = mover:GetScript("OnDragStart")
+
+            cfg.pinned = true
+            mover.grab = nil
+            if start then start(mover) end
+            Check("A pinned " .. name .. " panel refuses to be dragged",
+                mover.grab == nil)
+
+            cfg.pinned = false
+            mover.grab = nil
+            if start then start(mover) end
+            Check("An unpinned one takes the drag", mover.grab ~= nil)
+
+            -- Never left holding one. Edit mode's OnUpdate reads this every
+            -- frame, and a grab nobody asked for would move his panel.
+            mover.grab = nil
+            cfg.pinned = was
+            mover:RefreshLock()
+        end
+    end
+
+    if not any then
+        Skip("Whether the panel movers carry a cog and a padlock",
+            "edit mode has not been opened this session")
+    end
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -4275,6 +4355,7 @@ function Test:Run()
         { "Cast history",  TestHistory },
         { "Death analysis", TestDeath },
         { "Your bars",     TestLiveBars },
+        { "Panel movers",  TestPanelMovers },
     }
 
     for _, suite in ipairs(suites) do

@@ -1010,7 +1010,12 @@ function CoTanks:Create()
     panel:Hide()
 
     panel:SetScript("OnDragStart", function(frame)
-        if not ns.db.coTanks.locked then frame:StartMoving() end
+        -- `locked` here means "edit mode is shut", not "the player pinned
+        -- it" - the two are different questions and both have to say yes.
+        -- Pinned is the one on the padlock in edit mode, and it exists so the
+        -- panel you have finished placing is not what a stray drag lands on.
+        if ns.db.coTanks.locked or ns.db.coTanks.pinned then return end
+        frame:StartMoving()
     end)
     panel:SetScript("OnDragStop", function(frame)
         frame:StopMovingOrSizing()

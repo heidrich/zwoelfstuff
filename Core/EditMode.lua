@@ -972,14 +972,81 @@ local function ApplyTankMove(x, y)
     ns.CoTanks:ApplyLayout()
 end
 
--- label and origin are the only things the two panel movers disagree about,
--- so they are the only parameters. A third copy of this builder would be
--- the drift the reminders section warns about one screen down.
-local function CreatePanelMover(label, getOrigin)
+-- WHAT THE COG ON A PANEL OFFERS. The bar's menu is anchoring plus its own
+-- settings plus a switch; a panel has nothing to anchor to another panel, so
+-- what is left is where it sits, the settings behind it, and the switch.
+--
+-- Centring writes ZERO, because both panels are stored as an offset from the
+-- middle of the screen - the same terms an unanchored bar uses.
+local function OpenPanelMenu(mover)
+    local spec = mover.spec
+    local cfg = spec.config()
+    if not cfg then return end
+
+    local x, y = spec.origin()
+    local items = {
+        { text = "Centre on screen", onClick = function() spec.apply(0, 0) end },
+        { text = "Centre horizontally", onClick = function() spec.apply(0, y) end },
+        { text = "Centre vertically", onClick = function() spec.apply(x, 0) end },
+    }
+
+    local actions = {
+        { text = cfg.pinned and "Unpin" or "Pin in place", onClick = function()
+            cfg.pinned = not cfg.pinned
+            mover:RefreshLock()
+            ns.Options:Refresh()
+        end },
+        { text = spec.settingsText or "Settings", onClick = function()
+            -- Out of edit mode first: the window this opens would otherwise
+            -- land on top of the thing being placed, which is the whole
+            -- reason placing happens on the screen rather than in a panel.
+            EditMode:SetUnlocked(false)
+            ns.Options:Open(spec.page)
+        end },
+        { text = "Switch off", onClick = function()
+            ns.Modules:Set(spec.module, false)
+            EditMode:Refresh()
+            ns.Options:Refresh()
+        end },
+    }
+
+    UI.ShowMenu(mover.cog, {
+        width = 190,
+        anchor = { "TOPRIGHT", "BOTTOMRIGHT", 0, -2 },
+        items = items,
+        actions = actions,
+    })
+end
+
+-- A PANEL'S MOVER HAS A COG AND A PADLOCK, the same two a bar's mover has.
+--
+-- Owner, 2026-08-09, with a screenshot of the externals mover: "hier fehlt
+-- noch das zahnrad fuer einstellungen und das lock item!" - and he is right,
+-- because the two kinds of mover are one idea and having half the controls on
+-- one of them is a thing to discover rather than to learn.
+--
+-- Built ONCE for both panels. `spec` is what they disagree about and nothing
+-- else:
+--   label    what the box says
+--   origin   where it is now, as x, y from the screen centre
+--   apply    put it at x, y
+--   config   the table its `pinned` lives in
+--   page     which options page opens from the cog
+--   module   which module the cog can switch off
+--
+-- ON ITS OWN STRIP ABOVE THE BOX rather than in a corner of it. A panel can
+-- be as small as one icon - a single-slot externals panel is forty pixels
+-- square - and two twenty-pixel buttons do not fit inside that at all, never
+-- mind over the thing you are looking at. Above it, the controls are the same
+-- size and in the same place whatever is being moved.
+local function CreatePanelMover(spec)
     local mover = CreateFrame("Button", nil, overlay)
     mover:SetFrameLevel(overlay:GetFrameLevel() + 10)
     mover:RegisterForDrag("LeftButton")
     mover:Hide()
+    mover.spec = spec
+
+    local label, getOrigin = spec.label, spec.origin
 
     mover.bg = mover:CreateTexture(nil, "BACKGROUND")
     mover.bg:SetAllPoints(mover)
@@ -1001,7 +1068,73 @@ local function CreatePanelMover(label, getOrigin)
     mover.coords:SetPoint("TOPLEFT", text, "TOPLEFT", 4, -3)
     mover.coords:SetWordWrap(false)
 
+    -- The strip above the box, the same tab the nudge pad sits on.
+    local BUTTON = 20
+    local tab = CreateFrame("Frame", nil, mover)
+    tab:SetSize(BUTTON * 2 + 10, BUTTON + 6)
+    tab:SetPoint("BOTTOMLEFT", mover, "TOPLEFT", 0, 0)
+    tab:SetFrameLevel(mover:GetFrameLevel() + 4)
+    mover.tab = tab
+
+    tab.bg = tab:CreateTexture(nil, "BACKGROUND")
+    tab.bg:SetAllPoints(tab)
+    tab.bg:SetColorTexture(C.sidebarBg[1], C.sidebarBg[2], C.sidebarBg[3], 0.92)
+
+    tab.edge = ns.CreateBorder(tab, 1, "BORDER")
+    tab.edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
+
+    local function IconButton(kind, offset, onClick)
+        local button = CreateFrame("Button", nil, tab)
+        button:SetSize(BUTTON, BUTTON)
+        button:SetPoint("LEFT", tab, "LEFT", offset, 0)
+        button:SetFrameLevel(tab:GetFrameLevel() + 2)
+        local glyph = UI.Glyph(button, kind, 12, C.textDim)
+        glyph:SetPoint("CENTER", button, "CENTER", 0, 0)
+        button:SetScript("OnClick", onClick)
+        return button, glyph
+    end
+
+    local cog, cogGlyph = IconButton("ui-gear", 4, function()
+        OpenPanelMenu(mover)
+    end)
+    mover.cog, mover.cogGlyph = cog, cogGlyph
+
+    local lock, lockGlyph = IconButton("ui-lock", 4 + BUTTON + 2, function()
+        local cfg = spec.config()
+        if not cfg then return end
+        cfg.pinned = not cfg.pinned
+        mover:RefreshLock()
+        ns.Options:Refresh()
+    end)
+    mover.lock, mover.lockGlyph = lock, lockGlyph
+
+    -- Its own function for the same three callers the bars have: the click,
+    -- the refresh when edit mode opens, and hovering off it.
+    mover.RefreshLock = function(self)
+        local cfg = spec.config()
+        local pinned = cfg and cfg.pinned
+        self.lockGlyph:SetKind(pinned and "ui-lock" or "menu-unlock")
+        local colour = pinned and C.accent or C.textDim
+        self.lockGlyph:SetColor(colour[1], colour[2], colour[3])
+    end
+
+    mover.cog:SetScript("OnEnter", function()
+        mover.cogGlyph:SetColor(C.accent[1], C.accent[2], C.accent[3])
+    end)
+    mover.cog:SetScript("OnLeave", function()
+        mover.cogGlyph:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
+    end)
+    lock:SetScript("OnEnter", function()
+        lockGlyph:SetColor(C.accent[1], C.accent[2], C.accent[3])
+    end)
+    lock:SetScript("OnLeave", function() mover:RefreshLock() end)
+
     mover:SetScript("OnDragStart", function(self)
+        -- A PINNED PANEL SELECTS AND OPENS LIKE ANY OTHER. It just does not
+        -- move - the same sentence a pinned bar follows.
+        local cfg = spec.config()
+        if cfg and cfg.pinned then return end
+
         local cursorX, cursorY = CursorPosition()
         local originX, originY = getOrigin()
         self.grab = {
@@ -1018,6 +1151,7 @@ local function CreatePanelMover(label, getOrigin)
     mover:SetScript("OnDragStop", Stop)
     mover:SetScript("OnMouseUp", Stop)
 
+    mover:RefreshLock()
     return mover
 end
 
@@ -1073,6 +1207,7 @@ local function RefreshPanelMover(mover, getPanel, x, y)
     mover:SetAllPoints(panel)
     mover.coords:SetText(string.format("%d, %d", x or 0, y or 0))
     mover.coords:SetShown(Prefs().showCoords or mover.grab ~= nil)
+    mover:RefreshLock()
     mover:Show()
 end
 
@@ -1088,25 +1223,32 @@ local function ExternalPanel()
     return nil
 end
 
+local function ApplyExternalMove(x, y)
+    local cfg = ns.Externals.Config()
+    cfg.x, cfg.y = x, y
+    ns.Externals.Refresh()
+end
+
 local function RefreshExternalMover()
     if not ns.Modules:IsOn("externals") then
         if externalMover then externalMover:Hide() end
         return
     end
     if not externalMover then
-        externalMover = CreatePanelMover("External cooldowns", function()
-            local cfg = ns.Externals.Config()
-            return cfg.x or 0, cfg.y or 0
-        end)
+        externalMover = CreatePanelMover({
+            label = "External cooldowns",
+            page = "externals",
+            module = "externals",
+            config = function() return ns.Externals.Config() end,
+            apply = function(x, y) ApplyExternalMove(x, y) end,
+            origin = function()
+                local cfg = ns.Externals.Config()
+                return cfg.x or 0, cfg.y or 0
+            end,
+        })
     end
     local cfg = ns.Externals.Config()
     RefreshPanelMover(externalMover, ExternalPanel, cfg.x, cfg.y)
-end
-
-local function ApplyExternalMove(x, y)
-    local cfg = ns.Externals.Config()
-    cfg.x, cfg.y = x, y
-    ns.Externals.Refresh()
 end
 
 local function RefreshTankMover()
@@ -1118,9 +1260,16 @@ local function RefreshTankMover()
         return
     end
     if not tankMover then
-        tankMover = CreatePanelMover("Co-tanks", function()
-            return ns.db.coTanks.x or 0, ns.db.coTanks.y or 0
-        end)
+        tankMover = CreatePanelMover({
+            label = "Co-tanks",
+            page = "cotanks",
+            module = "cotanks",
+            config = function() return ns.db.coTanks end,
+            apply = function(x, y) ApplyTankMove(x, y) end,
+            origin = function()
+                return ns.db.coTanks.x or 0, ns.db.coTanks.y or 0
+            end,
+        })
     end
     RefreshPanelMover(tankMover, TankPanel, ns.db.coTanks.x, ns.db.coTanks.y)
 end
@@ -2327,6 +2476,16 @@ function EditMode:Refresh()
         end
     end
     RefreshInspector()
+end
+
+-- The panel movers, by name, for the self test and for the harness.
+--
+-- Both of them have to carry the same two controls as a bar's mover, and "it
+-- has a cog" is the sort of thing that stays true right up until somebody
+-- adds a third panel and builds it by hand. Nil until edit mode has been
+-- opened once - they are made on first refresh.
+function EditMode:PanelMovers()
+    return { tanks = tankMover, externals = externalMover }
 end
 
 function EditMode:SetGridShown(shown)

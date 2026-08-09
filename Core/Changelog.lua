@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.62.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100The co-tank and externals panels have a cog and a padlock in Edit Mode|r, the same two a cooldown bar has. Centre it, pin it, open its settings, or switch the whole thing off - from the panel itself.",
+            "|cffffd100Pinned means it does not move.|r The panel you have finished placing stops being the thing a stray drag lands on. It still selects and still opens its settings.",
+            "Both sit on a small strip above the panel, so they fit even when the panel is a single icon.",
+        },
+    },
+    {
         version = "4.61.0",
         date = "2026-08-10",
         lines = {

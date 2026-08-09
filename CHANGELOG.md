@@ -4,6 +4,38 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.62.0] - 2026-08-10
+
+### Added
+
+- **A panel's mover has a cog and a padlock**, the same two a bar's mover has.
+  Owner, with a screenshot of the externals mover: "hier fehlt noch das
+  zahnrad fuer einstellungen und das lock item!" The two kinds of mover are
+  one idea, and having half the controls on one of them was something to
+  discover rather than to learn.
+- The cog carries **Centre on screen**, **Centre horizontally**, **Centre
+  vertically**, **Pin in place**, **Settings** - which leaves edit mode and
+  opens that panel's own page - and **Switch off**, which switches the module
+  off from where you are looking at it.
+- **Pinned means it does not move.** It still selects, it still opens its
+  settings; it is simply not what a stray drag lands on. The co-tank panel's
+  own drag honours it too, which is a second door to the same frame.
+- Both controls sit on a **strip above the box** rather than in a corner of
+  it. A panel can be one icon square - a single-slot externals panel is forty
+  pixels - and two twenty-pixel buttons do not fit inside that at all.
+
+### Changed
+
+- `CreatePanelMover` takes one spec table now: label, origin, apply, config,
+  page, module. Built once, so the co-tank panel and the externals panel got
+  the cog and the padlock in the same change rather than one of them getting
+  it and the other waiting for somebody to notice.
+- The self test checks both movers carry both controls, that a pinned panel
+  refuses the drag - through the real handler, not a restatement of the rule -
+  and that the two keys behind the cog name a page and a module that exist.
+  Both are strings handed to something that quietly does nothing when it does
+  not recognise them.
+
 ## [4.61.0] - 2026-08-10
 
 ### Fixed
