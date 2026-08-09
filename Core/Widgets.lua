@@ -3739,6 +3739,14 @@ local RAW_TEXTURES = {
     skull = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
 }
 
+-- Whether a name draws SOMETHING - ours or the client's. UI.HasIcon above
+-- answers only for our own files, which is what the icon-set checks want; a
+-- caller that just needs to know the mark will not come out as four
+-- rectangles has to include the client's art, or "skull" reads as missing.
+function UI.HasGlyph(kind)
+    return ICON_FILES[kind] ~= nil or RAW_TEXTURES[kind] ~= nil
+end
+
 function UI.Glyph(parent, kind, size, colour)
     size = size or 12
 
@@ -3861,26 +3869,50 @@ function UI.NavItem(parent, text, glyphKind, onClick)
     item.label:SetPoint("LEFT", item.glyph, "RIGHT", 10, 0)
     item.label:SetWordWrap(false)
 
+    -- A ROW WHOSE FEATURE IS NOT RUNNING. It stays in the column and it stays
+    -- clickable - the page behind it is where you switch the thing back on,
+    -- so a row you cannot reach would be a dead end. What changes is that it
+    -- reads as off: the whole row drops a level, and the word says so.
+    --
+    -- The word rather than a dot: a faint dot beside a faint label is two
+    -- things to decode, and this column already spends its one accent on
+    -- "you are here".
+    item.offMark = UI.Label(item, "OFF", UI.FS.eyebrow, C.textGhost)
+    item.offMark:SetPoint("RIGHT", item, "RIGHT", -12, 0)
+    item.offMark:Hide()
+
     item.SetActive = function(self, active)
+        self.active = active and true or false
         self.bg:SetShown(active)
         self.marker:SetShown(active)
-        local c = active and C.text or C.textDim
+        local c = self.dimmed and C.textGhost or (active and C.text or C.textDim)
         self.label:SetTextColor(c[1], c[2], c[3])
         -- THE ICON DOES NOT GO ORANGE. The 2px edge on the left is this
         -- column's one accent, and an orange icon next to it makes two - which
         -- is the rule this palette is built on, broken in the first place it
         -- could be. The icon brightens with the label instead.
-        local g = active and C.text or C.textFaint
+        local g = self.dimmed and C.textGhost or (active and C.text or C.textFaint)
         self.glyph:SetColor(g[1], g[2], g[3])
+    end
+
+    item.SetDimmed = function(self, dimmed)
+        self.dimmed = dimmed and true or false
+        self.offMark:SetShown(self.dimmed)
+        -- Through SetActive rather than setting the colours here: two places
+        -- deciding one row's colour is how the active row ends up bright and
+        -- switched-off at the same time.
+        self:SetActive(self.active)
     end
 
     item:SetScript("OnEnter", function(self)
         if self.bg:IsShown() then return end
-        self.label:SetTextColor(C.text[1], C.text[2], C.text[3])
+        local c = self.dimmed and C.textFaint or C.text
+        self.label:SetTextColor(c[1], c[2], c[3])
     end)
     item:SetScript("OnLeave", function(self)
         if self.bg:IsShown() then return end
-        self.label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        local c = self.dimmed and C.textGhost or C.textDim
+        self.label:SetTextColor(c[1], c[2], c[3])
     end)
     if onClick then item:SetScript("OnClick", onClick) end
 

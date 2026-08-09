@@ -4,6 +4,49 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.56.0] - 2026-08-09
+
+### Added
+
+- **Four features, four switches.** `Core/Modules.lua` is a registry of what
+  this addon actually is - Cooldowns, Co-Tanks, Reminders, Death-log - and
+  each one can be off. A module that is off boots NOTHING: no frame, no
+  event, no listener. `Boot` runs once and only for a module that is on;
+  `Apply` runs on every flip and puts the world in the state the switch says.
+  Unregistering was deliberately not the mechanism - Blizzard's callback
+  registries here have no way back out, so a module that had truly unhooked
+  itself could never be switched on again without a reload.
+- **The welcome window**, once per character, and once more when an update
+  brings a module that character has never been offered. `Modules.WelcomeDue`
+  is the rule and it is pure, so the case that is easy to get wrong is
+  tested: a generation bumped with no new module must not open a window in
+  anybody's face.
+- `/zs modules` lists what is running and switches one by name; `/zs welcome`
+  reopens the window. There is a button for it under Settings.
+
+### Changed
+
+- **What is NOT a module**: the Cooldown Manager reader, the profile store,
+  the minimap button and the game-menu entry. Switching the bars off must not
+  take the spell catalogue with it - a reminder asks it whether a buff is up,
+  and the death log builds its defensives out of it.
+- **Off means Blizzard gets its icons back.** Every icon on a bar is one of
+  Blizzard's own frames; a hidden bar still holds them, so hiding alone would
+  have left the Cooldown Manager empty as well. `Screen:ModuleOff` releases
+  them, and both callers - the render pass and unlock mode - ask it.
+- **A switched-off page stays in the rail, greyed**, with the switch on it.
+  One overlay drawn once and moved between pages rather than four copies of
+  "this is off", and it swallows the clicks that greying promises it does.
+  Its third column goes away with it: a live spell palette beside a greyed
+  page would be half a state, and the live half edits settings for something
+  that is not running.
+- **Edit Mode hides the movers of a module that is not running**, handles
+  included - the frames still exist once a module has run at all, so "is
+  there a panel" is not the same question as "is this feature on".
+- `Reminders:Explain` reports the module switch FIRST. A page explaining at
+  length why one reminder is not firing, while the whole module is off, sends
+  somebody reading their own trigger for a fault that is not there.
+
 ## [4.55.1] - 2026-08-09
 
 ### Changed

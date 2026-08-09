@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.56.0",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100THIS ADDON IS FOUR THINGS, AND YOU PICK WHICH.|r Cooldowns, Co-Tanks, Reminders and the Death-log are modules now, and each one can be switched off under |cffffd100Settings|r. Off is not hidden: the module builds no frame and listens to nothing at all.",
+            "Switch the |cffffd100Cooldowns|r module off and Blizzard gets its own icons back - every icon on your bars is one of its frames, so this hands them over rather than covering them up.",
+            "A module you switched off keeps its page, greyed, with the switch on it - so nothing you set up can go missing behind a switch.",
+            "New characters get a |cffffd100welcome window|r that asks which of the four they want. You can open it again any time from Settings or with |cffffd100/zs welcome|r.",
+            "|cffffd100/zs modules|r says what is running.",
+        },
+    },
+    {
         version = "4.55.1",
         date = "2026-08-09",
         lines = {

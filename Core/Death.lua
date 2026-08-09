@@ -2094,7 +2094,8 @@ end
 function Death.RefreshIcon()
     if not ns.UI then return end
     local cfg = (ns.db and ns.db.death and ns.db.death.icon) or {}
-    if #Death.log == 0 or cfg.show == false then
+    local moduleOff = ns.Modules and not ns.Modules:IsOn("deaths")
+    if moduleOff or #Death.log == 0 or cfg.show == false then
         if iconButton then iconButton:Hide() end
         return
     end
@@ -2288,6 +2289,10 @@ watcher:SetScript("OnEvent", function(_, event, _, encounterName)
     -- from here or your last press lands after the hit that killed you.
     Death.diedAt = GetTime()
 
+    -- The module switch and the page's own "record deaths" switch, in that
+    -- order. Both mean the same thing here and both have to be asked: the
+    -- first is "I do not use this feature", the second is "not right now".
+    if ns.Modules and not ns.Modules:IsOn("deaths") then return end
     if ns.db and ns.db.death and ns.db.death.record == false then return end
 
     -- The recap needs a moment to exist: capture shortly after the fall,

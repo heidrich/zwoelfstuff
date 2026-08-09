@@ -287,7 +287,7 @@ local PAGES = {
     -- first visit and noise on every one after it, whereas how many cells are
     -- still empty is the one thing worth knowing at a glance.
     { key = "cooldowns", title = "Cooldowns", glyph = "grid", side = true,
-      status = true },
+      status = true, module = "cooldowns" },
 
     -- Through the namespace like the pages below it: the builder lives in
     -- Core/OptionsSettings.lua. What this page holds is the split its own
@@ -303,6 +303,7 @@ local PAGES = {
     -- belongs beside a co-tank preview is the co-tank settings and nothing in
     -- the other two is about this page at all.
     { key = "cotanks", title = "Co-Tanks", glyph = "tanks", tanks = true,
+      module = "cotanks",
       subtitle = "Every tank in the group, with their health and their auras.",
       -- Through the namespace, not a local: the builder lives in
       -- Core/OptionsCoTanks.lua, which loads BEFORE this file but after this
@@ -313,6 +314,7 @@ local PAGES = {
     -- the SPELL LIST as its third column - the same list the bars page uses -
     -- because the whole gesture is dragging a spell onto the reminder.
     { key = "reminders", title = "Reminders", glyph = "bell", reminders = true,
+      module = "reminders",
       subtitle = "Text on your screen when a buff has fallen off.",
       build = function(page, width) return ns.OptionsReminders:BuildPage(page, width) end },
 
@@ -325,6 +327,7 @@ local PAGES = {
     -- It carries the spell palette as its third column, because picking your
     -- defensives out of a dropdown of forty names was the worst part of it.
     { key = "deaths", title = "Death-log", glyph = "skull", deaths = true,
+      module = "deaths",
       subtitle = "What killed you, and what could have prevented it.",
       build = function(page, width) return ns.OptionsDeaths:BuildPage(page, width) end },
 
@@ -385,6 +388,81 @@ Options.PAGES = PAGES
 -- while being correct, which is precisely what a new page did.
 --
 -- WHICH column it is stays a separate question, asked only by the painter.
+---------------------------------------------------------------------------
+-- THE OFF STATE, drawn once and reused by every page that has a module.
+--
+-- Owner's choice, 2026-08-09: a switched-off module keeps its row in the rail
+-- and keeps its page. So the page is still built and still shown, and this
+-- sits over it, greying it and swallowing the clicks.
+--
+-- ONE of these, not one per page. Four copies of "this is switched off" is
+-- four things to keep in step, and it is always the fourth that drifts - the
+-- same reason the death window has one renderer and not a preview beside it.
+--
+-- It is deliberately not a full curtain: what shows through underneath is the
+-- page you would get, which is the best argument the switch has.
+---------------------------------------------------------------------------
+local function BuildModuleGate(parent)
+    local gate = CreateFrame("Frame", nil, parent)
+    gate:SetAllPoints(parent)
+    -- Well above the page it covers. A page builds cards, scroll areas and
+    -- popups at levels of their own, and a curtain a card can poke through is
+    -- worse than none.
+    gate:SetFrameLevel(parent:GetFrameLevel() + 30)
+    -- Swallows what is meant for the page beneath. Without this the greyed
+    -- page is still fully clickable, which is the one thing greying promises
+    -- it is not.
+    gate:EnableMouse(true)
+    gate:Hide()
+    UI.Fill(gate, "BACKGROUND", C.windowBg, 0.86)
+
+    local card = UI.Card(gate, 460)
+    card:SetPoint("TOP", gate, "TOP", 0, -120)
+
+    local title = UI.Label(card, "", UI.FS.card, C.text)
+    title:SetPoint("TOPLEFT", card, "TOPLEFT", UI.PAD, -UI.PAD)
+
+    local blurb = UI.Label(card, "", UI.FS.meta, C.textBody)
+    blurb:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    blurb:SetWidth(460 - UI.PAD * 2)
+    blurb:SetJustifyH("LEFT")
+
+    local detail = UI.Label(card, "", UI.FS.meta, C.textFaint)
+    detail:SetPoint("TOPLEFT", blurb, "BOTTOMLEFT", 0, -6)
+    detail:SetWidth(460 - UI.PAD * 2)
+    detail:SetJustifyH("LEFT")
+
+    local button = UI.Button(card, "Switch it on", 140, function()
+        if gate.key then
+            ns.Modules:Set(gate.key, true)
+            ns.Options:Refresh()
+        end
+    end, "primary")
+    button:SetPoint("TOPLEFT", detail, "BOTTOMLEFT", 0, -UI.PAD)
+
+    -- The card is as tall as what is in it, measured after the text has been
+    -- set rather than guessed at - two wrapped lines and one are 14 pixels
+    -- apart, and a fixed height is wrong for one of them.
+    function gate:Update(key)
+        self.key = key
+        local entry = key and ns.Modules:Get(key)
+        if not entry then
+            self:Hide()
+            return
+        end
+        title:SetText(entry.title .. " is switched off")
+        blurb:SetText(entry.blurb)
+        detail:SetText(entry.detail or "")
+        detail:SetShown((entry.detail or "") ~= "")
+        card:SetHeight(UI.PAD + title:GetStringHeight() + 8
+            + blurb:GetStringHeight() + (detail:IsShown() and (6 + detail:GetStringHeight()) or 0)
+            + UI.PAD + UI.BUTTON_H + UI.PAD)
+        self:Show()
+    end
+
+    return gate
+end
+
 function Options.HasThirdColumn(entry)
     return (entry.side or entry.explain or entry.tanks or entry.reminders
         or entry.deaths) and true or false
@@ -687,6 +765,10 @@ function Options:Create()
     local reminderSide = ns.OptionsReminders:BuildSide(sideHost, PAD)
     local deathSide = ns.OptionsDeaths:BuildSide(sideHost, PAD)
 
+    -- Over the middle column, and built here so it is above every page frame
+    -- created below it.
+    local moduleGate = BuildModuleGate(body)
+
     local pageFrames = {}
     for index, entry in ipairs(PAGES) do
         if entry.build then
@@ -792,14 +874,26 @@ function Options:Create()
     ---------------------------------------------------------------------
     local function PaintView()
         local entry = PAGES[self.pageIndex] or PAGES[1]
-        local withSide = entry.side and true or false
+
+        -- IS THE FEATURE THIS PAGE BELONGS TO RUNNING AT ALL. Asked before
+        -- anything else, because the answer decides how much of the window
+        -- this page gets to use.
+        local moduleOn = not entry.module or ns.Modules:IsOn(entry.module)
+        moduleGate:Update(not moduleOn and entry.module or nil)
+
+        local withSide = entry.side and moduleOn or false
         local withExplain = entry.explain and true or false
-        local withTanks = entry.tanks and true or false
-        local withReminders = entry.reminders and true or false
-        local withDeaths = entry.deaths and true or false
+        local withTanks = entry.tanks and moduleOn or false
+        local withReminders = entry.reminders and moduleOn or false
+        local withDeaths = entry.deaths and moduleOn or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
+        --
+        -- A switched-off module has no third column. Greying the page but
+        -- leaving its spell palette live beside it would be half a state, and
+        -- the half that is still live is the half that edits settings for
+        -- something that is not running.
         local third = withSide or withExplain or withTanks or withReminders
             or withDeaths
         SetStageWidth(third)
@@ -849,7 +943,12 @@ function Options:Create()
             page:SetShown(index == self.pageIndex)
         end
 
+        -- Every row, not just this one: switching a module changes a row that
+        -- is not the row you are standing on.
         for index, item in ipairs(navItems) do
+            local rowEntry = PAGES[index]
+            local rowModule = rowEntry and rowEntry.module
+            item:SetDimmed(rowModule and not ns.Modules:IsOn(rowModule))
             item:SetActive(index == self.pageIndex)
         end
 

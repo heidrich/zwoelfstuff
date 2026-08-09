@@ -1077,6 +1077,13 @@ local function RefreshPanelMover(mover, getPanel, x, y)
 end
 
 local function RefreshTankMover()
+    -- A module that is not running has nothing on screen to place. Its frames
+    -- still EXIST once it has run at all, so "is there a panel" is not the
+    -- same question as "is this feature on" and both have to be asked.
+    if not ns.Modules:IsOn("cotanks") then
+        if tankMover then tankMover:Hide() end
+        return
+    end
     if not tankMover then
         tankMover = CreatePanelMover("Co-tanks", function()
             return ns.db.coTanks.x or 0, ns.db.coTanks.y or 0
@@ -1190,7 +1197,9 @@ local function DragReminders()
 end
 
 local function RefreshReminderMovers()
-    local count = ns.Reminders:Count()
+    -- Same as the panel above: switched off, there is nothing to place, and
+    -- the frames of a module that ran earlier this session are still there.
+    local count = ns.Modules:IsOn("reminders") and ns.Reminders:Count() or 0
 
     for index = 1, count do
         local mover = reminderMovers[index]
@@ -2213,8 +2222,14 @@ end
 function EditMode:Refresh()
     if not (unlocked and overlay) then return end
 
+    -- The bars are a module too. Off, Screen has handed every icon back and
+    -- draws nothing, so asking for the bar frame here would put a mover over
+    -- a rectangle nobody can see. One word, and the branch that already
+    -- handles "there is no bar frame" does the rest.
+    local barsOn = ns.Modules:IsOn("cooldowns")
+
     for index, cfg in ipairs(ns.db.bars) do
-        local bar = ns.Screen:BarFrame(index)
+        local bar = barsOn and ns.Screen:BarFrame(index) or nil
         local mover = movers[index]
 
         if bar then
@@ -2248,6 +2263,13 @@ function EditMode:Refresh()
             RefreshHandles(index, cfg)
         elseif mover then
             mover:Hide()
+            -- The grab handles go with it. They are created lazily and kept,
+            -- so a bar that had them and then lost its frame - a switched-off
+            -- module is the way that now happens - would leave eight little
+            -- squares floating over nothing.
+            if handles[index] then
+                for _, handle in pairs(handles[index]) do handle:Hide() end
+            end
         end
     end
 

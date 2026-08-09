@@ -1150,6 +1150,12 @@ end
 
 function CoTanks:ShouldShow()
     local db = ns.db.coTanks
+    -- ABOVE the three escapes below, and it is the one thing that outranks
+    -- them: preview, test mode and unlock are requests to see a feature that
+    -- is RUNNING. A module that is switched off has nothing to preview, and
+    -- its options page is greyed out anyway, so there is nobody standing
+    -- there asking.
+    if ns.Modules and not ns.Modules:IsOn("cotanks") then return false end
     -- In the preview card it always shows. A card that is empty until you
     -- switch the feature on is a card that cannot tell you what switching it
     -- on would look like.

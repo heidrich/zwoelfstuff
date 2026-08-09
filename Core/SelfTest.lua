@@ -3505,10 +3505,147 @@ local function TestShare()
     Check("The preview of nothing is empty", #Share.Describe(nil) == 0)
 end
 
+---------------------------------------------------------------------------
+-- Modules
+--
+-- The switches that decide which features run at all. Three kinds of check,
+-- and the first two are the ones that would ship a silent hole:
+--
+--   the REGISTRY agrees with the pages - a module with no page is a feature
+--   you can switch off and never find again, and a page naming a module that
+--   does not exist greys itself out forever
+--
+--   the DEFAULTS say on - ApplyDefaults fills these into every existing
+--   profile on the first login after an update, and any other value here
+--   means the update switched somebody's bars off for them
+--
+--   WelcomeDue, which is pure and therefore testable without a profile: the
+--   rule for when the first-run window opens, including the case that only
+--   showed up while writing it - a generation bumped with no new module must
+--   not open a window in anybody's face.
+---------------------------------------------------------------------------
+local function TestModules()
+    local Modules = ns.Modules
+    Check("There is a module registry", Modules ~= nil)
+    if not Modules then return end
+
+    local list = Modules:All()
+    Check("Four modules are registered", #list == 4, tostring(#list))
+
+    local seen = {}
+    for _, entry in ipairs(list) do
+        Check("Module '" .. tostring(entry.key) .. "' has a key that is a word",
+            type(entry.key) == "string" and entry.key ~= "")
+        Check("Module '" .. tostring(entry.key) .. "' is named",
+            type(entry.title) == "string" and entry.title ~= "")
+        -- The welcome window and the greyed page both print this. Empty, they
+        -- offer a switch with nothing said about what it does.
+        Check("Module '" .. tostring(entry.key) .. "' says what it is for",
+            type(entry.blurb) == "string" and #entry.blurb > 20)
+        Check("Module '" .. tostring(entry.key) .. "' has a mark that resolves",
+            entry.glyph and ns.UI.HasGlyph(entry.glyph), tostring(entry.glyph))
+        Check("Module key '" .. tostring(entry.key) .. "' is used once",
+            not seen[entry.key])
+        seen[entry.key] = true
+    end
+
+    -- The registry and the window's page list, in both directions.
+    local pageByModule = {}
+    for _, page in ipairs(ns.Options.PAGES) do
+        if page.module then
+            Check("Page '" .. page.key .. "' names a module that exists",
+                Modules:Get(page.module) ~= nil, tostring(page.module))
+            pageByModule[page.module] = page.key
+        end
+    end
+    for _, entry in ipairs(list) do
+        Check("Module '" .. entry.key .. "' has a page to be switched on from",
+            pageByModule[entry.key] ~= nil)
+    end
+
+    -- Boot order is dependency order, and it is the LIST's order. A reminder
+    -- asks the Cooldown Manager whether a buff is up and the bars claim its
+    -- frames first, so this pair must not be swapped by a tidy-up.
+    local order = {}
+    for index, entry in ipairs(list) do order[entry.key] = index end
+    Check("The bars boot before the reminders",
+        (order.cooldowns or 99) < (order.reminders or 0))
+
+    -- The defaults. Read from ns.DEFAULTS rather than from a live profile:
+    -- this is the table an existing character gets filled in from.
+    for _, entry in ipairs(list) do
+        Check("Module '" .. entry.key .. "' defaults to ON",
+            ns.DEFAULTS.modules and ns.DEFAULTS.modules[entry.key] == true)
+    end
+    Check("The welcome flag is NOT in the defaults",
+        ns.DEFAULTS.welcomeSeen == nil,
+        "a default would answer the question before it was asked")
+
+    -- An unknown key answers YES. A typo in a gate has to leave the feature
+    -- running, not switch it off for everybody.
+    Check("An unknown module counts as running", Modules:IsOn("nonesuch"))
+
+    -- The switch itself, on the live profile, put back immediately. The one
+    -- test in this file that writes to your settings, and it writes one
+    -- boolean it already knows the value of.
+    if ns.db then
+        ns.db.modules = ns.db.modules or {}
+        local was = ns.db.modules.deaths
+        local ok, err = pcall(function()
+            ns.db.modules.deaths = false
+            Check("A module switched off reads as off", not Modules:IsOn("deaths"))
+            ns.db.modules.deaths = true
+            Check("A module switched on reads as on", Modules:IsOn("deaths"))
+            ns.db.modules.deaths = nil
+            Check("A module nobody has answered for counts as on",
+                Modules:IsOn("deaths"))
+        end)
+        ns.db.modules.deaths = was
+        if not ok then error(err) end
+    else
+        Skip("The module switch on a live profile", "no profile open")
+    end
+
+    ---------------------------------------------------------------------
+    -- WelcomeDue
+    ---------------------------------------------------------------------
+    local FAKE = {
+        { key = "old", since = 1 },
+        { key = "new", since = 2 },
+    }
+
+    local due, fresh, first = Modules.WelcomeDue(nil, 2, FAKE)
+    Check("Never asked: the window is due", due)
+    Check("Never asked: it is a first run", first)
+    Check("Never asked: nothing is singled out as new", #fresh == 0)
+
+    due = Modules.WelcomeDue(2, 2, FAKE)
+    Check("Already asked about everything: not due", not due)
+
+    due = Modules.WelcomeDue(3, 2, FAKE)
+    Check("Asked about MORE than we ship: not due", not due,
+        "a downgrade must not re-ask")
+
+    due, fresh, first = Modules.WelcomeDue(1, 2, FAKE)
+    Check("A new module makes it due again", due)
+    Check("Only the new module is singled out",
+        #fresh == 1 and fresh[1] == "new",
+        table.concat(fresh, ","))
+    Check("A second visit is not a first run", not first)
+
+    -- The case that is easy to get wrong: the number moved, the list did not.
+    due = Modules.WelcomeDue(1, 2, { { key = "old", since = 1 } })
+    Check("A generation bump with no new module opens nothing", not due)
+
+    due = Modules.WelcomeDue("yes", 2, FAKE)
+    Check("A nonsense flag does not open the window every login", not due)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
     local suites = {
+        { "Modules",       TestModules },
         { "Arrangements",  TestLayout },
         { "Coordinates",   TestOffsets },
         { "Pattern switch", TestPatternRoundTrip },

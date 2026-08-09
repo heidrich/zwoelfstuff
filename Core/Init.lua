@@ -119,6 +119,25 @@ ns.DEFAULTS = {
     -- See Bars:Migrate.
     dbVersion  = 7,
 
+    -- WHICH FEATURES ARE RUNNING. See Core/Modules.lua for what counts as one
+    -- and what does not.
+    --
+    -- All four on, and that default is load-bearing rather than tidy: an
+    -- existing profile gets these keys filled in by ApplyDefaults on the first
+    -- login after the update, and any other value would mean an update
+    -- silently switched somebody's bars off.
+    modules    = {
+        cooldowns = true,
+        cotanks   = true,
+        reminders = true,
+        deaths    = true,
+    },
+
+    -- Which round of modules this character has already been shown. Absent
+    -- means never asked, which is why it is not listed with a value here -
+    -- ApplyDefaults would then write the answer before the question.
+    -- Read through ns.Modules.WelcomeDue.
+
     -- Bars: a grid of cells, each holding one spell from Blizzard's Cooldown
     -- Manager. Seeded once on first run and never re-seeded, so a deleted
     -- bar stays deleted.
@@ -1050,30 +1069,34 @@ boot:SetScript("OnEvent", function(_, event, arg1)
             return ok
         end
 
+        -- THE MACHINERY, and it is not a module. Every feature below stands on
+        -- the Cooldown Manager: the bars claim its icon frames, a reminder
+        -- asks it whether a buff is up, the death log builds its defensives
+        -- out of its catalogue. Switching the bars off must not take the
+        -- catalogue with it, so this runs whatever the module switches say -
+        -- and it runs FIRST, because the first render claims item frames and
+        -- there is nothing to claim until the pools have been walked once.
         Boot("Cooldown Manager", function()
             ns.CDM:HookPools()
             -- The spell list is a live view of the Cooldown Manager, so a
             -- talent or spec change has to reach an open window.
             ns.CDM:OnChanged(function() ns.Options:OnCatalogChanged() end)
         end)
-        -- After the Cooldown Manager, and not before: the first render claims
-        -- Blizzard's item frames, and there is nothing to claim until its
-        -- pools have been walked once.
-        Boot("Bars", function() ns.Screen:Start() end)
-        -- Built even when switched off, because the panel's preview and
-        -- test mode both need the frames to exist before anybody turns
-        -- it on. Create() draws nothing until Refresh decides to.
-        Boot("Co-tanks", function() ns.CoTanks:Create() end)
-        -- After the Cooldown Manager for the same reason the bars are: a
-        -- reminder asks CDM whether its spell is active, and before the pools
-        -- have been walked once the honest answer is "not tracked" for
-        -- everything.
-        Boot("Reminders", function()
-            ns.Reminders:Rebuild()
-            ns.Reminders:Start()
-        end)
+
+        -- THE FEATURES, in the order Core/Modules.lua lists them, which is
+        -- the order this used to be a straight line of calls in. A module
+        -- that is switched off boots nothing at all - no frame, no event.
+        ns.Modules:BootAll()
+
+        -- The two ways in. Not modules: they are how you REACH the window,
+        -- and a switch you can only find through a door you switched off is
+        -- a switch nobody can find.
         Boot("Minimap button", function() ns.MinimapButton:Create() end)
         Boot("Game menu entry", function() ns.GameMenu:Create() end)
+
+        -- Last, and only if this character has never been asked which modules
+        -- it wants - or an update brought one it has not been offered.
+        Boot("Welcome", function() ns.Welcome:ShowIfDue() end)
     end
 end)
 
@@ -1095,6 +1118,8 @@ local usage = {
     "  |cffffd100/zs|r - open the window",
     "  |cffffd100/zs unlock|r / |cffffd100lock|r - move the bars around the screen",
     "  |cffffd100/zs build|r - take a bar apart slot by slot, on screen",
+    "  |cffffd100/zs modules|r - which features are running (|cffffd100/zs modules <name>|r switches one)",
+    "  |cffffd100/zs welcome|r - the window that asks which ones you want",
     "",
     "  Bars",
     "  |cffffd100/zs bars|r - list them (|cffffd100add <name>|r / |cffffd100remove <n>|r)",
@@ -1199,6 +1224,30 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Print("Co-tanks",
                 db.coTanks.enabled and "|cff40ff40on|r" or "|cff888888off|r")
         end
+
+    -- Which features are running, and switching one without opening a window.
+    -- The list prints first and the switch second, so "/zs modules" alone is
+    -- a report and never an accident.
+    elseif cmd == "modules" or cmd == "module" then
+        local wanted = (rest or ""):match("^(%S*)"):lower()
+        if wanted ~= "" then
+            if ns.Modules:Get(wanted) then
+                ns.Modules:Toggle(wanted)
+                ns.Options:Refresh()
+            else
+                ns.Print("|cffff4040No module called|r " .. wanted .. ".")
+            end
+        end
+        local on, total = ns.Modules:CountOn()
+        ns.Print(string.format("Modules - %d of %d running:", on, total))
+        for _, entry in ipairs(ns.Modules:All()) do
+            ns.Print(string.format("  |cffffd100%s|r  %s  %s",
+                entry.key, entry.title,
+                ns.Modules:IsOn(entry.key) and "|cff40ff40on|r" or "|cff888888off|r"))
+        end
+
+    elseif cmd == "welcome" then
+        ns.Welcome:Show()
 
     -- Reminders. One command, and it is the diagnostic rather than a toggle:
     -- "why is my reminder not showing" is the only question anybody has about

@@ -1141,8 +1141,27 @@ end
 ---------------------------------------------------------------------------
 local claimedBy = {}     -- spellID -> "bar name" of whoever got it first
 
+-- THE MODULE SWITCH, and the one place that reads it for the bars.
+--
+-- Hiding would not be enough and would not be honest: every icon on a bar is
+-- one of BLIZZARD'S frames, adopted out of its Cooldown Manager. A hidden bar
+-- still holds them, so the Cooldown Manager the user would have had without
+-- this addon would be empty as well. Off therefore hands every frame back.
+--
+-- Two callers - the render pass and unlock mode - and both must ask, or
+-- unlocking would show the bars of a module that is not running.
+function Screen:ModuleOff()
+    if ns.Modules and not ns.Modules:IsOn("cooldowns") then
+        self:ReleaseAll()
+        for _, bar in ipairs(barFrames) do bar:Hide() end
+        return true
+    end
+    return false
+end
+
 function Screen:Render()
     if not ns.db then return end
+    if self:ModuleOff() then return end
 
     RebuildItemIndex()
     wipe(claimedBy)
@@ -1987,6 +2006,11 @@ end
 ---------------------------------------------------------------------------
 function Screen:SetUnlocked(unlocked)
     self.unlocked = unlocked and true or false
+
+    -- A bar that belongs to a switched-off module stays away even here. The
+    -- rule above brings back a bar hidden by its OWN rule; a module that is
+    -- not running has no bars to arrange.
+    if self:ModuleOff() then return end
 
     -- A bar hidden by its own rule - "only in a raid" - has to come back while
     -- you are arranging it, or the rule you just wrote makes the thing you are

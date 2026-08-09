@@ -252,6 +252,10 @@ end
 -- so both outrank every rule below, including the switch.
 function Reminders:ShouldShow(cfg)
     if not cfg then return false end
+    -- The module switch outranks even the two below it, for the reason the
+    -- co-tank panel's does: preview and placing are requests to see a feature
+    -- that is running, and there is nobody at a greyed-out page to ask.
+    if ns.Modules and not ns.Modules:IsOn("reminders") then return false end
     if self.previewing == cfg then return true end
     if self.placing then return true end
     if not cfg.enabled then return false end
@@ -274,6 +278,12 @@ end
 -- answer without anybody reading code.
 function Reminders:Explain(cfg)
     if not cfg then return "no reminder" end
+    -- THE SWITCH IS REPORTED FIRST. A page that explains at length why one
+    -- reminder is not firing, while the whole module is off, is a page that
+    -- sends somebody reading their own trigger for a fault that is not there.
+    if ns.Modules and not ns.Modules:IsOn("reminders") then
+        return "The Reminders module is switched off."
+    end
     if not cfg.enabled then return "This reminder is switched off." end
 
     local state, why = self:State(cfg)

@@ -1,0 +1,203 @@
+---------------------------------------------------------------------------
+-- Welcome - the first window a character ever sees.
+--
+-- Owner, 2026-08-09, choosing when it opens: "option 3 und option im addon
+-- das neu zu starten" - once per character, once more when an update brings a
+-- module that character has never been offered, and reachable on purpose at
+-- any time from Settings or /zs welcome.
+--
+-- WHAT IT IS FOR, and it is only this: which of the four features do you want
+-- running. It is not a tour, it does not explain the bars, and it has no
+-- "next" button - a first-run wizard with four pages is three pages nobody
+-- reads and one decision buried in them.
+--
+-- WHY IT WRITES THE ANSWER WHEN IT CLOSES, not when a switch is flipped: the
+-- switches take effect immediately - that is what Modules:Set does - but
+-- "this character has been asked" is only true once they have finished
+-- asking. Somebody who reloads mid-way is asked again, which is the right way
+-- round.
+---------------------------------------------------------------------------
+local _, ns = ...
+
+local Welcome = {}
+ns.Welcome = Welcome
+
+local WIDTH = 560
+local PAD = 20
+local ROW_H = 44
+
+local frame
+
+local function BuildFrame()
+    local UI = ns.UI
+    local C = UI.C
+
+    frame = CreateFrame("Frame", "ZwoelfStuffWelcomeFrame", UIParent)
+    frame:SetWidth(WIDTH)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
+    frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:Hide()
+
+    UI.Fill(frame, "BACKGROUND", C.windowBg)
+    local edge = ns.CreateBorder(frame, 1, "BORDER")
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    -- The addon's own mark, the same file the game shows in its addon list.
+    local logo = frame:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(38, 38)
+    logo:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -PAD)
+    logo:SetTexture("Interface\\AddOns\\ZwoelfStuff\\Media\\logo")
+
+    -- The brand in its two colours, which is how the TOC, the minimap tooltip
+    -- and every chat line already write it. One spelling everywhere.
+    local title = UI.Label(frame, "|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r",
+        UI.FS.title, C.text)
+    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 12, -2)
+
+    local version = UI.Label(frame, "", UI.FS.meta, C.textGhost)
+    version:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", -PAD, -PAD - 8)
+    version:SetJustifyH("RIGHT")
+
+    local lead = UI.Label(frame, "", UI.FS.meta, C.textBody)
+    lead:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    lead:SetWidth(WIDTH - PAD * 2 - 50)
+    lead:SetJustifyH("LEFT")
+
+    local rule = frame:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(PAD + 62))
+    rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(PAD + 62))
+
+    -- ONE ROW PER MODULE, built from the registry rather than typed out. A
+    -- fifth module has to appear here by existing - a welcome screen that has
+    -- to be edited to mention a new feature is a welcome screen that will one
+    -- day fail to mention one.
+    frame.rows = {}
+    local previous
+    for index, entry in ipairs(ns.Modules:All()) do
+        -- controlWidth 96: the toggle sits at the right end of the slot and
+        -- the NEW badge at its left end, so the two never overlap and the
+        -- label knows where to stop.
+        local row = UI.Row(frame, entry.title, {
+            sublabel = entry.blurb,
+            icon = entry.glyph,
+            controlWidth = 96,
+        })
+        row:SetHeight(ROW_H)
+        row:SetPoint("LEFT", frame, "LEFT", PAD, 0)
+        row:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
+        if previous then
+            row:SetPoint("TOP", previous, "BOTTOM", 0, 0)
+        else
+            row:SetPoint("TOP", rule, "BOTTOM", 0, -4)
+        end
+        previous = row
+
+        row.badge = UI.Badge(row.slot, "NEW", "current")
+        row.badge:SetPoint("LEFT", row.slot, "LEFT", 0, 0)
+        row.badge:Hide()
+
+        UI.Toggle(row, function() return ns.Modules:IsOn(entry.key) end,
+            function(value) ns.Modules:Set(entry.key, value) end)
+
+        row.moduleKey = entry.key
+        frame.rows[index] = row
+    end
+
+    local footer = UI.Label(frame, "You can change this at any time under "
+        .. "Settings, and nothing here is permanent - a module you switch off "
+        .. "keeps everything you set up in it.", UI.FS.meta, C.textFaint)
+    footer:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -PAD)
+    footer:SetWidth(WIDTH - PAD * 2 - 150)
+    footer:SetJustifyH("LEFT")
+
+    local go = UI.Button(frame, "Let's go", 130, function()
+        Welcome:Close()
+    end, "primary")
+    go:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -PAD)
+
+    -- The height is what the rows added up to, not a number typed once and
+    -- wrong after the fifth module.
+    frame:SetHeight(PAD + 62 + 4 + #frame.rows * ROW_H + PAD
+        + math.max(footer:GetStringHeight(), UI.BUTTON_H) + PAD)
+
+    frame.version = version
+    frame.lead = lead
+
+    -- ESC closes it, and closing it by any route counts as answered.
+    table.insert(UISpecialFrames, "ZwoelfStuffWelcomeFrame")
+    frame:SetScript("OnHide", function() Welcome:Remember() end)
+end
+
+-- This character has now been asked about everything we ship.
+function Welcome:Remember()
+    if ns.db then ns.db.welcomeSeen = ns.Modules.GENERATION end
+end
+
+-- Both routes out of the window, and both write the answer. Remember is
+-- idempotent, so a close that comes through the button AND then through
+-- OnHide costs one assignment twice - which is the right way round: a window
+-- that only remembers through one of its two exits is a window that asks
+-- again for everybody who pressed Escape.
+function Welcome:Close()
+    self:Remember()
+    if frame then frame:Hide() end
+end
+
+-- fresh: the module keys to call out as new. first: nobody has ever been
+-- asked on this character, in which case nothing is called out - on a first
+-- run "everything is new" is not information.
+function Welcome:Show(fresh, first)
+    if not ns.UI then return end
+    if not frame then BuildFrame() end
+
+    frame.version:SetText("v" .. (ns.version or "?"))
+    frame.lead:SetText(first == false
+        and "This update brings something new. Pick what you want running."
+        or "Four features in one addon. Pick the ones you want running.")
+
+    local isFresh = {}
+    for _, key in ipairs(fresh or {}) do isFresh[key] = true end
+
+    for _, row in ipairs(frame.rows) do
+        row.badge:SetShown(isFresh[row.moduleKey] and true or false)
+        if row.Refresh then row.Refresh() end
+    end
+
+    frame:Show()
+end
+
+-- Login. Opens only if this character has never been asked, or an update
+-- brought a module it has not been offered.
+function Welcome:ShowIfDue()
+    if not ns.db then return end
+
+    local due, fresh, first = ns.Modules.WelcomeDue(ns.db.welcomeSeen)
+    if not due then return end
+
+    -- NOT IN COMBAT. Somebody who logs in mid-pull gets a window over the
+    -- fight, and the first thing this addon ever does must not be that. It
+    -- waits for the fight to end instead - the question keeps.
+    if InCombatLockdown and InCombatLockdown() then
+        local waiter = CreateFrame("Frame")
+        waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
+        waiter:SetScript("OnEvent", function(listener)
+            listener:UnregisterAllEvents()
+            Welcome:Show(fresh, first)
+        end)
+        return
+    end
+
+    -- A beat after login, for the same reason every other window in this
+    -- addon waits: the client is still building its own frames, and a window
+    -- that appears during that lands behind them.
+    C_Timer.After(1.5, function() Welcome:Show(fresh, first) end)
+end

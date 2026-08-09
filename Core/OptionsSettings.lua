@@ -28,6 +28,37 @@ function Page:BuildPage(page, width)
     local grid = UI.Page(page, width, { explain = true })
 
     ---------------------------------------------------------------------
+    -- Modules
+    --
+    -- First on the page, because these four decide what the REST of the
+    -- window even has to show. Built from ns.Modules rather than typed out:
+    -- a fifth module must appear here by existing, or this page becomes the
+    -- place a feature goes missing.
+    ---------------------------------------------------------------------
+    grid:Section("Modules")
+
+    grid:Note("Four features in one addon, and you are not obliged to want all "
+        .. "four. A module that is off boots nothing, registers nothing and "
+        .. "draws nothing - its page stays in the list on the left so you can "
+        .. "find it again, greyed, with the switch on it.")
+
+    for _, entry in ipairs(ns.Modules:All()) do
+        UI.Toggle(grid:Row(entry.title, { sublabel = entry.blurb }),
+            function() return ns.Modules:IsOn(entry.key) end,
+            function(value)
+                ns.Modules:Set(entry.key, value)
+                -- The rail and the page behind this one both change.
+                ns.Options:Refresh()
+            end)
+    end
+
+    grid:Buttons({
+        { text = "Show the welcome screen", width = 200, onClick = function()
+            ns.Welcome:Show()
+        end },
+    }, 14)
+
+    ---------------------------------------------------------------------
     -- Every bar
     ---------------------------------------------------------------------
     grid:Section("Every bar")

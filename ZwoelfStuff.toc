@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.55.1
+## Version: 4.56.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -49,6 +49,11 @@ Core\Share.lua
 # Which settings a character is using. Owns ns.OpenProfile, which every file
 # after this one reads the result of through ns.db.
 Core\Profiles.lua
+# Which features are running at all. Above everything it switches and below
+# the profile it reads, because a module switch is a per-character setting.
+# It holds no frame and touches nothing at load - the entries reach for
+# ns.Screen and friends only when a switch is actually flipped.
+Core\Modules.lua
 
 Core\Media.lua
 # The bar textures this addon ships, registered into the SHARED registry -
@@ -99,6 +104,10 @@ Core\Widgets.lua
 Core\Screen.lua
 Core\EditMode.lua
 Core\Changelog.lua
+# The first window a character ever sees, and the one place the modules can be
+# switched without hunting for a page. Below Widgets, whose design system it
+# is built from, and below Modules, whose list it draws.
+Core\Welcome.lua
 Core\OptionsBars.lua
 Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
