@@ -13,6 +13,18 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.46.0",
+        date = "2026-08-09",
+        lines = {
+            "THE DEATHS OF THE SESSION NOW STAND IN A LIST down the right side of the window - time, where it happened, who did it. Click one and it opens; the wheel steps through them. The arrows beside the close cross are gone, because a list you can see beats a counter you have to walk. |cffffd100Clear list|r under it throws them away, and asks once first.",
+            "WHERE IT HAPPENED is recorded with every death and says which kind of evening this was: |cffffd100M+12 - Ara-Kara - Avanoxx|r, |cffffd100Raid - Nerub-ar Palace (Heroic)|r, |cffffd100Open world - Duskwood|r. The boss's name comes from the pull itself, so a wipe on a boss says the boss and a death on the trash before it does not. It travels with the share.",
+            "THE KILLER'S PORTRAIT sits beside the title when the client hands one over - the same 3D model Blizzard's own recap draws. Where it does not, the header simply starts at the margin: no empty box.",
+            "Every hit in the list answers a hover with the client's own spell tooltip, plus what it did to you - the damage, the overkill, the health you had left after it. A melee swing has no spell to ask about and says what it knows itself.",
+            "Where the share goes is yours to choose on the Deaths page: the group you are in, or party, raid, instance, guild, say, yell outright. A channel you picked that is not there - Raid while you stand in a party of three - prints in your own chat frame and says why, rather than posting nowhere in silence.",
+            "|cffffd100/zs death clear|r empties the list from the command line.",
+        },
+    },
+    {
         version = "4.45.0",
         date = "2026-08-09",
         lines = {

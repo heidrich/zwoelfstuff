@@ -4,6 +4,50 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.46.0] - 2026-08-09
+
+### Added
+
+- **The session's deaths in a list**, down the right side of the window:
+  time, where it happened, who did it, newest at the top. Click one to read
+  it; the selected row carries the accent bar. The mouse wheel steps through
+  them. **Clear list** underneath empties the session, and asks once first -
+  there is no undo, and a mis-click during a wipe would take the analysis
+  you were about to read.
+
+- **Where it happened**, recorded with every death and shown under the
+  title: `M+12 - Ara-Kara, City of Echoes - Avanoxx`, `Raid - Nerub-ar
+  Palace (Heroic)`, `Open world - Duskwood`. The keystone level comes from
+  `C_ChallengeMode`, the boss's name from `ENCOUNTER_START` - so a wipe on
+  a boss says the boss and a death on the trash before it does not. It
+  travels with the chat share. The short form ("M+12", "Avanoxx") is what
+  the side list shows.
+
+- **The killer's portrait** beside the title, a `PlayerModel` pointed at
+  the creature id off the recap - the call MDT uses for its enemy tooltips,
+  with a display id and an npc id parsed out of a readable GUID as the
+  other two doors. None of them answering hides the block and slides the
+  header back to the margin: no empty box.
+
+- **A tooltip on every hit row** - the client's own spell tooltip where the
+  recap named a readable id, and underneath it the damage, the overkill and
+  the health left afterwards. A melee swing has no spell to ask about and
+  says what it knows itself.
+
+- **Where the share goes is a setting**: the group you are in (as before),
+  or party, raid, instance, guild, say, yell outright. A channel that is
+  not available prints to your own chat frame **and says which one was
+  missing** - a share that quietly goes nowhere is the one failure this
+  must not have.
+
+- `/zs death clear` empties the list from the command line.
+
+### Changed
+
+- **The pager arrows are gone**, replaced by the list: two ways to walk the
+  same ten deaths is one too many, and the list shows where you are instead
+  of counting for you.
+
 ## [4.45.0] - 2026-08-09
 
 ### Added

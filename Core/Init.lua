@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.45.0"
+ns.version = "4.46.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -997,7 +997,7 @@ local usage = {
     -- /zs route was listed here after Routes was parked, so the help printed a
     -- command that had no handler at all. A menu naming something that does
     -- nothing is worse than one that is short.
-    "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100probe|r measures)",
+    "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100clear|r empties the list)",
     "  |cffffd100/zs timeline|r - the next-hit panel's state (|cffffd100probe|r measures)",
     "",
     "  |cffffd100/zs test|r - run the addon's own checks and report failures",
@@ -1093,6 +1093,8 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Death:Share()
         elseif sub == "probe" then
             ns.Death:Probe()
+        elseif sub == "clear" then
+            ns.Death:Clear()
         else
             ns.Death:Show()
         end

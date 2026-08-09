@@ -78,9 +78,28 @@ function Page:BuildPage(page, width)
         .. "time, no Edit Mode needed. Locked, it stays put and only clicks.")
 
     ---------------------------------------------------------------------
-    -- The last ones
+    -- Sharing
     ---------------------------------------------------------------------
-    grid:Section("The last one")
+    grid:Section("Sharing")
+
+    UI.Dropdown(grid:FullRow("Post it to", { controlWidth = 200 }), {
+        { value = "AUTO",          text = "The group I am in" },
+        { value = "PARTY",         text = "Party" },
+        { value = "RAID",          text = "Raid" },
+        { value = "INSTANCE_CHAT", text = "Instance" },
+        { value = "GUILD",         text = "Guild" },
+        { value = "SAY",           text = "Say" },
+        { value = "YELL",          text = "Yell" },
+    }, function() return Config().channel or "AUTO" end,
+        function(value) Config().channel = value end)
+
+    grid:Note("|cffffd100The group I am in|r picks for itself: the instance "
+        .. "group first, then the raid, then the party - which is what this "
+        .. "did before there was a setting. Any other choice is taken "
+        .. "literally, and when it is not available - Raid while you are in "
+        .. "a party of three - the analysis is printed in your own chat "
+        .. "frame and the reason is said out loud. A share that quietly "
+        .. "goes nowhere is the one thing this must never do.")
 
     grid:Buttons({
         { text = "Open it", width = 120, style = "primary", onClick = function()
@@ -91,13 +110,13 @@ function Page:BuildPage(page, width)
         end },
     })
 
-    grid:Note("Share posts the short version - total taken, the biggest "
-        .. "hit, what was still ready - to the group you are in, and only "
-        .. "there. Words the client marks secret never go into chat; where "
-        .. "a spell's name is withheld, the line says \"a spell\" rather "
-        .. "than guessing. The window keeps the last ten deaths of the "
-        .. "session; the arrows beside its close cross page through them, "
-        .. "and Share posts the one you are looking at.")
+    grid:Note("Share posts the short version - where you were, who killed "
+        .. "you, the total taken, the biggest hit and what was still ready. "
+        .. "Words the client marks secret never go into chat; where a "
+        .. "spell's name is withheld, the line says \"a spell\" rather than "
+        .. "guessing. The window keeps the last ten deaths of the session in "
+        .. "a list down its right side, and Share posts the one you are "
+        .. "looking at - |cffffd100Clear list|r there throws them away.")
 
     ---------------------------------------------------------------------
     -- What counts as available

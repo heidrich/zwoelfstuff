@@ -1103,13 +1103,68 @@ local function TestDeath()
     -- The share is built from analysed lines only, and leads with totals.
     local lines = Death.ShareLines({
         when = "20:15:01",
+        where = "M+12 - Ara-Kara - Avanoxx",
         analysis = Death.Analyse({
             { t = 1, amount = 500000, heal = false, name = "Hit" },
         }, 1000000, {}, {}),
     })
     Check("The share leads with the totals line",
         lines and lines[1] ~= nil and lines[1]:find("Death 20:15:01", 1, true) ~= nil)
+    Check("Where it happened travels with the share",
+        lines and lines[1]:find("M+12 - Ara-Kara", 1, true) ~= nil)
     Check("The verdict lines travel with it", lines and #lines >= 2)
+
+    ---------------------------------------------------------------------
+    -- Where it happened. Every argument is one the client may withhold,
+    -- so the label has to degrade a word at a time rather than fail.
+    ---------------------------------------------------------------------
+    local key, keyShort = Death.WhereLabel("party", "Ara-Kara, City of Echoes",
+        "Mythic Keystone", 12, nil, nil)
+    Check("A keystone level makes the dungeon an M+",
+        key == "M+12 - Ara-Kara, City of Echoes" and keyShort == "M+12")
+
+    local dungeon = Death.WhereLabel("party", "Ara-Kara", "Heroic", nil, nil, nil)
+    Check("A dungeon without a key keeps its difficulty",
+        dungeon == "Dungeon - Ara-Kara (Heroic)")
+
+    local raid, raidShort = Death.WhereLabel("raid", "Nerub-ar Palace", "Heroic",
+        nil, "Queen Ansurek", nil)
+    Check("A raid boss is named after the raid and its difficulty",
+        raid == "Raid - Nerub-ar Palace (Heroic) - Queen Ansurek")
+    Check("The boss wins the short word outright", raidShort == "Queen Ansurek")
+
+    local open, openShort = Death.WhereLabel("none", nil, nil, nil, nil, "Duskwood")
+    Check("Outside an instance the zone is the place",
+        open == "Open world - Duskwood" and openShort == "Open world")
+    Check("A withheld zone still answers something",
+        Death.WhereLabel(nil, nil, nil, nil, nil, nil) == "Open world")
+
+    ---------------------------------------------------------------------
+    -- Where a share goes. The rule is separate from the group state so
+    -- this can be asked on a desktop with nobody around.
+    ---------------------------------------------------------------------
+    Check("Auto prefers the instance group over the raid",
+        Death.ShareTarget("AUTO", { inInstance = true, inRaid = true,
+            inParty = true }) == "INSTANCE_CHAT")
+    Check("Auto falls back to the raid, then the party",
+        Death.ShareTarget("AUTO", { inRaid = true, inParty = true }) == "RAID"
+            and Death.ShareTarget(nil, { inParty = true }) == "PARTY")
+    Check("Auto alone answers nobody, with a reason",
+        select(1, Death.ShareTarget("AUTO", {})) == nil
+            and select(2, Death.ShareTarget("AUTO", {})) ~= nil)
+    Check("A chosen channel that is not there never silently posts",
+        select(1, Death.ShareTarget("RAID", { inParty = true })) == nil)
+    Check("A chosen channel that IS there is taken literally",
+        Death.ShareTarget("RAID", { inRaid = true }) == "RAID"
+            and Death.ShareTarget("GUILD", { inGuild = true }) == "GUILD")
+    Check("Say and yell need no group at all",
+        Death.ShareTarget("SAY", {}) == "SAY"
+            and Death.ShareTarget("YELL", {}) == "YELL")
+
+    -- Clearing empties the list it is handed, and only that one.
+    local mine = { { n = 1 }, { n = 2 } }
+    Death.ClearLog(mine)
+    Check("Clearing the list leaves nothing behind", #mine == 0)
 end
 
 ---------------------------------------------------------------------------
