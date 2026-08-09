@@ -4,6 +4,16 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.58.2] - 2026-08-09
+
+### Fixed
+
+- **The "Who to ask" boxes were blank.** `UI.Dropdown` hangs its own `Refresh`
+  on the row it is given, and the page replaced that hook afterwards instead
+  of calling it - so the control never repainted, and the words that say what
+  happens when you leave it alone ("The healer of that class") were never
+  drawn. Two things wanting one hook: the second has to call the first.
+
 ## [4.58.1] - 2026-08-09
 
 ### Fixed

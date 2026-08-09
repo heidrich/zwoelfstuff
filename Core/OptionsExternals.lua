@@ -181,7 +181,15 @@ function Page:BuildPage(page, width)
             end
         end, { emptyText = "The healer of that class" })
 
+        -- UI.Dropdown HANGS ITS OWN Refresh ON THE ROW, and the line below
+        -- used to replace it - so the control never repainted and every one
+        -- of these boxes was blank, including the "The healer of that class"
+        -- that says what happens when you leave it alone. Two things want one
+        -- hook; the second has to call the first, not take it.
+        local paintControl = row.Refresh
+
         row.Refresh = function()
+            if paintControl then paintControl() end
             local spellID = SpellID()
             -- A row for a slot you have not filled is not an empty row, it is
             -- no row: SetRelevant takes it out of the layout entirely.
