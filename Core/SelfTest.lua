@@ -2095,6 +2095,33 @@ local function TestRoutes()
     Routes:Sweep()
     Check("A sweep reports how many badges it drew",
         type(Routes.drawn) == "number", tostring(Routes.drawn))
+
+    -- THE NAMEPLATE WALK, AND WHY IT IS ONE FUNCTION.
+    --
+    -- The sweep once found its nameplates through plate.namePlateUnitToken
+    -- and the diagnostic through the same field, and both came back with no
+    -- unit at all - that field is only set while a NAME_PLATE_UNIT_ADDED
+    -- event is being handled, and a timer is not that. Every badge fell
+    -- through to "not in the route" and the panel looked perfect.
+    --
+    -- Both now go through Routes:ForEachPlate, and this checks they agree. A
+    -- diagnostic that walks the screen differently from the thing it is
+    -- diagnosing is worse than none.
+    local wasTest = Routes.testing
+    Routes:SetTesting(true)         -- makes the sweep walk whatever the switch says
+    local walked = Routes:ForEachPlate(function() end)
+    Check("The sweep sees the same nameplates the walk hands out",
+        walked == Routes.plateCount,
+        walked .. " walked vs " .. tostring(Routes.plateCount) .. " swept")
+    Check("A plate the walk hands out always comes with a unit",
+        (function()
+            local ok = true
+            Routes:ForEachPlate(function(unit, plate)
+                if type(unit) ~= "string" or not plate then ok = false end
+            end)
+            return ok
+        end)())
+    Routes:SetTesting(wasTest)
 end
 
 local function TestTextElements()

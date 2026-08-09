@@ -8,6 +8,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.37.1",
+        date = "2026-08-09",
+        lines = {
+            "EVERY BADGE SAID \"?\" INSTEAD OF A PULL NUMBER. The test badges drew, the route read correctly, the panel listed the right four mobs by name - and not one nameplate was matched to the pull it belonged to.",
+            "The unit behind a nameplate was read from |cffffd100plate.namePlateUnitToken|r. That field is only set while a NAME_PLATE_UNIT_ADDED event is being handled; polled from a timer - which is what a sweep is - it comes back nil. No unit, no GUID, no npcID, and every badge fell through to the unmatched case.",
+            "The unit is walked now (nameplate1..40, filtered by UnitExists) and the plate is asked for by unit. That is what EllesmereUICooldownManager and BigWigs both do, and both say why.",
+            "|cffffd100/zs route|r had the same fault, so the one command built to explain an empty screen was describing a different screen. Both go through one walk now.",
+        },
+    },
+    {
         version = "4.37.0",
         date = "2026-08-09",
         lines = {

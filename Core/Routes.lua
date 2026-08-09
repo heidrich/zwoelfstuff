@@ -372,6 +372,42 @@ function Routes:SetTesting(on)
 end
 
 ---------------------------------------------------------------------------
+-- EVERY NAMEPLATE ON SCREEN, AND WHICH UNIT IS ON IT
+--
+-- NOT plate.namePlateUnitToken, which is the obvious way and is wrong here.
+-- That field is only reliably set while a NAME_PLATE_UNIT_ADDED event is
+-- being handled; polled from a timer - which is exactly what the sweep does -
+-- it comes back nil. EllesmereUICooldownManager says so in as many words at
+-- line 6972 and walks the tokens instead, and so do BigWigs' nameplate tools.
+--
+-- That nil was the second half of "no badges": no unit meant no GUID, no
+-- GUID meant no npcID, and every badge fell through to the unmatched case.
+--
+-- So the UNIT is the thing iterated and the plate is asked for by unit.
+-- One implementation, because the diagnostic has to walk exactly what the
+-- sweep walks or it is describing a different screen.
+---------------------------------------------------------------------------
+local MAX_PLATES = 40   -- nameplate1..nameplate40 is the range the client hands out
+
+function Routes:ForEachPlate(fn)
+    local forUnit = C_NamePlate and C_NamePlate.GetNamePlateForUnit
+    if not forUnit then return 0 end
+
+    local count = 0
+    for i = 1, MAX_PLATES do
+        local unit = "nameplate" .. i
+        if UnitExists(unit) then
+            local plate = forUnit(unit)
+            if plate then
+                count = count + 1
+                fn(unit, plate)
+            end
+        end
+    end
+    return count
+end
+
+---------------------------------------------------------------------------
 -- One pass over every nameplate on screen
 ---------------------------------------------------------------------------
 function Routes:Sweep()
@@ -390,15 +426,9 @@ function Routes:Sweep()
         return
     end
 
-    local plates = C_NamePlate and C_NamePlate.GetNamePlates
-        and C_NamePlate.GetNamePlates() or nil
-    if not plates then return end
-    self.plateCount = #plates
-
     local seen = {}
-    for _, plate in ipairs(plates) do
-        local unit = plate.namePlateUnitToken
-        local npcID = unit and Routes.NpcFromGUID(UnitGUID(unit))
+    self.plateCount = self:ForEachPlate(function(unit, plate)
+        local npcID = Routes.NpcFromGUID(UnitGUID(unit))
         local pullIndex = npcID and self:PullForNpc(npcID)
         local standing = Routes.Standing(pullIndex, self.index)
 
@@ -433,7 +463,7 @@ function Routes:Sweep()
             badge:Show()
             self.drawn = self.drawn + 1
         end
-    end
+    end)
 
     for plate, badge in pairs(badges) do
         if not seen[badge] then badge:Hide() end
@@ -639,13 +669,12 @@ function Routes:Dump()
         end
     end
 
-    local plates = C_NamePlate and C_NamePlate.GetNamePlates
-        and C_NamePlate.GetNamePlates() or {}
-    ns.Print(string.format("Nameplates on screen: |cffffd100%d|r, badges drawn: "
-        .. "|cffffd100%d|r", #plates, self.drawn or 0))
-    for _, plate in ipairs(plates) do
-        local unit = plate.namePlateUnitToken
-        local guid = unit and UnitGUID(unit)
+    -- The SAME walk the sweep does. A diagnostic that finds its nameplates a
+    -- different way is describing a different screen, and this one already
+    -- did once: it read plate.namePlateUnitToken, which is nil when polled.
+    local lines = {}
+    local plateCount = self:ForEachPlate(function(unit)
+        local guid = UnitGUID(unit)
         local npcID = Routes.NpcFromGUID(guid)
         local pullIndex = npcID and self:PullForNpc(npcID)
         -- "could not be read" is its own answer, and a different one from
@@ -661,11 +690,17 @@ function Routes:Dump()
         else
             verdict = "|cff888888no unit|r"
         end
-        ns.Print(string.format("   %s |cff888888%s|r - %s",
-            unit and UnitName(unit) or "?", tostring(npcID or "-"), verdict))
-    end
+        lines[#lines + 1] = string.format("   %s |cff888888%s|r - %s",
+            UnitName(unit) or "?", tostring(npcID or "-"), verdict)
+    end)
 
-    if #plates == 0 then
+    -- Collected first, printed after: the count belongs above the list, and
+    -- it is not known until the walk is done.
+    ns.Print(string.format("Nameplates on screen: |cffffd100%d|r, badges "
+        .. "drawn: |cffffd100%d|r", plateCount, self.drawn or 0))
+    for _, line in ipairs(lines) do ns.Print(line) end
+
+    if plateCount == 0 then
         ns.Print("|cffffd100No nameplates|r - stand in front of a pack, in "
             .. "combat or not, and run this again.")
     end

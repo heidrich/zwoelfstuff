@@ -8,6 +8,43 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.37.1] - 2026-08-09
+
+### Fixed
+
+- **Every badge said "?" instead of a pull number.** The test badges drew, the
+  route read correctly, the panel listed the right four mobs by name - and not
+  one nameplate was matched to the pull it belonged to.
+
+  The sweep found the unit behind a nameplate through
+  `plate.namePlateUnitToken`. That field is only reliably set **while a
+  `NAME_PLATE_UNIT_ADDED` event is being handled**; polled from a timer, which
+  is exactly what a sweep is, it comes back nil. No unit meant no GUID, no
+  GUID meant no npcID, and every badge fell through to the unmatched case.
+
+  `EllesmereUICooldownManager` says so in as many words at line 6972 and walks
+  `nameplate1..nameplate40` instead, letting `UnitExists` filter; BigWigs'
+  nameplate tools do the same. So the **unit** is what gets walked now and the
+  plate is asked for by unit through `C_NamePlate.GetNamePlateForUnit`.
+
+- **`/zs route` walks exactly what the sweep walks.** It had the same fault,
+  which meant the one command built to explain an empty screen was describing
+  a different screen. Both go through `Routes:ForEachPlate` now - one
+  implementation, two callers.
+
+### Changed
+
+- The desktop harness stubs nameplates **the way the client actually behaves**:
+  the plates it hands out carry no unit token, so anything that wants the unit
+  has to walk the tokens. The old stub was more generous than the game, which
+  is why it never saw this.
+
+- The harness now **runs every diagnostic command** - `/zs cdm`, `skin`,
+  `auras`, `reminders`, `route`, `cells`, `text`, `numbers`. Not one of them
+  had ever been executed there. A diagnostic that raises fails at the exact
+  moment its answer is needed, and this is the same blind spot as pages that
+  were "painted" without a builder ever running.
+
 ## [4.37.0] - 2026-08-09
 
 ### Fixed
