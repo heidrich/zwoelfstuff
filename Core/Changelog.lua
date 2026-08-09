@@ -13,6 +13,18 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.50.0",
+        date = "2026-08-09",
+        lines = {
+            "WHAT YOU PRESSED IS DRAWN AS BARS, not as icons in a row: each one starts where you cast it and runs for as long as it is up, so you can see whether it was still there when the hit landed. Two running at once stack instead of covering each other, and each keeps its own colour.",
+            "|cffffd100Zoom|r, and the wheel scrolls the plot. Six presses inside two tenths of a second cannot be drawn apart at any icon size - so the plot shows less time instead. Playing, the view walks with the playhead; scroll it yourself and it stays where you put it until Restart or Stop.",
+            "The axis is thicker and carries its seconds |cffffd100on|r the line, with half-second marks between them. The scale follows the zoom: a second and a half on screen gets a mark every half second.",
+            "The killer's portrait is small and sits on the damage lane rather than filling the corner - in a dungeon there are twenty things hitting you and one large face claimed the whole picture for one of them.",
+            "The health bar is red, the boxes around the icons are gone, and the Speed label sits next to its slider instead of eighty pixels away from it.",
+            "A heal was recognised by comparing against two spell-event names written from memory. It is anything the client calls HEAL now - if the recap ever says SPELL_HEAL_ABSORBED, a heal would have been drawn as damage and counted into the wrong total.",
+        },
+    },
+    {
         version = "4.49.0",
         date = "2026-08-09",
         lines = {

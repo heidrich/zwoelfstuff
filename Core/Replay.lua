@@ -33,22 +33,30 @@ local frame
 -- The plot. The axis runs the full width between these margins, time
 -- flowing left to right and ending at the killing blow on the right edge.
 local PLOT_L, PLOT_R = 30, 30
-local FRAME_W, FRAME_H = 780, 496
+local FRAME_W, FRAME_H = 780, 520
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
-local AXIS_Y = 274          -- from the top of the frame
+local AXIS_Y = 268          -- from the top of the frame
 local COLUMN_MAX = 96       -- tallest an incoming column may draw
 local MARKS_IN, MARKS_OUT, MARKS_HEAL = 28, 20, 20
 
 -- Three lanes and where each starts, measured from the top of the frame.
-local HEALTH_Y = 92         -- your own health bar
-local LANE_IN_Y = 120       -- "what came in", growing UP to the axis
-local LANE_OUT_Y = 282      -- "what you pressed", under the axis
-local LANE_HEAL_Y = 356     -- "who healed you", under that
+local HEALTH_Y = 84         -- your own health bar
+local LANE_IN_Y = 112       -- "what came in", growing UP to the axis
+local LANE_OUT_Y = 282      -- your presses, as bars under the axis
+local LANE_HEAL_Y = 384     -- "who healed you", under those
+
+-- The press bars: how tall each row is and how many rows may stack before
+-- the rest are dropped onto the last one. Four is more overlapping
+-- defensives than anybody presses in ten seconds.
+local BAR_H, BAR_GAP, BAR_ROWS = 18, 2, 4
 
 -- Half a second before the first thing happens, so the eye is on the plot
 -- when it starts moving rather than arriving after it.
 local LEAD = 0.5
 local SPEED_MIN, SPEED_MAX, SPEED_STEP = 0.25, 3, 0.25
+-- Eight times in means a ten-second death shown one and a quarter seconds
+-- at a time, which is finer than any press sequence a person makes.
+local ZOOM_MAX = 8
 
 ---------------------------------------------------------------------------
 -- Pure rules, exported for the self test
@@ -65,12 +73,50 @@ function Replay.Span(story)
     return math.max(1, oldest + LEAD)
 end
 
--- Where a moment sits on the axis, as a fraction from the left. t counts
--- DOWN to the death, so the oldest moment is at 0 and the death is at 1.
-function Replay.Fraction(t, span)
-    if not (span and span > 0) then return 1 end
-    local at = (span - (t or 0)) / span
-    return math.max(0, math.min(1, at))
+-- WHICH SLICE OF TIME THE PLOT SHOWS.
+--
+-- The owner's problem, in his words: six spells inside two tenths of a
+-- second all draw on top of each other. The answer is not smaller icons -
+-- it is a plot that can be zoomed into and scrolled along, the way every
+-- log viewer works.
+--
+-- zoom 1 shows the whole span. zoom 4 shows a quarter of it, centred on
+-- `centre` - which while it is playing is the playhead, so the window
+-- follows the story, and while it is paused is wherever the wheel left it.
+-- Returns from (the older edge, on the left) and to (the newer, on the
+-- right), both clamped inside the span so scrolling cannot run off it.
+function Replay.View(span, zoom, centre)
+    span = math.max(0.001, span or 1)
+    local visible = span / math.max(1, zoom or 1)
+    if visible >= span then return span, 0 end
+
+    centre = centre or (visible / 2)
+    local from = centre + visible / 2
+    if from > span then from = span end
+    local to = from - visible
+    if to < 0 then
+        to = 0
+        from = visible
+    end
+    return from, to
+end
+
+-- Where a moment sits, as a fraction from the left edge of what is shown.
+-- t counts DOWN to the death, so `from` is the left edge and `to` the
+-- right. A moment outside the view answers past 0 or past 1 rather than
+-- being clamped onto the edge - a mark two seconds off screen must not
+-- pile up against the border pretending it is at it.
+function Replay.Fraction(t, from, to)
+    from = from or 1
+    to = to or 0
+    local width = from - to
+    if width <= 0 then return 1 end
+    return (from - (t or 0)) / width
+end
+
+-- Is this moment on screen at all?
+function Replay.Visible(t, from, to)
+    return (t or 0) <= (from or 0) + 0.001 and (t or 0) >= (to or 0) - 0.001
 end
 
 -- The speed, kept inside what is watchable. It was a button walking a list
@@ -130,6 +176,82 @@ function Replay.ColumnHeight(amount, maxHP)
 end
 
 ---------------------------------------------------------------------------
+-- What you pressed, as BARS
+--
+-- The owner asked for it and he is right: an icon says "you pressed it" and
+-- a bar says "and it was up for these four seconds, which is the half of it
+-- that was still true when the hit landed". Two of them running at once
+-- stack, so an overlap is visible instead of two icons on top of each other.
+--
+-- HOW LONG IS IT UP? This addon has one rule about durations and it is
+-- MEASURED, NEVER ASSUMED - see KnownProcs.lua, which says so in capitals.
+-- On this patch aura data is secret, so there is no call that answers "how
+-- long does Icebound Fortitude last". What there IS is the number you can
+-- set yourself: "this is active for N seconds after I press it", on the
+-- Auras page, stored per account because it is a fact about the spell and
+-- not about the character. That is the source, and where it is unset the
+-- bar is a marker with no length rather than a guessed one.
+---------------------------------------------------------------------------
+
+function Replay.DurationOf(spellID)
+    if not spellID then return nil end
+    if not (ns.Auras and ns.Auras.ActiveStateFor) then return nil end
+    local ok, seconds = pcall(ns.Auras.ActiveStateFor, ns.Auras, spellID)
+    if ok and type(seconds) == "number" and seconds > 0 then return seconds end
+    return nil
+end
+
+-- Which row each bar draws in, so that two that overlap never sit on top of
+-- each other. Greedy by start time, which is optimal for intervals: put the
+-- bar in the first row whose last bar had already finished.
+--
+-- Time here counts DOWN to the death, so a bar runs from t (its cast) to
+-- t - duration (when it fell off), and "later" means a SMALLER t.
+function Replay.StackRows(bars)
+    local sorted = {}
+    for index, bar in ipairs(bars or {}) do sorted[index] = bar end
+    table.sort(sorted, function(a, b)
+        if a.t ~= b.t then return a.t > b.t end
+        return (a.duration or 0) > (b.duration or 0)
+    end)
+
+    local rowEnd = {}
+    for _, bar in ipairs(sorted) do
+        local finish = bar.t - (bar.duration or 0)
+        local placed
+        for row = 1, #rowEnd do
+            if bar.t <= rowEnd[row] then
+                rowEnd[row] = finish
+                placed = row
+                break
+            end
+        end
+        if not placed then
+            rowEnd[#rowEnd + 1] = finish
+            placed = #rowEnd
+        end
+        bar.row = placed
+    end
+    return sorted, #rowEnd
+end
+
+-- A colour per bar, so two defensives running together are two things
+-- rather than one long block. Stable within a replay: the same spell keeps
+-- its colour whichever row it lands in.
+local BAR_COLOURS = {
+    { 0.90, 0.55, 0.20 },   -- amber
+    { 0.35, 0.62, 0.85 },   -- steel blue
+    { 0.55, 0.75, 0.35 },   -- moss
+    { 0.72, 0.45, 0.80 },   -- violet
+    { 0.85, 0.40, 0.45 },   -- rose
+    { 0.40, 0.75, 0.72 },   -- teal
+}
+
+function Replay.ColourFor(index)
+    return BAR_COLOURS[((index - 1) % #BAR_COLOURS) + 1]
+end
+
+---------------------------------------------------------------------------
 -- The window
 ---------------------------------------------------------------------------
 
@@ -179,11 +301,11 @@ local function BuildMark(parent, kind)
     mark.column = mark:CreateTexture(nil, "ARTWORK")
     mark.column:SetWidth(kind == "in" and 8 or 3)
 
+    -- No border. The icons carried one and it drew a box round every mark,
+    -- which on a plot of twenty of them is twenty boxes and no picture.
     mark.icon = mark:CreateTexture(nil, "ARTWORK")
     mark.icon:SetSize(22, 22)
     mark.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-    mark.edge = ns.CreateBorder(mark, 1, "OVERLAY")
 
     mark.value = UI.Label(mark, "", 10, C.text)
     mark.value:SetJustifyH("CENTER")
@@ -250,14 +372,16 @@ local function BuildWindow()
     closeMark:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnClick", function() Replay:Close() end)
 
-    -- The killer, in the corner, with what he did to you on the hover.
+    -- The killer, small, sitting ON the damage lane it belongs to rather
+    -- than filling the corner of the window. The owner's reason is the
+    -- right one: in a dungeon twenty things are hitting you, and one large
+    -- portrait in the title bar claims the whole picture for one of them.
     frame.portrait = CreateFrame("PlayerModel", nil, frame)
-    frame.portrait:SetSize(56, 56)
-    frame.portrait:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -44, -12)
+    frame.portrait:SetSize(30, 30)
+    frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L + 108,
+        -(LANE_IN_Y - 9))
     frame.portrait:EnableMouse(true)
     frame.portrait:Hide()
-    local portraitEdge = ns.CreateBorder(frame.portrait, 1, "OVERLAY")
-    portraitEdge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
     frame.portrait:SetScript("OnEnter", function(self)
         local facts = self.facts
@@ -302,7 +426,28 @@ local function BuildWindow()
     frame.healthFill = frame.health:CreateTexture(nil, "ARTWORK")
     frame.healthFill:SetPoint("TOPLEFT", frame.health, "TOPLEFT", 0, 0)
     frame.healthFill:SetPoint("BOTTOMLEFT", frame.health, "BOTTOMLEFT", 0, 0)
-    frame.healthFill:SetColorTexture(0.20, 0.26, 0.34, 1)
+    -- Red, at the owner's word. In the death window's rows the slate means
+    -- "what was left of a bar you can also see the red of"; here there is
+    -- no second colour beside it, so it is a health bar and health bars in
+    -- this game are red.
+    frame.healthFill:SetColorTexture(0.62, 0.15, 0.15, 1)
+
+    -- The plot scrolls under the wheel. Doing so takes the view off the
+    -- playhead until Restart or Stop gives it back - otherwise the next
+    -- frame would drag it out from under the pointer.
+    frame.health:EnableMouseWheel(true)
+    local function Scroll(_, delta)
+        local state = Replay.state
+        if not (state and state.zoom > 1) then return end
+        local visible = state.span / state.zoom
+        state.following = false
+        state.pan = math.max(visible / 2, math.min(state.span - visible / 2,
+            (state.pan or state.now) + delta * visible * 0.25))
+        Replay.Redraw()
+    end
+    frame.health:SetScript("OnMouseWheel", Scroll)
+    frame:EnableMouseWheel(true)
+    frame:SetScript("OnMouseWheel", Scroll)
 
     frame.healthText = UI.Label(frame.health, "", 11, C.text)
     frame.healthText:SetPoint("LEFT", frame.health, "LEFT", 6, 0)
@@ -311,21 +456,37 @@ local function BuildWindow()
     frame.clock:SetPoint("RIGHT", frame.health, "RIGHT", -6, 0)
     frame.clock:SetJustifyH("RIGHT")
 
-    -- The axis itself, with the playhead riding it.
+    -- The axis. Three pixels rather than one: it is the spine of the whole
+    -- picture and a hairline read as a scratch between two empty halves.
     local axis = frame:CreateTexture(nil, "ARTWORK")
-    axis:SetColorTexture(C.edge[1], C.edge[2], C.edge[3], 1)
+    axis:SetColorTexture(C.line[1], C.line[2], C.line[3], 1)
     axis:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -AXIS_Y)
-    axis:SetSize(PLOT_W, 1)
+    axis:SetSize(PLOT_W, 3)
 
+    -- The whole seconds, written ON the line - the owner asked for it and
+    -- it is right: under the line they belong to nothing, on it they are
+    -- the line's own scale. Each carries a patch of the window's own
+    -- background so the axis does not run through the letters.
     frame.ticks = {}
-    for i = 1, 11 do
+    for i = 1, 13 do
+        local plate = frame:CreateTexture(nil, "OVERLAY")
+        plate:SetColorTexture(C.windowBg[1], C.windowBg[2], C.windowBg[3], 1)
+        plate:SetSize(34, 13)
+        local label = UI.Label(frame, "", 10, C.textDim)
+        label:SetJustifyH("CENTER")
+        label:SetWidth(34)
+        frame.ticks[i] = { plate = plate, label = label }
+    end
+
+    -- And the half seconds, as marks with no writing: they say how fast
+    -- the story is running without adding a second column of numbers.
+    frame.halfTicks = {}
+    for i = 1, 26 do
         local tick = frame:CreateTexture(nil, "ARTWORK")
         tick:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
-        tick:SetSize(1, 5)
-        local label = UI.Label(frame, "", 10, C.textGhost)
-        label:SetJustifyH("CENTER")
-        label:SetWidth(40)
-        frame.ticks[i] = { tick = tick, label = label }
+        tick:SetSize(1, 7)
+        tick:Hide()
+        frame.halfTicks[i] = tick
     end
 
     frame.playhead = frame:CreateTexture(nil, "OVERLAY")
@@ -383,7 +544,9 @@ local function BuildWindow()
     -- a worse control than dragging to it. `silent` because this is an
     -- on-screen panel - the options window has nothing to repaint.
     local speedRow = UI.Row(frame, "Speed", { controlWidth = 116 })
-    speedRow:SetWidth(196)
+    -- Sized to its own contents: the label was floating eighty pixels away
+    -- from the control it names, because the row was wider than either.
+    speedRow:SetWidth(160)
     speedRow:SetPoint("LEFT", stop, "RIGHT", 16, 0)
     speedRow.rule:Hide()   -- a settings hairline has no business in a panel
     UI.Slider(speedRow, {
@@ -402,6 +565,25 @@ local function BuildWindow()
         format = function(v) return Replay.SpeedLabel(v) end,
     })
     frame.speedRow = speedRow
+
+    -- ZOOM. Six presses inside two tenths of a second cannot be drawn apart
+    -- at any icon size; the plot has to be able to show less time instead.
+    local zoomRow = UI.Row(frame, "Zoom", { controlWidth = 116 })
+    zoomRow:SetWidth(158)
+    zoomRow:SetPoint("LEFT", speedRow, "RIGHT", 10, 0)
+    zoomRow.rule:Hide()
+    UI.Slider(zoomRow, {
+        get = function() return (Replay.state and Replay.state.zoom) or 1 end,
+        set = function(value)
+            if not Replay.state then return end
+            Replay.state.zoom = math.max(1, math.min(ZOOM_MAX, value))
+            Replay.Redraw()
+        end,
+        min = 1, max = ZOOM_MAX, step = 0.5,
+        silent = true,
+        format = function(v) return Replay.SpeedLabel(v) end,
+    })
+    frame.zoomRow = zoomRow
 
     frame.legend = UI.Label(frame, "", 11, C.textFaint)
     frame.legend:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 46)
@@ -431,10 +613,14 @@ end
 -- One heal, in the bottom lane: the amount, the spell's icon, and the name
 -- of whoever cast it under both. The class colour comes from the client
 -- when that person is in your group, which is when it can.
-local function PlaceHeal(mark, ev, span)
+local function PlaceHeal(mark, ev, from, to)
     local C = ns.UI.C
     mark.item = ev
-    local x = PLOT_L + Replay.Fraction(ev.t, span) * PLOT_W
+    if not Replay.Visible(ev.t, from, to) then
+        mark:Hide()
+        return
+    end
+    local x = PLOT_L + Replay.Fraction(ev.t, from, to) * PLOT_W
 
     mark:ClearAllPoints()
     mark:SetPoint("TOP", frame, "TOPLEFT", x, -(LANE_HEAL_Y + 16))
@@ -448,7 +634,6 @@ local function PlaceHeal(mark, ev, span)
     mark.icon:ClearAllPoints()
     mark.icon:SetPoint("TOP", mark.column, "BOTTOM", 0, -14)
     mark.icon:SetTexture((ev.spellID and ns.SpellTexture(ev.spellID)) or 135966)
-    mark.edge:SetColor(0.12, 0.42, 0.16, 1)
 
     mark.value:ClearAllPoints()
     mark.value:SetPoint("TOP", mark.column, "BOTTOM", 0, -1)
@@ -480,8 +665,7 @@ end
 -- Places every mark for one death. Positions do not change while it plays;
 -- only what is lit does, which is what makes the playhead read as time
 -- passing rather than as things appearing out of nowhere.
-local function Place(snapshot, span)
-    local C = ns.UI.C
+local function Place(snapshot, from, to)
     local events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
     local maxHP = snapshot.maxHP
 
@@ -493,36 +677,39 @@ local function Place(snapshot, span)
         if ev.heal then
             healSlot = healSlot + 1
             if healSlot <= MARKS_HEAL then
-                PlaceHeal(frame.heals[healSlot], ev, span)
+                PlaceHeal(frame.heals[healSlot], ev, from, to)
             end
         else
             slot = slot + 1
             if slot <= MARKS_IN then
                 local mark = frame.incoming[slot]
                 mark.item = ev
-                local height = Replay.ColumnHeight(ev.amount, maxHP)
-                local x = PLOT_L + Replay.Fraction(ev.t, span) * PLOT_W
+                if not Replay.Visible(ev.t, from, to) then
+                    mark:Hide()
+                else
+                    local height = Replay.ColumnHeight(ev.amount, maxHP)
+                    local x = PLOT_L + Replay.Fraction(ev.t, from, to) * PLOT_W
 
-                mark:ClearAllPoints()
-                mark:SetPoint("BOTTOM", frame, "TOPLEFT", x, -(AXIS_Y - 1))
-                mark:SetSize(24, height + 46)
+                    mark:ClearAllPoints()
+                    mark:SetPoint("BOTTOM", frame, "TOPLEFT", x, -(AXIS_Y - 1))
+                    mark:SetSize(24, height + 46)
 
-                mark.column:ClearAllPoints()
-                mark.column:SetPoint("BOTTOM", mark, "BOTTOM", 0, 0)
-                mark.column:SetHeight(height)
-                mark.column:SetColorTexture(0.55, 0.11, 0.11, 0.95)
+                    mark.column:ClearAllPoints()
+                    mark.column:SetPoint("BOTTOM", mark, "BOTTOM", 0, 0)
+                    mark.column:SetHeight(height)
+                    mark.column:SetColorTexture(0.55, 0.11, 0.11, 0.95)
 
-                mark.icon:ClearAllPoints()
-                mark.icon:SetPoint("BOTTOM", mark.column, "TOP", 0, 2)
-                mark.icon:SetTexture((ev.spellID and ns.SpellTexture(ev.spellID))
-                    or 135274)
-                mark.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+                    mark.icon:ClearAllPoints()
+                    mark.icon:SetPoint("BOTTOM", mark.column, "TOP", 0, 2)
+                    mark.icon:SetTexture(
+                        (ev.spellID and ns.SpellTexture(ev.spellID)) or 135274)
 
-                mark.value:ClearAllPoints()
-                mark.value:SetPoint("BOTTOM", mark.icon, "TOP", 0, 2)
-                mark.value:SetText("|cffe06c5e-"
-                    .. ns.ShortNumber(ev.amount) .. "|r")
-                mark:Show()
+                    mark.value:ClearAllPoints()
+                    mark.value:SetPoint("BOTTOM", mark.icon, "TOP", 0, 2)
+                    mark.value:SetText("|cffe06c5e-"
+                        .. ns.ShortNumber(ev.amount) .. "|r")
+                    mark:Show()
+                end
             end
         end
     end
@@ -535,45 +722,72 @@ local function Place(snapshot, span)
         frame.heals[i]:Hide()
     end
 
-    slot = 0
+    -- YOUR PRESSES, AS BARS. Each starts where you cast it and runs for as
+    -- long as it is up, so an overlap is two bars on two rows rather than
+    -- two icons on top of each other. The icon rides the bar's left end.
+    local colourOf, nextColour = {}, 0
+    local bars = {}
     for _, cast in ipairs(snapshot.casts or {}) do
+        bars[#bars + 1] = {
+            t = cast.t, name = cast.name, spellID = cast.spellID,
+            cast = true, defensive = cast.defensive,
+            duration = Replay.DurationOf(cast.spellID),
+        }
+    end
+    local stacked = Replay.StackRows(bars)
+
+    slot = 0
+    for _, bar in ipairs(stacked) do
         slot = slot + 1
         if slot <= MARKS_OUT then
             local mark = frame.outgoing[slot]
-            mark.item = {
-                t = cast.t, name = cast.name, spellID = cast.spellID,
-                cast = true, defensive = cast.defensive,
-            }
-            local x = PLOT_L + Replay.Fraction(cast.t, span) * PLOT_W
+            mark.item = bar
 
-            mark:ClearAllPoints()
-            mark:SetPoint("TOP", frame, "TOPLEFT", x, -(LANE_OUT_Y - 8))
-            mark:SetSize(24, 44)
-
-            mark.column:ClearAllPoints()
-            mark.column:SetPoint("TOP", mark, "TOP", 0, 0)
-            mark.column:SetHeight(10)
-            if cast.defensive then
-                mark.column:SetColorTexture(C.accent[1], C.accent[2],
-                    C.accent[3], 1)
+            -- A bar is on screen when ANY part of it is: it may start
+            -- before the left edge and still be running under the hit you
+            -- are looking at, which is exactly the case worth seeing.
+            local ended = bar.t - (bar.duration or 0)
+            if bar.t < to or ended > from then
+                mark:Hide()
             else
-                mark.column:SetColorTexture(C.textGhost[1], C.textGhost[2],
-                    C.textGhost[3], 1)
-            end
+                local x = PLOT_L
+                    + math.max(0, Replay.Fraction(bar.t, from, to)) * PLOT_W
+                -- A press whose length nobody has measured gets a marker,
+                -- not an invented bar: this addon does not guess durations.
+                local ends = bar.duration
+                    and (PLOT_L + math.min(1,
+                        Replay.Fraction(math.max(0, ended), from, to)) * PLOT_W)
+                    or (x + 4)
+                local row = math.min(bar.row or 1, BAR_ROWS)
+                local top = LANE_OUT_Y + (row - 1) * (BAR_H + BAR_GAP)
 
-            mark.icon:ClearAllPoints()
-            mark.icon:SetPoint("TOP", mark.column, "BOTTOM", 0, -2)
-            mark.icon:SetTexture(cast.spellID and ns.SpellTexture(cast.spellID))
-            -- A defensive gets the accent edge: on a plot of twenty grey
-            -- presses, the two that mattered have to be findable.
-            if cast.defensive then
-                mark.edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
-            else
-                mark.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
-            end
+                mark:ClearAllPoints()
+                mark:SetPoint("TOPLEFT", frame, "TOPLEFT", x - 9, -top)
+                mark:SetSize(math.max(BAR_H, (ends - x) + 9), BAR_H)
 
-            mark.value:SetText("")
-            mark:Show()
+                -- Its own colour, kept by spell so the same defensive is
+                -- the same colour wherever it lands.
+                local key = bar.spellID or bar.name or slot
+                if not colourOf[key] then
+                    nextColour = nextColour + 1
+                    colourOf[key] = Replay.ColourFor(nextColour)
+                end
+                local colour = colourOf[key]
+
+                mark.column:ClearAllPoints()
+                mark.column:SetPoint("TOPLEFT", mark, "TOPLEFT", 9, 0)
+                mark.column:SetPoint("BOTTOMRIGHT", mark, "BOTTOMRIGHT", 0, 0)
+                mark.column:SetColorTexture(colour[1], colour[2], colour[3],
+                    bar.defensive and 0.85 or 0.35)
+
+                mark.icon:ClearAllPoints()
+                mark.icon:SetPoint("LEFT", mark, "LEFT", 0, 0)
+                mark.icon:SetSize(BAR_H, BAR_H)
+                mark.icon:SetTexture(bar.spellID
+                    and ns.SpellTexture(bar.spellID))
+                mark.value:SetText("")
+                mark:Show()
+            end
         end
     end
     for i = slot + 1, MARKS_OUT do
@@ -581,30 +795,64 @@ local function Place(snapshot, span)
         frame.outgoing[i]:Hide()
     end
 
-    -- The axis labels: one every two seconds, oldest on the left.
-    local step = span > 12 and 4 or 2
-    for i, entry in ipairs(frame.ticks) do
-        local at = (i - 1) * step
-        if at <= span then
-            local x = PLOT_L + Replay.Fraction(at, span) * PLOT_W
-            entry.tick:ClearAllPoints()
-            entry.tick:SetPoint("TOP", frame, "TOPLEFT", x, -AXIS_Y)
-            entry.label:ClearAllPoints()
-            entry.label:SetPoint("TOP", frame, "TOPLEFT", x - 20, -(AXIS_Y + 7))
-            entry.label:SetText(at == 0 and "death" or string.format("-%ds", at))
-            entry.tick:Show()
-            entry.label:Show()
-        else
-            entry.tick:Hide()
-            entry.label:Hide()
+    -- The scale, written ON the line. The step follows the ZOOM: showing
+    -- twelve seconds at once wants a label every two, showing one and a
+    -- half wants one every half, or the axis is either crowded or bare.
+    local shown = from - to
+    local step = 1
+    if shown > 12 then step = 2
+    elseif shown <= 3 then step = 0.5
+    end
+
+    local slotIndex = 0
+    for at = math.floor(to / step) * step, from + step, step do
+        if at >= to - 0.001 and at <= from + 0.001 then
+            slotIndex = slotIndex + 1
+            local entry = frame.ticks[slotIndex]
+            if entry then
+                local x = PLOT_L + Replay.Fraction(at, from, to) * PLOT_W
+                entry.plate:ClearAllPoints()
+                entry.plate:SetPoint("CENTER", frame, "TOPLEFT", x,
+                    -(AXIS_Y + 1))
+                entry.label:ClearAllPoints()
+                entry.label:SetPoint("CENTER", frame, "TOPLEFT", x,
+                    -(AXIS_Y + 1))
+                entry.label:SetText(at < 0.001 and "death"
+                    or (step < 1 and string.format("%.1fs", at)
+                        or string.format("%ds", at)))
+                entry.plate:SetWidth(at < 0.001 and 40 or 30)
+                entry.plate:Show()
+                entry.label:Show()
+            end
         end
     end
+    for i = slotIndex + 1, #frame.ticks do
+        frame.ticks[i].plate:Hide()
+        frame.ticks[i].label:Hide()
+    end
+
+    -- Half a step between them, unwritten: they say how fast the story is
+    -- running without adding a second column of numbers.
+    local half = 0
+    for at = math.floor(to / step) * step + step / 2, from, step do
+        if at >= to and at <= from then
+            half = half + 1
+            local tick = frame.halfTicks[half]
+            if tick then
+                local x = PLOT_L + Replay.Fraction(at, from, to) * PLOT_W
+                tick:ClearAllPoints()
+                tick:SetPoint("TOP", frame, "TOPLEFT", x, -(AXIS_Y - 2))
+                tick:Show()
+            end
+        end
+    end
+    for i = half + 1, #frame.halfTicks do frame.halfTicks[i]:Hide() end
 end
 
 -- What is lit and what is waiting, for the clock's current position.
 local function Paint(now)
     local state = Replay.state
-    local span = state.span
+    local from, to = state.viewFrom or state.span, state.viewTo or 0
 
     for _, lane in ipairs({ frame.incoming, frame.outgoing, frame.heals }) do
         for _, mark in ipairs(lane) do
@@ -627,9 +875,34 @@ local function Paint(now)
         or "")
     frame.clock:SetText(string.format("-%.1fs", math.max(0, now)))
 
-    frame.playhead:ClearAllPoints()
-    frame.playhead:SetPoint("TOP", frame, "TOPLEFT",
-        PLOT_L + Replay.Fraction(now, span) * PLOT_W, -56)
+    -- The playhead only exists where the view reaches; zoomed in and
+    -- scrolled away from it, it is off the plot and must not be drawn
+    -- pinned to an edge it is not at.
+    if Replay.Visible(now, from, to) then
+        frame.playhead:ClearAllPoints()
+        frame.playhead:SetPoint("TOP", frame, "TOPLEFT",
+            PLOT_L + Replay.Fraction(now, from, to) * PLOT_W, -(HEALTH_Y - 4))
+        frame.playhead:Show()
+    else
+        frame.playhead:Hide()
+    end
+end
+
+-- Recomputes the view and lays every mark out again. Called when the zoom
+-- or the scroll changes, and every frame while a zoomed-in replay is
+-- following the playhead. At zoom 1 the view never moves, so the normal
+-- case costs one comparison rather than sixty-eight SetPoints.
+function Replay.Redraw()
+    local state = Replay.state
+    if not (state and frame) then return end
+
+    local centre = state.following and state.now or state.pan
+    local from, to = Replay.View(state.span, state.zoom, centre)
+    if state.viewFrom == from and state.viewTo == to then return end
+
+    state.viewFrom, state.viewTo = from, to
+    Place(state.snapshot, from, to)
+    Paint(math.max(0, state.now))
 end
 
 ---------------------------------------------------------------------------
@@ -652,12 +925,19 @@ function Replay:Open(snapshot)
 
     local span = Replay.Span(story)
     Replay.state = {
+        snapshot = snapshot,
         events = events,
         maxHP = snapshot.maxHP,
         span = span,
         now = span,
         paused = false,
         speed = (ns.db and ns.db.death and ns.db.death.replaySpeed) or 1,
+        -- The zoom starts out showing everything, and the view FOLLOWS the
+        -- playhead until the wheel is used - after which it stays where it
+        -- was put, until Restart or Stop hands it back.
+        zoom = 1,
+        following = true,
+        pan = nil,
     }
 
     frame.title:SetText(snapshot.killer
@@ -702,8 +982,10 @@ function Replay:Open(snapshot)
 
     frame.playButton.label:SetText("Pause")
     frame.speedRow.Refresh()
+    frame.zoomRow.Refresh()
 
-    Place(snapshot, span)
+    Replay.state.viewFrom, Replay.state.viewTo = span, 0
+    Place(snapshot, span, 0)
     Paint(span)
 
     -- Opened from the death window's button, so it opens IN FRONT of it
@@ -721,6 +1003,9 @@ function Replay:Open(snapshot)
             state.paused = true
             frame.playButton.label:SetText("Play")
         end
+        -- Zoomed in, the view walks with the playhead; at zoom 1 Redraw
+        -- finds nothing changed and returns without touching a frame.
+        if state.zoom > 1 and state.following then Replay.Redraw() end
         Paint(math.max(0, state.now))
     end)
 

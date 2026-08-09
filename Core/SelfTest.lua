@@ -1307,11 +1307,32 @@ local function TestDeath()
         Check("An empty story still has a plot to draw on",
             Replay.Span({}) >= 1)
         Check("The death sits at the right-hand end of the axis",
-            math.abs(Replay.Fraction(0, 10) - 1) < 0.001)
-        Check("The oldest moment sits at the left-hand end",
-            math.abs(Replay.Fraction(10, 10)) < 0.001)
-        Check("A moment off the end of the plot is clamped onto it",
-            Replay.Fraction(40, 10) == 0 and Replay.Fraction(-5, 10) == 1)
+            math.abs(Replay.Fraction(0, 10, 0) - 1) < 0.001)
+        Check("The oldest moment shown sits at the left-hand end",
+            math.abs(Replay.Fraction(10, 10, 0)) < 0.001)
+        -- NOT clamped, on purpose: a mark two seconds off the left edge
+        -- must not pile up against the border pretending it is at it.
+        -- Replay.Visible is what decides whether it is drawn at all.
+        Check("A moment off the plot answers off the plot",
+            Replay.Fraction(20, 10, 0) < 0 and Replay.Fraction(-5, 10, 0) > 1)
+        Check("What is on screen and what is not is its own question",
+            Replay.Visible(5, 10, 0) and not Replay.Visible(12, 10, 0)
+                and not Replay.Visible(-1, 10, 0))
+
+        -- The view: zoom 1 is everything, and zooming in follows a centre
+        -- without ever running off either end of the story.
+        local from, to = Replay.View(10, 1, nil)
+        Check("At rest the plot shows the whole death",
+            from == 10 and to == 0)
+        from, to = Replay.View(10, 2, 5)
+        Check("Zoomed in, it shows a window round where you are looking",
+            math.abs(from - 7.5) < 0.001 and math.abs(to - 2.5) < 0.001)
+        from, to = Replay.View(10, 2, 9.9)
+        Check("It cannot scroll past the beginning",
+            math.abs(from - 10) < 0.001 and math.abs(to - 5) < 0.001)
+        from, to = Replay.View(10, 2, 0)
+        Check("It cannot scroll past the death",
+            math.abs(to) < 0.001 and math.abs(from - 5) < 0.001)
 
         -- What the killer's portrait says on hover, summed from the events
         -- we already read. There is no client call for "what can this NPC

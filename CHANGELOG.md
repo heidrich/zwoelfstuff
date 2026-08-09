@@ -4,6 +4,49 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.50.0] - 2026-08-09
+
+### Added
+
+- **Your presses are bars, not icons.** Each starts where you cast it and
+  runs for as long as it is up, so "was it still there when the hit landed"
+  is answerable by looking. Overlapping bars stack onto rows
+  (`Replay.StackRows`, greedy by start time) and each keeps its own colour.
+  **Where the duration comes from**: this addon measures durations and never
+  assumes them (see `KnownProcs.lua`). Aura data is secret on this patch, so
+  the source is the "active for N seconds" number you can set yourself on
+  the Auras page. Unset, the press draws as a marker with no length rather
+  than an invented one.
+
+- **Zoom, and the wheel scrolls the plot.** Six presses inside two tenths of
+  a second cannot be drawn apart at any icon size, so the plot shows less
+  time instead (`Replay.View`, up to 8x). While playing the view walks with
+  the playhead; scrolling takes it off that until Restart or Stop hands it
+  back. At zoom 1 the view never moves, so the normal case costs one
+  comparison per frame rather than sixty-eight re-anchors.
+
+### Changed
+
+- **The axis** is three pixels rather than one and carries its seconds **on**
+  the line, on a patch of the window's own background, with half-second
+  marks between them. The scale follows the zoom: twelve seconds on screen
+  gets a label every two, a second and a half gets one every half.
+
+- **The killer's portrait** is small and sits on the damage lane instead of
+  filling the window's corner - in a dungeon twenty things are hitting you
+  and one large face claimed the whole picture for one of them.
+
+- The health bar is **red**, the **boxes around the icons are gone**, and the
+  **Speed label sits next to its slider** rather than eighty pixels away.
+
+### Fixed
+
+- **A heal was recognised by two event names written from memory**
+  (`SPELL_HEAL`, `SPELL_PERIODIC_HEAL`). It is now anything the client calls
+  HEAL - if the recap says `SPELL_HEAL_ABSORBED` or anything else in that
+  family, a heal would have been drawn as damage and counted into the wrong
+  total.
+
 ## [4.49.0] - 2026-08-09
 
 ### Added

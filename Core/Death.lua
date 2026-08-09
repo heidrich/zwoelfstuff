@@ -837,7 +837,12 @@ function Death.ReadRecap(recapID)
             amount = (ns.CanCompute(amount) and type(amount) == "number")
                 and math.abs(amount) or 0,
             hp = (ns.CanCompute(hp) and type(hp) == "number") and hp or nil,
-            heal = kind == "SPELL_HEAL" or kind == "SPELL_PERIODIC_HEAL",
+            -- Anything with HEAL in its name, not two guessed constants.
+            -- SPELL_HEAL and SPELL_PERIODIC_HEAL were written from memory;
+            -- if the recap says SPELL_HEAL_ABSORBED or anything else in
+            -- that family, a heal would have been drawn as damage and
+            -- counted into the wrong total. The word is the rule.
+            heal = kind:find("HEAL", 1, true) ~= nil,
             name = Death.SafeName(ev.spellName, kind),
             who = WhoOf(ev),
             spellID = (ns.CanCompute(ev.spellId) and type(ev.spellId) == "number"
