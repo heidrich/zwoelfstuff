@@ -22,10 +22,17 @@ ns.OptionsExternals = Page
 
 local SLOT, GAP = 40, 8
 local PER_ROW = 8
-local SLOTS = 12
 
 local function Cfg() return ns.Externals.Config() end
 local function Apply() ns.Externals.Refresh() end
+
+-- WHICH SLOT THE NEXT SPELL GOES INTO. The same idea the cooldown page runs
+-- on: you click a cell, it stays marked, and the list on the right fills THAT
+-- one. Owner: "wenn ich eine zelle anklicke, sollte die zelle markiert sein".
+--
+-- On the module rather than a local, because the third column is built by a
+-- different function and has to read it.
+Page.selected = nil
 
 ---------------------------------------------------------------------------
 -- The page
@@ -39,28 +46,45 @@ function Page:BuildPage(page, width)
     grid:Section("Your externals")
 
     local host = CreateFrame("Frame", nil, grid.content)
-    host:SetHeight(SLOT * 2 + GAP)
+    local MAX = ns.Externals.MAX_SLOTS
+    local HOST_H = math.ceil(MAX / PER_ROW) * (SLOT + GAP)
+    host:SetHeight(HOST_H)
 
+    -- Every slot the count could ever reach is BUILT once and shown or hidden
+    -- from the count. Building them from the count instead would mean
+    -- creating frames while somebody drags a slider, which is how a settings
+    -- page ends up with two hundred frames after one afternoon.
     local slots = {}
-    for index = 1, SLOTS do
+    for index = 1, MAX do
         local slot = UI.SpellSlot(host, {
             size = SLOT,
-            get = function() return ns.Externals.Picked()[index] end,
+            get = function() return ns.Externals.SpellAt(index) end,
+            onEmptyClick = function()
+                Page.selected = (Page.selected ~= index) and index or nil
+                ns.Options:Refresh()
+            end,
             onClear = function()
-                local spellID = ns.Externals.Picked()[index]
-                if spellID then
-                    ns.Externals.Drop(spellID)
-                    ns.Options:Refresh()
-                end
+                ns.Externals.ClearSlot(index)
+                ns.Options:Refresh()
             end,
         })
+        -- A FILLED slot answers a left click too - selecting it is how you
+        -- say "replace this one". UI.SpellSlot only calls onEmptyClick, so
+        -- the click is taken here and the widget's own path is left alone.
+        slot:HookScript("OnClick", function(_, button)
+            if button ~= "LeftButton" then return end
+            if ns.Externals.SpellAt(index) then
+                Page.selected = (Page.selected ~= index) and index or nil
+                ns.Options:Refresh()
+            end
+        end)
         slot:SetPoint("TOPLEFT", host, "TOPLEFT",
             ((index - 1) % PER_ROW) * (SLOT + GAP),
             -math.floor((index - 1) / PER_ROW) * (SLOT + GAP))
         slots[index] = slot
     end
 
-    grid:Wide(host, SLOT * 2 + GAP, 2, 10)
+    grid:Wide(host, HOST_H, 2, 10)
 
     grid:Note("Pick from the list on the right - any of them, at any time, "
         .. "whoever happens to be in your group. On your screen, clicking one "
@@ -72,6 +96,16 @@ function Page:BuildPage(page, width)
     -- The panel
     ---------------------------------------------------------------------
     grid:Section("The panel")
+
+    UI.Slider(grid:Row("How many slots"), {
+        get = function() return ns.Externals.Count() end,
+        set = function(value) ns.Externals.SetCount(value) end,
+        min = 1, max = ns.Externals.MAX_SLOTS, step = 1,
+        apply = function() ns.Options:Refresh() end,
+    })
+    grid:Note("How many places there are to put a spell. Taking it down and "
+        .. "back up gives you what you had - a slot beyond the count keeps "
+        .. "what is in it, the same way a shrunk bar keeps its cells.")
 
     UI.Slider(grid:Row("Icon size"), {
         get = function() return Cfg().size or 40 end,
@@ -116,7 +150,17 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("What you say")
 
-    local messageRow = grid:FullRow("Whisper", { controlWidth = 300 })
+    local channelRow = grid:Row("Send it to")
+    UI.Dropdown(channelRow, ns.Externals.CHANNELS,
+        function() return Cfg().channel or "WHISPER" end,
+        function(value) Cfg().channel = value end, {})
+    grid:Note("A whisper reaches the one person who can cast it. Party and "
+        .. "raid reach everybody - useful when you do not care who answers, "
+        .. "as long as somebody does. |cffffd100Party or raid|r picks the "
+        .. "right one for the group you are actually in, which in a dungeon "
+        .. "from the finder is NOT the party channel.")
+
+    local messageRow = grid:FullRow("Message", { controlWidth = 300 })
     local input = UI.Input(messageRow.slot, 300, function(text)
         Cfg().message = (text ~= "" and text) or nil
     end, false, ns.Externals.DEFAULT_MESSAGE)
@@ -126,10 +170,12 @@ function Page:BuildPage(page, width)
     -- this twice on every repaint.
     messageRow.Refresh = function() input:SetText(Cfg().message or "") end
 
-    grid:Note("One sentence for every slot. |cffffd100%s|r is where the "
-        .. "spell's name goes. Leave it out and the name is put in brackets "
-        .. "after it anyway - a whisper that does not say WHAT you want is a "
-        .. "whisper nobody can act on.")
+    grid:Note("One sentence for every slot. |cffffd100%s|r is the spell's "
+        .. "name and |cffffd100%n|r is the person being asked - worth having "
+        .. "in party or raid chat, where \"Ironbark bitte!\" asks nobody in "
+        .. "particular. Leave |cffffd100%s|r out and the name is put in "
+        .. "brackets anyway: a message that does not say WHAT you want is one "
+        .. "nobody can act on.")
 
     grid:Buttons({
         { text = "Move the panel", width = 150, style = "primary",
@@ -158,7 +204,7 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Who to ask")
 
-    for index = 1, SLOTS do
+    for index = 1, ns.Externals.MAX_SLOTS do
         local row = grid:FullRow("", { controlWidth = 220 })
         local function SpellID() return ns.Externals.Picked()[index] end
 
@@ -210,7 +256,16 @@ function Page:BuildPage(page, width)
     grid:Layout()
 
     page.Refresh = function()
-        for _, slot in ipairs(slots) do slot.Refresh() end
+        local count = ns.Externals.Count()
+        -- The selection cannot outlive the slot it points at: drag the count
+        -- down past the marked one and it would sit on a slot nobody can see.
+        if Page.selected and Page.selected > count then Page.selected = nil end
+
+        for index, slot in ipairs(slots) do
+            slot:SetShown(index <= count)
+            slot:SetSelected(Page.selected == index)
+            slot.Refresh()
+        end
         grid:Refresh()
     end
 end
@@ -261,7 +316,19 @@ function Page:BuildSide(sideHost, pad)
             if ns.Externals.IsPicked(entry.spellID) then
                 ns.Externals.Drop(entry.spellID)
             else
-                ns.Externals.Pick(entry.spellID)
+                -- Into the slot you marked, or the first empty one. Nothing
+                -- free is not a silent no: the page says so, because a click
+                -- that appears to do nothing reads as a broken list.
+                local landed = ns.Externals.Pick(entry.spellID, Page.selected)
+                if not landed then
+                    ns.Print("|cffff8040Every slot is full.|r Raise "
+                        .. "|cffffd100How many slots|r, or right-click one to "
+                        .. "empty it.")
+                else
+                    -- The marked slot has been used. Keeping the mark would
+                    -- make the next click overwrite what this one just placed.
+                    Page.selected = nil
+                end
             end
             ns.Options:Refresh()
         end)

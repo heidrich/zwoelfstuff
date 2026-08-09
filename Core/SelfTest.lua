@@ -3912,7 +3912,108 @@ local function TestExternals()
         X.Message("Ironbark"):find("Ironbark", 1, true) ~= nil,
         X.Message("Ironbark"))
 
+    -- %n, the person. Worth having in party chat, where "Ironbark bitte!"
+    -- asks nobody in particular.
+    cfg.message = "%n, %s bitte"
+    Check("The name is written into the message",
+        X.Message("Ironbark", "Baum") == "Baum, Ironbark bitte",
+        X.Message("Ironbark", "Baum"))
+
+    -- Nobody resolved: the placeholder comes OUT rather than being read as
+    -- "%n" by somebody mid-pull, and the space it sat in goes with it.
+    Check("With nobody to name, the placeholder is removed",
+        X.Message("Ironbark", nil):find("%%n") == nil,
+        X.Message("Ironbark", nil))
+    Check("And no hole is left where the name was",
+        X.Message("Ironbark", nil) == ", Ironbark bitte"
+            or X.Message("Ironbark", nil) == "Ironbark bitte"
+            or X.Message("Ironbark", nil):find("  ") == nil,
+        X.Message("Ironbark", nil))
+
+    -- A percent sign in a spell name would otherwise be read as a capture by
+    -- the NEXT gsub. Nothing in this list has one today, which is exactly why
+    -- it is worth a test rather than a memory.
+    cfg.message = "%s bitte"
+    Check("A percent in a name survives",
+        X.Message("100%% Mana", nil):find("Mana", 1, true) ~= nil,
+        X.Message("100%% Mana", nil))
+
     cfg.message = was
+
+    ---------------------------------------------------------------------
+    -- WHICH CHANNEL IT ACTUALLY GOES ON
+    --
+    -- The one that would have shipped broken: /p is NOT the party channel in
+    -- a dungeon from the group finder. That group talks on INSTANCE_CHAT, and
+    -- a message sent to PARTY there arrives NOWHERE - silently, which is the
+    -- worst way for a "tell the healer" button to fail.
+    ---------------------------------------------------------------------
+    local R = X.ResolveChannel
+    Check("A whisper is a whisper anywhere", R("WHISPER") == "WHISPER")
+    Check("Say needs no group", R("SAY", false) == "SAY")
+
+    Check("A group message alone goes nowhere, and says so",
+        R("GROUP", false) == nil)
+    Check("In a party it is PARTY",
+        R("GROUP", true, false, false) == "PARTY")
+    Check("In a raid it is RAID",
+        R("GROUP", true, true, false) == "RAID")
+    Check("IN A DUNGEON FROM THE FINDER IT IS INSTANCE_CHAT",
+        R("GROUP", true, false, true) == "INSTANCE_CHAT",
+        tostring(R("GROUP", true, false, true)))
+    Check("An instance raid is instance chat too",
+        R("GROUP", true, true, true) == "INSTANCE_CHAT")
+
+    -- The raid warning, and its two ways of not being available. Neither
+    -- refuses to send: the message still wants to arrive.
+    Check("A raid warning as lead is a raid warning",
+        R("RAID_WARNING", true, true, false, true) == "RAID_WARNING")
+    local fallback, why2 = R("RAID_WARNING", true, true, false, false)
+    Check("Without assist it falls back to raid chat", fallback == "RAID")
+    Check("And it says why", type(why2) == "string" and #why2 > 0)
+    Check("Outside a raid it goes to the group instead",
+        R("RAID_WARNING", true, false, false, false) == "PARTY")
+    Check("In an instance group, to instance chat",
+        R("RAID_WARNING", true, false, true, false) == "INSTANCE_CHAT")
+
+    ---------------------------------------------------------------------
+    -- Slots
+    ---------------------------------------------------------------------
+    local keptCells, keptCount = X.Config().cells, X.Config().count
+    X.Config().cells, X.Config().count = {}, 4
+
+    Check("An empty panel has nothing on it", #X.Picked() == 0)
+
+    local landed = X.Pick(6940)
+    Check("A spell lands in the first free slot", landed == 1, tostring(landed))
+    Check("And it is on the panel", X.IsPicked(6940))
+
+    landed = X.Pick(102342, 3)
+    Check("A marked slot is used when there is one", landed == 3,
+        tostring(landed))
+    Check("The slot between them is still empty", X.SpellAt(2) == nil)
+
+    -- One spell, one slot. A second copy would whisper twice for one click.
+    X.SetSlot(2, 6940)
+    Check("Putting a spell somewhere else MOVES it", X.SpellAt(1) == nil)
+    Check("And it is in its new place", X.SpellAt(2) == 6940)
+
+    -- What falls off the end stays put. The same rule a shrunk bar follows.
+    X.SetCount(2)
+    Check("A slot beyond the count keeps what is in it", X.SpellAt(3) == 102342)
+    Check("But it is not on the panel", #X.Picked() == 1)
+    X.SetCount(4)
+    Check("Raising the count gives it back", #X.Picked() == 2)
+
+    X.ClearSlot(2)
+    Check("Clearing a slot empties it", X.SpellAt(2) == nil)
+
+    X.SetCount(1)
+    Check("The count never goes below one", X.Count() >= 1)
+    X.SetCount(999)
+    Check("And never past the ceiling", X.Count() == X.MAX_SLOTS)
+
+    X.Config().cells, X.Config().count = keptCells, keptCount
 end
 
 function Test:Run()

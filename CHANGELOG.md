@@ -4,6 +4,48 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.59.0] - 2026-08-09
+
+### Changed
+
+- **The externals panel is SLOTS now, the way the cooldown bars are.** It was
+  an ordered list, which is why "how many slots" changed nothing and why there
+  was no empty third slot to click on. There is a count, a sparse table of
+  what is in each place, and a profile written before this pours its old list
+  into the slots once.
+- **Click a slot and it stays marked**, and the next spell you click in the
+  list goes into THAT one - the same gesture the Cooldowns page runs on. A
+  marked slot is cleared once it is used, or the next click would overwrite
+  what the last one just placed.
+- **A spell can only be in one slot.** Putting it somewhere else moves it
+  rather than leaving a second copy, which would whisper twice for one click.
+- Taking the count down and back up gives you what you had: a slot beyond the
+  count keeps its spell, the same rule a shrunk bar follows.
+
+### Added
+
+- **Where the message goes**: whisper, party or raid, raid warning, say, yell.
+  **"Party or raid" picks the right one for the group you are actually in** -
+  and that is the point of it: `/p` is NOT the party channel in a dungeon from
+  the group finder. That group talks on `INSTANCE_CHAT`, and a message sent to
+  `PARTY` there arrives nowhere at all, silently. `IsInGroup(2)` is the test,
+  taken from BigWigs, which picks its channel exactly this way.
+- A raid warning outside a raid, or without assist, falls back to the group
+  rather than refusing - the message still wants to arrive - and says which.
+- **`%n` in the message is the person being asked**, next to `%s` for the
+  spell. Worth having in party chat, where "Ironbark bitte!" asks nobody in
+  particular. With nobody to name, the placeholder is removed rather than
+  printed.
+
+### Fixed
+
+- `gsub` answers a string AND a count, and handing that pair straight to
+  another `gsub` makes the count its LIMIT - "replace at most 0 times". The
+  message went out with a literal `%s` in it. Caught by the self test, which
+  is the only reason it is in this section rather than in a screenshot.
+- A client with no chat API is a sentence now, not an error thrown under the
+  cursor.
+
 ## [4.58.2] - 2026-08-09
 
 ### Fixed

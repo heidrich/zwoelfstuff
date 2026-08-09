@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.59.0",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100The externals panel works like the cooldown bars now.|r Set how many slots you want, click one to mark it, then click a spell in the list to put it there. Right-click empties a slot. It was an ordered list before, which is why the slot count did nothing at all.",
+            "|cffffd100Send it somewhere other than a whisper|r - party, raid, raid warning, say, yell. |cffffd100Party or raid|r picks the right channel for the group you are actually in: in a dungeon from the group finder that is NOT party chat, and a message sent there would have arrived nowhere.",
+            "|cffffd100%n|r in your message is the person being asked, next to |cffffd100%s|r for the spell. In party chat \"Ironbark bitte!\" asks nobody in particular; \"Baum, Ironbark bitte!\" asks somebody.",
+            "A raid warning outside a raid, or without assist, goes to the group instead of failing quietly.",
+            "The |cffffd100Who to ask|r boxes were blank and now say what they do.",
+        },
+    },
+    {
         version = "4.58.1",
         date = "2026-08-09",
         lines = {

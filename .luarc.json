@@ -67,6 +67,7 @@
     "IsInRaid",
     "LE_PARTY_CATEGORY_INSTANCE",
     "SendChatMessage",
+    "UnitIsGroupAssistant",
     "IsMouseButtonDown",
     "IsResting",
     "IsShiftKeyDown",

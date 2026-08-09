@@ -64,42 +64,127 @@ function Externals.Get(spellID) return byID[spellID] end
 ---------------------------------------------------------------------------
 -- Configuration
 ---------------------------------------------------------------------------
+-- SLOTS, NOT A LIST. Owner: "slot anzahl geht nicht. das sollte wie bei den
+-- cooldowns funktionieren."
+--
+-- So this is shaped like a bar: a COUNT of slots, and a sparse table of what
+-- is in each one. The difference from the old ordered list is the whole point
+-- - a list has no empty third slot to click on, so there was nothing to
+-- select and nothing for a count to change.
+Externals.MAX_SLOTS = 24
+
 function Externals.Config()
     ns.db.externals = ns.db.externals or {}
     local cfg = ns.db.externals
-    cfg.picked = cfg.picked or {}       -- ordered list of spell ids
-    cfg.assigned = cfg.assigned or {}   -- [spellID] = "Name-Realm", raid only
+    cfg.cells = cfg.cells or {}
+    cfg.assigned = cfg.assigned or {}   -- [spellID] = "Name-Realm"
+    cfg.count = cfg.count or 6
+
+    -- A profile written before the slots existed carries an ordered list.
+    -- Poured into the cells in the order it had, once, and then dropped: a
+    -- migration that runs twice would refill slots somebody has emptied.
+    if cfg.picked then
+        for index, spellID in ipairs(cfg.picked) do
+            if cfg.cells[index] == nil then cfg.cells[index] = spellID end
+        end
+        cfg.count = math.max(cfg.count, #cfg.picked)
+        cfg.picked = nil
+    end
+
     return cfg
 end
 
+function Externals.Count()
+    local cfg = Externals.Config()
+    return math.max(1, math.min(Externals.MAX_SLOTS, cfg.count or 6))
+end
+
+function Externals.SetCount(value)
+    local cfg = Externals.Config()
+    cfg.count = math.max(1, math.min(Externals.MAX_SLOTS, math.floor(value or 6)))
+    -- WHAT FALLS OFF THE END STAYS PUT. Dragging the count down and back up
+    -- must give you what you had - the same rule a bar's cells follow, and
+    -- the reason a shrunk bar does not forget its spells.
+    Externals.Refresh()
+end
+
+function Externals.SpellAt(index)
+    return Externals.Config().cells[index]
+end
+
+function Externals.SetSlot(index, spellID)
+    if index < 1 or index > Externals.MAX_SLOTS then return end
+    if spellID and not byID[spellID] then return end
+    local cfg = Externals.Config()
+
+    -- One spell in one slot. Putting it somewhere else MOVES it rather than
+    -- leaving a second copy, which would whisper twice for one click.
+    if spellID then
+        for other, id in pairs(cfg.cells) do
+            if id == spellID and other ~= index then cfg.cells[other] = nil end
+        end
+    end
+
+    cfg.cells[index] = spellID
+    Externals.Refresh()
+end
+
+function Externals.ClearSlot(index)
+    local cfg = Externals.Config()
+    local spellID = cfg.cells[index]
+    cfg.cells[index] = nil
+    if spellID then cfg.assigned[spellID] = nil end
+    Externals.Refresh()
+end
+
+-- Every spell on the panel, in slot order, holes skipped. What the SCREEN
+-- draws and what the "Who to ask" rows walk.
 function Externals.Picked()
-    return Externals.Config().picked
+    local out = {}
+    local cfg = Externals.Config()
+    for index = 1, Externals.Count() do
+        if cfg.cells[index] then out[#out + 1] = cfg.cells[index] end
+    end
+    return out
+end
+
+function Externals.SlotOf(spellID)
+    local cfg = Externals.Config()
+    for index = 1, Externals.Count() do
+        if cfg.cells[index] == spellID then return index end
+    end
+    return nil
 end
 
 function Externals.IsPicked(spellID)
-    for _, id in ipairs(Externals.Picked()) do
-        if id == spellID then return true end
-    end
-    return false
+    return Externals.SlotOf(spellID) ~= nil
 end
 
-function Externals.Pick(spellID)
-    if not byID[spellID] or Externals.IsPicked(spellID) then return end
-    local picked = Externals.Picked()
-    picked[#picked + 1] = spellID
-    Externals.Refresh()
+-- Into the slot somebody has selected, or the first empty one. Answers the
+-- index it used, or nil when every slot is full - which the page reports,
+-- because a click that quietly does nothing reads as a broken list.
+function Externals.Pick(spellID, preferred)
+    if not byID[spellID] then return nil end
+    if Externals.IsPicked(spellID) then return Externals.SlotOf(spellID) end
+
+    local cfg = Externals.Config()
+    if preferred and preferred >= 1 and preferred <= Externals.Count() then
+        Externals.SetSlot(preferred, spellID)
+        return preferred
+    end
+
+    for index = 1, Externals.Count() do
+        if not cfg.cells[index] then
+            Externals.SetSlot(index, spellID)
+            return index
+        end
+    end
+    return nil
 end
 
 function Externals.Drop(spellID)
-    local picked = Externals.Picked()
-    for index, id in ipairs(picked) do
-        if id == spellID then
-            table.remove(picked, index)
-            break
-        end
-    end
-    Externals.Config().assigned[spellID] = nil
-    Externals.Refresh()
+    local index = Externals.SlotOf(spellID)
+    if index then Externals.ClearSlot(index) end
 end
 
 ---------------------------------------------------------------------------
@@ -208,29 +293,124 @@ end
 -- wording are the same setting.
 Externals.DEFAULT_MESSAGE = "%s bitte!"
 
-function Externals.Message(spellName)
+-- WHERE IT GOES. Owner: "wir brauchen noch mehr funktionen, neben wisper,
+-- /p /ra /y etc".
+--
+-- "GROUP" is one entry rather than three, and that is the whole reason it
+-- exists: /p is NOT the party channel in a random dungeon. A group formed by
+-- the finder talks on INSTANCE_CHAT, and a message sent to PARTY there
+-- arrives nowhere at all - silently. IsInGroup(2) is the test, taken from
+-- BigWigs, which picks its channel exactly this way in shipping code.
+Externals.CHANNELS = {
+    { value = "WHISPER",      text = "Whisper the one who can cast it" },
+    { value = "GROUP",        text = "Party or raid (whichever you are in)" },
+    { value = "RAID_WARNING", text = "Raid warning" },
+    { value = "SAY",          text = "Say" },
+    { value = "YELL",         text = "Yell" },
+}
+
+-- The channel a message would actually be sent on, and why not, when not.
+-- Its own function so the page can say "you are not in a group" before you
+-- press anything rather than after.
+function Externals.ResolveChannel(choice, inGroup, inRaid, inInstanceGroup,
+    canWarn)
+    choice = choice or "WHISPER"
+    if choice == "WHISPER" then return "WHISPER" end
+
+    if choice == "SAY" or choice == "YELL" then return choice end
+
+    if not inGroup then
+        return nil, "you are not in a group"
+    end
+
+    if choice == "RAID_WARNING" then
+        if not inRaid then
+            -- Not an error worth refusing over: outside a raid the warning
+            -- channel does not exist, and the message still wants to arrive.
+            return inInstanceGroup and "INSTANCE_CHAT" or "PARTY",
+                "no raid, sent to the group instead"
+        end
+        if not canWarn then
+            return "RAID", "not lead or assist, sent to raid chat instead"
+        end
+        return "RAID_WARNING"
+    end
+
+    -- "GROUP"
+    if inInstanceGroup then return "INSTANCE_CHAT" end
+    if inRaid then return "RAID" end
+    return "PARTY"
+end
+
+-- %s is the spell, %n is the person being asked. Two placeholders because a
+-- whisper does not need a name in it and a message to the whole group does -
+-- "Ironbark bitte!" in party chat asks nobody in particular.
+function Externals.Message(spellName, targetName)
     local cfg = Externals.Config()
     local text = cfg.message
     if type(text) ~= "string" or text == "" then
         text = Externals.DEFAULT_MESSAGE
     end
+
     -- A message somebody edited down to no placeholder still has to name the
     -- spell, or every slot sends the same sentence and nobody knows which of
     -- their four buttons is being asked for.
     if not text:find("%%s") then
-        return text .. " (" .. (spellName or "?") .. ")"
+        text = text .. " (" .. (spellName or "?") .. ")"
     end
-    return (text:gsub("%%s", spellName or "?"))
+
+    -- ONE VALUE, NOT TWO. gsub answers the string AND the number of
+    -- replacements, and handing that pair straight to another gsub makes the
+    -- count its LIMIT argument - "replace at most 0 times". The message then
+    -- goes out with a literal %s in it and nothing looks wrong in the code.
+    -- Assigned to a single local first, which truncates it.
+    local safeSpell = (spellName or "?"):gsub("%%", "%%%%")
+    text = text:gsub("%%s", safeSpell)
+
+    -- No target resolved and a name asked for: the placeholder comes OUT
+    -- rather than being read as "%n" by somebody mid-pull. The surrounding
+    -- space goes with it, or the sentence keeps a hole where the name was.
+    if targetName then
+        local safeName = targetName:gsub("%%", "%%%%")
+        text = text:gsub("%%n", safeName)
+    else
+        text = text:gsub("%s*%%n%s*", " ")
+    end
+
+    text = text:gsub("^%s+", "")
+    return (text:gsub("%s+$", ""))
+end
+
+-- LE_PARTY_CATEGORY_INSTANCE. The constant is not guaranteed to exist under
+-- that name on every client, and BigWigs writes the literal 2 for the same
+-- reason - so the name is used when it is there and the number when it is not.
+local function InInstanceGroup()
+    local category = LE_PARTY_CATEGORY_INSTANCE or 2
+    return IsInGroup(category) and true or false
 end
 
 function Externals.Ask(spellID)
     local spell = byID[spellID]
     if not spell then return false, "not an external" end
 
+    local cfg = Externals.Config()
+    local choice = cfg.channel or "WHISPER"
+
+    -- WHO is resolved even for a group channel: the message names them, and
+    -- "who would this ask" is the question the tooltip answers either way.
     local target, why = Externals.Whom(spell, Externals.Roster(),
-        Externals.Config().assigned[spellID])
-    if not target then
+        cfg.assigned[spellID])
+
+    if choice == "WHISPER" and not target then
         return false, "nobody in the group can cast it"
+    end
+
+    local channel, note = Externals.ResolveChannel(choice, IsInGroup(),
+        IsInRaid(), InInstanceGroup(),
+        (UnitIsGroupLeader and UnitIsGroupLeader("player"))
+            or (UnitIsGroupAssistant and UnitIsGroupAssistant("player")))
+    if not channel then
+        return false, note or "there is nowhere to send it"
     end
 
     local name = ns.SpellName(spellID) or ("Spell " .. spellID)
@@ -240,8 +420,17 @@ function Externals.Ask(spellID)
     -- death window's share already goes through the same pair.
     ---@diagnostic disable-next-line: deprecated
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
-    send(Externals.Message(name), "WHISPER", nil, target.name)
-    return true, target.name, why
+    if type(send) ~= "function" then
+        return false, "this client has no way to send a chat message"
+    end
+
+    -- The whisper is the only channel with a recipient, and the early return
+    -- above guarantees there IS one by here. Written as its own local so that
+    -- is legible rather than implied halfway along an argument list.
+    local whisperTo = (channel == "WHISPER") and target and target.name or nil
+    send(Externals.Message(name, target and target.name), channel, nil, whisperTo)
+
+    return true, target and target.name or channel, note or why
 end
 
 ---------------------------------------------------------------------------

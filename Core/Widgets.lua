@@ -2458,6 +2458,23 @@ function UI.SpellSlot(parent, cfg)
     marker:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
     marker:Hide()
 
+    -- THE SELECTED SLOT, marked the way a selected bar cell is: an accent
+    -- outline that STAYS. Owner: "wenn ich eine zelle anklicke, sollte die
+    -- zelle markiert sein" - and it is not decoration, it is the answer to
+    -- "where does the next spell I click go".
+    --
+    -- Its own border rather than recolouring the resting one: the resting
+    -- edge has to come back when the selection moves, and a colour that is
+    -- both the resting state and the selected state cannot.
+    local chosen = ns.CreateBorder(slot, 2, "OVERLAY")
+    chosen:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+    chosen:Hide()
+
+    slot.SetSelected = function(_, on)
+        slot.selected = on and true or false
+        chosen:SetShown(slot.selected)
+    end
+
     slot.CellAt = function()
         if not slot:IsVisible() then return nil end
         local x, y = GetCursorPosition()
