@@ -138,13 +138,34 @@ ns.DEFAULTS = {
     -- never seeded - the panel draws nothing until you have picked something,
     -- which is the right silence for a feature that puts icons on the screen.
     externals  = {
-        picked   = {},
+        cells    = {},
         assigned = {},
+        channels = { WHISPER = true },
+        count    = 6,
         size     = 40,
         gap      = 4,
         perLine  = 6,
         growth   = "right",
         onlyInGroup = true,
+
+        -- THE LOOK, UNDER THE SAME KEY NAMES A BAR USES. Owner asked for
+        -- "genau wie die anderen optionen beim cdm", and the cheapest way to
+        -- mean it is literally: ns.PaintSurface and ns.PaintBorder read these
+        -- names, so the panel is painted by the SAME code as a cooldown cell
+        -- rather than by a second renderer that would drift from it.
+        --
+        -- The values are the bar defaults, so a panel and a bar look like
+        -- they belong to one addon before anybody has touched either.
+        scale            = 1.0,
+        alpha            = 1.0,
+        borderSize       = 1,
+        borderColor      = { 0.00, 0.00, 0.00 },
+        borderTexture    = "None",
+        backdrop         = true,
+        backdropColor    = { 0.00, 0.00, 0.00 },
+        backdropAlpha    = 0.90,
+        backdropTexture  = "Blizzard",
+        iconZoom         = 0.08,
     },
 
     -- Which round of modules this character has already been shown. Absent

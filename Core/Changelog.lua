@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.60.0",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100The externals panel has the same look settings a cooldown bar has|r - scale, opacity, icon zoom, border thickness, colour and texture, backdrop and its texture. Same rows, same words, same drawing code: what you learn on one you already know on the other.",
+        },
+    },
+    {
         version = "4.59.1",
         date = "2026-08-09",
         lines = {

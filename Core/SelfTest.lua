@@ -4030,6 +4030,44 @@ local function TestExternals()
     X.Config().channels = keptChannels
 
     ---------------------------------------------------------------------
+    -- THE LOOK, UNDER THE BAR'S OWN KEY NAMES
+    --
+    -- The point of the naming is that ns.PaintSurface and ns.PaintBorder can
+    -- read this table without knowing what a panel is. If a key is ever
+    -- renamed here, the painters keep working on the DEFAULTS and the setting
+    -- silently stops doing anything - which is the failure this catches.
+    ---------------------------------------------------------------------
+    local style = X.Style()
+    for _, key in ipairs({ "borderSize", "borderColor", "borderTexture",
+        "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
+        "iconZoom" }) do
+        Check("The panel's style carries '" .. key .. "'", style[key] ~= nil)
+    end
+    Check("Its border thickness is a number", type(style.borderSize) == "number")
+    Check("Its border colour is three numbers",
+        type(style.borderColor) == "table" and #style.borderColor >= 3)
+    Check("A negative thickness cannot get through",
+        (function()
+            local keptSize = X.Config().borderSize
+            X.Config().borderSize = -5
+            local clamped = X.Style().borderSize
+            X.Config().borderSize = keptSize
+            return clamped >= 0
+        end)())
+
+    -- Every one of these names is one a BAR uses. Spelled the same or the
+    -- two renderers are two vocabularies for one idea.
+    for _, key in ipairs({ "borderSize", "borderColor", "borderTexture",
+        "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
+        "iconZoom", "scale", "alpha" }) do
+        local found = false
+        for _, barKey in ipairs(ns.BAR_STYLE_KEYS) do
+            if barKey == key then found = true break end
+        end
+        Check("'" .. key .. "' is spelled the way a bar spells it", found)
+    end
+
+    ---------------------------------------------------------------------
     -- Slots
     ---------------------------------------------------------------------
     local keptCells, keptCount = X.Config().cells, X.Config().count

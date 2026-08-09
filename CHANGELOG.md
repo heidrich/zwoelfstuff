@@ -4,6 +4,30 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.60.0] - 2026-08-09
+
+### Added
+
+- **The externals panel is styled like a cooldown bar**, because the owner
+  asked for exactly that: "genau wie die anderen optionen beim cdm". Scale,
+  opacity, icon zoom, border thickness/colour/texture, backdrop
+  show/colour/opacity/texture - the same rows, the same words.
+- **And it is not a second renderer.** The settings are stored under the SAME
+  key names a bar uses, so `ns.PaintSurface` and `ns.PaintBorder` paint the
+  panel without knowing what a panel is. A change to how a border is drawn
+  reaches both without anybody remembering there are two places - which is the
+  fault this addon has already paid for twice, once in the aura strips and
+  once in the death window's preview.
+- The self test checks every one of those key names against
+  `ns.BAR_STYLE_KEYS`. Rename one and the painters would quietly keep using
+  the defaults while the setting appeared to do nothing.
+
+### Changed
+
+- The hover outline on a panel icon is the panel's own, drawn above the
+  border: it says "this is the one you are about to press", and it has to be
+  visible whatever border you chose - including none.
+
 ## [4.59.1] - 2026-08-09
 
 ### Changed

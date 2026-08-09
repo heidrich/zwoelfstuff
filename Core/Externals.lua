@@ -577,6 +577,16 @@ function Externals:ApplyLayout()
                 vertical and down or across,
                 -(vertical and across or down))
             slot.icon:SetTexture(ns.SpellTexture(spellID))
+
+            -- Painted every pass rather than only when a setting changes:
+            -- the pass is a walk over at most two dozen icons, and "the
+            -- border did not update" is a class of bug this buys off outright.
+            local style = Externals.Style()
+            ns.PaintSurface(slot.bg, style)
+            ns.PaintBorder(slot.chrome, style, false)
+            local zoom = style.iconZoom
+            slot.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+
             slot:Show()
         end
     end
@@ -592,6 +602,10 @@ function Externals:ApplyLayout()
         panel:SetSize(math.max(1, perLineShown * size + math.max(0, perLineShown - 1) * gap),
             math.max(1, lines * size + (lines - 1) * gap))
     end
+
+    -- The panel's own scale and opacity, the two a bar carries as well.
+    panel:SetScale(math.max(0.3, math.min(3, cfg.scale or 1)))
+    panel:SetAlpha(math.max(0, math.min(1, cfg.alpha or 1)))
 
     panel:SetShown(shown > 0 and self:ShouldShow())
 end
@@ -611,21 +625,45 @@ function Externals:ShouldShow()
     return true
 end
 
-function Externals.BuildSlot()
-    local C = ns.UI.C
+-- The style table the shared painters read. Built from the config under the
+-- SAME key names a bar's is, so ns.PaintSurface and ns.PaintBorder need to
+-- know nothing about this panel - and a change to how a border is drawn
+-- reaches both without anybody remembering there are two places.
+function Externals.Style()
+    local cfg = Externals.Config()
+    return {
+        borderSize      = math.max(0, cfg.borderSize or 1),
+        borderColor     = cfg.borderColor or { 0, 0, 0 },
+        borderTexture   = cfg.borderTexture or "None",
+        borderGradient  = cfg.borderGradient,
+        backdrop        = cfg.backdrop ~= false,
+        backdropColor   = cfg.backdropColor or { 0, 0, 0 },
+        backdropAlpha   = cfg.backdropAlpha or 0.9,
+        backdropTexture = cfg.backdropTexture or "Blizzard",
+        backdropGradient = cfg.backdropGradient,
+        iconZoom        = cfg.iconZoom or 0.08,
+    }
+end
 
+function Externals.BuildSlot()
     local slot = CreateFrame("Button", nil, panel)
     slot:SetFrameStrata("MEDIUM")
 
+    -- A PLATE, THE ART, THEN THE FRAME - the same three layers a cooldown
+    -- cell has, in the same order, painted by the same two functions.
+    slot.bg = slot:CreateTexture(nil, "BACKGROUND")
+    slot.bg:SetAllPoints(slot)
+
     slot.icon = slot:CreateTexture(nil, "ARTWORK")
     slot.icon:SetAllPoints(slot)
-    slot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    local edge = ns.CreateBorder(slot, 1, "OVERLAY")
-    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+    slot.chrome = ns.CreateChrome(slot)
 
     slot:SetScript("OnEnter", function(self)
-        edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        -- The hover is the panel's own, not a style: it says "this is the one
+        -- you are about to press", and it has to be visible whatever border
+        -- the user chose - including none at all.
+        self.hover:Show()
         if not (GameTooltip and self.spellID) then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID) then
@@ -643,8 +681,8 @@ function Externals.BuildSlot()
         GameTooltip:Show()
     end)
 
-    slot:SetScript("OnLeave", function()
-        edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+    slot:SetScript("OnLeave", function(self)
+        self.hover:Hide()
         if GameTooltip then GameTooltip:Hide() end
     end)
 
@@ -652,6 +690,13 @@ function Externals.BuildSlot()
         local ok, whoOrWhy = Externals.Ask(self.spellID)
         if not ok then ns.Print("|cffff8040" .. tostring(whoOrWhy) .. ".|r") end
     end)
+
+    -- ABOVE the chrome, or a thick border drawn on top of it would swallow
+    -- the one signal that says the cursor is here.
+    slot.hover = ns.CreateBorder(slot, 2, "OVERLAY")
+    slot.hover:SetColor(ns.UI.C.accent[1], ns.UI.C.accent[2],
+        ns.UI.C.accent[3], 1)
+    slot.hover:Hide()
 
     return slot
 end

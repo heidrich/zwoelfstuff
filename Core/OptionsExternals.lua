@@ -146,6 +146,82 @@ function Page:BuildPage(page, width)
     grid:Note("Out of combat you are asking for nothing.")
 
     ---------------------------------------------------------------------
+    -- The look
+    --
+    -- Owner: "genau wie die anderen optionen beim cdm" - so these are the
+    -- BAR's settings, under the bar's key names, drawn by the bar's painters.
+    -- Same words on the rows too: a border is a border, and calling it
+    -- something else here would make one addon read like two.
+    ---------------------------------------------------------------------
+    local function Slide(label, key, min, max, step, format, scale)
+        UI.Slider(grid:Row(label), {
+            get = function() return Cfg()[key] end,
+            set = function(value) Cfg()[key] = value end,
+            min = min, max = max, step = step,
+            format = format, scale = scale, apply = Apply,
+        })
+    end
+
+    local function Percent(v)
+        return string.format("%d%%", math.floor((v or 0) * 100 + 0.5))
+    end
+
+    grid:Section("Look")
+
+    Slide("Scale", "scale", 0.5, 2, 0.05, Percent, 100)
+    grid:Note("The whole panel, larger or smaller. The icon size above "
+        .. "changes one icon; this changes everything on it at once.")
+
+    Slide("Opacity", "alpha", 0, 1, 0.05, Percent, 100)
+
+    Slide("Icon zoom", "iconZoom", 0, 0.2, 0.01, Percent, 100)
+    grid:Note("How far into the spell art each icon is cropped. Blizzard's "
+        .. "own art carries a border in the file; cropping cuts it off, and "
+        .. "at 0 you see the whole thing, frame and all.")
+
+    grid:Section("Border")
+
+    Slide("Thickness", "borderSize", 0, 4, 1)
+
+    UI.Swatch(grid:Row("Colour"),
+        function()
+            local colour = Cfg().borderColor or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) Cfg().borderColor = { r, g, b } end, Apply)
+
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-border" }), "border",
+        function() return Cfg().borderTexture end,
+        function(value) Cfg().borderTexture = value end, Apply)
+    grid:Note("None is a crisp one-pixel line drawn from colour textures, and "
+        .. "it stays sharper than any edge file at small sizes. The rest come "
+        .. "from whatever your other addons registered.")
+
+    grid:Section("Backdrop")
+
+    UI.Toggle(grid:Row("Show"),
+        function() return Cfg().backdrop ~= false end,
+        function(value) Cfg().backdrop = value and true or false; Apply() end)
+    grid:Note("A plate behind the icon. Spell art is opaque and fills its "
+        .. "square, so this shows at the edges and wherever the art does not "
+        .. "reach - it is what a cropped icon sits on.")
+
+    UI.Swatch(grid:Row("Colour"),
+        function()
+            local colour = Cfg().backdropColor or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) Cfg().backdropColor = { r, g, b } end, Apply)
+
+    Slide("Opacity", "backdropAlpha", 0, 1, 0.05, Percent, 100)
+
+    UI.MediaPicker(grid:FullRow("Texture",
+        { controlWidth = 190, icon = "media-texture" }), "statusbar",
+        function() return Cfg().backdropTexture end,
+        function(value) Cfg().backdropTexture = value end, Apply)
+
+    ---------------------------------------------------------------------
     -- The message
     ---------------------------------------------------------------------
     grid:Section("What you say")
