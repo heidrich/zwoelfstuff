@@ -4,6 +4,24 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.51.1] - 2026-08-09
+
+### Changed
+
+- **The availability footer writes only what it knows.** `ready` and
+  `25s to go` are answers; "no known cooldown" and "not cast since login"
+  are the addon saying it cannot tell, once per defensive, in the space
+  where the answer should be. The owner read that footer and said they can
+  go. The name and its icon stay.
+- **Inline spell icons are line-height, not 14 pixels.** `|T…:0:0:…|t` sizes
+  the icon to the font's line box; a fixed height taller than the line hangs
+  out of the top of it, which is exactly what it did.
+- **The faces on the replay are 30px** (were 20): a creature model is a
+  whole silhouette in a square, and below about this it is not recognisable
+  as anything.
+- **"What you pressed" sits above its bars**, where the other two lanes
+  carry their names. The bar stack starts 14px lower to make the gap.
+
 ## [4.51.0] - 2026-08-09
 
 ### Added

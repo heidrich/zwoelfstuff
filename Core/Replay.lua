@@ -33,10 +33,10 @@ local frame
 -- The plot. The axis runs the full width between these margins, time
 -- flowing left to right and ending at the killing blow on the right edge.
 local PLOT_L, PLOT_R = 30, 30
-local FRAME_W, FRAME_H = 780, 576
+local FRAME_W, FRAME_H = 780, 590
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
 local AXIS_Y = 268          -- from the top of the frame
-local COLUMN_MAX = 78       -- tallest an incoming column may draw
+local COLUMN_MAX = 70       -- tallest an incoming column may draw
 local MARKS_IN, MARKS_OUT, MARKS_HEAL = 28, 20, 20
 
 -- The columns stand clear of the axis rather than on it: the seconds are
@@ -45,14 +45,18 @@ local MARKS_IN, MARKS_OUT, MARKS_HEAL = 28, 20, 20
 -- ein paar pixel nach oben, das die nicht die zahlen verdecken".
 local COLUMN_LIFT = 10
 
--- A face over every hit, small. In a dungeon twenty things are hitting you
--- at once and a number with no face on it cannot be assigned to any of them.
-local AVATAR = 20
+-- A face over every hit. In a dungeon twenty things are hitting you at once
+-- and a number with no face on it cannot be assigned to any of them.
+--
+-- Twenty pixels was the first size and the owner asked for bigger: a
+-- creature model is not an icon, it is a whole silhouette squeezed into a
+-- square, and below about this it stops being recognisable as anything.
+local AVATAR = 30
 
 -- Three lanes and where each starts, measured from the top of the frame.
 local HEALTH_Y = 84         -- your own health bar
 local LANE_IN_Y = 112       -- "what came in", growing UP to the axis
-local LANE_OUT_Y = 282      -- your presses, as bars under the axis
+local LANE_OUT_Y = 296      -- your presses, as bars under the axis
 local LANE_HEAL_Y = 396     -- "who healed you", under those
 
 -- The press bars: how tall each row is and how many rows may stack before
@@ -618,7 +622,7 @@ local function BuildWindow()
     frame.playhead:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
     frame.playhead:SetWidth(1)
     frame.playhead:SetPoint("TOP", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 4))
-    frame.playhead:SetHeight(LANE_HEAL_Y + 96 - HEALTH_Y)
+    frame.playhead:SetHeight(LANE_HEAL_Y + 112 - HEALTH_Y)
 
     -- Three lanes: what hit you above the axis, what you pressed below it,
     -- and who was healing you under that.
@@ -629,12 +633,14 @@ local function BuildWindow()
 
     frame.laneIn = UI.Eyebrow(frame, "Damage on you")
     frame.laneIn:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_IN_Y)
-    -- UNDER its own bars, not through them. It sat at a fixed offset that
-    -- landed on the third row, which nothing reached while every press drew
-    -- as a stub - and everything reaches now that the bars have length.
+    -- ABOVE its own bars, where the other two lanes carry their names. It
+    -- sat at a fixed offset that landed on the third row of bars - which
+    -- nothing reached while every press drew as a stub - and moving it
+    -- under the stack only made it look like the heading of the lane below
+    -- it. The stack starts fourteen pixels lower instead, and the name goes
+    -- in the gap between the axis and the first row.
     frame.laneOut = UI.Eyebrow(frame, "What you pressed")
-    frame.laneOut:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L,
-        -(LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP) + 2))
+    frame.laneOut:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(AXIS_Y + 8))
     frame.laneHeal = UI.Eyebrow(frame, "Healing on you")
     frame.laneHeal:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_HEAL_Y)
 

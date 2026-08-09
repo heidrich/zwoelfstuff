@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.51.1",
+        date = "2026-08-09",
+        lines = {
+            "The footer under a death only writes what it actually knows now. |cffffd100ready|r and |cffffd10025s to go|r are answers; \"no known cooldown\" and \"not cast since login\" are the addon saying it cannot tell, five times in a row, in the space where the answer should be.",
+            "The inline spell icons sit ON their line instead of standing above it - they had a fixed height, and an icon taller than the line hangs out of the top of it.",
+            "The faces on the replay are bigger, and |cffffd100What you pressed|r sits above its own bars where the other two lanes carry their names.",
+        },
+    },
+    {
         version = "4.51.0",
         date = "2026-08-09",
         lines = {

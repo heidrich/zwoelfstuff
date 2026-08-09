@@ -353,9 +353,15 @@ function Death.SpellText(spellID, name)
     local texture = spellID and ns.SpellTexture and ns.SpellTexture(spellID)
     if type(texture) == "number" then texture = string.format("%d", texture) end
     if type(texture) ~= "string" or texture == "" then return name end
-    -- The trimmed crop every icon in this addon uses, so an inline icon and
-    -- a drawn one are the same picture.
-    return "|T" .. texture .. ":14:14:0:0:64:64:5:59:5:59|t " .. name
+    -- HEIGHT AND WIDTH BOTH ZERO, which means "as tall as the line". A
+    -- fixed 14 pixels was the first attempt and it stood clear of the text
+    -- it belonged to - a font string's line box is the font's height, and
+    -- an icon taller than it hangs out of the top of it. Zero is the idiom
+    -- for an icon that sits IN a sentence.
+    --
+    -- The texel numbers stay: that is the trimmed crop every drawn icon in
+    -- this addon uses, so an inline icon and a drawn one are one picture.
+    return "|T" .. texture .. ":0:0:0:0:64:64:5:59:5:59|t " .. name
 end
 
 -- A list of { spellID, name } as one readable enumeration. Plain strings
@@ -1776,19 +1782,25 @@ function Death:Show(index)
     else
         local bits = {}
         for _, entry in ipairs(snapshot.avail or {}) do
+            -- ONLY WHAT WE ACTUALLY KNOW gets written after the name. The
+            -- other two answers - "no known cooldown", "not cast since
+            -- login" - are this addon saying it cannot tell, five times in
+            -- a row, in the space where the answer should be. The owner
+            -- read that footer and said they can go, and he is right: a
+            -- column of non-answers is worse than a bare list of names,
+            -- because it takes as long to read and says nothing.
             local state
             if entry.remaining == 0 then
-                state = "|cff67c971ready|r"
+                state = ":  |cff67c971ready|r"
             elseif entry.remaining then
-                state = string.format("|cff9ba3af%ds to go|r",
+                state = string.format(":  |cff9ba3af%ds to go|r",
                     math.floor(entry.remaining + 0.5))
             else
-                state = "|cff626a76" .. (entry.why or "unknown") .. "|r"
+                state = ""
             end
             -- Icon in front of the name here too: this footer is a list of
             -- spells, and a list of spells in this game shows its icons.
-            bits[#bits + 1] = Death.SpellText(entry.spellID, entry.name)
-                .. ": " .. state
+            bits[#bits + 1] = Death.SpellText(entry.spellID, entry.name) .. state
         end
         frame.avail:SetText(#bits > 0
             and ("Defensives by our own clock -  " .. table.concat(bits, "   "))
