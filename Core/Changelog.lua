@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.44.1",
+        date = "2026-08-09",
+        lines = {
+            "The death window said \"no deaths this fight\" while Blizzard's own recap stood open. The deaths list lives in a differently named field of the damage meter's answer than this code read; fixed, and the Overall session is checked when the Current one is empty.",
+            "Blizzard's own Death Recap is the tie-breaker now: when it opens, the id it opens with IS your death, and a window still showing \"not enough was readable\" repaints itself with the real events.",
+            "The defensive picker shows each spell's icon, the client's own tooltip on hover, and a filter box - forty same-grey names tell you nothing.",
+        },
+    },
+    {
         version = "4.44.0",
         date = "2026-08-09",
         lines = {

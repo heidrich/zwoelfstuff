@@ -916,6 +916,16 @@ local function MenuEntry(menu, index)
     entry.mark:SetPoint("LEFT", entry, "LEFT", 8, 0)
     entry.mark:Hide()
 
+    -- A real texture beside the vector mark: a spell list is the one menu
+    -- where the icon IS the recognition - people find Vampiric Blood by its
+    -- red drop long before they read its name. The owner asked in as many
+    -- words. Cropped like every spell icon this addon draws.
+    entry.spellIcon = entry:CreateTexture(nil, "ARTWORK")
+    entry.spellIcon:SetSize(ENTRY_H - 6, ENTRY_H - 6)
+    entry.spellIcon:SetPoint("LEFT", entry, "LEFT", 6, 0)
+    entry.spellIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    entry.spellIcon:Hide()
+
     entry.label = UI.Label(entry, "", 12, C.text)
     entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
     entry.label:SetWordWrap(false)
@@ -1068,11 +1078,23 @@ local function ShowMenu(owner, spec)
         end
         -- A row that is already the answer must not lose its ground when the
         -- cursor leaves it, and a row that is not must not keep one.
+        --
+        -- A row that names a SPELL also answers for it: the client's own
+        -- tooltip, the same call the spell pane makes. pcall, because on
+        -- this patch a tooltip API is allowed to refuse a spell.
         entry:SetScript("OnEnter", function(self)
-            if active then return end
-            self.hl:Show()
+            if not active then self.hl:Show() end
+            if item.spellID and GameTooltip then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if not pcall(GameTooltip.SetSpellByID, GameTooltip, item.spellID) then
+                    GameTooltip:Hide()
+                else
+                    GameTooltip:Show()
+                end
+            end
         end)
         entry:SetScript("OnLeave", function(self)
+            if item.spellID and GameTooltip then GameTooltip:Hide() end
             if active then return end
             self.hl:Hide()
         end)
@@ -1086,13 +1108,22 @@ local function ShowMenu(owner, spec)
 
         -- A row with a mark indents its label past it; a row without one takes
         -- the indent back, or the next menu through this pooled row would sit
-        -- 20 pixels in with nothing in front of it.
-        if item.icon and entry.mark:SetKind(item.icon) then
+        -- 20 pixels in with nothing in front of it. `iconTexture` is a real
+        -- texture (a spell's icon); `icon` stays the vector-glyph key it has
+        -- always been - two names because they are two different things.
+        if item.iconTexture then
+            entry.spellIcon:SetTexture(item.iconTexture)
+            entry.spellIcon:Show()
+            entry.mark:Hide()
+            entry.label:SetPoint("LEFT", entry, "LEFT", 6 + (ENTRY_H - 6) + 6, 0)
+        elseif item.icon and entry.mark:SetKind(item.icon) then
             entry.mark:SetColor(colour[1], colour[2], colour[3])
             entry.mark:Show()
+            entry.spellIcon:Hide()
             entry.label:SetPoint("LEFT", entry, "LEFT", 30, 0)
         else
             entry.mark:Hide()
+            entry.spellIcon:Hide()
             entry.label:SetPoint("LEFT", entry, "LEFT", 10, 0)
         end
 
@@ -1568,6 +1599,11 @@ function UI.Dropdown(row, options, get, set, cfg)
         for _, option in ipairs(Options()) do
             items[#items + 1] = {
                 text = option.text, value = option.value, icon = option.icon,
+                -- The two spell fields ride along untouched: iconTexture
+                -- draws the real icon, spellID hangs the client's own
+                -- tooltip on the row. Options that carry neither cost
+                -- nothing here.
+                iconTexture = option.iconTexture, spellID = option.spellID,
                 onClick = function()
                     set(option.value)
                     if cfg.apply then cfg.apply() end
@@ -1575,7 +1611,14 @@ function UI.Dropdown(row, options, get, set, cfg)
                 end,
             }
         end
-        ShowMenu(button, { items = items, current = get(), width = cfg.menuWidth })
+        ShowMenu(button, {
+            items = items, current = get(), width = cfg.menuWidth,
+            -- A list of forty spells without a filter is a scroll hunt; the
+            -- box only appears when the caller asks, so two-entry menus stay
+            -- two entries tall.
+            search = cfg.search, rowHeight = cfg.rowHeight,
+            foot = cfg.search and "Scroll or type to filter" or nil,
+        })
     end)
 
     button.Refresh = function()

@@ -58,6 +58,11 @@ function Page:BuildPage(page, width)
                 out[#out + 1] = {
                     value = entry.spellID,
                     text = entry.name or ("Spell " .. entry.spellID),
+                    -- The icon and the client's own tooltip, both off the
+                    -- catalogue entry - the owner asked while picking on a
+                    -- list of forty same-grey names.
+                    iconTexture = entry.icon,
+                    spellID = entry.spellID,
                 }
             end
         end
@@ -72,7 +77,8 @@ function Page:BuildPage(page, width)
             ns.db.defensives[value] = true
             ns.Options:Refresh()
             ns.Busters:Refresh()
-        end, { emptyText = "Pick a spell the Cooldown Manager knows" })
+        end, { emptyText = "Pick a spell the Cooldown Manager knows",
+               search = true, rowHeight = 26 })
 
     grid:Note("Readiness is OUR OWN estimate - your last cast plus the "
         .. "spell's base cooldown - because the client will not let an addon "

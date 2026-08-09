@@ -4,6 +4,32 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.44.1] - 2026-08-09
+
+### Fixed
+
+- **The death window said "no deaths this fight" while Blizzard's own recap
+  stood open showing the killer.** The deaths list sits in the damage
+  meter's answer under `combatSources`; this code read a field that does
+  not exist and took the empty fallback for an empty fight. It reads the
+  right one now - the field EllesmereUI's shipping code iterates - and
+  checks the Current session first, Overall second.
+
+### Added
+
+- **Blizzard's own Death Recap is now the tie-breaker.** When it opens, the
+  id it opens with is by definition your death - so it is taken over, and a
+  window still saying "not enough was readable" repaints itself with the
+  real events.
+
+- **The defensive picker got spell icons, tooltips and a filter box.** A
+  list of forty same-grey names tells you nothing; the icon is the
+  recognition, the tooltip is the client's own, and typing narrows the list.
+
+- The death probe prints the damage meter's answer WHOLE - both session
+  types, every field of the session itself and of the first death in it -
+  so a wrongly guessed field name can never blind it again.
+
 ## [4.44.0] - 2026-08-09
 
 ### Added

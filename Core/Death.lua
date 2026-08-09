@@ -172,15 +172,26 @@ function Death.OwnRecapID()
         return nil, "this client has no damage meter API"
     end
 
-    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType,
-        Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
-    if not ok or type(session) ~= "table" then
-        return nil, "the damage meter has no current session"
+    -- combatSources, because that is the field EllesmereUI's shipping code
+    -- iterates. The first in-game death was reported "no deaths this fight"
+    -- while Blizzard's own recap stood open showing the killer: the field
+    -- here was guessed as .sources, the guess answered nil, and the empty
+    -- fallback made a wrong name read as an empty fight. Current first,
+    -- Overall as the fallback - a training dummy kill landed in one and not
+    -- the other on the owner's screen.
+    local function SourcesOf(sessionType)
+        local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType,
+            sessionType, Enum.DamageMeterType.Deaths)
+        if not ok or type(session) ~= "table" then return nil end
+        local list = session.combatSources or session.sources
+        if type(list) ~= "table" or #list == 0 then return nil end
+        return list
     end
 
-    local sources = session.sources or session
-    if type(sources) ~= "table" or #sources == 0 then
-        return nil, "the damage meter recorded no deaths this fight"
+    local sources = SourcesOf(Enum.DamageMeterSessionType.Current)
+        or SourcesOf(Enum.DamageMeterSessionType.Overall)
+    if not sources then
+        return nil, "the damage meter lists no deaths yet"
     end
 
     local me = UnitName("player")
@@ -318,9 +329,16 @@ function Death.ReadRecap(recapID)
     return events, maxHP, nil, killer
 end
 
-function Death:Capture()
+function Death:Capture(overrideID)
     local now = GetTime()
-    local recapID, why = Death.OwnRecapID()
+    local recapID, why
+    if overrideID then
+        -- Handed straight from Blizzard's own recap window opening - no
+        -- searching, no name matching, the id is by definition ours.
+        recapID = overrideID
+    else
+        recapID, why = Death.OwnRecapID()
+    end
 
     local events, maxHP, readWhy, killer
     if recapID then
@@ -603,6 +621,11 @@ end
 local function Verdict(value)
     if value == nil then return "|cff888888absent|r" end
     if not ns.CanCompute(value) then return "|cffff8040SECRET|r" end
+    -- A nested table's address answers nothing; its length at least says
+    -- "the list you are looking for may live here".
+    if type(value) == "table" then
+        return string.format("|cff7ec6d4table, %d list entries|r", #value)
+    end
     return "|cff40ff40" .. tostring(value) .. "|r"
 end
 
@@ -624,15 +647,25 @@ function Death:Probe()
         return
     end
 
-    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType,
-        Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
-    if not ok or type(session) ~= "table" then
-        ns.Print("  no current Deaths session (not died this fight, or no fight).")
-    else
-        local sources = session.sources or session
-        ns.Print(string.format("  Deaths session: %d entr%s.",
-            #sources, #sources == 1 and "y" or "ies"))
-        if sources[1] then DumpTable("first entry, every field", sources[1]) end
+    -- BOTH session types, and the session's OWN fields before anything in
+    -- it. The first in-game run printed "no deaths this fight" because the
+    -- list sat under a field this code had guessed wrong - a probe that
+    -- dumps the parent cannot be blinded that way.
+    for _, sessionType in ipairs({
+        { key = Enum.DamageMeterSessionType.Current, label = "Current" },
+        { key = Enum.DamageMeterSessionType.Overall, label = "Overall" },
+    }) do
+        local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType,
+            sessionType.key, Enum.DamageMeterType.Deaths)
+        if not ok or type(session) ~= "table" then
+            ns.Print("  " .. sessionType.label .. ": no Deaths session.")
+        else
+            DumpTable(sessionType.label .. " session, every field", session)
+            local list = session.combatSources or session.sources
+            if type(list) == "table" and list[1] then
+                DumpTable(sessionType.label .. " first death, every field", list[1])
+            end
+        end
     end
 
     local recapID, why = Death.OwnRecapID()
@@ -654,9 +687,48 @@ end
 ---------------------------------------------------------------------------
 -- Wiring
 ---------------------------------------------------------------------------
+
+-- Blizzard's own recap window opened for the owner's death while our first
+-- damage-meter search came up empty. The id it opens with is by definition
+-- OUR recap, so the opener is hooked and the id kept. Everything here is
+-- guarded twice: the frame lives in a load-on-demand Blizzard addon, so the
+-- global may not exist yet at our load - hence the second attempt on
+-- ADDON_LOADED - and on some client this hook may simply never fire, which
+-- costs nothing.
+local recapHooked = false
+local function TryHookBlizzardRecap()
+    if recapHooked then return end
+    if not (type(hooksecurefunc) == "function"
+        and type(OpenDeathRecapUI) == "function") then
+        return
+    end
+    recapHooked = true
+    hooksecurefunc("OpenDeathRecapUI", function(recapID)
+        if not (ns.CanCompute(recapID) and type(recapID) == "number"
+            and recapID > 0) then
+            return
+        end
+        -- A fresh death whose capture found nothing gets a second chance
+        -- with the definitive id - and the window, if it is up showing
+        -- "not enough was readable", is repainted rather than left lying.
+        local snapshot = Death.snapshot
+        if snapshot and snapshot.events == nil
+            and (GetTime() - snapshot.at) < 120 then
+            Death:Capture(recapID)
+            if frame and frame:IsShown() then Death:Show() end
+        end
+    end)
+end
+
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_DEAD")
-watcher:SetScript("OnEvent", function()
+watcher:RegisterEvent("ADDON_LOADED")
+watcher:SetScript("OnEvent", function(_, event)
+    if event == "ADDON_LOADED" then
+        TryHookBlizzardRecap()
+        return
+    end
+
     if ns.db and ns.db.death and ns.db.death.record == false then return end
 
     -- The recap needs a moment to exist: capture shortly after the fall,
@@ -674,3 +746,5 @@ watcher:SetScript("OnEvent", function()
         end
     end)
 end)
+
+TryHookBlizzardRecap()
