@@ -4,6 +4,54 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.61.0] - 2026-08-10
+
+### Fixed
+
+- **The slots on the External cooldowns page were not drawn at all**, which
+  read as lost saved data: an empty band over a "Who to ask" list that still
+  named the spells. Owner: "nach rl ist mein preset von meinen external cds
+  immer weg." Nothing was ever lost. The frame the slots sit in had ONE
+  anchor point and a height and no width, so its rectangle could not be
+  worked out - and a frame like that is not drawn, and neither are its
+  children. The band's own eyebrow and hairline are regions of the band
+  itself, so they kept drawing and hid what had happened.
+- **A chat channel you switched off came back at the next login.** It was
+  listed in the defaults, and a channel that is off is stored by being
+  missing - so the default filled it back in every time. The same rule the
+  welcome window follows: what the player answered is not something to have a
+  default for.
+
+### Added
+
+- **Rows and columns, the two words a cooldown bar uses.** Owner: "anzahl rows
+  fehlt! wie die cdm einstellungen, reihe und spalten anzahl." Rows times
+  columns is how many places there are, so the count is not a separate setting
+  that could disagree with the line width any more. A panel written before
+  this reads its old count and line width once, becomes the same shape, and
+  drops them.
+- **The preview in the band IS the panel's lattice**, laid out by the same
+  function the panel uses - `Externals.Cell` - so what you arrange is the
+  shape you get. It shrinks to fit the page rather than clipping or scrolling:
+  a lattice you cannot see all of is not a preview of anything.
+- **Move the panel, Test mode and Who would be asked sit in the band**, with
+  the slots they act on. Owner: "auch sollte der test mode button etc da mit
+  hoch." Test mode says which state it is in rather than looking the same
+  either way.
+
+### Changed
+
+- **What you say moved directly under Who to ask**, at the owner's word, and
+  everything about how the panel LOOKS follows after it. Who you ask and what
+  you say to them are one thought; borders and backdrops are a different
+  afternoon.
+- `/zs externals` prints the lattice and every slot in it, filled or empty.
+  "My panel is empty" has two completely different causes - nothing saved or
+  nothing drawn - and one line now tells them apart.
+- One "Who to ask" row is built per spell that exists rather than per slot
+  that could exist. A spell lives in exactly one slot, so fourteen is the real
+  ceiling however large the lattice gets.
+
 ## [4.60.2] - 2026-08-09
 
 ### Added

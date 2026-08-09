@@ -21,10 +21,29 @@ local Page = {}
 ns.OptionsExternals = Page
 
 local SLOT, GAP = 40, 8
-local PER_ROW = 8
+local MIN_SLOT = 22
+
+-- How tall the preview is allowed to get. The band does not scroll - that is
+-- the point of it - so a six-row lattice at full size would push the settings
+-- it is a preview OF off the bottom of the window.
+local BAND_MAX_H = 200
 
 local function Cfg() return ns.Externals.Config() end
 local function Apply() ns.Externals.Refresh() end
+
+-- HOW BIG ONE SLOT IS DRAWN IN THE PREVIEW. Pure, because the alternative is
+-- finding out in game that twelve columns run off the edge of the page.
+--
+-- The preview shrinks rather than clipping or scrolling: a lattice you cannot
+-- see all of is not a preview of anything, and the shape - which is what you
+-- are actually deciding - survives being smaller. It never grows past the
+-- design's own 40.
+function Page.PreviewSize(rows, columns, availableWidth, availableHeight)
+    local byWidth = (availableWidth - (columns - 1) * GAP) / columns
+    local byHeight = (availableHeight - (rows - 1) * GAP) / rows
+    local size = math.floor(math.min(SLOT, byWidth, byHeight))
+    return math.max(MIN_SLOT, size)
+end
 
 -- WHICH SLOT THE NEXT SPELL GOES INTO. The same idea the cooldown page runs
 -- on: you click a cell, it stays marked, and the list on the right fills THAT
@@ -51,8 +70,12 @@ function Page:BuildPage(page, width)
     local band = grid.sticky
     UI.Fill(band, "BACKGROUND", C.windowBg)
 
+    -- The band's own header line: what it is on the left, what you can do to
+    -- it on the right, the slots under both.
+    local BAND_HEAD = 32
+
     local bandTitle = UI.Eyebrow(band, "Your externals")
-    bandTitle:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -6)
+    bandTitle:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -10)
 
     local bandRule = band:CreateTexture(nil, "ARTWORK")
     bandRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
@@ -60,19 +83,62 @@ function Page:BuildPage(page, width)
     bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
     bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
 
-    local host = CreateFrame("Frame", nil, band)
-    local MAX = ns.Externals.MAX_SLOTS
-    local HOST_H = math.ceil(MAX / PER_ROW) * (SLOT + GAP)
-    host:SetHeight(HOST_H)
+    -- THE THREE THINGS YOU DO TO THE PANEL, in the band with it.
+    --
+    -- Owner: "auch sollte der test mode button etc da mit hoch". Right, and
+    -- for the same reason the slots are up here: they act on the thing the
+    -- band shows. At the bottom of a page this long they were forty rows of
+    -- scrolling away from what they switch.
+    local BAND_ACTIONS = {
+        { text = "Who would be asked", width = 150,
+          onClick = function() ns.Externals:Dump() end },
+        { text = "Test mode", width = 106, onClick = function()
+            ns.Externals:SetTestMode(not ns.Externals.testing)
+            ns.Options:Refresh()
+        end },
+        { text = "Move the panel", width = 124, style = "primary",
+          onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
+    }
 
-    -- Every slot the count could ever reach is BUILT once and shown or hidden
-    -- from the count. Building them from the count instead would mean
-    -- creating frames while somebody drags a slider, which is how a settings
-    -- page ends up with two hundred frames after one afternoon.
+    -- Right to left, so the primary action is the one nearest the edge and
+    -- the row keeps its shape whatever the widths are.
+    local testButton
+    local x = -14
+    for _, spec in ipairs(BAND_ACTIONS) do
+        local button = UI.Button(band, spec.text, spec.width, spec.onClick,
+            spec.style or "ghost")
+        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", x, -6)
+        x = x - spec.width - 6
+        if spec.text == "Test mode" then testButton = button end
+    end
+
+    -- THE SLOT HOST NEEDS A RECTANGLE, NOT A HEIGHT.
+    --
+    -- It had one point and a height, no width - and a frame whose rect cannot
+    -- be worked out is not drawn AND NEITHER ARE ITS CHILDREN. The band's own
+    -- eyebrow and hairline are REGIONS of the band, so they kept drawing,
+    -- which is exactly what made this look like lost saved data: an empty
+    -- band over a "Who to ask" list that still named two spells. Two points
+    -- across, or SetWidth - never a lone corner.
+    local host = CreateFrame("Frame", nil, band)
+    host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -BAND_HEAD)
+    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, -BAND_HEAD)
+    host:SetHeight(SLOT)
+
+    -- THE PREVIEW IS THE PANEL'S OWN LATTICE. Rows and columns, filled the
+    -- way the panel fills them, from ns.Externals.Cell - so what you arrange
+    -- here is the shape you get on screen rather than a second opinion about
+    -- it.
+    --
+    -- Built on demand and kept: a lattice can be seventy-two places, and
+    -- creating those frames up front to show six of them is a page that costs
+    -- what its largest setting costs on every login.
     local slots = {}
-    for index = 1, MAX do
+    local function SlotAt(index)
+        if slots[index] then return slots[index] end
+
         local slot = UI.SpellSlot(host, {
-            size = SLOT,
+            size = SLOT,     -- re-sized by Fit; this is only the first guess
             get = function() return ns.Externals.SpellAt(index) end,
             onEmptyClick = function()
                 Page.selected = (Page.selected ~= index) and index or nil
@@ -93,21 +159,42 @@ function Page:BuildPage(page, width)
                 ns.Options:Refresh()
             end
         end)
-        slot:SetPoint("TOPLEFT", host, "TOPLEFT",
-            ((index - 1) % PER_ROW) * (SLOT + GAP),
-            -math.floor((index - 1) / PER_ROW) * (SLOT + GAP))
         slots[index] = slot
+        return slot
     end
 
-    host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -24)
-
-    -- The band is as tall as the rows that are actually shown, measured when
-    -- the count changes. A band sized for twenty-four slots would be a third
-    -- of the page held empty for slots nobody asked for.
+    -- The band is as tall as the lattice actually is, measured whenever it
+    -- changes. Sized for the largest one it could ever be, it would hold a
+    -- third of the page empty for slots nobody asked for.
     band.Fit = function()
-        local rows = math.max(1, math.ceil(ns.Externals.Count() / PER_ROW))
-        host:SetHeight(rows * SLOT + (rows - 1) * GAP)
-        band:SetHeight(24 + host:GetHeight() + 10)
+        local cfg = Cfg()
+        local count = ns.Externals.Count()
+        local down = cfg.growth == "down"
+        local size = Page.PreviewSize(cfg.rows, cfg.columns,
+            width - 28, BAND_MAX_H)
+
+        for index = 1, count do
+            local slot = SlotAt(index)
+            local column, line = ns.Externals.Cell(index, cfg.rows, cfg.columns, down)
+            slot:SetSize(size, size)
+            slot:ClearAllPoints()
+            slot:SetPoint("TOPLEFT", host, "TOPLEFT",
+                column * (size + GAP), -line * (size + GAP))
+        end
+        for index = count + 1, #slots do slots[index]:Hide() end
+
+        -- Test mode is a state, so the button says which one it is in. A
+        -- switch that looks the same on and off is one you have to press to
+        -- read.
+        if testButton then
+            testButton:SetText(ns.Externals.testing and "Test mode: on"
+                or "Test mode")
+        end
+
+        -- Always exactly the lattice: rows times columns IS the count, so
+        -- both fill orders end up filling the same rectangle.
+        host:SetHeight(cfg.rows * size + (cfg.rows - 1) * GAP)
+        band:SetHeight(BAND_HEAD + host:GetHeight() + 10)
     end
     band.Fit()
 
@@ -136,7 +223,11 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Who to ask")
 
-    for index = 1, ns.Externals.MAX_SLOTS do
+    -- ONE ROW PER SPELL THERE IS, not per slot there could be. A spell lives
+    -- in exactly one slot, so fourteen is the real ceiling however large the
+    -- lattice gets - and building a row per possible slot would be seventy-two
+    -- dropdowns for a list that can never be longer than the list on the right.
+    for index = 1, #ns.Externals.SPELLS do
         local row = grid:FullRow("", { controlWidth = 220 })
         local function SpellID() return ns.Externals.Picked()[index] end
 
@@ -186,26 +277,104 @@ function Page:BuildPage(page, width)
         .. "themselves works anywhere, alone included.")
 
     ---------------------------------------------------------------------
+    -- The message
+    ---------------------------------------------------------------------
+    grid:Section("What you say")
+
+    -- CHIPS, NOT A SELECT. Owner: "wir brauchen hier eine mehrfachauswahl."
+    -- Five yes-or-no answers, all of them visible at once, which a dropdown
+    -- showing one line cannot do however it is worded.
+    local channelHost = CreateFrame("Frame", nil, grid.content)
+    local chips = UI.ChipRow(channelHost, width - 40, {
+        chips = {
+            { key = "WHISPER",      text = "Whisper" },
+            { key = "GROUP",        text = "Party or raid" },
+            { key = "RAID_WARNING", text = "Raid warning" },
+            { key = "SAY",          text = "Say" },
+            { key = "YELL",         text = "Yell" },
+        },
+        isOn = function(key) return ns.Externals.ChannelOn(key) end,
+        onSelect = function(key)
+            ns.Externals.ToggleChannel(key)
+            ns.Options:Refresh()
+        end,
+    })
+    chips:SetPoint("TOPLEFT", channelHost, "TOPLEFT", 0, 0)
+    channelHost:SetHeight(chips:GetHeight())
+    grid:Wide(channelHost, chips:GetHeight(), 4, 8)
+    channelHost.Refresh = function() chips.Refresh() end
+    grid.widgets[#grid.widgets + 1] = channelHost
+
+    grid:Note("Pick as many as you like. A whisper reaches the one person who "
+        .. "can cast it; party or raid reaches everybody, which is what you "
+        .. "want when you do not care who answers as long as somebody does. "
+        .. "|cffffd100Party or raid|r picks the right channel for the group "
+        .. "you are actually in - in a dungeon from the finder that is NOT "
+        .. "party chat. Two that come out the same are sent once. The last "
+        .. "one cannot be switched off: a button that sends nowhere is not a "
+        .. "setting.")
+
+    local messageRow = grid:FullRow("Message", { controlWidth = 300 })
+    local input = UI.Input(messageRow.slot, 300, function(text)
+        Cfg().message = (text ~= "" and text) or nil
+    end, false, ns.Externals.DEFAULT_MESSAGE)
+    input:SetPoint("RIGHT", messageRow.slot, "RIGHT", 0, 0)
+    -- The row is already in grid.widgets - Grid:FullRow put it there - so
+    -- giving it a Refresh is all that is needed. Adding it again would run
+    -- this twice on every repaint.
+    messageRow.Refresh = function() input:SetText(Cfg().message or "") end
+
+    grid:Note("One sentence for every slot. |cffffd100%s|r is the spell's "
+        .. "name and |cffffd100%n|r is the person being asked - worth having "
+        .. "in party or raid chat, where \"Ironbark bitte!\" asks nobody in "
+        .. "particular. Leave |cffffd100%s|r out and the name is put in "
+        .. "brackets anyway: a message that does not say WHAT you want is one "
+        .. "nobody can act on.")
+
+    ---------------------------------------------------------------------
     -- The panel
+    --
+    -- ROWS AND COLUMNS, the two words a cooldown bar uses. Owner: "anzahl
+    -- rows fehlt! wie die cdm einstellungen, reihe und spalten anzahl."
+    --
+    -- Both sliders repaint the page rather than only the panel, because the
+    -- preview in the band IS the lattice - it has to grow with them.
     ---------------------------------------------------------------------
     grid:Section("The panel")
 
-    UI.Slider(grid:Row("How many slots"), {
-        get = function() return ns.Externals.Count() end,
-        set = function(value) ns.Externals.SetCount(value) end,
-        min = 1, max = ns.Externals.MAX_SLOTS, step = 1,
-        apply = function() ns.Options:Refresh() end,
+    local function Relayout() ns.Options:Refresh() end
+
+    UI.Slider(grid:Row("Rows"), {
+        get = ns.Externals.Rows, set = ns.Externals.SetRows,
+        min = 1, max = ns.Externals.MAX_ROWS, step = 1, apply = Relayout,
     })
-    grid:Note("How many places there are to put a spell. Taking it down and "
-        .. "back up gives you what you had - a slot beyond the count keeps "
-        .. "what is in it, the same way a shrunk bar keeps its cells.")
+
+    UI.Slider(grid:Row("Columns"), {
+        get = ns.Externals.Columns, set = ns.Externals.SetColumns,
+        min = 1, max = ns.Externals.MAX_COLUMNS, step = 1, apply = Relayout,
+    })
+    grid:Note("Rows times columns is how many places there are to put a "
+        .. "spell, the same as a cooldown bar. Taking either one down and back "
+        .. "up gives you what you had - a slot outside the lattice keeps what "
+        .. "is in it, the way a shrunk bar keeps its cells. What nobody in "
+        .. "your group can cast is not drawn at all, so a row with one usable "
+        .. "spell in it is one icon wide on your screen.")
+
+    UI.Dropdown(grid:Row("Runs"), {
+        { value = "right", text = "Across", icon = "dir-left-right" },
+        { value = "down",  text = "Down",   icon = "dir-top-bottom" },
+    }, function() return Cfg().growth or "right" end,
+        function(value) Cfg().growth = value end, { apply = Relayout })
+    grid:Note("Which way the slots fill: across a row first, or down a column "
+        .. "first.")
 
     UI.Slider(grid:Row("Icon size"), {
         get = function() return Cfg().size or 40 end,
         set = function(value) Cfg().size = value end,
         min = 20, max = 64, step = 2, apply = Apply,
     })
-    grid:Note("How big each icon is on your screen.")
+    grid:Note("How big each icon is on your screen. The preview above keeps "
+        .. "its own size - it has a page to fit into.")
 
     UI.Slider(grid:Row("Spacing"), {
         get = function() return Cfg().gap or 4 end,
@@ -213,20 +382,6 @@ function Page:BuildPage(page, width)
         min = 0, max = 16, step = 1, apply = Apply,
     })
     grid:Note("The gap between two icons.")
-
-    UI.Slider(grid:Row("How many in a line"), {
-        get = function() return Cfg().perLine or 6 end,
-        set = function(value) Cfg().perLine = value end,
-        min = 1, max = 12, step = 1, apply = Apply,
-    })
-    grid:Note("After this many the panel starts a second line.")
-
-    UI.Dropdown(grid:Row("Runs"), {
-        { value = "right", text = "Across", icon = "dir-left-right" },
-        { value = "down",  text = "Down",   icon = "dir-top-bottom" },
-    }, function() return Cfg().growth or "right" end,
-        function(value) Cfg().growth = value end, { apply = Apply })
-    grid:Note("Whether the icons run across the screen or down it.")
 
     UI.Toggle(grid:Row("Only in a group"),
         function() return Cfg().onlyInGroup ~= false end,
@@ -313,74 +468,6 @@ function Page:BuildPage(page, width)
         { controlWidth = 190, icon = "media-texture" }), "statusbar",
         function() return Cfg().backdropTexture end,
         function(value) Cfg().backdropTexture = value end, Apply)
-
-    ---------------------------------------------------------------------
-    -- The message
-    ---------------------------------------------------------------------
-    grid:Section("What you say")
-
-    -- CHIPS, NOT A SELECT. Owner: "wir brauchen hier eine mehrfachauswahl."
-    -- Five yes-or-no answers, all of them visible at once, which a dropdown
-    -- showing one line cannot do however it is worded.
-    local channelHost = CreateFrame("Frame", nil, grid.content)
-    local chips = UI.ChipRow(channelHost, width - 40, {
-        chips = {
-            { key = "WHISPER",      text = "Whisper" },
-            { key = "GROUP",        text = "Party or raid" },
-            { key = "RAID_WARNING", text = "Raid warning" },
-            { key = "SAY",          text = "Say" },
-            { key = "YELL",         text = "Yell" },
-        },
-        isOn = function(key) return ns.Externals.ChannelOn(key) end,
-        onSelect = function(key)
-            ns.Externals.ToggleChannel(key)
-            ns.Options:Refresh()
-        end,
-    })
-    chips:SetPoint("TOPLEFT", channelHost, "TOPLEFT", 0, 0)
-    channelHost:SetHeight(chips:GetHeight())
-    grid:Wide(channelHost, chips:GetHeight(), 4, 8)
-    channelHost.Refresh = function() chips.Refresh() end
-    grid.widgets[#grid.widgets + 1] = channelHost
-
-    grid:Note("Pick as many as you like. A whisper reaches the one person who "
-        .. "can cast it; party or raid reaches everybody, which is what you "
-        .. "want when you do not care who answers as long as somebody does. "
-        .. "|cffffd100Party or raid|r picks the right channel for the group "
-        .. "you are actually in - in a dungeon from the finder that is NOT "
-        .. "party chat. Two that come out the same are sent once. The last "
-        .. "one cannot be switched off: a button that sends nowhere is not a "
-        .. "setting.")
-
-    local messageRow = grid:FullRow("Message", { controlWidth = 300 })
-    local input = UI.Input(messageRow.slot, 300, function(text)
-        Cfg().message = (text ~= "" and text) or nil
-    end, false, ns.Externals.DEFAULT_MESSAGE)
-    input:SetPoint("RIGHT", messageRow.slot, "RIGHT", 0, 0)
-    -- The row is already in grid.widgets - Grid:FullRow put it there - so
-    -- giving it a Refresh is all that is needed. Adding it again would run
-    -- this twice on every repaint.
-    messageRow.Refresh = function() input:SetText(Cfg().message or "") end
-
-    grid:Note("One sentence for every slot. |cffffd100%s|r is the spell's "
-        .. "name and |cffffd100%n|r is the person being asked - worth having "
-        .. "in party or raid chat, where \"Ironbark bitte!\" asks nobody in "
-        .. "particular. Leave |cffffd100%s|r out and the name is put in "
-        .. "brackets anyway: a message that does not say WHAT you want is one "
-        .. "nobody can act on.")
-
-    grid:Buttons({
-        { text = "Move the panel", width = 150, style = "primary",
-          onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
-        { text = "Test mode", width = 120, onClick = function()
-            ns.Externals:SetTestMode(not ns.Externals.testing)
-            ns.Print("External cooldowns test mode",
-                ns.Externals.testing and "|cff40ff40on|r" or "|cff888888off|r")
-        end },
-        { text = "Who would be asked", width = 170, onClick = function()
-            ns.Externals:Dump()
-        end },
-    }, 14)
 
     grid:Layout()
 

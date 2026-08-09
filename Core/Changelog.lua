@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.61.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Your externals were still there - the page just was not drawing them.|r An empty row of slots after a reload was a drawing fault, not lost settings. Nothing you picked was ever thrown away.",
+            "|cffffd100Rows and columns, the same as a cooldown bar.|r Rows times columns is how many places there are to put a spell, and the preview above the settings IS that grid - what you arrange is what appears on your screen.",
+            "|cffffd100Move the panel, Test mode and Who would be asked moved up|r to sit with the slots they act on, instead of forty rows further down.",
+            "|cffffd100What you say|r now sits directly under |cffffd100Who to ask|r - the two belong together - and everything about the look follows below.",
+            "A chat channel you switched off stayed off. It was coming back at every login.",
+        },
+    },
+    {
         version = "4.60.2",
         date = "2026-08-09",
         lines = {

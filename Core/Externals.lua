@@ -71,15 +71,47 @@ function Externals.Get(spellID) return byID[spellID] end
 -- is in each one. The difference from the old ordered list is the whole point
 -- - a list has no empty third slot to click on, so there was nothing to
 -- select and nothing for a count to change.
-Externals.MAX_SLOTS = 24
+-- ROWS AND COLUMNS, the way a bar has them. Owner: "anzahl rows fehlt! wie
+-- die cdm einstellungen, reihe und spalten anzahl."
+--
+-- So the panel is a LATTICE and not a run of slots with a wrap setting: rows
+-- times columns is how many places there are, which is the same sentence the
+-- cooldown bars answer. The old pair - a count plus "how many in a line" -
+-- said the same thing in two numbers that could disagree, and the disagreement
+-- was silent (a count of 7 in lines of 6 is a lonely second line nobody asked
+-- for).
+Externals.MAX_ROWS = 6
+Externals.MAX_COLUMNS = 12
+Externals.MAX_SLOTS = Externals.MAX_ROWS * Externals.MAX_COLUMNS
+
+local function Clamp(value, low, high)
+    value = math.floor(tonumber(value) or low)
+    if value < low then return low end
+    if value > high then return high end
+    return value
+end
 
 function Externals.Config()
     ns.db.externals = ns.db.externals or {}
     local cfg = ns.db.externals
     cfg.cells = cfg.cells or {}
     cfg.assigned = cfg.assigned or {}   -- [spellID] = "Name-Realm"
-    cfg.count = cfg.count or 6
     cfg.channels = cfg.channels or {}
+
+    -- A profile written before the lattice carries a count and a line width.
+    -- Read once into rows and columns and then dropped - and it is dropped
+    -- rather than kept in step, because two numbers for one shape is exactly
+    -- what this replaced.
+    if cfg.count or cfg.perLine then
+        local perLine = Clamp(cfg.perLine or 6, 1, Externals.MAX_COLUMNS)
+        local count = Clamp(cfg.count or 6, 1, Externals.MAX_SLOTS)
+        cfg.columns = cfg.columns or perLine
+        cfg.rows = cfg.rows or math.ceil(count / perLine)
+        cfg.count, cfg.perLine = nil, nil
+    end
+
+    cfg.rows = Clamp(cfg.rows or 1, 1, Externals.MAX_ROWS)
+    cfg.columns = Clamp(cfg.columns or 6, 1, Externals.MAX_COLUMNS)
 
     -- One channel, chosen before it could be several. Carried over, then
     -- dropped - a migration that runs twice would switch a channel somebody
@@ -106,18 +138,50 @@ function Externals.Config()
     return cfg
 end
 
+function Externals.Rows() return Externals.Config().rows end
+function Externals.Columns() return Externals.Config().columns end
+
 function Externals.Count()
     local cfg = Externals.Config()
-    return math.max(1, math.min(Externals.MAX_SLOTS, cfg.count or 6))
+    return cfg.rows * cfg.columns
 end
 
-function Externals.SetCount(value)
-    local cfg = Externals.Config()
-    cfg.count = math.max(1, math.min(Externals.MAX_SLOTS, math.floor(value or 6)))
-    -- WHAT FALLS OFF THE END STAYS PUT. Dragging the count down and back up
-    -- must give you what you had - the same rule a bar's cells follow, and
-    -- the reason a shrunk bar does not forget its spells.
+-- WHAT FALLS OFF THE END STAYS PUT. Taking a lattice down and back up must
+-- give you what you had - the same rule a bar's cells follow, and the reason
+-- a shrunk bar does not forget its spells.
+function Externals.SetRows(value)
+    Externals.Config().rows = Clamp(value, 1, Externals.MAX_ROWS)
     Externals.Refresh()
+end
+
+function Externals.SetColumns(value)
+    Externals.Config().columns = Clamp(value, 1, Externals.MAX_COLUMNS)
+    Externals.Refresh()
+end
+
+-- WHERE SLOT `index` SITS, as a zero-based column and row. Pure, and the ONE
+-- answer: the panel on screen and the preview on the settings page both ask
+-- it, so a preview that disagrees with the screen is not a thing that can
+-- happen. `down` is the growth setting - fill a column before wrapping
+-- instead of a row.
+function Externals.Cell(index, rows, columns, down)
+    local slot = index - 1
+    if down then
+        return math.floor(slot / rows), slot % rows
+    end
+    return slot % columns, math.floor(slot / columns)
+end
+
+-- HOW BIG THE DRAWN THING IS, in columns and rows. A panel showing three of
+-- its twelve places is three icons wide and one tall, not twelve by one: what
+-- is not drawn takes up no room, which is the whole meaning of "verschwindet
+-- ganz". Pure, and the panel's own size comes from it.
+function Externals.Extent(shown, rows, columns, down)
+    if shown <= 0 then return 0, 0 end
+    if down then
+        return math.ceil(shown / rows), math.min(shown, rows)
+    end
+    return math.min(shown, columns), math.ceil(shown / columns)
 end
 
 function Externals.SpellAt(index)
@@ -544,7 +608,7 @@ function Externals:ApplyLayout()
     local cfg = Externals.Config()
     local size = SlotSize()
     local gap = cfg.gap or 4
-    local perLine = math.max(1, cfg.perLine or 6)
+    local rows, columns = cfg.rows, cfg.columns
     local vertical = cfg.growth == "down"
 
     panel:ClearAllPoints()
@@ -566,16 +630,16 @@ function Externals:ApplyLayout()
             panel.slots[shown] = slot
             slot.spellID = spellID
 
-            local line = math.floor((shown - 1) / perLine)
-            local column = (shown - 1) % perLine
-            local across = column * (size + gap)
-            local down = line * (size + gap)
+            -- The SAME lattice the settings page draws, from the same
+            -- function. What is placed here is the SHOWN sequence rather than
+            -- the slot number, so a spell nobody present can cast leaves no
+            -- hole on screen - it closes up.
+            local column, line = Externals.Cell(shown, rows, columns, vertical)
 
             slot:SetSize(size, size)
             slot:ClearAllPoints()
             slot:SetPoint("TOPLEFT", panel, "TOPLEFT",
-                vertical and down or across,
-                -(vertical and across or down))
+                column * (size + gap), -(line * (size + gap)))
             slot.icon:SetTexture(ns.SpellTexture(spellID))
 
             -- Painted every pass rather than only when a setting changes:
@@ -593,15 +657,9 @@ function Externals:ApplyLayout()
 
     for index = shown + 1, #panel.slots do panel.slots[index]:Hide() end
 
-    local lines = math.max(1, math.ceil(shown / perLine))
-    local perLineShown = math.min(shown, perLine)
-    if vertical then
-        panel:SetSize(math.max(1, lines * size + (lines - 1) * gap),
-            math.max(1, perLineShown * size + math.max(0, perLineShown - 1) * gap))
-    else
-        panel:SetSize(math.max(1, perLineShown * size + math.max(0, perLineShown - 1) * gap),
-            math.max(1, lines * size + (lines - 1) * gap))
-    end
+    local wide, tall = Externals.Extent(shown, rows, columns, vertical)
+    panel:SetSize(math.max(1, wide * size + (wide - 1) * gap),
+        math.max(1, tall * size + (tall - 1) * gap))
 
     -- The panel's own scale and opacity, the two a bar carries as well.
     panel:SetScale(math.max(0.3, math.min(3, cfg.scale or 1)))
@@ -752,6 +810,18 @@ function Externals:Dump()
     end
 
     local roster = Externals.Roster()
+    local cfg = Externals.Config()
+
+    -- THE RAW SHAPE FIRST, and it is not decoration: "my panel is empty" has
+    -- two completely different causes - nothing saved, or nothing drawn - and
+    -- this line is what tells them apart without another evening of guessing.
+    local slots = {}
+    for index = 1, Externals.Count() do
+        slots[#slots + 1] = tostring(cfg.cells[index] or "-")
+    end
+    ns.Print(string.format("  %d x %d, running %s: %s",
+        cfg.rows, cfg.columns, cfg.growth == "down" and "down" or "across",
+        table.concat(slots, " ")))
     ns.Print(string.format("  %d in the group, %d picked.",
         #roster, #Externals.Picked()))
 

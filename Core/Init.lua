@@ -140,11 +140,23 @@ ns.DEFAULTS = {
     externals  = {
         cells    = {},
         assigned = {},
-        channels = { WHISPER = true },
-        count    = 6,
+
+        -- CHANNELS, ROWS AND COLUMNS ARE DELIBERATELY NOT LISTED HERE.
+        -- Externals.Config owns all three, and putting them in the defaults
+        -- would break each one in its own way:
+        --
+        --   channels        a channel you switched OFF is stored by being
+        --                   MISSING, and ApplyDefaults fills in what is
+        --                   missing - so the whisper would come back at every
+        --                   login and no amount of clicking would keep it off.
+        --                   The same rule welcomeSeen follows below.
+        --   rows, columns   ApplyDefaults runs BEFORE the first Config call,
+        --                   so a default would already be sitting in the two
+        --                   keys the count/perLine migration is about to read
+        --                   as "nothing here yet" - and a panel of twelve in
+        --                   lines of four would come back as one line of six.
         size     = 40,
         gap      = 4,
-        perLine  = 6,
         growth   = "right",
         onlyInGroup = true,
 

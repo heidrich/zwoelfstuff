@@ -4070,8 +4070,11 @@ local function TestExternals()
     ---------------------------------------------------------------------
     -- Slots
     ---------------------------------------------------------------------
-    local keptCells, keptCount = X.Config().cells, X.Config().count
-    X.Config().cells, X.Config().count = {}, 4
+    local keptCells = X.Config().cells
+    local keptRows, keptColumns = X.Config().rows, X.Config().columns
+    X.Config().cells = {}
+    X.SetRows(1)
+    X.SetColumns(4)
 
     Check("An empty panel has nothing on it", #X.Picked() == 0)
 
@@ -4090,21 +4093,148 @@ local function TestExternals()
     Check("And it is in its new place", X.SpellAt(2) == 6940)
 
     -- What falls off the end stays put. The same rule a shrunk bar follows.
-    X.SetCount(2)
-    Check("A slot beyond the count keeps what is in it", X.SpellAt(3) == 102342)
+    X.SetColumns(2)
+    Check("A slot outside the lattice keeps what is in it",
+        X.SpellAt(3) == 102342)
     Check("But it is not on the panel", #X.Picked() == 1)
-    X.SetCount(4)
-    Check("Raising the count gives it back", #X.Picked() == 2)
+    X.SetColumns(4)
+    Check("Making the lattice bigger gives it back", #X.Picked() == 2)
 
     X.ClearSlot(2)
     Check("Clearing a slot empties it", X.SpellAt(2) == nil)
 
-    X.SetCount(1)
-    Check("The count never goes below one", X.Count() >= 1)
-    X.SetCount(999)
-    Check("And never past the ceiling", X.Count() == X.MAX_SLOTS)
+    ---------------------------------------------------------------------
+    -- ROWS AND COLUMNS, the shape itself
+    --
+    -- Owner: "anzahl rows fehlt! wie die cdm einstellungen, reihe und spalten
+    -- anzahl." So the count is not a setting any more - it is what the two
+    -- of them multiply to, and there is no third number that can disagree.
+    ---------------------------------------------------------------------
+    X.SetRows(3)
+    X.SetColumns(4)
+    Check("Rows times columns is how many places there are", X.Count() == 12,
+        tostring(X.Count()))
 
-    X.Config().cells, X.Config().count = keptCells, keptCount
+    X.SetRows(0)
+    Check("Neither ever goes below one", X.Rows() == 1)
+    X.SetColumns(999)
+    Check("And neither past its ceiling", X.Columns() == X.MAX_COLUMNS)
+
+    -- WHERE EACH SLOT SITS. Pure, and the same answer the panel and the
+    -- preview both draw from - a preview that disagrees with the screen is
+    -- worse than no preview.
+    local function At(index, rows, columns, down)
+        local column, row = X.Cell(index, rows, columns, down)
+        return column .. "," .. row
+    end
+    Check("The first slot is the top left corner", At(1, 2, 4) == "0,0")
+    Check("Across, the fourth is at the end of the first row",
+        At(4, 2, 4) == "3,0", At(4, 2, 4))
+    Check("Across, the fifth wraps to the next row", At(5, 2, 4) == "0,1",
+        At(5, 2, 4))
+    Check("Down, the second is UNDER the first",
+        At(2, 2, 4, true) == "0,1", At(2, 2, 4, true))
+    Check("Down, the third starts a new column",
+        At(3, 2, 4, true) == "1,0", At(3, 2, 4, true))
+
+    -- HOW BIG THE DRAWN PANEL IS. What nobody can cast is not drawn at all,
+    -- so three usable spells in a lattice of twelve is three icons wide -
+    -- the owner's "verschwindet ganz", measured.
+    local function Extent(shown, rows, columns, down)
+        local wide, tall = X.Extent(shown, rows, columns, down)
+        return wide .. "x" .. tall
+    end
+    Check("Nothing to show is no size at all", Extent(0, 2, 4) == "0x0")
+    Check("Three of twelve are three across and one down",
+        Extent(3, 3, 4) == "3x1", Extent(3, 3, 4))
+    Check("Five of twelve wrap onto a second row",
+        Extent(5, 3, 4) == "4x2", Extent(5, 3, 4))
+    Check("Growing downwards, three are one column of three",
+        Extent(3, 3, 4, true) == "1x3", Extent(3, 3, 4, true))
+    Check("A full lattice is exactly its own shape",
+        Extent(12, 3, 4) == "4x3", Extent(12, 3, 4))
+
+    ---------------------------------------------------------------------
+    -- THE OLD SHAPE IS READ ONCE AND DROPPED
+    --
+    -- A profile written before the lattice carries a count and a line width.
+    -- This is the migration everybody who updates runs exactly once, and
+    -- getting it wrong means somebody's arranged panel comes back as a
+    -- default - which is the same thing as losing it.
+    ---------------------------------------------------------------------
+    local cfg = X.Config()
+    local savedRows, savedColumns = cfg.rows, cfg.columns
+    cfg.rows, cfg.columns = nil, nil
+    cfg.count, cfg.perLine = 12, 4
+    X.Config()
+    Check("An old count of twelve in lines of four is 3 x 4",
+        cfg.rows == 3 and cfg.columns == 4,
+        tostring(cfg.rows) .. "x" .. tostring(cfg.columns))
+    Check("And the two old keys are gone rather than kept in step",
+        cfg.count == nil and cfg.perLine == nil)
+    cfg.rows, cfg.columns = savedRows, savedColumns
+
+    ---------------------------------------------------------------------
+    -- WHAT A LOGIN DOES TO A PANEL SOMEBODY HAS ARRANGED
+    --
+    -- Owner, 2026-08-09: "nach rl ist mein preset von meinen external cds
+    -- immer weg." What he was actually looking at was a preview that did not
+    -- draw - but "the login path keeps what I arranged" is worth pinning down
+    -- rather than believing, because ApplyDefaults runs over every profile
+    -- before anything reads it and it is the one thing that could.
+    --
+    -- Run on a stand-in profile, so this can never touch his own.
+    ---------------------------------------------------------------------
+    local realDB = ns.db
+    local saved = {
+        externals = {
+            cells = { [1] = 6940, [3] = 102342 },
+            assigned = { [6940] = "Heiler" },
+            rows = 2, columns = 5,
+            -- Whisper switched OFF and Say switched on. Stored by being
+            -- MISSING, which is the shape ApplyDefaults would undo.
+            channels = { SAY = true },
+            message = "%s bitte!",
+        },
+    }
+    ns.ApplyDefaults(saved, ns.DEFAULTS)
+    ns.db = saved
+    local after = X.Config()
+    ns.db = realDB
+
+    Check("A login keeps the spells you put in your slots",
+        after.cells[1] == 6940 and after.cells[3] == 102342)
+    Check("And the lattice you arranged them in",
+        after.rows == 2 and after.columns == 5,
+        tostring(after.rows) .. "x" .. tostring(after.columns))
+    Check("And who you assigned them to", after.assigned[6940] == "Heiler")
+    Check("A CHANNEL YOU SWITCHED OFF STAYS OFF over a login",
+        after.channels.WHISPER == nil and after.channels.SAY == true)
+
+    ---------------------------------------------------------------------
+    -- THE PREVIEW FITS THE PAGE
+    --
+    -- The band does not scroll, so the lattice has to be drawn at whatever
+    -- size fits both ways. This is the rule that stops twelve columns running
+    -- off the edge of the settings page - which is not something the desktop
+    -- harness can see, because every frame out here answers 400 wide.
+    ---------------------------------------------------------------------
+    local P = ns.OptionsExternals and ns.OptionsExternals.PreviewSize
+    if P then
+        Check("A small lattice is drawn at the design's own size",
+            P(1, 6, 730, 200) == 40, tostring(P(1, 6, 730, 200)))
+        Check("Twelve columns still fit across the page",
+            P(1, 12, 730, 200) * 12 + 11 * 8 <= 730,
+            tostring(P(1, 12, 730, 200)))
+        Check("Six rows still fit inside the band",
+            P(6, 6, 730, 200) * 6 + 5 * 8 <= 200, tostring(P(6, 6, 730, 200)))
+        Check("It never shrinks past being clickable", P(6, 12, 200, 60) >= 22,
+            tostring(P(6, 12, 200, 60)))
+    end
+
+    X.Config().cells = keptCells
+    X.SetRows(keptRows)
+    X.SetColumns(keptColumns)
 end
 
 function Test:Run()
