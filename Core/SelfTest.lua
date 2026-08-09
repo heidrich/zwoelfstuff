@@ -3977,6 +3977,59 @@ local function TestExternals()
         R("RAID_WARNING", true, false, true, false) == "INSTANCE_CHAT")
 
     ---------------------------------------------------------------------
+    -- SEVERAL CHANNELS AT ONCE
+    --
+    -- The de-duplication is the part worth a test: "Raid warning" and "Party
+    -- or raid" both come out as RAID for somebody without assist, and sending
+    -- one sentence to one channel twice is a person spamming their own group
+    -- because of a setting they thought was two different things.
+    ---------------------------------------------------------------------
+    local function Names(list)
+        local out = {}
+        for _, entry in ipairs(list) do out[#out + 1] = entry.channel end
+        return table.concat(out, ",")
+    end
+
+    Check("One channel goes to one place",
+        Names(X.SendingTo({ WHISPER = true }, true, false, false, false))
+            == "WHISPER")
+
+    Check("A whisper and the group are two messages",
+        Names(X.SendingTo({ WHISPER = true, GROUP = true },
+            true, false, false, false)) == "WHISPER,PARTY",
+        Names(X.SendingTo({ WHISPER = true, GROUP = true },
+            true, false, false, false)))
+
+    -- Both resolve to RAID without assist. One message, not two.
+    Check("Two choices that come out the same are sent once",
+        Names(X.SendingTo({ GROUP = true, RAID_WARNING = true },
+            true, true, false, false)) == "RAID",
+        Names(X.SendingTo({ GROUP = true, RAID_WARNING = true },
+            true, true, false, false)))
+
+    -- With assist they are genuinely two channels, and both are wanted.
+    Check("With assist they are two different channels",
+        Names(X.SendingTo({ GROUP = true, RAID_WARNING = true },
+            true, true, false, true)) == "RAID,RAID_WARNING",
+        Names(X.SendingTo({ GROUP = true, RAID_WARNING = true },
+            true, true, false, true)))
+
+    Check("Solo, a group-only choice sends nowhere",
+        #X.SendingTo({ GROUP = true }, false, false, false, false) == 0)
+    Check("But Say still goes out solo",
+        Names(X.SendingTo({ GROUP = true, SAY = true },
+            false, false, false, false)) == "SAY")
+
+    -- The last one cannot be switched off. A button that sends nowhere is not
+    -- a setting, and the click that emptied it is the one nobody notices.
+    local keptChannels = X.Config().channels
+    X.Config().channels = { WHISPER = true }
+    X.ToggleChannel("WHISPER")
+    Check("Switching off the last channel leaves one on",
+        next(X.Config().channels) ~= nil)
+    X.Config().channels = keptChannels
+
+    ---------------------------------------------------------------------
     -- Slots
     ---------------------------------------------------------------------
     local keptCells, keptCount = X.Config().cells, X.Config().count

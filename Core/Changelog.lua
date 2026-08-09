@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.59.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100Pick as many channels as you like.|r A whisper to the one person who can cast it AND a line in party chat: the first is aimed, the second is insurance.",
+            "Two that come out the same channel are sent once - a raid warning without assist IS raid chat, and you would have said it twice.",
+            "The last one cannot be switched off, and a whisper with nobody to whisper no longer stops the others going out.",
+        },
+    },
+    {
         version = "4.59.0",
         date = "2026-08-09",
         lines = {

@@ -4371,6 +4371,18 @@ function UI.ChipRow(parent, width, cfg)
     local row = CreateFrame("Frame", nil, parent)
     row:SetWidth(width)
 
+    -- ONE CHIP LIT, OR SEVERAL. `current` is the filter case this was built
+    -- for - one of six, and picking another puts the last one out. `isOn` is
+    -- the other shape, where every chip is its own yes or no: the externals
+    -- panel sends a message to a whisper AND to party chat, and a control
+    -- that can only hold one answer cannot say that.
+    --
+    -- One predicate for both, so nothing below has to know which it is.
+    local function IsOn(key)
+        if cfg.isOn then return cfg.isOn(key) and true or false end
+        return cfg.current and cfg.current() == key
+    end
+
     local chips = {}
     for index, spec in ipairs(cfg.chips) do
         local chip = CreateFrame("Button", nil, row)
@@ -4387,12 +4399,12 @@ function UI.ChipRow(parent, width, cfg)
 
         chip:SetScript("OnClick", function() cfg.onSelect(spec.key) end)
         chip:SetScript("OnEnter", function(self)
-            if cfg.current() == spec.key then return end
+            if IsOn(spec.key) then return end
             self.bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
             self.bg:Show()
         end)
         chip:SetScript("OnLeave", function(self)
-            if cfg.current() == spec.key then return end
+            if IsOn(spec.key) then return end
             self.bg:Hide()
         end)
 
@@ -4418,9 +4430,8 @@ function UI.ChipRow(parent, width, cfg)
     end
 
     row.Refresh = function()
-        local current = cfg.current()
         for index, chip in ipairs(chips) do
-            local active = cfg.chips[index].key == current
+            local active = IsOn(cfg.chips[index].key)
             -- Only the chosen one has a bed. Six filled boxes across the top
             -- of a list weigh more than the list, and five of them are saying
             -- "not me".

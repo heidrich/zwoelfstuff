@@ -79,6 +79,18 @@ function Externals.Config()
     cfg.cells = cfg.cells or {}
     cfg.assigned = cfg.assigned or {}   -- [spellID] = "Name-Realm"
     cfg.count = cfg.count or 6
+    cfg.channels = cfg.channels or {}
+
+    -- One channel, chosen before it could be several. Carried over, then
+    -- dropped - a migration that runs twice would switch a channel somebody
+    -- has just turned off back on.
+    if cfg.channel then
+        cfg.channels[cfg.channel] = true
+        cfg.channel = nil
+    end
+    -- A profile that has never been asked sends a whisper, which is what the
+    -- feature was built around.
+    if next(cfg.channels) == nil then cfg.channels.WHISPER = true end
 
     -- A profile written before the slots existed carries an ordered list.
     -- Poured into the cells in the order it had, once, and then dropped: a
@@ -301,13 +313,33 @@ Externals.DEFAULT_MESSAGE = "%s bitte!"
 -- the finder talks on INSTANCE_CHAT, and a message sent to PARTY there
 -- arrives nowhere at all - silently. IsInGroup(2) is the test, taken from
 -- BigWigs, which picks its channel exactly this way in shipping code.
+-- SEVERAL AT ONCE, not one of five. Owner: "wir brauchen hier eine
+-- mehrfachauswahl, sorry, das hab ich falsch kommuniziert." A whisper to the
+-- one person who can cast it AND a line in party chat is a reasonable thing
+-- to want - the first is aimed, the second is insurance.
 Externals.CHANNELS = {
-    { value = "WHISPER",      text = "Whisper the one who can cast it" },
-    { value = "GROUP",        text = "Party or raid (whichever you are in)" },
-    { value = "RAID_WARNING", text = "Raid warning" },
+    { value = "WHISPER",      text = "Whisper", long = "Whisper the one who can cast it" },
+    { value = "GROUP",        text = "Party or raid", long = "Whichever group you are actually in" },
+    { value = "RAID_WARNING", text = "Raid warning", long = "Needs lead or assist" },
     { value = "SAY",          text = "Say" },
     { value = "YELL",         text = "Yell" },
 }
+
+function Externals.ChannelOn(value)
+    local cfg = Externals.Config()
+    return cfg.channels[value] and true or false
+end
+
+function Externals.ToggleChannel(value)
+    local cfg = Externals.Config()
+    cfg.channels[value] = (not cfg.channels[value]) or nil
+
+    -- NEVER ALL OFF. A button that sends nowhere is not a setting, it is a
+    -- button that does nothing - and the click that emptied the last one is
+    -- exactly the click somebody would not notice doing it.
+    for _ in pairs(cfg.channels) do return end
+    cfg.channels.WHISPER = true
+end
 
 -- The channel a message would actually be sent on, and why not, when not.
 -- Its own function so the page can say "you are not in a group" before you
@@ -389,28 +421,67 @@ local function InInstanceGroup()
     return IsInGroup(category) and true or false
 end
 
+-- Every channel this press would actually go out on, in the order they are
+-- listed, with duplicates removed.
+--
+-- The de-duplication is not tidiness: "Raid warning" and "Party or raid" both
+-- resolve to RAID for somebody without assist, and sending the same sentence
+-- to the same channel twice is a person spamming their own group because of
+-- a setting they thought was two different things.
+function Externals.SendingTo(chosen, inGroup, inRaid, inInstanceGroup, canWarn)
+    local out, seen = {}, {}
+    for _, entry in ipairs(Externals.CHANNELS) do
+        if chosen[entry.value] then
+            local channel, note = Externals.ResolveChannel(entry.value,
+                inGroup, inRaid, inInstanceGroup, canWarn)
+            if channel and not seen[channel] then
+                seen[channel] = true
+                out[#out + 1] = { channel = channel, note = note }
+            end
+        end
+    end
+    return out
+end
+
 function Externals.Ask(spellID)
     local spell = byID[spellID]
     if not spell then return false, "not an external" end
 
     local cfg = Externals.Config()
-    local choice = cfg.channel or "WHISPER"
 
-    -- WHO is resolved even for a group channel: the message names them, and
+    -- WHO is resolved whatever the channels are: the message names them, and
     -- "who would this ask" is the question the tooltip answers either way.
     local target, why = Externals.Whom(spell, Externals.Roster(),
         cfg.assigned[spellID])
 
-    if choice == "WHISPER" and not target then
-        return false, "nobody in the group can cast it"
+    if cfg.channels.WHISPER and not target then
+        -- A whisper with nobody to whisper is the one case worth refusing
+        -- outright ONLY when it is the sole channel. With party chat also on,
+        -- the message still has somewhere to go.
+        local others = false
+        for value in pairs(cfg.channels) do
+            if value ~= "WHISPER" then others = true end
+        end
+        if not others then
+            return false, "nobody in the group can cast it"
+        end
     end
 
-    local channel, note = Externals.ResolveChannel(choice, IsInGroup(),
-        IsInRaid(), InInstanceGroup(),
+    local going = Externals.SendingTo(cfg.channels, IsInGroup(), IsInRaid(),
+        InInstanceGroup(),
         (UnitIsGroupLeader and UnitIsGroupLeader("player"))
             or (UnitIsGroupAssistant and UnitIsGroupAssistant("player")))
-    if not channel then
-        return false, note or "there is nowhere to send it"
+
+    -- A whisper with no recipient is dropped here rather than refused above:
+    -- the other channels still carry the message.
+    for index = #going, 1, -1 do
+        if going[index].channel == "WHISPER" and not target then
+            table.remove(going, index)
+        end
+    end
+
+    if #going == 0 then
+        return false, "there is nowhere to send it - you are not in a group"
     end
 
     local name = ns.SpellName(spellID) or ("Spell " .. spellID)
@@ -424,13 +495,20 @@ function Externals.Ask(spellID)
         return false, "this client has no way to send a chat message"
     end
 
-    -- The whisper is the only channel with a recipient, and the early return
-    -- above guarantees there IS one by here. Written as its own local so that
-    -- is legible rather than implied halfway along an argument list.
-    local whisperTo = (channel == "WHISPER") and target and target.name or nil
-    send(Externals.Message(name, target and target.name), channel, nil, whisperTo)
+    local text = Externals.Message(name, target and target.name)
+    local note
+    for _, where in ipairs(going) do
+        -- The whisper is the only channel with a recipient, and the loop
+        -- above has already dropped it if there is nobody to name. Asked
+        -- again anyway: an invariant established twenty lines earlier is one
+        -- somebody edits out later, and this costs a comparison.
+        local whisperTo = (where.channel == "WHISPER") and target
+            and target.name or nil
+        send(text, where.channel, nil, whisperTo)
+        note = note or where.note
+    end
 
-    return true, target and target.name or channel, note or why
+    return true, target and target.name or going[1].channel, note or why
 end
 
 ---------------------------------------------------------------------------

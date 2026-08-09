@@ -150,15 +150,38 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("What you say")
 
-    local channelRow = grid:Row("Send it to")
-    UI.Dropdown(channelRow, ns.Externals.CHANNELS,
-        function() return Cfg().channel or "WHISPER" end,
-        function(value) Cfg().channel = value end, {})
-    grid:Note("A whisper reaches the one person who can cast it. Party and "
-        .. "raid reach everybody - useful when you do not care who answers, "
-        .. "as long as somebody does. |cffffd100Party or raid|r picks the "
-        .. "right one for the group you are actually in, which in a dungeon "
-        .. "from the finder is NOT the party channel.")
+    -- CHIPS, NOT A SELECT. Owner: "wir brauchen hier eine mehrfachauswahl."
+    -- Five yes-or-no answers, all of them visible at once, which a dropdown
+    -- showing one line cannot do however it is worded.
+    local channelHost = CreateFrame("Frame", nil, grid.content)
+    local chips = UI.ChipRow(channelHost, width - 40, {
+        chips = {
+            { key = "WHISPER",      text = "Whisper" },
+            { key = "GROUP",        text = "Party or raid" },
+            { key = "RAID_WARNING", text = "Raid warning" },
+            { key = "SAY",          text = "Say" },
+            { key = "YELL",         text = "Yell" },
+        },
+        isOn = function(key) return ns.Externals.ChannelOn(key) end,
+        onSelect = function(key)
+            ns.Externals.ToggleChannel(key)
+            ns.Options:Refresh()
+        end,
+    })
+    chips:SetPoint("TOPLEFT", channelHost, "TOPLEFT", 0, 0)
+    channelHost:SetHeight(chips:GetHeight())
+    grid:Wide(channelHost, chips:GetHeight(), 4, 8)
+    channelHost.Refresh = function() chips.Refresh() end
+    grid.widgets[#grid.widgets + 1] = channelHost
+
+    grid:Note("Pick as many as you like. A whisper reaches the one person who "
+        .. "can cast it; party or raid reaches everybody, which is what you "
+        .. "want when you do not care who answers as long as somebody does. "
+        .. "|cffffd100Party or raid|r picks the right channel for the group "
+        .. "you are actually in - in a dungeon from the finder that is NOT "
+        .. "party chat. Two that come out the same are sent once. The last "
+        .. "one cannot be switched off: a button that sends nowhere is not a "
+        .. "setting.")
 
     local messageRow = grid:FullRow("Message", { controlWidth = 300 })
     local input = UI.Input(messageRow.slot, 300, function(text)

@@ -4,6 +4,29 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.59.1] - 2026-08-09
+
+### Changed
+
+- **The channel is a MULTIPLE choice.** Owner: "wir brauchen hier eine
+  mehrfachauswahl, sorry, das hab ich falsch kommuniziert." A whisper to the
+  one person who can cast it AND a line in party chat is a reasonable thing to
+  want - the first is aimed, the second is insurance. Chips rather than a
+  select, because five yes-or-no answers all need to be visible at once, which
+  a dropdown showing one line cannot do however it is worded.
+- **Two choices that come out the same are sent once.** "Raid warning" and
+  "Party or raid" both resolve to `RAID` for somebody without assist, and one
+  sentence twice in one channel is a person spamming their own group because
+  of a setting they thought was two different things.
+- **A whisper with nobody to whisper no longer stops the rest.** It is dropped
+  and the other channels still carry the message; only when it is the ONLY
+  channel is the press refused.
+- **The last channel cannot be switched off.** A button that sends nowhere is
+  not a setting, and the click that emptied it is the one nobody notices
+  making.
+- `UI.ChipRow` grew an `isOn` predicate beside its `current` one, so the same
+  widget does both the filter shape it was built for and this one.
+
 ## [4.59.0] - 2026-08-09
 
 ### Changed
