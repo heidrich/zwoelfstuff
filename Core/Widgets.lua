@@ -483,6 +483,40 @@ function UI.MakeRowASpell(row, spellID, texture)
     return row
 end
 
+-- The same for a CONSUMABLE. A potion has an icon and a tooltip, so it
+-- shows both - the rule does not care that it is an item.
+function UI.MakeRowAnItem(row, itemID)
+    if not row.dkItemIcon then
+        row.dkItemIcon = row:CreateTexture(nil, "ARTWORK")
+        row.dkItemIcon:SetSize(18, 18)
+        row.dkItemIcon:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.dkItemIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        row:HookScript("OnEnter", function(entered)
+            if not (entered.dkItemID and GameTooltip) then return end
+            GameTooltip:SetOwner(entered, "ANCHOR_RIGHT")
+            if pcall(GameTooltip.SetItemByID, GameTooltip, entered.dkItemID) then
+                GameTooltip:Show()
+            else
+                GameTooltip:Hide()
+            end
+        end)
+        row:HookScript("OnLeave", function()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+    end
+
+    row.dkItemID = itemID
+    local icon = itemID and ns.Death and ns.Death.ItemIcon(itemID) or nil
+    row.dkItemIcon:SetTexture(icon)
+    row.dkItemIcon:SetShown(icon ~= nil)
+
+    row.label:ClearAllPoints()
+    row.label:SetPoint("LEFT", row, "LEFT", icon and 24 or 0, 0)
+    row.label:SetPoint("RIGHT", row.slot, "LEFT", -UI.GAP, 0)
+    return row
+end
+
 ---------------------------------------------------------------------------
 -- A ROW OF SPELLS, drawn the way this game draws spells
 --
@@ -528,13 +562,17 @@ function UI.SpellChips(parent, opts)
         chip.label:SetWordWrap(false)
 
         chip:SetScript("OnEnter", function(self)
-            if not (self.spellID and GameTooltip) then return end
+            if not GameTooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-            if pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID) then
-                GameTooltip:Show()
-            else
-                GameTooltip:Hide()
+            -- A consumable gets the client's item tooltip, a spell its spell
+            -- tooltip. Same rule either way: whatever has one, shows it.
+            local shown = false
+            if self.itemID then
+                shown = pcall(GameTooltip.SetItemByID, GameTooltip, self.itemID)
+            elseif self.spellID then
+                shown = pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID)
             end
+            if shown then GameTooltip:Show() else GameTooltip:Hide() end
         end)
         chip:SetScript("OnLeave", function()
             if GameTooltip then GameTooltip:Hide() end
@@ -552,8 +590,15 @@ function UI.SpellChips(parent, opts)
             local chip = strip.chips[shown + 1]
             if not chip then break end
 
-            local texture = entry.spellID and ns.SpellTexture(entry.spellID)
+            local texture
+            if entry.itemID and C_Item and C_Item.GetItemIconByID then
+                local ok, icon = pcall(C_Item.GetItemIconByID, entry.itemID)
+                if ok then texture = icon end
+            end
+            texture = texture
+                or (entry.spellID and ns.SpellTexture(entry.spellID))
             chip.spellID = entry.spellID
+            chip.itemID = entry.itemID
             chip.icon:SetTexture(texture)
             chip.icon:SetShown(texture and true or false)
             chip.label:SetText((entry.name or "?") .. (entry.suffix or ""))
@@ -579,6 +624,7 @@ function UI.SpellChips(parent, opts)
 
         for index = shown + 1, #strip.chips do
             strip.chips[index].spellID = nil
+            strip.chips[index].itemID = nil
             strip.chips[index]:Hide()
         end
 

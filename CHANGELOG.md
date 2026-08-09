@@ -4,6 +4,52 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.54.0] - 2026-08-09
+
+### Removed
+
+- **The Timeline module.** `Core/Busters.lua` and `Core/OptionsBusters.lua`
+  are gone, with their page, their Edit Mode mover, their slash command and
+  their tests. The owner's call: *"wir nehmen timeline als eigenes modul
+  raus, das ist ja jetzt im death log drin"*. What the panel drew live was
+  the fight's next scheduled hit; the replay answers the same question
+  afterwards with everything the panel could never show. The defensives list
+  it carried was always read by the death window - it moved, it was not lost.
+
+### Added
+
+- **Consumables are defensives.** `ns.db.rescueItems` is a picked list like
+  `ns.db.defensives`, seeded once with healthstone and the two current
+  healing potions - `nil` means "never seen", which is not the same as a
+  list emptied on purpose, so a potion thrown out stays thrown out.
+  - They are judged in **one list with the spells**: an `avail` entry carries
+    a `spellID` or an `itemID` and nothing downstream cares which. The old
+    shape had a second list for "what was in the bags", so one question had
+    two answers on one window. `Death.Analyse` lost its `items` parameter.
+  - An item's cooldown is a **fact**, not an estimate: `C_Item.GetItemCooldown`
+    is readable on this patch. `Death.ItemReady` returns it; the count comes
+    from `C_Item.GetItemCount`, and carrying none is worded as "none" rather
+    than as a cooldown.
+  - `Death.BagConsumables` offers whatever is in the bags right now with a
+    use-spell and class id 0 - not a shipped list of item ids, which goes out
+    of date every patch.
+  - Drinking one is a cast: `DefensiveSpells()` maps each picked item to its
+    spell through `C_Item.GetItemSpell`, so a potion gets a **bar** in the
+    replay instead of appearing in the rotation row as an unnamed press.
+- **The Deaths page carries the spell list as its third column**
+  (`OptionsDeaths:BuildSide`, on the same `BuildSpellPane` the bars and
+  reminders use). Click a spell to judge it as a defensive, click again to
+  stop. Picking out of a dropdown of forty names was the worst part of it.
+- `UI.MakeRowAnItem` - a row with an item's icon and the client's item
+  tooltip, the same rule spells already get.
+
+### Fixed
+
+- **`ns.version` was a second, drifting copy of the version number** - it
+  said 4.50.0 while the TOC said 4.53.0, and it is what the window shows,
+  the About page prints and a shared profile is stamped with. It reads
+  `C_AddOns.GetAddOnMetadata` now.
+
 ## [4.53.0] - 2026-08-09
 
 ### Changed

@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- SelfTest - /zs test
 --
 -- WHY AN ADDON SHIPS ITS OWN TEST SUITE.
@@ -950,7 +950,7 @@ end
 -- Your own bars. Read-only.
 ---------------------------------------------------------------------------
 ---------------------------------------------------------------------------
--- Cast history - the estimate both the Timeline strip and the death window
+-- Cast history - the estimate the death window
 -- colour their answers with. The rule has one trap worth pinning: nil and 0
 -- are different answers ("cannot tell" against "ready"), and a caller that
 -- collapses them calls every unknown spell ready.
@@ -1129,24 +1129,49 @@ local function TestDeath()
         end)())
 
     -- Availability: ready by our clock is listed, unknown is not called
-    -- ready, and an unused healthstone is mentioned.
+    -- ready, and a CONSUMABLE is judged in the same list as the spells -
+    -- "what could have saved you" is one question and used to have two
+    -- answers on one window.
     local avail = Death.Analyse({},  nil, {
         { spellID = 1, name = "Icebound Fortitude", remaining = 0 },
         { spellID = 2, name = "Vampiric Blood",     remaining = 25 },
         { spellID = 3, name = "Lichborne",          remaining = nil, why = "not cast since login" },
-    }, { { name = "Healthstone", count = 1 } })
+        { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 },
+    }, {})
     Check("Ready and unused is listed by name",
-        #avail.readyDefensives == 1
+        #avail.readyDefensives == 2
             and avail.readyDefensives[1].name == "Icebound Fortitude")
     -- The id travels with the name everywhere, because only the id can
     -- produce an icon and a tooltip - and this game shows both, always.
     Check("A named spell carries its id for the icon and the tooltip",
         avail.readyDefensives[1].spellID == 1)
+    -- A consumable carries an ITEM id and is judged with the spells: a
+    -- healthstone in the bag is the same verdict as a defensive off cooldown.
+    Check("A consumable is judged as a defensive, by its item id",
+        avail.readyDefensives[2].itemID == 5512)
     Check("Cannot-tell is never promoted to ready",
         #avail.unknownDefensives == 1
             and avail.unknownDefensives[1].name == "Lichborne")
-    Check("What sat in the bags is said",
-        avail.itemsInBags[1] == "Healthstone")
+
+
+    -- CONSUMABLES ARE PICKED, NOT SHIPPED. The three seeded ids are a
+    -- starting point; nil means the setting has never been seen, which is a
+    -- different thing from a list somebody emptied on purpose - and getting
+    -- that wrong would re-seed a potion he threw out, every login.
+    if ns.db then
+        ns.db.rescueItems = nil
+        local seeded = Death.PickedItems()
+        local count = 0
+        for _ in pairs(seeded) do count = count + 1 end
+        Check("An unseen list is seeded once", count > 0)
+
+        for id in pairs(seeded) do seeded[id] = nil end
+        local again = Death.PickedItems()
+        local emptied = 0
+        for _ in pairs(again) do emptied = emptied + 1 end
+        Check("A list emptied on purpose stays empty", emptied == 0)
+        ns.db.rescueItems = nil
+    end
 
     -- Nothing readable at all still answers with a sentence.
     local empty = Death.Analyse(nil, nil, {}, {})
@@ -1529,7 +1554,7 @@ local function TestDeath()
     -- feature is for: anybody reading it can see nothing was pressed.
     ---------------------------------------------------------------------
     local nothing = Death.Analyse(
-        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {}, {})
+        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {})
     Check("Pressing nothing at all is said out loud",
         (function()
             for _, line in ipairs(nothing.lines) do
@@ -1539,7 +1564,7 @@ local function TestDeath()
         end)())
 
     local wrongOnes = Death.Analyse(
-        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {},
+        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {},
         { { name = "Death Strike" }, { name = "Heart Strike" } })
     -- The judgement and the evidence are two lines, not one sentence: a
     -- rotation of seven abilities wrapped the old one over three lines and
@@ -1562,7 +1587,7 @@ local function TestDeath()
         end)())
 
     local rightOne = Death.Analyse(
-        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {},
+        { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {},
         { { spellID = 48792, name = "Icebound Fortitude", defensive = true },
           { name = "Death Strike" } })
     Check("A defensive that WAS used is credited on its own",
@@ -1600,31 +1625,6 @@ local function TestDeath()
             "2026-08-09") == "07.08.  16:10:54")
     Check("A death with no day recorded still reads",
         Death.WhenLabel({ when = "16:10:54" }, "2026-08-09") == "16:10:54")
-end
-
----------------------------------------------------------------------------
--- Timeline - the soonest-event rule and the panel's width rule, the two
--- things the desktop can check without a timeline to ask.
----------------------------------------------------------------------------
-local function TestBusters()
-    local Busters = ns.Busters
-    if not Busters then
-        Skip("Timeline", "Busters.lua did not load")
-        return
-    end
-
-    local id, remaining = Busters.Soonest({ a = 12.5, b = 3.2, c = 40 })
-    Check("The soonest event wins", id == "b" and remaining == 3.2)
-    Check("An empty timeline answers nil", Busters.Soonest({}) == nil)
-    Check("A negative remaining is not a candidate",
-        select(1, Busters.Soonest({ a = -1 })) == nil)
-    Check("A non-number never wins",
-        select(1, Busters.Soonest({ a = "soon", b = 9 })) == "b")
-
-    local wide = Busters.Extent(0)
-    Check("An empty strip still has the panel's minimum width", wide == 220)
-    local wider = Busters.Extent(12)
-    Check("Twelve icons outgrow the minimum", wider > 220)
 end
 
 local function TestLiveBars()
@@ -3540,7 +3540,6 @@ function Test:Run()
         { "Sharing",       TestShare },
         { "Cast history",  TestHistory },
         { "Death analysis", TestDeath },
-        { "Timeline",      TestBusters },
         { "Your bars",     TestLiveBars },
     }
 

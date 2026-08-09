@@ -316,13 +316,15 @@ local PAGES = {
       subtitle = "Text on your screen when a buff has fallen off.",
       build = function(page, width) return ns.OptionsReminders:BuildPage(page, width) end },
 
-    -- The fight's next scheduled hit, over your defensives. No third
-    -- column: a panel switch and a list, nothing to drag in from.
-    { key = "timeline", title = "Timeline", glyph = "cond-combat",
-      subtitle = "The next scripted hit, and whether you are ready for it.",
-      build = function(page, width) return ns.OptionsBusters:BuildPage(page, width) end },
-
-    { key = "deaths", title = "Deaths", glyph = "effect-flash",
+    -- The death log, and with it the DEFENSIVES LIST that used to live on a
+    -- Timeline page of its own. That page is gone: what it drew live was the
+    -- fight's next scheduled hit, and the replay answers the same question
+    -- afterwards with everything the panel could never show. The list it
+    -- carried was always read by this window anyway.
+    --
+    -- It carries the spell palette as its third column, because picking your
+    -- defensives out of a dropdown of forty names was the worst part of it.
+    { key = "deaths", title = "Deaths", glyph = "effect-flash", deaths = true,
       subtitle = "What killed you, and what could have prevented it.",
       build = function(page, width) return ns.OptionsDeaths:BuildPage(page, width) end },
 
@@ -384,8 +386,8 @@ Options.PAGES = PAGES
 --
 -- WHICH column it is stays a separate question, asked only by the painter.
 function Options.HasThirdColumn(entry)
-    return (entry.side or entry.explain or entry.tanks or entry.reminders)
-        and true or false
+    return (entry.side or entry.explain or entry.tanks or entry.reminders
+        or entry.deaths) and true or false
 end
 
 function Options.PageWidth(entry, narrow, wide)
@@ -683,6 +685,7 @@ function Options:Create()
     local side = ns.OptionsBars:BuildSide(sideHost, PAD)
     local tankSide = ns.OptionsCoTanks:BuildSide(sideHost, PAD)
     local reminderSide = ns.OptionsReminders:BuildSide(sideHost, PAD)
+    local deathSide = ns.OptionsDeaths:BuildSide(sideHost, PAD)
 
     local pageFrames = {}
     for index, entry in ipairs(PAGES) do
@@ -741,7 +744,6 @@ function Options:Create()
         { eyebrow = "Tank stuff" },
         { page = "cotanks" },
         { page = "reminders" },
-        { page = "timeline" },
         { page = "deaths" },
         { eyebrow = "System" },
         { page = "settings" },
@@ -794,18 +796,22 @@ function Options:Create()
         local withExplain = entry.explain and true or false
         local withTanks = entry.tanks and true or false
         local withReminders = entry.reminders and true or false
+        local withDeaths = entry.deaths and true or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
         local third = withSide or withExplain or withTanks or withReminders
+            or withDeaths
         SetStageWidth(third)
         sideHost:SetShown(third)
         side:SetShown(withSide)
         explain:SetShown(withExplain)
         tankSide:SetShown(withTanks)
         reminderSide:SetShown(withReminders)
+        deathSide:SetShown(withDeaths)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
+        if withDeaths then ns.OptionsDeaths:Refresh() end
 
         pageTitle:SetText(entry.title)
         if entry.status then

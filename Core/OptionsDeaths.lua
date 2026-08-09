@@ -141,17 +141,206 @@ function Page:BuildPage(page, width)
         .. "looking at - |cffffd100Clear list|r there throws them away.")
 
     ---------------------------------------------------------------------
-    -- What counts as available
+    -- Your defensives
+    --
+    -- This list used to live on a Timeline page of its own, and that page
+    -- is gone: what it drew live was the fight's next scheduled hit, which
+    -- the replay answers afterwards with everything the panel could never
+    -- show. The list was always read by this window anyway.
+    --
+    -- It decides three things: what the verdict calls "still ready", which
+    -- presses get a bar in the replay, and how long that bar runs.
     ---------------------------------------------------------------------
-    grid:Section("What counts as available")
+    grid:Section("Your defensives")
 
-    grid:Note("The defensives judged are the ones picked on the "
-        .. "|cffffd100Timeline|r page - one list for the panel and for this "
-        .. "window. Readiness is estimated from your own casts plus base "
-        .. "cooldowns, because the client withholds live cooldowns from "
-        .. "every addon on this patch. \"Ready\" here means ready as far as "
-        .. "that clock can tell.")
+    grid:Note("Pick them from the list on the right - what the Cooldown "
+        .. "Manager knows for this character. These are the spells judged as "
+        .. "defensives: the verdict says which were |cffffd100still ready|r "
+        .. "when you fell, and the replay draws a bar for each one you did "
+        .. "press. Readiness is our own estimate - your last cast plus the "
+        .. "base cooldown - because the client will not let an addon read a "
+        .. "live cooldown on this patch. Charges, resets and haste are not "
+        .. "in it, so it says about and means it.")
+
+    local SPELL_ROWS = 14
+    local spellRows = {}
+    for i = 1, SPELL_ROWS do
+        local row = grid:FullRow("", { controlWidth = 90 })
+        local remove = UI.Button(row.slot, "Remove", 90, function()
+            if row.dkSpell and ns.db.defensives then
+                ns.db.defensives[row.dkSpell] = nil
+                ns.Options:Refresh()
+            end
+        end)
+        remove:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+        spellRows[i] = row
+    end
+
+    ---------------------------------------------------------------------
+    -- Consumables
+    --
+    -- The owner: "wir brauchen zudem noch neben spells consumables wie
+    -- traenke oder healthstones, das sind auch def cds". They ARE - and
+    -- unlike a spell, the client still answers what their cooldown is, so
+    -- this half of the list is a fact rather than an estimate.
+    ---------------------------------------------------------------------
+    grid:Section("Consumables")
+
+    grid:Note("A healthstone that stayed in the bag is the same verdict as a "
+        .. "defensive that stayed off cooldown, so they are judged in one "
+        .. "list. Drinking one is a cast like any other on this patch, which "
+        .. "means the replay draws it on the timeline with everything else. "
+        .. "What is offered is whatever is in your bags right now.")
+
+    UI.Dropdown(grid:FullRow("Add one", { controlWidth = 260 }),
+        function()
+            local out = {}
+            local picked = ns.Death.PickedItems()
+            for _, itemID in ipairs(ns.Death.BagConsumables()) do
+                if not picked[itemID] then
+                    out[#out + 1] = {
+                        value = itemID,
+                        text = ns.Death.ItemName(itemID) or ("Item " .. itemID),
+                        iconTexture = ns.Death.ItemIcon(itemID),
+                        itemID = itemID,
+                    }
+                end
+            end
+            return out
+        end,
+        function() return nil end,
+        function(value)
+            if not value then return end
+            ns.Death.PickedItems()[value] = true
+            ns.Options:Refresh()
+        end, { emptyText = "Nothing usable found in your bags",
+               search = true, rowHeight = 26 })
+
+    local ITEM_ROWS = 8
+    local itemRows = {}
+    for i = 1, ITEM_ROWS do
+        local row = grid:FullRow("", { controlWidth = 90 })
+        local remove = UI.Button(row.slot, "Remove", 90, function()
+            if row.dkItem then
+                ns.Death.PickedItems()[row.dkItem] = nil
+                ns.Options:Refresh()
+            end
+        end)
+        remove:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+        itemRows[i] = row
+    end
 
     grid:Layout()
-    page.Refresh = function() grid:Refresh() end
+
+    page.Refresh = function()
+        local picked = {}
+        for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+            picked[#picked + 1] = spellID
+        end
+        table.sort(picked, function(a, b)
+            return (ns.SpellName(a) or "") < (ns.SpellName(b) or "")
+        end)
+
+        for i, row in ipairs(spellRows) do
+            local spellID = picked[i]
+            row.dkSpell = spellID
+            row:SetShown(spellID ~= nil)
+            if spellID then
+                row.label:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
+                UI.MakeRowASpell(row, spellID)
+            end
+        end
+
+        local items = {}
+        for itemID in pairs(ns.Death.PickedItems()) do
+            items[#items + 1] = itemID
+        end
+        table.sort(items, function(a, b)
+            return (ns.Death.ItemName(a) or "") < (ns.Death.ItemName(b) or "")
+        end)
+
+        for i, row in ipairs(itemRows) do
+            local itemID = items[i]
+            row.dkItem = itemID
+            row:SetShown(itemID ~= nil)
+            if itemID then
+                local count = ns.Death.ItemCount(itemID)
+                row.label:SetText((ns.Death.ItemName(itemID)
+                    or ("Item " .. itemID))
+                    .. (count > 0 and ("  |cff9ba3af x" .. count .. "|r")
+                        or "  |cff626a76none carried|r"))
+                -- The icon and the item's own tooltip, the same treatment
+                -- every spell in this addon gets.
+                UI.MakeRowAnItem(row, itemID)
+            end
+        end
+
+        grid:Refresh()
+    end
+end
+
+---------------------------------------------------------------------------
+-- The third column: the spell list, click to pick
+--
+-- The same pane the bars and the reminders use, with three callbacks of
+-- ours. Not a copy - every second copy of a display in this addon has
+-- drifted from the first, without exception.
+---------------------------------------------------------------------------
+function Page:BuildSide(parent, pad)
+    local side = CreateFrame("Frame", nil, parent)
+    side:SetAllPoints(parent)
+    side:Hide()
+
+    local width = parent:GetWidth() - pad * 2
+    local C = UI.C
+
+    local title = UI.Label(side, "Spells", UI.FS.card, C.text)
+    title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -16)
+    title:SetWidth(width - 96)
+    title:SetWordWrap(false)
+
+    local subtitle = UI.Eyebrow(side, "CLICK ONE TO MAKE IT A DEFENSIVE")
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    subtitle:SetWidth(width - 96)
+    subtitle:SetWordWrap(false)
+
+    local host = CreateFrame("Frame", nil, side)
+    host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
+    host:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
+
+    self.spellPane = ns.OptionsBars:BuildSpellPane(host, width, {
+        Used = function()
+            local used = {}
+            for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+                used[spellID] = "Defensive"
+            end
+            return used
+        end,
+        -- A click TOGGLES. Picking is done from this list, so unpicking
+        -- from it too is the one place a person looks second.
+        Assign = function(spellID)
+            ns.db.defensives = ns.db.defensives or {}
+            if ns.db.defensives[spellID] then
+                ns.db.defensives[spellID] = nil
+            else
+                ns.db.defensives[spellID] = true
+            end
+            ns.Options:Refresh()
+        end,
+        Hint = function(spellID)
+            if ns.db and ns.db.defensives and ns.db.defensives[spellID] then
+                return "Click to stop judging it as a defensive."
+            end
+            return "Click to judge it as a defensive."
+        end,
+    })
+
+    self.side = side
+    return side
+end
+
+function Page:Refresh()
+    if self.spellPane and self.spellPane.Refresh then
+        self.spellPane.Refresh()
+    end
 end

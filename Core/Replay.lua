@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Replay.lua - the death, played back on a timeline
 --
 -- The owner's ask, in his words: "dann würde ich das als extra fenster
@@ -957,7 +957,7 @@ local function Place(snapshot, from, to)
     -- and a Death Strike has nothing that is up - drawing it as a bar off
     -- its tooltip's number invents a state that does not exist. So the
     -- rotation goes in a row of its own, as icons: moments, which is what
-    -- they are. Only the defensives picked on the Timeline page get bars.
+    -- they are. Only the defensives picked on the Deaths page get bars.
     local colourOf, nextColour = {}, 0
     local bars, others = {}, {}
     for _, cast in ipairs(snapshot.casts or {}) do

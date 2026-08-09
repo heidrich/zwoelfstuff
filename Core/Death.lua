@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Death.lua - what killed you, and what could have prevented it
 --
 -- The owner's ask, in his words: when you die, a window with a quick
@@ -249,17 +249,12 @@ function Death.Persist(snapshot)
     for _, entry in ipairs(snapshot.avail or {}) do
         avail[#avail + 1] = {
             spellID = Plain(entry.spellID, "number"),
+            -- Consumables ride the same list; the id says which kind it is.
+            itemID = Plain(entry.itemID, "number"),
+            count = Plain(entry.count, "number"),
             name = Plain(entry.name, "string") or "?",
             remaining = Plain(entry.remaining, "number"),
             why = Plain(entry.why, "string"),
-        }
-    end
-
-    local items = {}
-    for _, item in ipairs(snapshot.items or {}) do
-        items[#items + 1] = {
-            name = Plain(item.name, "string") or "?",
-            count = Plain(item.count, "number") or 0,
         }
     end
 
@@ -289,7 +284,6 @@ function Death.Persist(snapshot)
         maxHP = Plain(snapshot.maxHP, "number"),
         events = events,
         avail = avail,
-        items = items,
         casts = casts,
     }
 end
@@ -302,7 +296,7 @@ function Death.Restore(stored)
     for _, entry in ipairs(stored or {}) do
         if type(entry) == "table" and type(entry.events) == "table" then
             entry.analysis = Death.Analyse(entry.events, entry.maxHP,
-                entry.avail, entry.items, entry.casts)
+                entry.avail, entry.casts)
             log[#log + 1] = entry
         end
     end
@@ -326,9 +320,10 @@ end
 -- events: oldest first, each { t, amount, hp, heal, name, overkill }
 --         with t in seconds before death (0 = the killing blow), every
 --         field already readable - Capture below guarantees that.
--- avail:  { { spellID, name, remaining, why } } - remaining 0 = ready by
---         our clock, nil = cannot tell (why says why).
--- items:  { { name, count } } - only what was actually in the bags.
+-- avail:  { { spellID | itemID, name, remaining, why, count } } - remaining
+--         0 = ready, nil = cannot tell (why says why). Spells and
+--         consumables in one list: "what could have saved you" is one
+--         question, and it had two answers on one window before.
 ---------------------------------------------------------------------------
 ---------------------------------------------------------------------------
 -- NAMING A SPELL, the way this game names spells
@@ -348,9 +343,20 @@ end
 -- stripped on the way out. One function, one place, no drift.
 ---------------------------------------------------------------------------
 
-function Death.SpellText(spellID, name)
-    name = name or (spellID and ("Spell " .. tostring(spellID))) or "?"
-    local texture = spellID and ns.SpellTexture and ns.SpellTexture(spellID)
+-- entry may be a spell id, or a table carrying spellID or itemID. A
+-- consumable is named and pictured exactly like a spell, because to the
+-- person reading the window it is the same kind of thing: something you
+-- could have pressed.
+function Death.SpellText(spellID, name, itemID)
+    name = name or (spellID and ("Spell " .. tostring(spellID)))
+        or (itemID and ("Item " .. tostring(itemID))) or "?"
+    local texture
+    if itemID and C_Item and C_Item.GetItemIconByID then
+        local ok, icon = pcall(C_Item.GetItemIconByID, itemID)
+        if ok then texture = icon end
+    end
+    texture = texture
+        or (spellID and ns.SpellTexture and ns.SpellTexture(spellID))
     if type(texture) == "number" then texture = string.format("%d", texture) end
     if type(texture) ~= "string" or texture == "" then return name end
     -- HEIGHT AND WIDTH BOTH ZERO, which means "as tall as the line". A
@@ -370,7 +376,8 @@ function Death.SpellList(entries, separator)
     local parts = {}
     for _, entry in ipairs(entries or {}) do
         if type(entry) == "table" then
-            parts[#parts + 1] = Death.SpellText(entry.spellID, entry.name)
+            parts[#parts + 1] = Death.SpellText(entry.spellID, entry.name,
+                entry.itemID)
         else
             parts[#parts + 1] = tostring(entry)
         end
@@ -384,14 +391,13 @@ function Death.PlainText(text)
     return (text:gsub("|T.-|t%s*", ""))
 end
 
-function Death.Analyse(events, maxHP, avail, items, casts)
+function Death.Analyse(events, maxHP, avail, casts)
     local out = {
         totalIn = 0, totalHealed = 0, hits = 0,
         biggest = nil,          -- { amount, name, pct }
         lastHealAgo = nil,      -- seconds before death the last heal landed
         readyDefensives = {},   -- { spellID, name }, ready and unpressed
         unknownDefensives = {}, -- { spellID, name } we cannot judge
-        itemsInBags = {},       -- names with count > 0
         lines = {},             -- the verdict, one sentence per line
     }
 
@@ -422,17 +428,13 @@ function Death.Analyse(events, maxHP, avail, items, casts)
         -- The ID travels with the name, always. A spell named in this UI
         -- without its icon and its tooltip is unfinished to the people who
         -- play this game, and only the ID can produce either.
-        local named = { spellID = entry.spellID, name = entry.name }
+        local named = {
+            spellID = entry.spellID, itemID = entry.itemID, name = entry.name,
+        }
         if entry.remaining == 0 then
             out.readyDefensives[#out.readyDefensives + 1] = named
         elseif entry.remaining == nil then
             out.unknownDefensives[#out.unknownDefensives + 1] = named
-        end
-    end
-
-    for _, item in ipairs(items or {}) do
-        if (item.count or 0) > 0 then
-            out.itemsInBags[#out.itemsInBags + 1] = item.name
         end
     end
 
@@ -501,11 +503,6 @@ function Death.Analyse(events, maxHP, avail, items, casts)
     if #out.readyDefensives > 0 then
         lines[#lines + 1] = "Ready and unused (by our own clock): "
             .. Death.SpellList(out.readyDefensives) .. "."
-    end
-
-    if #out.itemsInBags > 0 then
-        lines[#lines + 1] = "In the bags: "
-            .. table.concat(out.itemsInBags, ", ") .. "."
     end
 
     if #lines == 0 then
@@ -689,22 +686,131 @@ end
 -- Capture
 ---------------------------------------------------------------------------
 
--- Health potions and healthstone. Item ids are stable facts; counts are
--- bag questions, not combat questions, and stay readable. The list is
--- deliberately short - the two things a healer will ask about first.
-local RESCUE_ITEMS = {
-    { itemID = 5512,   name = "Healthstone" },
-    { itemID = 244839, name = "Invigorating Healing Potion" },
-    { itemID = 211880, name = "Algari Healing Potion" },
-}
+---------------------------------------------------------------------------
+-- CONSUMABLES ARE DEFENSIVES
+--
+-- The owner: "wir brauchen zudem noch neben spells consumables wie traenke
+-- oder healthstones, das sind auch def cds". He is right, and it is the
+-- same verdict either way: a potion that stayed in the bag and a defensive
+-- that stayed off cooldown are one sentence, not two.
+--
+-- So they live in ONE list with the spells - each entry carries a spellID
+-- or an itemID and nothing downstream cares which. The old shape had a
+-- second list for "what was in the bags", which meant the same question got
+-- two answers in two places on one window.
+--
+-- These three are only the SEED. `nil` means "this setting has never been
+-- seen", which is NOT the same as a list somebody emptied on purpose, so it
+-- is written once and after that the list belongs to the player.
+---------------------------------------------------------------------------
+local RESCUE_SEED = { 5512, 244839, 211880 }
 
-local function ItemsInBags()
-    local out = {}
-    if not (C_Item and C_Item.GetItemCount) then return out end
-    for _, item in ipairs(RESCUE_ITEMS) do
-        local ok, count = pcall(C_Item.GetItemCount, item.itemID)
-        if ok and type(count) == "number" and count > 0 then
-            out[#out + 1] = { name = item.name, count = count }
+function Death.PickedItems()
+    if not ns.db then return {} end
+    if ns.db.rescueItems == nil then
+        ns.db.rescueItems = {}
+        for _, itemID in ipairs(RESCUE_SEED) do
+            ns.db.rescueItems[itemID] = true
+        end
+    end
+    return ns.db.rescueItems
+end
+
+-- The name the client knows it by, or nothing. An item whose data has not
+-- loaded yet answers nil and is asked to load, so the next look succeeds.
+function Death.ItemName(itemID)
+    if not (C_Item and itemID) then return nil end
+    local get = C_Item.GetItemNameByID
+    if get then
+        local ok, name = pcall(get, itemID)
+        if ok and type(name) == "string" and name ~= "" then return name end
+    end
+    if C_Item.RequestLoadItemDataByID then
+        pcall(C_Item.RequestLoadItemDataByID, itemID)
+    end
+    return nil
+end
+
+-- Seconds until it can be used again, 0 when it is ready, nil when the
+-- client will not say. Unlike a spell this one IS readable on this patch -
+-- item cooldowns were never made secret - so it is a fact, not an estimate.
+function Death.ItemReady(itemID)
+    local get = (C_Item and C_Item.GetItemCooldown)
+        or (C_Container and C_Container.GetItemCooldown)
+    if not (get and itemID) then return nil end
+    local ok, start, duration = pcall(get, itemID)
+    if not (ok and type(start) == "number" and type(duration) == "number") then
+        return nil
+    end
+    if start == 0 or duration == 0 then return 0 end
+    return math.max(0, (start + duration) - GetTime())
+end
+
+-- How many are actually carried. Zero is an answer worth having: a potion
+-- you do not have is a different sentence from one you did not drink.
+function Death.ItemCount(itemID)
+    if not (C_Item and C_Item.GetItemCount) then return 0 end
+    local ok, count = pcall(C_Item.GetItemCount, itemID)
+    if ok and type(count) == "number" then return count end
+    return 0
+end
+local ItemCount = Death.ItemCount
+
+function Death.ItemIcon(itemID)
+    if not (C_Item and C_Item.GetItemIconByID and itemID) then return nil end
+    local ok, icon = pcall(C_Item.GetItemIconByID, itemID)
+    if ok then return icon end
+    return nil
+end
+
+-- WHAT IS OFFERED TO PICK FROM: whatever is in the bags right now that can
+-- be used at all. Not a shipped list of item ids - those go out of date
+-- every patch, and the three seeded above are already one expansion's worth
+-- of guessing. An item with no use-spell is not a defensive by any reading.
+--
+-- Consumables only: GetItemInfoInstant answers the class id without waiting
+-- for the item to load, and 0 is Consumable in every locale because it is a
+-- number rather than a word.
+local CONSUMABLE_CLASS = 0
+
+function Death.BagConsumables()
+    local out, seen = {}, {}
+    local container = C_Container
+    if not (container and container.GetContainerNumSlots
+        and container.GetContainerItemID and C_Item) then
+        return out
+    end
+
+    for bag = 0, 5 do
+        local okSlots, slots = pcall(container.GetContainerNumSlots, bag)
+        if okSlots and type(slots) == "number" then
+            for slot = 1, slots do
+                local okID, itemID = pcall(container.GetContainerItemID,
+                    bag, slot)
+                if okID and type(itemID) == "number" and not seen[itemID] then
+                    seen[itemID] = true
+
+                    local classID
+                    if C_Item.GetItemInfoInstant then
+                        local ok, _, _, _, _, class = pcall(
+                            C_Item.GetItemInfoInstant, itemID)
+                        if ok then classID = class end
+                    end
+
+                    local usable = false
+                    if C_Item.GetItemSpell then
+                        local ok, _, spellID = pcall(C_Item.GetItemSpell, itemID)
+                        usable = ok and spellID ~= nil
+                    end
+
+                    if usable and classID == CONSUMABLE_CLASS then
+                        out[#out + 1] = itemID
+                        -- Asked to load, so the NAME is there by the time
+                        -- the list is drawn rather than one frame late.
+                        Death.ItemName(itemID)
+                    end
+                end
+            end
         end
     end
     return out
@@ -774,10 +880,30 @@ end
 -- `diedAt` is the moment PLAYER_DEAD fired, not the moment of the capture -
 -- the capture runs the better part of a second later, and offsetting every
 -- cast by that would put your last press after the hit that killed you.
+-- WHICH SPELL IDS COUNT AS A DEFENSIVE PRESS.
+--
+-- The picked spells, plus the spell each picked CONSUMABLE casts. Drinking
+-- a potion is a cast like any other on this patch - UNIT_SPELLCAST_SUCCEEDED
+-- fires with the item's own spell - so without this the potion showed up in
+-- the rotation row as an unnamed press instead of as the defensive it is.
+local function DefensiveSpells()
+    local out = {}
+    for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+        out[spellID] = true
+    end
+    if C_Item and C_Item.GetItemSpell then
+        for itemID in pairs(Death.PickedItems()) do
+            local ok, _, spellID = pcall(C_Item.GetItemSpell, itemID)
+            if ok and type(spellID) == "number" then out[spellID] = true end
+        end
+    end
+    return out
+end
+
 local function CastsBefore(diedAt, window)
     local out = {}
     if not (ns.History and diedAt) then return out end
-    local picked = (ns.db and ns.db.defensives) or {}
+    local picked = DefensiveSpells()
     for _, cast in ipairs(ns.History.casts or {}) do
         local ago = diedAt - cast.at
         if ago >= 0 and ago <= window then
@@ -808,7 +934,11 @@ local function CastsBefore(diedAt, window)
     return out
 end
 
--- What was still ready, off the defensives picked on the Timeline page.
+-- What was still ready: the defensives picked on this page, spells and
+-- consumables in ONE list. A spell's readiness is our own estimate - the
+-- client withholds live cooldowns - while an item's is a fact the client
+-- still answers, which is why the entries carry different fields and the
+-- window says "about" only where it has to.
 local function Availability(now)
     local out = {}
     for spellID in pairs((ns.db and ns.db.defensives) or {}) do
@@ -819,6 +949,20 @@ local function Availability(now)
             remaining = remaining, why = why,
         }
     end
+
+    for itemID in pairs(Death.PickedItems()) do
+        local count = ItemCount(itemID)
+        out[#out + 1] = {
+            itemID = itemID,
+            name = Death.ItemName(itemID) or ("Item " .. itemID),
+            count = count,
+            -- Carrying none is not "on cooldown" and must not read as it:
+            -- the count says the rest, and the verdict words it.
+            remaining = (count > 0) and Death.ItemReady(itemID) or nil,
+            why = (count == 0) and "none in the bags" or nil,
+        }
+    end
+
     table.sort(out, function(a, b) return a.name < b.name end)
     return out
 end
@@ -997,7 +1141,6 @@ function Death:Capture(overrideID, replace)
     end
 
     local avail = Availability(now)
-    local items = ItemsInBags()
     local where, whereShort = Death.Where()
     local casts = CastsBefore(Death.diedAt or now, WINDOW)
 
@@ -1012,10 +1155,9 @@ function Death:Capture(overrideID, replace)
         killer = killer,
         killerArt = art,
         avail = avail,
-        items = items,
         casts = casts,
         reason = events == nil and (readWhy or why) or nil,
-        analysis = Death.Analyse(events, maxHP, avail, items, casts),
+        analysis = Death.Analyse(events, maxHP, avail, casts),
     }, Death.KeepCount(), replace)
 
     -- The pager may be standing on an older death; a new one must not yank
@@ -1816,13 +1958,18 @@ function Death:Show(index)
             elseif entry.remaining then
                 suffix = string.format("  |cff9ba3af%ds|r",
                     math.floor(entry.remaining + 0.5))
+            elseif entry.itemID and (entry.count or 0) == 0 then
+                -- A potion you were not carrying is not "cannot tell" - it
+                -- is a plain no, and the one case worth writing out.
+                suffix = "  |cff626a76none|r"
             end
             chips[#chips + 1] = {
-                spellID = entry.spellID, name = entry.name, suffix = suffix,
+                spellID = entry.spellID, itemID = entry.itemID,
+                name = entry.name, suffix = suffix,
             }
         end
-        frame.avail:SetText(#chips > 0 and "Defensives by our own clock"
-            or "No defensives picked on the Timeline page yet.")
+        frame.avail:SetText(#chips > 0 and "What you had, by our own clock"
+            or "Nothing picked yet - the Deaths page has the list.")
         frame.availChips.Paint(chips)
     end
 

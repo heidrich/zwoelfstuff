@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- History.lua - what YOU cast, and what that says about what is ready
 --
 -- The one combat fact this client still hands an addon in full is the
@@ -13,9 +13,11 @@
 -- estimate: cooldown resets, charges and haste-scaled cooldowns are not in
 -- it, and every answer carries its source so a caller can say "about".
 --
--- Two consumers, one recorder: the Timeline panel colours its defensive
--- strip with it, and the death capture asks it what was STILL READY when
--- you died - the question the owner asked for in as many words.
+-- One consumer: the death capture, which asks it what was STILL READY when
+-- you died - the question the owner asked for in as many words. There were
+-- two until 4.54.0, when the Timeline panel that drew the other strip was
+-- taken out; the estimate outlived it because the death window is what the
+-- question was always for.
 ---------------------------------------------------------------------------
 local _, ns = ...
 

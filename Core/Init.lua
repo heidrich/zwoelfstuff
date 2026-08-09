@@ -11,7 +11,20 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.50.0"
+
+-- OFF THE TOC, not typed a second time. This was a literal and it had drifted
+-- three versions behind the one the packager ships - and it is the number the
+-- window shows, the About page prints and a shared profile is stamped with,
+-- so it was wrong in all three places at once. The literal below is only what
+-- answers when the client has no metadata call at all.
+ns.version = (function()
+    local get = C_AddOns and C_AddOns.GetAddOnMetadata
+    if get then
+        local ok, value = pcall(get, ADDON, "Version")
+        if ok and type(value) == "string" and value ~= "" then return value end
+    end
+    return "0.0.0"
+end)()
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -1105,7 +1118,6 @@ local usage = {
     -- command that had no handler at all. A menu naming something that does
     -- nothing is worse than one that is short.
     "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100clear|r empties the list, |cffffd100cds|r says why a press has no bar)",
-    "  |cffffd100/zs timeline|r - the next-hit panel's state (|cffffd100probe|r measures)",
     "",
     "  |cffffd100/zs test|r - run the addon's own checks and report failures",
     "  |cffffd100/zs minimap|r - show or hide the minimap button",
@@ -1208,17 +1220,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Death:Clear()
         else
             ns.Death:Show()
-        end
-
-    elseif cmd == "timeline" then
-        if rest:lower() == "probe" then
-            ns.Busters:Probe()
-        else
-            ns.Busters:Refresh()
-            ns.Print("Timeline panel "
-                .. (ns.Busters:ShouldShow() and "|cff40ff40on screen|r"
-                    or "|cff888888hidden by its rule|r")
-                .. " - it shows in combat, and Edit Mode forces it up.")
         end
 
     elseif cmd == "test" then

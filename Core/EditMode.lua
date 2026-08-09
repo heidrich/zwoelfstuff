@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- EditMode - unlock the screen and build the thing.
 --
 -- Two modes, and the difference is the level you are working at:
@@ -955,7 +955,7 @@ end
 -- list, and nil is not a bar. So the panel lines up on the bars and the bars
 -- line up on it, which is the whole point of snapping to something.
 ---------------------------------------------------------------------------
-local tankMover, busterMover
+local tankMover
 
 local function TankPanel()
     local panel = ns.CoTanks and ns.CoTanks.panel
@@ -970,20 +970,6 @@ local function ApplyTankMove(x, y)
     db.point, db.relPoint = "CENTER", "CENTER"
     db.x, db.y = math.floor(x + 0.5), math.floor(y + 0.5)
     ns.CoTanks:ApplyLayout()
-end
-
--- The Timeline panel, moved by the same machinery. Its numbers were born in
--- CENTRE terms, so Apply is one write and one refresh.
-local function BusterPanel()
-    local panel = ns.Busters and ns.Busters.panel
-    if panel and panel:IsShown() then return panel end
-    return nil
-end
-
-local function ApplyBusterMove(x, y)
-    local cfg = ns.Busters:Config()
-    cfg.x, cfg.y = math.floor(x + 0.5), math.floor(y + 0.5)
-    ns.Busters:ApplyPosition()
 end
 
 -- label and origin are the only things the two panel movers disagree about,
@@ -1097,17 +1083,6 @@ local function RefreshTankMover()
         end)
     end
     RefreshPanelMover(tankMover, TankPanel, ns.db.coTanks.x, ns.db.coTanks.y)
-end
-
-local function RefreshBusterMover()
-    if not busterMover then
-        busterMover = CreatePanelMover("Timeline", function()
-            local cfg = ns.Busters:Config()
-            return cfg.x or 0, cfg.y or -220
-        end)
-    end
-    local cfg = ns.Busters and ns.Busters:Config() or {}
-    RefreshPanelMover(busterMover, BusterPanel, cfg.x, cfg.y)
 end
 
 ---------------------------------------------------------------------------
@@ -1247,7 +1222,6 @@ end
 local function OnUpdate()
     if cellDrag then DragCell() end
     DragPanel(tankMover, TankPanel, ApplyTankMove)
-    DragPanel(busterMover, BusterPanel, ApplyBusterMove)
     DragReminders()
     if not dragging then return end
 
@@ -2285,7 +2259,6 @@ function EditMode:Refresh()
     end
 
     RefreshTankMover()
-    RefreshBusterMover()
     RefreshReminderMovers()
 
     -- The selection can outlive what it pointed at: delete a bar, or shrink a
@@ -2373,10 +2346,6 @@ function EditMode:SetUnlocked(state, wanted)
     -- for Bone Shield to fall off in order to place the message about Bone
     -- Shield falling off is not a workflow.
     if ns.Reminders then ns.Reminders:SetPlacing(state) end
-
-    -- The Timeline panel too: it shows in combat, and edit mode is the one
-    -- moment it must be there with nothing scheduled and nobody swinging.
-    if ns.Busters then ns.Busters:SetPlacing(state) end
 
     if state then
         -- The window would sit behind the overlay, catching clicks that were

@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.54.0",
+        date = "2026-08-09",
+        lines = {
+            "THE TIMELINE PAGE IS GONE, and everything it held is on |cffffd100Deaths|r. The panel it drew showed the fight's next scheduled hit; the replay answers the same question afterwards with everything that panel could never show, and the defensives list it carried was always read by the death window anyway.",
+            "Pick your defensives from the |cffffd100list on the right|r of the Deaths page - the same spell list the bars use. Click one to make it a defensive, click it again to stop. That list decides three things: what the verdict calls still ready, which presses get a bar in the replay, and how long that bar runs.",
+            "|cffffd100CONSUMABLES ARE DEFENSIVES.|r A healthstone that stayed in the bag is the same verdict as a defensive that stayed off cooldown, so they are judged in one list. Add any usable consumable you are carrying; the window says whether it was ready and whether you had one at all. Drinking one is a cast like any other on this patch, so the replay draws it on the timeline with everything else.",
+            "Unlike a spell, an item's cooldown is a fact the client still answers - so that half of the list is not an estimate.",
+        },
+    },
+    {
         version = "4.53.0",
         date = "2026-08-09",
         lines = {
