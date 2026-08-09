@@ -36,7 +36,22 @@ local UI -- ns.UI, taken late: Widgets loads after this file
 -- "did the last capture find anything" and that question has one answer.
 Death.log = {}
 Death.snapshot = nil
+
+-- Ten by default, the owner's number, and his to change: some evenings are
+-- worth keeping and some keys are worth forgetting. The bounds are ours -
+-- below three there is nothing to page through, and above fifty the saved
+-- variables grow for a list nobody reads to the end of.
 local DEATHS_KEPT = 10
+local KEEP_MIN, KEEP_MAX = 3, 50
+
+function Death.KeepCount()
+    local want = ns.db and ns.db.death and ns.db.death.keep
+    if type(want) ~= "number" then return DEATHS_KEPT end
+    return math.max(KEEP_MIN, math.min(KEEP_MAX, math.floor(want + 0.5)))
+end
+
+Death.KEEP_MIN, Death.KEEP_MAX, Death.KEEP_DEFAULT =
+    KEEP_MIN, KEEP_MAX, DEATHS_KEPT
 
 -- How far back the quick analysis looks, in seconds. The recap itself
 -- decides how many events it hands over; this only bounds OUR arithmetic.
@@ -472,6 +487,21 @@ function Death.Storyline(events, casts)
     return out
 end
 
+-- Which slice of the list the side column shows, given the death being
+-- read. The list holds up to fifty and shows twelve, and a selection that
+-- scrolls out of sight while the wheel walks through deaths is a list that
+-- has stopped answering "where am I".
+--
+-- `index` counts from the OLDEST death; the column draws newest-first, so
+-- position from the top is total - index.
+function Death.ScrollTo(index, total, offset, visible)
+    local pos = total - index
+    offset = offset or 0
+    if pos < offset then offset = pos end
+    if pos > offset + visible - 1 then offset = pos - visible + 1 end
+    return math.max(0, math.min(math.max(0, total - visible), offset))
+end
+
 -- WHERE A REPLAY STANDS at a given moment. `now` counts DOWN, in seconds
 -- before the death, the same clock the rows are labelled with: it starts
 -- above the oldest event and ends at 0, the killing blow.
@@ -855,7 +885,7 @@ function Death:Capture(overrideID, replace)
         casts = casts,
         reason = events == nil and (readWhy or why) or nil,
         analysis = Death.Analyse(events, maxHP, avail, items, casts),
-    }, DEATHS_KEPT, replace)
+    }, Death.KeepCount(), replace)
 
     -- The pager may be standing on an older death; a new one must not yank
     -- it. Only a view of the newest follows the newest.
@@ -893,8 +923,14 @@ function Death.Load()
     if not (store and key) then return end
 
     Death.log = Death.Restore(store[key])
+    -- A list read back from disk may be longer than what is being kept now:
+    -- the setting can have been lowered on another character, or between
+    -- sessions. The cap is applied on the way in, not only on the way out.
+    local keep = Death.KeepCount()
+    while #Death.log > keep do table.remove(Death.log, 1) end
     Death.snapshot = Death.log[#Death.log]
     Death.showing = nil
+    Death.sideOffset = 0
     Death.RefreshIcon()
 end
 
@@ -973,6 +1009,10 @@ end
 ---------------------------------------------------------------------------
 local frame
 
+-- Declared here because the side list's wheel handler is wired while the
+-- window is built and the painter is written further down.
+local PaintSideList
+
 -- One row of the event list: time, name, a health bar behind the amount.
 -- The bar IS the graph - each row's fill is the health you still had after
 -- that event, so reading down the list is watching the health drain.
@@ -992,6 +1032,10 @@ local GUTTER = 16
 local DIVIDER_X = 16 + MAIN_W + GUTTER
 local SIDE_X = DIVIDER_X + GUTTER
 local SIDE_ROW_H = 34
+-- How many rows FIT beside the analysis. The list may hold fifty now, so
+-- the pool is sized to the window and the rest is scrolled to - a pool
+-- sized to the setting would build fifty frames to show twelve.
+local SIDE_ROWS = 12
 local HEADER_BOTTOM = 82
 
 -- The four columns of the event table, measured from the row's left edge.
@@ -1220,12 +1264,26 @@ local function BuildWindow()
     frame.sideTitle = UI.Label(frame, "This session", 11, C.textDim)
     frame.sideTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDE_X, -16)
 
+    -- The rows live in an area of their own so the wheel over the LIST
+    -- scrolls the list, while the wheel over the analysis still steps
+    -- through deaths. Two gestures, two places, neither guessing.
+    frame.sideArea = CreateFrame("Frame", nil, frame)
+    frame.sideArea:SetSize(SIDE_W, SIDE_ROWS * SIDE_ROW_H)
+    frame.sideArea:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDE_X, -40)
+    frame.sideArea:EnableMouseWheel(true)
+    frame.sideArea:SetScript("OnMouseWheel", function(_, delta)
+        Death.sideOffset = math.max(0, math.min(
+            math.max(0, #Death.log - SIDE_ROWS),
+            (Death.sideOffset or 0) - delta))
+        PaintSideList()
+    end)
+
     frame.sideRows = {}
-    for i = 1, DEATHS_KEPT do
-        local row = CreateFrame("Button", nil, frame)
+    for i = 1, SIDE_ROWS do
+        local row = CreateFrame("Button", nil, frame.sideArea)
         row:SetSize(SIDE_W, SIDE_ROW_H)
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDE_X,
-            -(40 + (i - 1) * SIDE_ROW_H))
+        row:SetPoint("TOPLEFT", frame.sideArea, "TOPLEFT", 0,
+            -((i - 1) * SIDE_ROW_H))
 
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints(row)
@@ -1387,12 +1445,15 @@ end
 
 -- The side list, repainted whole. Newest at the top, because that is the
 -- one being asked about nine times in ten.
-local function PaintSideList()
+function PaintSideList()
     local total = #Death.log
     local today = date("%Y-%m-%d")
-    for slot = 1, DEATHS_KEPT do
+    local offset = math.max(0, math.min(math.max(0, total - SIDE_ROWS),
+        Death.sideOffset or 0))
+    Death.sideOffset = offset
+    for slot = 1, SIDE_ROWS do
         local row = frame.sideRows[slot]
-        local index = total - slot + 1
+        local index = total - (offset + slot - 1)
         local snapshot = index >= 1 and Death.log[index] or nil
         if not snapshot then
             row.index = nil
@@ -1414,8 +1475,15 @@ local function PaintSideList()
             row:Show()
         end
     end
-    frame.sideTitle:SetText(total == 1 and "This session - 1 death"
-        or string.format("This session - %d deaths", total))
+    -- The count is also the only hint that there is more below the edge,
+    -- so it says so rather than leaving the wheel to be discovered.
+    if total > SIDE_ROWS then
+        frame.sideTitle:SetText(string.format("%d deaths - scroll for more",
+            total))
+    else
+        frame.sideTitle:SetText(total == 1 and "This session - 1 death"
+            or string.format("This session - %d deaths", total))
+    end
 end
 
 function Death:Show(index)
@@ -1458,6 +1526,8 @@ function Death:Show(index)
     frame.title:ClearAllPoints()
     frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", hasPortrait and 82 or 16, -14)
 
+    Death.sideOffset = Death.ScrollTo(index, #self.log,
+        Death.sideOffset, SIDE_ROWS)
     PaintSideList()
 
     frame.verdict:SetText(table.concat(snapshot.analysis.lines, "\n"))
@@ -1600,6 +1670,25 @@ function Death:Show(index)
     end
 
     frame:Show()
+end
+
+-- The list cut down to what is being kept, oldest first out of the door.
+-- Called when the setting changes: lowering it from fifty to ten and
+-- leaving forty in the list until they fall out one death at a time would
+-- be a setting that does nothing for an evening.
+function Death.Trim()
+    local keep = Death.KeepCount()
+    while #Death.log > keep do table.remove(Death.log, 1) end
+    Death.snapshot = Death.log[#Death.log]
+    if Death.showing and Death.showing > #Death.log then
+        Death.showing = #Death.log > 0 and #Death.log or nil
+    end
+    Death.sideOffset = 0
+    Death.Save()
+    Death.RefreshIcon()
+    if frame and frame:IsShown() then
+        if #Death.log == 0 then frame:Hide() else Death:Show(Death.showing) end
+    end
 end
 
 -- Throwing the session's deaths away. The skull goes with them - it counts

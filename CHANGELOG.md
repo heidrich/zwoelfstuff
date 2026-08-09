@@ -4,6 +4,26 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.48.0] - 2026-08-09
+
+### Added
+
+- **How many deaths to keep is a setting** on the Deaths page - three to
+  fifty, ten by default, per profile. They are kept for this character and
+  survive logging out, so the number is how far back you want to be able to
+  look. Lowering it trims the list **immediately** (`Death.Trim`): a list
+  that keeps forty for the rest of the evening after being told ten is a
+  setting that appears to do nothing. The cap is also applied on the way
+  back **in**, because a list read off disk can be longer than what the
+  setting says now.
+
+- **The side list scrolls.** It shows twelve at a time - the pool is sized
+  to the window, not to the setting, so asking for fifty does not build
+  fifty frames to show twelve. The wheel over the list scrolls it; the
+  wheel over the analysis still steps through deaths, and doing so keeps
+  the death being read in view (`Death.ScrollTo`). The heading says "23
+  deaths - scroll for more" rather than leaving the wheel to be discovered.
+
 ## [4.47.1] - 2026-08-09
 
 ### Added

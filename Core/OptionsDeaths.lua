@@ -33,9 +33,28 @@ function Page:BuildPage(page, width)
         .. "you fall - what hit you, how hard, the health you had left after "
         .. "each blow - plus which of your defensives were still ready by "
         .. "our own clock, and whether a healthstone or a potion was in the "
-        .. "bags. The last ten are kept for this character and survive a "
-        .. "reload; anything older than that falls off the end, and "
+        .. "bags. They are kept for this character and survive logging out; "
+        .. "anything past the number below falls off the end, and "
         .. "|cffffd100Clear list|r in the window empties them.")
+
+    UI.Slider(grid:Row("How many to keep"), {
+        get = function() return ns.Death.KeepCount() end,
+        set = function(value) Config().keep = math.floor(value + 0.5) end,
+        min = ns.Death.KEEP_MIN, max = ns.Death.KEEP_MAX, step = 1,
+        format = function(v)
+            return string.format("%d", math.floor((v or 10) + 0.5))
+        end,
+        -- Applied at once, not at the next death: a list that keeps forty
+        -- for the rest of the evening after being told ten is a setting
+        -- that appears to do nothing.
+        apply = function() ns.Death.Trim() end,
+    })
+
+    grid:Note("Ten by default. They are kept for this character and survive "
+        .. "logging out, so the number is how far back you want to be able "
+        .. "to look - the window shows twelve at a time and the list "
+        .. "scrolls. Lowering it drops the oldest immediately, and there is "
+        .. "no undo.")
 
     UI.Toggle(grid:Row("Open the window right away"),
         function() return Config().openOnDeath ~= false end,

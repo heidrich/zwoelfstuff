@@ -1161,6 +1161,29 @@ local function TestDeath()
         Death.ShareTarget("SAY", {}) == "SAY"
             and Death.ShareTarget("YELL", {}) == "YELL")
 
+    ---------------------------------------------------------------------
+    -- How many are kept, and which slice of them the side column shows.
+    ---------------------------------------------------------------------
+    Check("Ten is the number when nobody has said otherwise",
+        Death.KEEP_DEFAULT == 10)
+    Check("The bounds are real bounds", Death.KEEP_MIN >= 1
+        and Death.KEEP_MAX > Death.KEEP_MIN)
+
+    -- The side column shows twelve of up to fifty, so the slice has to
+    -- follow the selection or the list stops answering "where am I".
+    Check("The newest death sits at the top with nothing scrolled",
+        Death.ScrollTo(30, 30, 0, 12) == 0)
+    Check("Walking past the bottom edge scrolls by exactly one",
+        Death.ScrollTo(18, 30, 0, 12) == 1)
+    Check("Walking back up above the top edge scrolls back",
+        Death.ScrollTo(30, 30, 5, 12) == 0)
+    Check("A selection already in view does not move the list",
+        Death.ScrollTo(25, 30, 3, 12) == 3)
+    Check("The list never scrolls past its own end",
+        Death.ScrollTo(1, 30, 99, 12) == 18)
+    Check("A list shorter than the column never scrolls",
+        Death.ScrollTo(1, 4, 0, 12) == 0)
+
     -- Clearing empties the list it is handed, and only that one.
     local mine = { { n = 1 }, { n = 2 } }
     Death.ClearLog(mine)

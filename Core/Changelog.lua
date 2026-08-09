@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.48.0",
+        date = "2026-08-09",
+        lines = {
+            "HOW MANY DEATHS TO KEEP is yours to set now - |cffffd100three to fifty|r, ten as it was. They are kept for this character and survive logging out, so the number is how far back you want to be able to look. Lowering it drops the oldest at once rather than waiting for them to fall out one death at a time.",
+            "The list beside the analysis shows twelve at a time and |cffffd100scrolls|r for the rest. Walking through deaths with the wheel over the analysis keeps the one you are reading in view; the wheel over the list itself scrolls the list.",
+        },
+    },
+    {
         version = "4.47.1",
         date = "2026-08-09",
         lines = {
