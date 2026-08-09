@@ -212,6 +212,16 @@ local function Plain(value, kind)
     return value
 end
 
+-- A face, reduced to the two numbers that can draw it. Same rule as every
+-- other field down here: copied by name, verified, never handed over whole.
+local function PlainArt(art)
+    if type(art) ~= "table" then return nil end
+    local creatureID = Plain(art.creatureID, "number")
+    local displayID = Plain(art.displayID, "number")
+    if not (creatureID or displayID) then return nil end
+    return { creatureID = creatureID, displayID = displayID }
+end
+
 -- The whitelist. The analysis is NOT stored: it is derived from the events
 -- and re-run on the way back in, so a better verdict written next month
 -- applies to the deaths already on disk.
@@ -231,6 +241,7 @@ function Death.Persist(snapshot)
             who = Plain(ev.who, "string"),
             spellID = Plain(ev.spellID, "number"),
             overkill = Plain(ev.overkill, "number"),
+            art = PlainArt(ev.art),
         }
     end
 
@@ -259,6 +270,11 @@ function Death.Persist(snapshot)
             spellID = Plain(cast.spellID, "number"),
             name = Plain(cast.name, "string") or "?",
             defensive = cast.defensive and true or nil,
+            -- The measured window, so a bar drawn today is the same length
+            -- after a reload. Without it the press would fall back to a
+            -- generic reading and quietly change length on disk.
+            lasted = Plain(cast.lasted, "number"),
+            stillUp = cast.stillUp and true or nil,
         }
     end
 
@@ -269,10 +285,7 @@ function Death.Persist(snapshot)
         where = Plain(snapshot.where, "string"),
         whereShort = Plain(snapshot.whereShort, "string"),
         killer = Plain(snapshot.killer, "string"),
-        killerArt = art and {
-            creatureID = Plain(art.creatureID, "number"),
-            displayID = Plain(art.displayID, "number"),
-        } or nil,
+        killerArt = PlainArt(art),
         maxHP = Plain(snapshot.maxHP, "number"),
         events = events,
         avail = avail,
@@ -317,13 +330,61 @@ end
 --         our clock, nil = cannot tell (why says why).
 -- items:  { { name, count } } - only what was actually in the bags.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- NAMING A SPELL, the way this game names spells
+--
+-- The owner's rule, and it is a rule now: "immer wenn eine faehigkeit oder
+-- was auch immer einen tooltip und icon hat, muss das angezeigt werden.
+-- egal bei was". Nobody reads spell names in this game - they read icons.
+--
+-- A wrapped sentence cannot hold a hover target, so the verdict gets the
+-- icon INLINE, which every font string in this client understands. The
+-- places with room for real widgets - the replay's legend, the settings
+-- rows - get an icon and a tooltip, which is the fuller form of the same
+-- rule.
+--
+-- And the chat share gets neither: the escape sequence would either arrive
+-- as raw punctuation at the other end or not arrive at all, so it is
+-- stripped on the way out. One function, one place, no drift.
+---------------------------------------------------------------------------
+
+function Death.SpellText(spellID, name)
+    name = name or (spellID and ("Spell " .. tostring(spellID))) or "?"
+    local texture = spellID and ns.SpellTexture and ns.SpellTexture(spellID)
+    if type(texture) == "number" then texture = string.format("%d", texture) end
+    if type(texture) ~= "string" or texture == "" then return name end
+    -- The trimmed crop every icon in this addon uses, so an inline icon and
+    -- a drawn one are the same picture.
+    return "|T" .. texture .. ":14:14:0:0:64:64:5:59:5:59|t " .. name
+end
+
+-- A list of { spellID, name } as one readable enumeration. Plain strings
+-- are accepted so a caller with nothing but a name still gets a sentence.
+function Death.SpellList(entries, separator)
+    local parts = {}
+    for _, entry in ipairs(entries or {}) do
+        if type(entry) == "table" then
+            parts[#parts + 1] = Death.SpellText(entry.spellID, entry.name)
+        else
+            parts[#parts + 1] = tostring(entry)
+        end
+    end
+    return table.concat(parts, separator or ", ")
+end
+
+-- The same text with every inline icon taken back out, for chat.
+function Death.PlainText(text)
+    if type(text) ~= "string" then return text end
+    return (text:gsub("|T.-|t%s*", ""))
+end
+
 function Death.Analyse(events, maxHP, avail, items, casts)
     local out = {
         totalIn = 0, totalHealed = 0, hits = 0,
         biggest = nil,          -- { amount, name, pct }
         lastHealAgo = nil,      -- seconds before death the last heal landed
-        readyDefensives = {},   -- names, ready and unpressed
-        unknownDefensives = {}, -- names we cannot judge
+        readyDefensives = {},   -- { spellID, name }, ready and unpressed
+        unknownDefensives = {}, -- { spellID, name } we cannot judge
         itemsInBags = {},       -- names with count > 0
         lines = {},             -- the verdict, one sentence per line
     }
@@ -352,10 +413,14 @@ function Death.Analyse(events, maxHP, avail, items, casts)
     end
 
     for _, entry in ipairs(avail or {}) do
+        -- The ID travels with the name, always. A spell named in this UI
+        -- without its icon and its tooltip is unfinished to the people who
+        -- play this game, and only the ID can produce either.
+        local named = { spellID = entry.spellID, name = entry.name }
         if entry.remaining == 0 then
-            out.readyDefensives[#out.readyDefensives + 1] = entry.name
+            out.readyDefensives[#out.readyDefensives + 1] = named
         elseif entry.remaining == nil then
-            out.unknownDefensives[#out.unknownDefensives + 1] = entry.name
+            out.unknownDefensives[#out.unknownDefensives + 1] = named
         end
     end
 
@@ -400,26 +465,27 @@ function Death.Analyse(events, maxHP, avail, items, casts)
     -- this patch, but a live event that survived it.
     local pressed, defensives = {}, {}
     for _, cast in ipairs(casts or {}) do
-        pressed[#pressed + 1] = cast.name
-        if cast.defensive then defensives[#defensives + 1] = cast.name end
+        local named = { spellID = cast.spellID, name = cast.name }
+        pressed[#pressed + 1] = named
+        if cast.defensive then defensives[#defensives + 1] = named end
     end
-    out.pressed, out.defensivesPressed = pressed, defensives
+    out.pressed, out.defensivesUsed = pressed, defensives
 
     if out.hits > 0 then
         if #pressed == 0 then
             lines[#lines + 1] = "You pressed nothing in those seconds."
         elseif #defensives == 0 then
-            lines[#lines + 1] = "No defensive was pressed - you cast "
-                .. table.concat(pressed, ", ") .. "."
+            lines[#lines + 1] = "No defensive was used - you cast "
+                .. Death.SpellList(pressed) .. "."
         else
-            lines[#lines + 1] = "Defensives pressed: "
-                .. table.concat(defensives, ", ") .. "."
+            lines[#lines + 1] = "Defensives used: "
+                .. Death.SpellList(defensives) .. "."
         end
     end
 
     if #out.readyDefensives > 0 then
-        lines[#lines + 1] = "Ready and unpressed (by our own clock): "
-            .. table.concat(out.readyDefensives, ", ") .. "."
+        lines[#lines + 1] = "Ready and unused (by our own clock): "
+            .. Death.SpellList(out.readyDefensives) .. "."
     end
 
     if #out.itemsInBags > 0 then
@@ -700,12 +766,28 @@ local function CastsBefore(diedAt, window)
     for _, cast in ipairs(ns.History.casts or {}) do
         local ago = diedAt - cast.at
         if ago >= 0 and ago <= window then
-            out[#out + 1] = {
+            local entry = {
                 t = ago,
                 spellID = cast.spellID,
                 name = ns.SpellName(cast.spellID) or ("Spell " .. cast.spellID),
                 defensive = picked[cast.spellID] and true or nil,
             }
+
+            -- HOW LONG IT WAS ACTUALLY UP, for this press, measured while
+            -- it happened - see History.lua. Not a duration looked up in a
+            -- table: the window this very press opened. A buff still up
+            -- when you died runs to the end of the plot and says so.
+            local from, to = ns.History:ActiveWindow(cast.spellID, cast.at)
+            if from then
+                local endsAt = to and math.max(0, diedAt - to) or 0
+                local lasted = ago - endsAt
+                if lasted > 0 then
+                    entry.lasted = lasted
+                    entry.stillUp = (to == nil) or nil
+                end
+            end
+
+            out[#out + 1] = entry
         end
     end
     return out
@@ -809,19 +891,43 @@ function Death.ReadRecap(recapID)
         return nil
     end
 
-    local art
-    for i = 1, #raw do
-        local creature = NumberFrom(raw[i], {
+    local function ArtOf(ev)
+        local creature = NumberFrom(ev, {
             "sourceCreatureID", "creatureID", "npcID", "sourceNpcID",
-        }) or CreatureFromGUID(raw[i])
-        local display = NumberFrom(raw[i], {
+        }) or CreatureFromGUID(ev)
+        local display = NumberFrom(ev, {
             "displayID", "sourceDisplayID", "creatureDisplayID",
         })
         if creature or display then
-            art = { creatureID = creature, displayID = display }
-            break
+            return { creatureID = creature, displayID = display }
+        end
+        return nil
+    end
+
+    -- ONE FACE PER HIT, not one face for the death. The owner's reason is
+    -- the right one: "wenn du 10 gegner hast, kannst das sonst nicht
+    -- zuordnen" - a single portrait in the corner claims the whole picture
+    -- for one of twenty things that were hitting you.
+    --
+    -- Keyed by the source's NAME as well, because only some events carry a
+    -- readable id: two hits from the same named mob are the same mob, so
+    -- the face found on one of them belongs on the other. That is an
+    -- inference about identity, not about art - it never invents a model.
+    local artByWho = {}
+    for i = 1, #raw do
+        local who = WhoOf(raw[i])
+        if who and not artByWho[who] then
+            local found = ArtOf(raw[i])
+            if found then artByWho[who] = found end
         end
     end
+
+    local art
+    for i = 1, #raw do
+        art = ArtOf(raw[i])
+        if art then break end
+    end
+    if not art and killer then art = artByWho[killer] end
 
     local events = {}
     for i = #raw, 1, -1 do
@@ -831,7 +937,12 @@ function Death.ReadRecap(recapID)
         local ts = ev.timestamp
         local overkill = ev.overkill
         local kind = ns.CanCompute(ev.event) and ev.event or ""
+        local who = WhoOf(ev)
         events[#events + 1] = {
+            -- Whose face belongs over this hit: its own id when the recap
+            -- gave one, otherwise the one found on another hit from the
+            -- same named source.
+            art = ArtOf(ev) or (who and artByWho[who]) or nil,
             t = (deathAt and ns.CanCompute(ts) and type(ts) == "number")
                 and math.max(0, deathAt - ts) or 0,
             amount = (ns.CanCompute(amount) and type(amount) == "number")
@@ -844,7 +955,7 @@ function Death.ReadRecap(recapID)
             -- counted into the wrong total. The word is the rule.
             heal = kind:find("HEAL", 1, true) ~= nil,
             name = Death.SafeName(ev.spellName, kind),
-            who = WhoOf(ev),
+            who = who,
             spellID = (ns.CanCompute(ev.spellId) and type(ev.spellId) == "number"
                 and ev.spellId > 0) and ev.spellId or nil,
             overkill = (ns.CanCompute(overkill) and type(overkill) == "number"
@@ -974,7 +1085,9 @@ function Death.ShareLines(snapshot)
             snapshot.when or "", by, at)
     end
     for _, line in ipairs(a.lines) do
-        lines[#lines + 1] = line
+        -- Without the icons: an escape sequence in a chat message is either
+        -- punctuation or nothing at the other end. See Death.SpellText.
+        lines[#lines + 1] = Death.PlainText(line)
     end
     return lines
 end
@@ -1672,7 +1785,10 @@ function Death:Show(index)
             else
                 state = "|cff626a76" .. (entry.why or "unknown") .. "|r"
             end
-            bits[#bits + 1] = entry.name .. ": " .. state
+            -- Icon in front of the name here too: this footer is a list of
+            -- spells, and a list of spells in this game shows its icons.
+            bits[#bits + 1] = Death.SpellText(entry.spellID, entry.name)
+                .. ": " .. state
         end
         frame.avail:SetText(#bits > 0
             and ("Defensives by our own clock -  " .. table.concat(bits, "   "))

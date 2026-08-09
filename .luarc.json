@@ -78,6 +78,7 @@
     "SLASH_ZWOELFSTUFF1",
     "SLASH_ZWOELFSTUFF2",
     "SOUNDKIT",
+    "SetPortraitTexture",
     "SetRaidTargetIconTexture",
     "SlashCmdList",
     "UIParent",

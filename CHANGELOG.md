@@ -4,6 +4,61 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.51.0] - 2026-08-09
+
+### Added
+
+- **Defensive durations are MEASURED.** The press bars drew as stubs because
+  their only source was the "active for N seconds" number a person can type
+  in on the Auras page, and nobody types it in. `History.lua` now polls
+  Blizzard's **buff viewers** ten times a second and records the window
+  between a tracked buff going active and going inactive - our own clock
+  over a value this patch withholds, the same trick the proc recorder plays
+  with the glow events. Only the buff viewers, deliberately: an icon in the
+  cooldown viewers is "active" for reasons of its own, and a Shield Wall
+  drawn three minutes long because its *cooldown* was running would be a
+  confident lie.
+  - `History.PushActive` keeps a window only if it lasted between 0.5s and
+    120s; `History.WindowFor` pairs a window with the press that opened it
+    (0.5s early to 2.0s late, newest first, variant-aware) and answers with
+    no end when the buff was **still up at the death** - which the replay
+    draws as a bar running to the killing blow.
+  - `History.NoteMeasured` keeps the longest window ever seen per spec, so a
+    death restored from disk can still draw a length somebody observed.
+  - `Replay.BarLength` asks in order: this press's own window, the number
+    you set, the measured store. None answering is still a marker with no
+    length - never a guess - and `Replay.LengthNote` says on hover which of
+    the four it was.
+
+- **A face over every hit and every heal.** `Death.ReadRecap` now extracts
+  creature/display art **per event**, keyed by the source's name so a hit
+  that carries no readable id inherits the face found on another hit from
+  the same named mob. Mob faces are `PlayerModel:SetCreature` (built lazily,
+  one per mark that has art); healer faces are `SetPortraitTexture` against
+  the unit token the name resolves to - proven in shipping code (oUF's
+  portrait element, EllesmereUI unit frames, BigWigs). No unit, no face: we
+  do not know what that person looks like and will not invent one.
+
+### Changed
+
+- **The single killer portrait in the replay's corner is gone.** With ten
+  mobs on you it answered for all of them and therefore for none. Its
+  tooltip facts moved onto the per-hit marks (`Replay.SourceSummary`, was
+  `KillerSummary`).
+- **The damage columns stand clear of the axis** (`COLUMN_LIFT`), so the
+  seconds written on the line stay readable under twenty of them.
+- **"Defensives used"**, not "pressed" - and every spell named in the UI
+  carries its icon and its tooltip: inline in the verdict and the
+  availability footer (a wrapped font string cannot hold a hover target),
+  and as real chips with the client's tooltip in the replay's legend. The
+  analysis carries `{ spellID, name }` pairs everywhere it used to carry
+  bare names, because only the id can produce either. `Death.PlainText`
+  strips the inline icons on the way to chat, where the escape sequence
+  would arrive as punctuation or not at all.
+- The replay window is taller (576) and **"What you pressed" sits under its
+  own bars** rather than at a fixed offset that landed on the third row -
+  which nothing reached while every bar was a stub.
+
 ## [4.50.0] - 2026-08-09
 
 ### Added

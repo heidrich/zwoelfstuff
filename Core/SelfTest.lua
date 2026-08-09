@@ -982,6 +982,65 @@ local function TestHistory()
     History.Push(last, casts, 103, 99, 5)
     Check("The map remembers only the newest cast of a spell",
         last[103] == 99)
+
+    -----------------------------------------------------------------------
+    -- HOW LONG A DEFENSIVE WAS UP, measured. The replay drew every press
+    -- as a stub because its only source was a number nobody types in. So
+    -- the window between a tracked buff going up and going down is
+    -- recorded while it happens - our own clock over a value this patch
+    -- withholds, exactly as the proc recorder works.
+    -----------------------------------------------------------------------
+    local windows = {}
+    Check("A window shorter than a flicker is not a reading",
+        History.PushActive(windows, 871, 100, 100.2, 10) == false
+            and #windows == 0)
+    Check("A window that never closed is not a reading either",
+        History.PushActive(windows, 871, 100, 400, 10) == false)
+    Check("A real window is kept",
+        History.PushActive(windows, 871, 100, 108, 10) == true
+            and windows[1].from == 100 and windows[1].to == 108)
+
+    Check("The press finds the window it opened",
+        (function()
+            local from, to = History.WindowFor(windows, {}, 871, 99.8)
+            return from == 100 and to == 108
+        end)())
+    Check("A window from another fight is not that press's window",
+        History.WindowFor(windows, {}, 871, 60) == nil)
+    Check("Another spell's window is never borrowed",
+        History.WindowFor(windows, {}, 12345, 99.8) == nil)
+    Check("A talented form of the same spell still finds it",
+        (function()
+            local from = History.WindowFor(windows, {}, 12345, 99.8, { 871 })
+            return from == 100
+        end)())
+
+    -- Pressed twice in one fight: each press gets ITS window, not both the
+    -- first one - the reason the search runs newest first.
+    History.PushActive(windows, 871, 200, 209, 10)
+    Check("Two presses of one spell keep their own windows",
+        (function()
+            local from = History.WindowFor(windows, {}, 871, 199.9)
+            return from == 200
+        end)())
+
+    Check("A buff still up answers with no end, which means 'to the death'",
+        (function()
+            local from, to = History.WindowFor({}, { [871] = 300 }, 871, 299.8)
+            return from == 300 and to == nil
+        end)())
+
+    local measured = {}
+    History.NoteMeasured(measured, 871, 8.04)
+    Check("A measured length is kept to a tenth", measured[871] == 8)
+    History.NoteMeasured(measured, 871, 5)
+    Check("A shorter reading never shortens what was already seen",
+        measured[871] == 8)
+    History.NoteMeasured(measured, 871, 12)
+    Check("A longer reading wins - a window can be cut short, never grown",
+        measured[871] == 12)
+    History.NoteMeasured(measured, 871, 999)
+    Check("A reading that never closed is not stored", measured[871] == 12)
 end
 
 ---------------------------------------------------------------------------
@@ -1042,10 +1101,16 @@ local function TestDeath()
         { spellID = 2, name = "Vampiric Blood",     remaining = 25 },
         { spellID = 3, name = "Lichborne",          remaining = nil, why = "not cast since login" },
     }, { { name = "Healthstone", count = 1 } })
-    Check("Ready and unpressed is listed by name",
-        #avail.readyDefensives == 1 and avail.readyDefensives[1] == "Icebound Fortitude")
+    Check("Ready and unused is listed by name",
+        #avail.readyDefensives == 1
+            and avail.readyDefensives[1].name == "Icebound Fortitude")
+    -- The id travels with the name everywhere, because only the id can
+    -- produce an icon and a tooltip - and this game shows both, always.
+    Check("A named spell carries its id for the icon and the tooltip",
+        avail.readyDefensives[1].spellID == 1)
     Check("Cannot-tell is never promoted to ready",
-        #avail.unknownDefensives == 1 and avail.unknownDefensives[1] == "Lichborne")
+        #avail.unknownDefensives == 1
+            and avail.unknownDefensives[1].name == "Lichborne")
     Check("What sat in the bags is said",
         avail.itemsInBags[1] == "Healthstone")
 
@@ -1202,10 +1267,13 @@ local function TestDeath()
         maxHP = 2000000,
         events = {
             { t = 2.0, amount = 81600, hp = 40000, name = "Melee",
-              who = "Heavyweight Golem", spellID = 195181 },
+              who = "Heavyweight Golem", spellID = 195181,
+              art = { creatureID = 213333 } },
         },
         avail = { { spellID = 48792, name = "Icebound Fortitude", remaining = 0 } },
         items = { { name = "Healthstone", count = 1 } },
+        casts = { { t = 6, spellID = 48792, name = "Icebound Fortitude",
+                    defensive = true, lasted = 8, stillUp = true } },
         analysis = { lines = { "derived, and not stored" } },
     })
     Check("A death worth keeping is kept whole",
@@ -1215,6 +1283,17 @@ local function TestDeath()
             and #kept.events == 1 and kept.events[1].amount == 81600)
     Check("The verdict is NOT stored - it is derived on the way back",
         kept.analysis == nil)
+    -- Each hit keeps its own face, or a reload turns twenty mobs back into
+    -- one, which is the whole reason the faces are per hit.
+    Check("Every hit keeps the face that belongs to it",
+        kept.events[1].art ~= nil and kept.events[1].art.creatureID == 213333)
+    -- And each press keeps the length that was measured for it, or the bar
+    -- silently changes size after a reload.
+    Check("A measured press keeps its length across a reload",
+        kept.casts[1].lasted == 8 and kept.casts[1].stillUp == true)
+    Check("A face with no numbers behind it is not stored as an empty box",
+        Death.Persist({ events = { { t = 0, amount = 1, art = {} } } })
+            .events[1].art == nil)
     Check("A death nothing was readable out of is not stored at all",
         Death.Persist({ when = "16:11:00", events = nil }) == nil)
 
@@ -1334,26 +1413,49 @@ local function TestDeath()
         Check("It cannot scroll past the death",
             math.abs(to) < 0.001 and math.abs(from - 5) < 0.001)
 
-        -- What the killer's portrait says on hover, summed from the events
-        -- we already read. There is no client call for "what can this NPC
-        -- do" and a dungeon mob withholds even its name, so this is what
-        -- HE did to YOU rather than a page from a database.
-        local facts = Replay.KillerSummary({
+        -- What a source's face says on hover, summed from the events we
+        -- already read. There is no client call for "what can this NPC do"
+        -- and a dungeon mob withholds even its name, so this is what IT
+        -- did to YOU rather than a page from a database.
+        local facts = Replay.SourceSummary({
             { t = 4, amount = 50000, name = "Scratch", who = "Golem" },
             { t = 2, amount = 900000, name = "Melee", who = "Golem" },
             { t = 1, amount = 300000, heal = true, name = "Heal",
               who = "Healyboi" },
             { t = 0, amount = 10000, name = "Melee", who = "Someone else" },
         }, "Golem")
-        Check("The portrait counts only what that mob did",
+        Check("A face counts only what that source did",
             facts.hits == 2 and facts.total == 950000)
-        Check("It names his biggest hit", facts.biggest == 900000)
-        Check("It lists what he used, once each",
+        Check("It names its biggest hit", facts.biggest == 900000)
+        Check("It lists what it used, once each",
             #facts.spells == 2 and facts.spells[1] == "Scratch")
-        Check("A heal is never counted as something he did to you",
+        Check("A heal is never counted as something it did to you",
             facts.total == 950000)
-        Check("No named killer is an empty summary, not an error",
-            Replay.KillerSummary({ { t = 1, amount = 5 } }, nil).hits == 0)
+        Check("No named source is an empty summary, not an error",
+            Replay.SourceSummary({ { t = 1, amount = 5 } }, nil).hits == 0)
+
+        -----------------------------------------------------------------
+        -- HOW LONG A BAR IS, and where that length came from. The owner
+        -- watched presses draw as stubs and said so: "die cd bars muessen
+        -- so weit gehen wie sie aktiv sind". The fix was not to invent a
+        -- length - it was to measure one and to keep saying which is which.
+        -----------------------------------------------------------------
+        local lasted, source = Replay.BarLength({ spellID = 1, t = 6,
+            lasted = 8 })
+        Check("A press draws the window it actually opened",
+            lasted == 8 and source == "window")
+        lasted, source = Replay.BarLength({ spellID = 1, t = 6, lasted = 6,
+            stillUp = true })
+        Check("A buff still up when you died says so",
+            lasted == 6 and source == "open")
+        Check("A press with no window measured gets no invented length",
+            Replay.BarLength({ spellID = 99999901 }) == nil)
+        Check("A bar with no length is called a mark, not a bar",
+            Replay.LengthNote(nil, nil):find("mark", 1, true) ~= nil)
+        Check("A measured window says it was measured",
+            Replay.LengthNote("window", 8):find("measured", 1, true) ~= nil)
+        Check("A still-running buff is worded as still running",
+            Replay.LengthNote("open", 6):find("Still up", 1, true) ~= nil)
 
         Check("A speed outside what is watchable is pulled back in",
             Replay.ClampSpeed(0.01) > 0 and Replay.ClampSpeed(0.01) <= 1
@@ -1406,7 +1508,7 @@ local function TestDeath()
     Check("Pressing something that was not a defensive says which",
         (function()
             for _, line in ipairs(wrongOnes.lines) do
-                if line:find("No defensive was pressed", 1, true)
+                if line:find("No defensive was used", 1, true)
                     and line:find("Death Strike", 1, true) then return true end
             end
             return false
@@ -1414,11 +1516,33 @@ local function TestDeath()
 
     local rightOne = Death.Analyse(
         { { t = 1, amount = 900000, name = "Melee" } }, 1000000, {}, {},
-        { { name = "Icebound Fortitude", defensive = true },
+        { { spellID = 48792, name = "Icebound Fortitude", defensive = true },
           { name = "Death Strike" } })
-    Check("A defensive that WAS pressed is credited on its own",
-        #rightOne.defensivesPressed == 1
-            and rightOne.defensivesPressed[1] == "Icebound Fortitude")
+    Check("A defensive that WAS used is credited on its own",
+        #rightOne.defensivesUsed == 1
+            and rightOne.defensivesUsed[1].name == "Icebound Fortitude")
+    Check("And it carries its id, so the chip can draw an icon",
+        rightOne.defensivesUsed[1].spellID == 48792)
+
+    ---------------------------------------------------------------------
+    -- ICON AND TOOLTIP, ALWAYS. The owner's rule, in his words: "immer
+    -- wenn eine faehigkeit oder was auch immer einen tooltip und icon hat,
+    -- muss das angezeigt werden. egal bei was". A wrapped sentence cannot
+    -- hold a hover target, so the verdict carries the icon inline - and
+    -- chat, which would show the escape sequence as punctuation or drop it
+    -- outright, gets it taken back out on the way through.
+    ---------------------------------------------------------------------
+    Check("A spell with no icon behind it still reads as its name",
+        Death.SpellText(nil, "Shield Wall") == "Shield Wall")
+    Check("A list of spells reads as an enumeration",
+        Death.PlainText(Death.SpellList({
+            { spellID = 1, name = "A" }, { spellID = 2, name = "B" },
+        })) == "A, B")
+    Check("An inline icon never reaches the chat",
+        Death.PlainText("Defensives used: |T123:14:14|t Shield Wall.")
+            == "Defensives used: Shield Wall.")
+    Check("Text with no icons in it is handed back untouched",
+        Death.PlainText("nothing to strip") == "nothing to strip")
 
     -- The clock in the list. Today it is a time; older, the day goes first.
     Check("A death from today reads as a clock",

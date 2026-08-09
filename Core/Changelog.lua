@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.51.0",
+        date = "2026-08-09",
+        lines = {
+            "THE DEFENSIVE BARS RUN THEIR REAL LENGTH NOW. Every press drew as a stub before, because the only thing that knew how long a defensive lasts was a number you had to type in yourself. It is |cffffd100measured|r instead: while you play, the addon watches Blizzard's own buff display and writes down the window between a buff going up and going down - so a bar in the replay is the length that buff was actually up, on that press, in that fight. A buff that was still up when you died runs to the end and says so on hover.",
+            "|cffffd100A face over every hit|r, and over every heal. The killer's portrait used to sit alone in the corner of the lane, which in a dungeon with twenty mobs on you answers for all of them and therefore for none. Now each hit carries the face of whatever dealt it and each heal the face of whoever cast it, and the hover says what that one source did to you across the whole window.",
+            "The damage columns stand clear of the axis, so the seconds written on the line stay readable under twenty of them.",
+            "|cffffd100Defensives used|r, not \"pressed\" - and the spells in it are drawn the way this game draws spells: an icon in front of the name and the client's own tooltip on hover. Same in the verdict and in the footer that lists what was ready.",
+        },
+    },
+    {
         version = "4.50.0",
         date = "2026-08-09",
         lines = {

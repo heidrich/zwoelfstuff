@@ -33,17 +33,27 @@ local frame
 -- The plot. The axis runs the full width between these margins, time
 -- flowing left to right and ending at the killing blow on the right edge.
 local PLOT_L, PLOT_R = 30, 30
-local FRAME_W, FRAME_H = 780, 520
+local FRAME_W, FRAME_H = 780, 576
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
 local AXIS_Y = 268          -- from the top of the frame
-local COLUMN_MAX = 96       -- tallest an incoming column may draw
+local COLUMN_MAX = 78       -- tallest an incoming column may draw
 local MARKS_IN, MARKS_OUT, MARKS_HEAL = 28, 20, 20
+
+-- The columns stand clear of the axis rather than on it: the seconds are
+-- written ON the line now, and a column starting at the line drew straight
+-- through them. The owner asked for exactly this - "setz die income balken
+-- ein paar pixel nach oben, das die nicht die zahlen verdecken".
+local COLUMN_LIFT = 10
+
+-- A face over every hit, small. In a dungeon twenty things are hitting you
+-- at once and a number with no face on it cannot be assigned to any of them.
+local AVATAR = 20
 
 -- Three lanes and where each starts, measured from the top of the frame.
 local HEALTH_Y = 84         -- your own health bar
 local LANE_IN_Y = 112       -- "what came in", growing UP to the axis
 local LANE_OUT_Y = 282      -- your presses, as bars under the axis
-local LANE_HEAL_Y = 384     -- "who healed you", under those
+local LANE_HEAL_Y = 396     -- "who healed you", under those
 
 -- The press bars: how tall each row is and how many rows may stack before
 -- the rest are dropped onto the last one. Four is more overlapping
@@ -148,9 +158,14 @@ end
 --
 -- What we do have is better than a wiki page anyway: what this mob did to
 -- YOU, in these seconds. Summed from the events we already read.
-function Replay.KillerSummary(events, killer)
+--
+-- Asked for ANY source now, not only the killer: every face on the plot
+-- carries its own summary, which is the point of putting a face on every
+-- hit in the first place.
+function Replay.SourceSummary(events, who)
     local out = { hits = 0, total = 0, biggest = 0, spells = {} }
-    if not killer then return out end
+    if not who then return out end
+    local killer = who
     local seen = {}
     for _, ev in ipairs(events or {}) do
         if ev.who == killer and not ev.heal then
@@ -185,20 +200,75 @@ end
 --
 -- HOW LONG IS IT UP? This addon has one rule about durations and it is
 -- MEASURED, NEVER ASSUMED - see KnownProcs.lua, which says so in capitals.
--- On this patch aura data is secret, so there is no call that answers "how
--- long does Icebound Fortitude last". What there IS is the number you can
--- set yourself: "this is active for N seconds after I press it", on the
--- Auras page, stored per account because it is a fact about the spell and
--- not about the character. That is the source, and where it is unset the
--- bar is a marker with no length rather than a guessed one.
+-- On this patch aura data is secret, so no call answers "how long does
+-- Icebound Fortitude last".
+--
+-- The first version of this had one source: the number a person can type in
+-- on the Auras page. Nobody types it in, so every press drew as a stub and
+-- the owner said so - "die cd bars muessen so weit gehen wie sie aktiv
+-- sind". The answer was not to invent a length. It was to MEASURE one:
+-- History.lua now watches Blizzard's buff viewers and records the window
+-- between a tracked buff going up and going down, so a press carries the
+-- length of its own window - what happened, in that fight, to that press.
+--
+-- Three sources, in order of how much they know:
+--
+--   1. cast.lasted   the window this very press opened. A fact about THIS
+--                    death, including "it was still up when you died".
+--   2. the setting    "active for N seconds", stated by the player. Believed
+--                    the moment it exists - that is the design in Auras.lua.
+--   3. the measured   the longest window ever seen for this spell on this
+--      store          spec. For deaths restored from disk, which have no
+--                    live window behind them.
+--
+-- None of the three answering means a marker with no length. Never a guess.
 ---------------------------------------------------------------------------
 
 function Replay.DurationOf(spellID)
     if not spellID then return nil end
-    if not (ns.Auras and ns.Auras.ActiveStateFor) then return nil end
-    local ok, seconds = pcall(ns.Auras.ActiveStateFor, ns.Auras, spellID)
-    if ok and type(seconds) == "number" and seconds > 0 then return seconds end
+
+    if ns.Auras and ns.Auras.ActiveStateFor then
+        local ok, seconds = pcall(ns.Auras.ActiveStateFor, ns.Auras, spellID)
+        if ok and type(seconds) == "number" and seconds > 0 then
+            return seconds, "set"
+        end
+    end
+
+    if ns.History and ns.History.MeasuredFor then
+        local ok, seconds = pcall(ns.History.MeasuredFor, ns.History, spellID)
+        if ok and type(seconds) == "number" and seconds > 0 then
+            return seconds, "measured"
+        end
+    end
+
     return nil
+end
+
+-- The length of one bar and where that length came from, so the tooltip can
+-- say it out loud instead of leaving a person to wonder whether a bar is a
+-- reading or a decoration.
+function Replay.BarLength(cast)
+    if not cast then return nil end
+    if type(cast.lasted) == "number" and cast.lasted > 0 then
+        return cast.lasted, cast.stillUp and "open" or "window"
+    end
+    return Replay.DurationOf(cast.spellID)
+end
+
+function Replay.LengthNote(source, seconds)
+    if source == "open" then
+        return "Still up when you died."
+    elseif source == "window" then
+        return string.format("Up for %.1fs - measured on this press.", seconds)
+    elseif source == "measured" then
+        return string.format("About %.1fs - the longest window measured for "
+            .. "it on this spec.", seconds)
+    elseif source == "set" then
+        return string.format("%.0fs - the length you set for it on the Auras "
+            .. "page.", seconds)
+    end
+    return "No length has been measured for this one yet, so it is a mark "
+        .. "rather than a bar."
 end
 
 -- Which row each bar draws in, so that two that overlap never sit on top of
@@ -269,8 +339,20 @@ local function Tooltip(owner, item)
     if item.cast then
         GameTooltip:AddLine(item.defensive and "You pressed it - a defensive"
             or "You pressed it", 0.49, 0.78, 0.83)
+        -- Where the bar's length came from, said out loud. A bar whose
+        -- length nobody can account for is decoration.
+        GameTooltip:AddLine(Replay.LengthNote(item.source, item.duration),
+            0.61, 0.64, 0.69, true)
     elseif item.who then
         GameTooltip:AddLine("from " .. item.who, 0.61, 0.64, 0.69)
+        -- And what that source did to you across the whole window, since
+        -- the face over the mark is now the source's and not the killer's.
+        local facts = item.summary
+        if facts and facts.hits > 1 then
+            GameTooltip:AddLine(string.format("%d hits from it, %s in total, "
+                .. "biggest %s", facts.hits, ns.ShortNumber(facts.total),
+                ns.ShortNumber(facts.biggest)), 0.61, 0.64, 0.69, true)
+        end
     end
     if item.amount and item.amount > 0 then
         GameTooltip:AddLine(string.format("%s%s",
@@ -288,6 +370,86 @@ local function Tooltip(owner, item)
     GameTooltip:AddLine(string.format("%.1fs before the end", item.t or 0),
         0.38, 0.42, 0.46)
     GameTooltip:Show()
+end
+
+-- WHOSE FACE GOES OVER A MARK.
+--
+-- A mob is a model: a creature id into PlayerModel:SetCreature, which is
+-- what MDT's enemy tooltips do with raw npc ids and what the killer
+-- portrait has been doing since 4.49.0. Built only when a mark actually
+-- has art behind it - a model frame is not free and most plots need a
+-- handful, not twenty-eight.
+local function EnsureModel(mark)
+    if mark.model then return mark.model end
+    local model = CreateFrame("PlayerModel", nil, mark)
+    model:SetSize(AVATAR, AVATAR)
+    model:Hide()
+    mark.model = model
+    return model
+end
+
+local function PaintCreature(mark, art)
+    if not (art and (art.creatureID or art.displayID)) then
+        if mark.model then mark.model:Hide() end
+        return false
+    end
+    local model = EnsureModel(mark)
+    local drawn = false
+    if art.creatureID and model.SetCreature then
+        drawn = pcall(model.SetCreature, model, art.creatureID)
+    end
+    if not drawn and art.displayID and model.SetDisplayInfo then
+        drawn = pcall(model.SetDisplayInfo, model, art.displayID)
+    end
+    if not drawn then
+        model:Hide()
+        return false
+    end
+    pcall(model.SetPosition, model, 0, 0, 0)
+    pcall(model.SetFacing, model, 0.4)
+    pcall(model.SetCamDistanceScale, model, 1.35)
+    model:Show()
+    return true
+end
+
+-- A person is a portrait texture, which needs a unit token - so the name
+-- is looked for among the units this client will still answer for. Outside
+-- the group there is no answer and the mark keeps its name and no face,
+-- which is honest: we do not know what that person looks like.
+local function UnitFor(name)
+    if not (name and UnitName) then return nil end
+    local function Is(unit)
+        local ok, found = pcall(UnitName, unit)
+        return ok and found == name
+    end
+    if Is("player") then return "player" end
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if Is(unit) then return unit end
+    end
+    for i = 1, 40 do
+        local unit = "raid" .. i
+        if Is(unit) then return unit end
+    end
+    return nil
+end
+
+local function PaintFace(mark, name)
+    local unit = UnitFor(name)
+    if not (unit and SetPortraitTexture) then
+        if mark.face then mark.face:Hide() end
+        return false
+    end
+    if not mark.face then
+        mark.face = mark:CreateTexture(nil, "ARTWORK")
+        mark.face:SetSize(AVATAR, AVATAR)
+        -- The round crop Blizzard's own portraits use, so a healer's face
+        -- reads as a portrait and not as a screenshot of one.
+        mark.face:SetTexCoord(0.15, 0.85, 0.15, 0.85)
+    end
+    local ok = pcall(SetPortraitTexture, mark.face, unit)
+    mark.face:SetShown(ok and true or false)
+    return ok and true or false
 end
 
 -- One mark on the plot: a column, an icon and a number for the incoming
@@ -371,43 +533,6 @@ local function BuildWindow()
     local closeMark = UI.Glyph(close, "ui-close", 12, C.textDim)
     closeMark:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnClick", function() Replay:Close() end)
-
-    -- The killer, small, sitting ON the damage lane it belongs to rather
-    -- than filling the corner of the window. The owner's reason is the
-    -- right one: in a dungeon twenty things are hitting you, and one large
-    -- portrait in the title bar claims the whole picture for one of them.
-    frame.portrait = CreateFrame("PlayerModel", nil, frame)
-    frame.portrait:SetSize(30, 30)
-    frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L + 108,
-        -(LANE_IN_Y - 9))
-    frame.portrait:EnableMouse(true)
-    frame.portrait:Hide()
-
-    frame.portrait:SetScript("OnEnter", function(self)
-        local facts = self.facts
-        if not (facts and GameTooltip) then return end
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:AddLine(facts.name or "Unknown", 1, 1, 1)
-        if facts.hits > 0 then
-            GameTooltip:AddLine(string.format(
-                "%d hit%s on you, %s in total", facts.hits,
-                facts.hits == 1 and "" or "s", ns.ShortNumber(facts.total)),
-                0.61, 0.64, 0.69)
-            GameTooltip:AddLine("Biggest: " .. ns.ShortNumber(facts.biggest),
-                0.61, 0.64, 0.69)
-        end
-        if #facts.spells > 0 then
-            GameTooltip:AddLine("Used: " .. table.concat(facts.spells, ", "),
-                0.61, 0.64, 0.69, true)
-        end
-        -- Said out loud rather than left as a gap somebody wonders about.
-        GameTooltip:AddLine("What else it can do is not something the client "
-            .. "will tell an addon on this patch.", 0.38, 0.42, 0.46, true)
-        GameTooltip:Show()
-    end)
-    frame.portrait:SetScript("OnLeave", function()
-        if GameTooltip then GameTooltip:Hide() end
-    end)
 
     -- YOUR health, said in as many words. It is the only bar in the window
     -- and it was being read as the mob's.
@@ -493,7 +618,7 @@ local function BuildWindow()
     frame.playhead:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
     frame.playhead:SetWidth(1)
     frame.playhead:SetPoint("TOP", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 4))
-    frame.playhead:SetHeight(LANE_HEAL_Y + 60 - HEALTH_Y)
+    frame.playhead:SetHeight(LANE_HEAL_Y + 96 - HEALTH_Y)
 
     -- Three lanes: what hit you above the axis, what you pressed below it,
     -- and who was healing you under that.
@@ -504,8 +629,12 @@ local function BuildWindow()
 
     frame.laneIn = UI.Eyebrow(frame, "Damage on you")
     frame.laneIn:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_IN_Y)
+    -- UNDER its own bars, not through them. It sat at a fixed offset that
+    -- landed on the third row, which nothing reached while every press drew
+    -- as a stub - and everything reaches now that the bars have length.
     frame.laneOut = UI.Eyebrow(frame, "What you pressed")
-    frame.laneOut:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(LANE_OUT_Y + 46))
+    frame.laneOut:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L,
+        -(LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP) + 2))
     frame.laneHeal = UI.Eyebrow(frame, "Healing on you")
     frame.laneHeal:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_HEAL_Y)
 
@@ -585,15 +714,84 @@ local function BuildWindow()
     })
     frame.zoomRow = zoomRow
 
+    -- THE ONE SENTENCE THIS WINDOW EXISTS TO MAKE UNNECESSARY, said anyway.
+    -- The spells in it are spells, so they are drawn the way this game draws
+    -- spells: an icon in front of the name and a tooltip on hover. The
+    -- owner's rule - "immer wenn eine faehigkeit einen tooltip und icon hat,
+    -- muss das angezeigt werden. egal bei was".
     frame.legend = UI.Label(frame, "", 11, C.textFaint)
     frame.legend:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 46)
-    frame.legend:SetWidth(PLOT_W)
     frame.legend:SetJustifyH("LEFT")
+    frame.legend:SetWordWrap(false)
+
+    frame.chips = {}
+    for i = 1, 10 do
+        local chip = CreateFrame("Button", nil, frame)
+        chip:SetHeight(20)
+
+        chip.icon = chip:CreateTexture(nil, "ARTWORK")
+        chip.icon:SetSize(16, 16)
+        chip.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        chip.icon:SetPoint("LEFT", chip, "LEFT", 0, 0)
+
+        chip.label = UI.Label(chip, "", 11, C.text)
+        chip.label:SetPoint("LEFT", chip.icon, "RIGHT", 4, 0)
+        chip.label:SetWordWrap(false)
+
+        chip:SetScript("OnEnter", function(self)
+            if not (GameTooltip and self.spellID) then return end
+            GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+            if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID) then
+                GameTooltip:ClearLines()
+                GameTooltip:AddLine(self.spellName or "", 1, 1, 1)
+            end
+            GameTooltip:Show()
+        end)
+        chip:SetScript("OnLeave", function()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+        chip:Hide()
+        frame.chips[i] = chip
+    end
 
     local dismiss = UI.Button(frame, "Close", 90, function()
         Replay:Close()
     end)
     dismiss:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PLOT_R, 12)
+end
+
+-- The legend, as a label and a row of spell chips beside it. Names alone
+-- were there before and they read as a list of words; this reads as the
+-- abilities they are.
+local function PaintLegend(analysis)
+    local used = (analysis and analysis.defensivesUsed) or {}
+    local room = #frame.chips
+    local shown = math.min(#used, room)
+    local extra = #used - shown
+
+    frame.legend:SetText(shown > 0
+        and ("Defensives used:" .. (extra > 0
+            and (" (+" .. extra .. " more)") or ""))
+        or "|cffe0a05eNo defensive was used in these seconds.|r")
+
+    local anchor = frame.legend
+    for index = 1, shown do
+        local entry, chip = used[index], frame.chips[index]
+        chip.spellID = entry.spellID
+        chip.spellName = entry.name
+        chip.icon:SetTexture(entry.spellID and ns.SpellTexture(entry.spellID))
+        chip.icon:SetShown(entry.spellID and true or false)
+        chip.label:SetText(entry.name or "?")
+        chip:SetWidth(20 + (chip.label:GetStringWidth() or 40))
+        chip:ClearAllPoints()
+        chip:SetPoint("LEFT", anchor, "RIGHT", 8, 0)
+        chip:Show()
+        anchor = chip
+    end
+    for index = shown + 1, room do
+        frame.chips[index].spellID = nil
+        frame.chips[index]:Hide()
+    end
 end
 
 -- "0.25x" without a trailing zero pretending to be precision. The word
@@ -624,20 +822,28 @@ local function PlaceHeal(mark, ev, from, to)
 
     mark:ClearAllPoints()
     mark:SetPoint("TOP", frame, "TOPLEFT", x, -(LANE_HEAL_Y + 16))
-    mark:SetSize(24, 62)
+    mark:SetSize(24, 64 + AVATAR)
 
     mark.column:ClearAllPoints()
     mark.column:SetPoint("TOP", mark, "TOP", 0, 0)
     mark.column:SetHeight(8)
     mark.column:SetColorTexture(0.12, 0.42, 0.16, 1)
 
-    mark.icon:ClearAllPoints()
-    mark.icon:SetPoint("TOP", mark.column, "BOTTOM", 0, -14)
-    mark.icon:SetTexture((ev.spellID and ns.SpellTexture(ev.spellID)) or 135966)
-
     mark.value:ClearAllPoints()
     mark.value:SetPoint("TOP", mark.column, "BOTTOM", 0, -1)
     mark.value:SetText("|cff67c971+" .. ns.ShortNumber(ev.amount) .. "|r")
+
+    mark.icon:ClearAllPoints()
+    mark.icon:SetPoint("TOP", mark.value, "BOTTOM", 0, -2)
+    mark.icon:SetTexture((ev.spellID and ns.SpellTexture(ev.spellID)) or 135966)
+
+    -- The healer's face over their own heal, for the same reason the mob's
+    -- sits over its own hit: in a five man three people are healing you.
+    local hasFace = PaintFace(mark, ev.who)
+    if hasFace then
+        mark.face:ClearAllPoints()
+        mark.face:SetPoint("TOP", mark.icon, "BOTTOM", 0, -3)
+    end
 
     -- The healer's name, in their class colour where the client will give
     -- it. UnitClass answers for a name that is in your group and nothing
@@ -657,7 +863,8 @@ local function PlaceHeal(mark, ev, from, to)
         mark.who:SetText("|cff626a76unnamed|r")
     end
     mark.who:ClearAllPoints()
-    mark.who:SetPoint("TOP", mark.icon, "BOTTOM", 0, -2)
+    mark.who:SetPoint("TOP", hasFace and mark.face or mark.icon, "BOTTOM",
+        0, -2)
     mark.who:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
     mark:Show()
 end
@@ -691,8 +898,11 @@ local function Place(snapshot, from, to)
                     local x = PLOT_L + Replay.Fraction(ev.t, from, to) * PLOT_W
 
                     mark:ClearAllPoints()
-                    mark:SetPoint("BOTTOM", frame, "TOPLEFT", x, -(AXIS_Y - 1))
-                    mark:SetSize(24, height + 46)
+                    -- Clear of the axis, so the seconds written on the line
+                    -- stay readable under twenty columns.
+                    mark:SetPoint("BOTTOM", frame, "TOPLEFT", x,
+                        -(AXIS_Y - COLUMN_LIFT))
+                    mark:SetSize(24, height + 40 + AVATAR)
 
                     mark.column:ClearAllPoints()
                     mark.column:SetPoint("BOTTOM", mark, "BOTTOM", 0, 0)
@@ -708,6 +918,21 @@ local function Place(snapshot, from, to)
                     mark.value:SetPoint("BOTTOM", mark.icon, "TOP", 0, 2)
                     mark.value:SetText("|cffe06c5e-"
                         .. ns.ShortNumber(ev.amount) .. "|r")
+
+                    -- WHO HIT YOU, over the hit itself. The killer's face
+                    -- used to sit alone in the corner of the lane; with ten
+                    -- mobs on you that face answers for all of them and
+                    -- therefore for none of them.
+                    if PaintCreature(mark, ev.art) then
+                        mark.model:ClearAllPoints()
+                        mark.model:SetPoint("BOTTOM", mark.value, "TOP", 0, 2)
+                    end
+                    -- Summed once per source and kept on the event: the
+                    -- plot is laid out again on every scroll, and this
+                    -- walks the whole list.
+                    if ev.who and not ev.summary then
+                        ev.summary = Replay.SourceSummary(events, ev.who)
+                    end
                     mark:Show()
                 end
             end
@@ -728,10 +953,12 @@ local function Place(snapshot, from, to)
     local colourOf, nextColour = {}, 0
     local bars = {}
     for _, cast in ipairs(snapshot.casts or {}) do
+        -- The window this press actually opened, first. See Replay.BarLength.
+        local duration, source = Replay.BarLength(cast)
         bars[#bars + 1] = {
             t = cast.t, name = cast.name, spellID = cast.spellID,
             cast = true, defensive = cast.defensive,
-            duration = Replay.DurationOf(cast.spellID),
+            duration = duration, source = source,
         }
     end
     local stacked = Replay.StackRows(bars)
@@ -945,40 +1172,11 @@ function Replay:Open(snapshot)
     frame.sub:SetText((snapshot.when or "")
         .. (snapshot.where and ("  -  " .. snapshot.where) or ""))
 
-    -- The killer's face and what he did to you, off the same events the
-    -- plot is drawn from. Hidden outright when the recap gave us no model
-    -- to draw - an empty box in the corner answers nothing.
-    local art = snapshot.killerArt
-    local drawn = false
-    if art and (art.creatureID or art.displayID) then
-        if art.creatureID and frame.portrait.SetCreature then
-            drawn = pcall(frame.portrait.SetCreature, frame.portrait,
-                art.creatureID)
-        end
-        if not drawn and art.displayID and frame.portrait.SetDisplayInfo then
-            drawn = pcall(frame.portrait.SetDisplayInfo, frame.portrait,
-                art.displayID)
-        end
-    end
-    if drawn then
-        pcall(frame.portrait.SetPosition, frame.portrait, 0, 0, 0)
-        pcall(frame.portrait.SetFacing, frame.portrait, 0.4)
-        pcall(frame.portrait.SetCamDistanceScale, frame.portrait, 1.35)
-        local facts = Replay.KillerSummary(events, snapshot.killer)
-        facts.name = snapshot.killer
-        frame.portrait.facts = facts
-        frame.portrait:Show()
-    else
-        frame.portrait.facts = nil
-        frame.portrait:Hide()
-    end
-
-    -- The one sentence this window exists to make unnecessary - said
-    -- anyway, because a plot is read in a second and a sentence in less.
-    local pressed = snapshot.analysis and snapshot.analysis.defensivesPressed
-    frame.legend:SetText(#(pressed or {}) > 0
-        and ("Defensives pressed: " .. table.concat(pressed, ", ") .. ".")
-        or "|cffe0a05eNo defensive was pressed in these seconds.|r")
+    -- The single portrait that used to sit in the corner of the damage lane
+    -- is gone: every hit carries its own face now. One face for a death
+    -- with twenty mobs in it answered for all of them, which is the owner's
+    -- objection and it is right.
+    PaintLegend(snapshot.analysis)
 
     frame.playButton.label:SetText("Pause")
     frame.speedRow.Refresh()
