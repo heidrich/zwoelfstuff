@@ -1864,6 +1864,36 @@ local function TestDesignSystem()
     Check("Nothing bigger than the biggest cut exists",
         ns.UI.IconCutFor(32, 99) == CUTS[#CUTS])
 
+    -----------------------------------------------------------------------
+    -- A WHEEL OVER A LIST THAT CANNOT SCROLL
+    --
+    -- EnableMouseWheel swallows the gesture whether or not there is anything
+    -- to move. In the death window that wheel is how you page between
+    -- deaths, and the event list covers most of the window - so a death with
+    -- three hits would have eaten the gesture over the area you are most
+    -- likely to be pointing at. The escape hatch is a contract of the
+    -- widget, so it is checked on the widget.
+    -----------------------------------------------------------------------
+    do
+        local host = CreateFrame("Frame", nil, UIParent)
+        host:SetSize(200, 100)
+        host:Hide()
+        local scroll, content = ns.UI.ScrollArea(host, 200, 8)
+        -- One unit tall: there is nothing to scroll, by construction.
+        content:SetHeight(1)
+
+        local passed_ = false
+        scroll.OnIdleWheel = function(delta) passed_ = (delta == -1) end
+
+        local handler = scroll:GetScript("OnMouseWheel")
+        Check("A scrolling area answers the wheel", handler ~= nil)
+        if handler then
+            handler(scroll, -1)
+            Check("A wheel a list cannot use is handed back, not swallowed",
+                passed_)
+        end
+    end
+
     -- The screen measurement itself. It cannot be predicted out here, but it
     -- can be required to be a usable number - EllesmereUI's own comment says
     -- GetPhysicalScreenSize answers 0 or nil during a display-mode change,

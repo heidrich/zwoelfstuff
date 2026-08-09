@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.57.0",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100THE LIST OF HITS SCROLLS,|r and it no longer throws any away. It was capped at twelve rows so they would not run off the bottom of the window - which meant the deaths with the most to say were the ones losing hits.",
+            "The list opens at the |cffffd100bottom|r, on the hit that killed you.",
+            "The footer no longer prints across the last row. Its block grows upwards and the list now ends where the footer begins, so neither can land on the other however long either one gets.",
+        },
+    },
+    {
         version = "4.56.2",
         date = "2026-08-09",
         lines = {

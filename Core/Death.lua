@@ -1292,7 +1292,11 @@ local PaintSideList
 -- The bar IS the graph - each row's fill is the health you still had after
 -- that event, so reading down the list is watching the health drain.
 local ROW_H = 22
-local ROWS_MAX = 12
+
+-- THE ROWS ARE NARROWER THAN THE COLUMN THEY SIT IN, by exactly the room the
+-- scroll rail needs. Without it the right-hand numbers - the ones the whole
+-- table is read for - are the pixels the rail sits on top of.
+local LIST_GUTTER = 8
 
 -- The window is two columns: the analysis of ONE death on the left, and the
 -- session's deaths down the right so you can walk them without paging. The
@@ -1302,6 +1306,7 @@ local ROWS_MAX = 12
 -- verdict, the Close button and the availability footer all ran right up
 -- against the line while the list had air to spare.
 local MAIN_W = 510
+local LIST_W = MAIN_W - LIST_GUTTER
 local SIDE_W = 186
 local GUTTER = 16
 local DIVIDER_X = 16 + MAIN_W + GUTTER
@@ -1401,11 +1406,40 @@ local function BuildWindow()
     frame.verdict:SetJustifyV("TOP")
     frame.verdict:SetSpacing(3)
 
-    -- Event rows, built once, filled per death.
+    -----------------------------------------------------------------------
+    -- THE EVENT LIST, IN ITS OWN SCROLLING AREA.
+    --
+    -- Owner, 2026-08-09: "die liste links muss scrollbar sein" - and the
+    -- screenshot showed the other half of the same fault: with a four-line
+    -- verdict and ten hits, the availability footer was drawn straight
+    -- across the killing blow. Both come from the rows having been placed at
+    -- absolute offsets inside a window of fixed height, with a hard cap of
+    -- twelve to keep them from running off the bottom. A cap is not a
+    -- layout: it silently drops hits from the very deaths that have the most
+    -- to say.
+    --
+    -- Now the list has an AREA. Its top follows the verdict, its bottom sits
+    -- on the footer, and whatever does not fit is scrolled to rather than
+    -- thrown away or drawn over something else.
+    -----------------------------------------------------------------------
+    frame.listHost = CreateFrame("Frame", nil, frame)
+    frame.list, frame.listContent = UI.ScrollArea(frame.listHost, LIST_W,
+        LIST_GUTTER)
+
+    -- The wheel still pages between deaths when the list has nothing to
+    -- scroll - see UI.ScrollArea. Losing that over the biggest part of the
+    -- window would be a worse trade than the scrolling is worth.
+    frame.list.OnIdleWheel = function(delta)
+        Death:Show((Death.showing or #Death.log) + delta)
+    end
+
+    -- Event rows, POOLED and built on demand. Twelve were built up front
+    -- when twelve was also the ceiling; now a quiet death builds three and a
+    -- messy one builds as many as it needs, once.
     frame.rows = {}
-    for i = 1, ROWS_MAX do
-        local row = CreateFrame("Frame", nil, frame)
-        row:SetSize(MAIN_W, ROW_H)
+    frame.BuildRow = function()
+        local row = CreateFrame("Frame", nil, frame.listContent)
+        row:SetSize(LIST_W, ROW_H)
 
         -- Two pieces of one health bar: what was left, and what the event
         -- moved, drawn end to end. See Death.RowSpans.
@@ -1493,7 +1527,7 @@ local function BuildWindow()
         end)
 
         row:Hide()
-        frame.rows[i] = row
+        return row
     end
 
     -----------------------------------------------------------------------
@@ -1512,7 +1546,10 @@ local function BuildWindow()
     -- different picture and it needs the room.
 
     frame.head = CreateFrame("Frame", nil, frame)
-    frame.head:SetSize(MAIN_W, 16)
+    -- The head is as wide as the ROWS, not as the column: its labels sit over
+    -- their columns, and a head eight pixels wider puts every right-aligned
+    -- caption eight pixels off the number under it.
+    frame.head:SetSize(LIST_W, 16)
     frame.head:Hide()
 
     local function HeadLabel(text)
@@ -1832,7 +1869,6 @@ function Death:Show(index)
         frame.sub:SetText(when
             .. "  -  nothing in the last seconds; the events below are older")
     end
-    local first = math.max(1, #events - ROWS_MAX + 1)
     local shown = 0
     local maxHP = snapshot.maxHP
 
@@ -1860,14 +1896,31 @@ function Death:Show(index)
     end
     top = top + 36
 
-    for i = first, #events do
+    -- THE AREA THE ROWS LIVE IN. Top under the head, bottom on the footer -
+    -- and the footer's own block grows upward with however many defensives
+    -- there are to name, so the two can no longer be drawn over each other
+    -- whatever either of them contains.
+    frame.listHost:ClearAllPoints()
+    frame.listHost:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -top)
+    frame.listHost:SetPoint("TOPRIGHT", frame, "TOPLEFT", 16 + MAIN_W, -top)
+    -- BOTTOMLEFT rather than BOTTOM: three points have to describe a
+    -- rectangle without arguing about it, and a centre point next to a left
+    -- and a right one is a fourth opinion on where the left edge is.
+    frame.listHost:SetPoint("BOTTOMLEFT", frame.avail, "TOPLEFT", 0, 10)
+    frame.listHost:SetShown(#events > 0)
+
+    for i = 1, #events do
         shown = shown + 1
         local row = frame.rows[shown]
+        if not row then
+            row = frame.BuildRow()
+            frame.rows[shown] = row
+        end
         local ev = events[i]
 
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 16,
-            -(top + (shown - 1) * (ROW_H + 2)))
+        row:SetPoint("TOPLEFT", frame.listContent, "TOPLEFT", 0,
+            -((shown - 1) * (ROW_H + 2)))
 
         -- What the hover reads. Kept on the row rather than closed over,
         -- because these twelve frames are pooled across every death in the
@@ -1923,9 +1976,9 @@ function Death:Show(index)
         -- are the health you had before it landed. Read down the column and
         -- the slate shrinks - that is the pull going wrong, drawn.
         local left, chunk = Death.RowSpans(ev, maxHP)
-        row.fill:SetWidth(math.max(1, MAIN_W * left))
+        row.fill:SetWidth(math.max(1, LIST_W * left))
         row.fill:SetColorTexture(0.20, 0.26, 0.34, 0.85)
-        row.chunk:SetWidth(math.max(1, MAIN_W * chunk))
+        row.chunk:SetWidth(math.max(1, LIST_W * chunk))
         if ev.heal then
             row.chunk:SetColorTexture(0.12, 0.42, 0.16, 0.85)
         else
@@ -1934,10 +1987,31 @@ function Death:Show(index)
         row.chunk:SetShown(chunk > 0)
         row:Show()
     end
-    for i = shown + 1, ROWS_MAX do
+    -- Rows the pool has and this death does not need. It is a POOL, so it
+    -- is as long as the messiest death seen this session, not as long as
+    -- this one.
+    for i = shown + 1, #frame.rows do
         frame.rows[i].ev = nil
         frame.rows[i]:Hide()
     end
+
+    -- What the scrolling area now holds, and where it opens.
+    --
+    -- AT THE BOTTOM, because the row that matters is the last one - the hit
+    -- that killed you. A list of thirty that opens on the oldest hit puts
+    -- the answer below the fold.
+    --
+    -- One frame later, and that is not superstition: the scroll range is
+    -- computed by the client from the child's height against the viewport,
+    -- and neither is resolved until this window has been laid out once.
+    -- Asking now answers 0 on the first death of the session.
+    frame.listContent:SetHeight(math.max(1, shown * (ROW_H + 2)))
+    C_Timer.After(0, function()
+        if not (frame and frame:IsShown()) then return end
+        local range = frame.list:GetVerticalScrollRange() or 0
+        frame.list:SetVerticalScroll(range > 1 and range or 0)
+        if frame.list.Update then frame.list.Update() end
+    end)
 
     if snapshot.reason then
         frame.avail:SetText("|cffff8040" .. snapshot.reason .. "|r")

@@ -3014,7 +3014,19 @@ function UI.ScrollArea(parent, contentWidth, gutter)
         scroll:SetVerticalScroll(next_)
     end
 
-    scroll:SetScript("OnMouseWheel", function(_, delta) ScrollBy(delta) end)
+    -- A WHEEL OVER A LIST THAT DOES NOT SCROLL IS NOT A WHEEL NOBODY MEANT.
+    --
+    -- EnableMouseWheel swallows the gesture whether or not there is anything
+    -- to move, so a short list would eat the wheel over the largest part of
+    -- the window - and in the death log that wheel is how you page between
+    -- deaths. The owner would have lost it on every death with few hits.
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        if Range() <= 0 then
+            if self.OnIdleWheel then self.OnIdleWheel(delta) end
+            return
+        end
+        ScrollBy(delta)
+    end)
     scroll:SetScript("OnVerticalScroll", UpdateThumb)
     scroll:SetScript("OnScrollRangeChanged", UpdateThumb)
     scroll:SetScript("OnSizeChanged", UpdateThumb)

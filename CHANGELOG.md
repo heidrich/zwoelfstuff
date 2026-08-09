@@ -4,6 +4,36 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.57.0] - 2026-08-09
+
+### Changed
+
+- **The event list in the death window scrolls, and it no longer drops hits.**
+  The rows were placed at absolute offsets inside a window of fixed height,
+  with a hard cap of twelve to stop them running off the bottom - so the
+  deaths with the most to say were the ones losing rows. The list has an AREA
+  now: its top follows the verdict, its bottom sits on the footer, and what
+  does not fit is scrolled to. It opens at the BOTTOM, because the row that
+  matters is the last one.
+- **The footer no longer draws across the last hit.** Same fault, other half:
+  with a four-line verdict and ten hits, "What you had, by our own clock" was
+  printed straight over the killing blow. The list's bottom is anchored to the
+  footer, which grows upward, so neither can be drawn over the other whatever
+  either of them contains.
+- The rows are POOLED and built when needed rather than twelve up front, and
+  they are eight pixels narrower than the column - which is the room the
+  scroll rail sits in. Without that the right-hand numbers, which are what the
+  table is read for, would be under it.
+
+### Fixed
+
+- **A wheel over a list that cannot scroll is handed back instead of
+  swallowed.** `EnableMouseWheel` takes the gesture whether or not there is
+  anything to move, and in this window the wheel is how you page between
+  deaths - so a death with three hits would have eaten it over the largest
+  part of the window. `UI.ScrollArea` now offers `OnIdleWheel` for exactly
+  that, and the contract is checked in the self test.
+
 ## [4.56.2] - 2026-08-09
 
 ### Fixed
