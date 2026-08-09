@@ -2398,6 +2398,12 @@ function EditMode:SetUnlocked(state, wanted)
         ns.CoTanks:Refresh()
     end
 
+    -- AND THE EXTERNALS PANEL, for the sharpest version of the same reason:
+    -- it hides a slot nobody in the group can fill, and the group you are
+    -- standing in while placing it is usually nobody at all. Placing shows
+    -- every slot you picked, or there is nothing on screen to put anywhere.
+    if ns.Externals then ns.Externals:SetPlacing(state) end
+
     -- AND SO DO THE REMINDERS, for the same reason one layer sharper: a
     -- reminder is on screen only while the thing it names is wrong. Waiting
     -- for Bone Shield to fall off in order to place the message about Bone

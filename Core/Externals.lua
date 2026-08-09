@@ -288,8 +288,12 @@ function Externals:ApplyLayout()
         -- A SLOT NOBODY CAN FILL IS NOT DRAWN. The owner's choice: "verschwindet
         -- ganz". So the panel is as wide as the help actually available, and
         -- an empty group leaves nothing on screen at all.
-        if #Externals.Candidates(byID[spellID], Externals.Roster()) > 0
-            or Externals.testing then
+        -- WHILE PLACING OR TESTING, EVERY PICKED SLOT IS DRAWN. Otherwise a
+        -- slot is only there when somebody present can actually fill it -
+        -- the owner's choice, "verschwindet ganz" - which is right on a
+        -- screen mid-pull and useless while you are arranging the thing.
+        if Externals.placing or Externals.testing
+            or #Externals.Candidates(byID[spellID], Externals.Roster()) > 0 then
             shown = shown + 1
             local slot = panel.slots[shown] or Externals.BuildSlot()
             panel.slots[shown] = slot
@@ -327,8 +331,13 @@ end
 
 function Externals:ShouldShow()
     if not ns.Modules:IsOn("externals") then return false end
-    if Externals.testing then return true end
-    if ns.EditMode and ns.EditMode.unlocked then return true end
+    -- Both of these outrank every rule below, and they are the two explicit
+    -- requests to SEE the thing. `unlocked` used to be read off ns.EditMode
+    -- here, where it is a FILE-LOCAL and therefore always nil - so the panel
+    -- was never on screen in edit mode and its mover had nothing to sit on.
+    -- Edit Mode calls SetPlacing now, the same door the co-tank panel and the
+    -- reminders are opened through.
+    if Externals.testing or Externals.placing then return true end
     local cfg = Externals.Config()
     if cfg.onlyInGroup ~= false and not IsInGroup() then return false end
     if cfg.onlyInCombat and not UnitAffectingCombat("player") then return false end
@@ -394,6 +403,13 @@ function Externals:SavePosition()
         cfg.x = math.floor(x - px + 0.5)
         cfg.y = math.floor(y - py + 0.5)
     end
+end
+
+-- Edit Mode is open and this panel is one of the things being placed.
+function Externals:SetPlacing(on)
+    Externals.placing = on and true or false
+    if not Externals.placing then self:SavePosition() end
+    Externals.Refresh()
 end
 
 function Externals:SetTestMode(on)

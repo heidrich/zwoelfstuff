@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsExternals.lua - the External cooldowns page
 --
 -- The same shape as the Death-log page, deliberately: the SLOTS at the top
@@ -62,9 +62,11 @@ function Page:BuildPage(page, width)
 
     grid:Wide(host, SLOT * 2 + GAP, 2, 10)
 
-    grid:Note("Pick from the list on the right. On your screen, clicking one "
-        .. "of these whispers whoever in the group can cast it; right-click a "
-        .. "slot here to drop it.")
+    grid:Note("Pick from the list on the right - any of them, at any time, "
+        .. "whoever happens to be in your group. On your screen, clicking one "
+        .. "of these whispers whoever can cast it; right-click a slot here to "
+        .. "drop it. A slot nobody present can fill is not drawn while you "
+        .. "play, and every one of them is drawn while you place the panel.")
 
     ---------------------------------------------------------------------
     -- The panel
@@ -192,7 +194,10 @@ function Page:BuildPage(page, width)
     end
 
     grid:Note("Left alone, a click asks the healer of that class - which in a "
-        .. "five-man is the only person who has it. In a raid, name somebody.")
+        .. "five-man is the only person who has it. In a raid, name somebody. "
+        .. "The names offered are whoever is in the group right now, so this "
+        .. "is a thing to set once the raid has formed - picking the spells "
+        .. "themselves works anywhere, alone included.")
 
     grid:Layout()
 
@@ -258,31 +263,37 @@ function Page:BuildSide(sideHost, pad)
 
     content:SetHeight(math.max(1, y))
 
+    -- THIS LIST DOES NOT CARE WHO IS IN THE GROUP. Owner: "man sollte auch
+    -- ohne das die klassen in der gruppe sind sich sein set zusammenstellen
+    -- koennen" - and he is right. You build a set once, on a quiet evening,
+    -- for the dungeons you run all week; a list that greys out everything
+    -- because you are standing alone in Dornogal is a list that can only be
+    -- used at the exact moment you have no time for it.
+    --
+    -- WHO can cast it is a different question and it has its own place: the
+    -- "Who to ask" rows on the page, where the names are. Two answers to one
+    -- question in two columns is how they drift.
     side.Refresh = function()
-        local roster = ns.Externals.Roster()
         for _, row in ipairs(rows) do
             local spellID = row.spellID
             local picked = ns.Externals.IsPicked(spellID)
-            local candidates = ns.Externals.Candidates(
-                ns.Externals.Get(spellID), roster)
+            local spell = ns.Externals.Get(spellID)
 
             row.icon:SetTexture(ns.SpellTexture(spellID) or ns.WHITE)
             row.name:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
-
-            -- known = "somebody here can actually cast this". A picked spell
-            -- whose class is not in the group draws NOTHING on screen - the
-            -- panel hides that slot - so without this the page would have
-            -- offered no explanation for an icon that never appears.
-            row:SetUsed(picked and "on panel" or nil, #candidates > 0)
+            row:SetUsed(picked and "on panel" or nil, true)
 
             if picked then
                 row:SetTrailing("On panel", "cell")
-            elseif #candidates == 0 then
-                row:SetTrailing("nobody here")
-            elseif #candidates == 1 then
-                row:SetTrailing(candidates[1].name)
+            elseif spell and spell.cooldown then
+                -- Its cooldown, as a fact about the spell rather than a
+                -- clock. See Externals.lua: nothing here counts anybody down.
+                local minutes = math.floor(spell.cooldown / 60)
+                row:SetTrailing(minutes > 0
+                    and string.format("%d min", minutes)
+                    or string.format("%d sec", spell.cooldown))
             else
-                row:SetTrailing(#candidates .. " in the group")
+                row:SetTrailing("")
             end
         end
     end

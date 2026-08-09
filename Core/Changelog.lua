@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.58.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100The externals panel now appears in Edit Mode|r, with every slot you picked - so there is something to actually place. It was invisible there, which meant it could not be moved at all.",
+            "|cffffd100Build your set whenever you like.|r The list no longer dims what your current group cannot cast: you pick your spells on a quiet evening, and who casts them is a separate question under |cffffd100Who to ask|r.",
+        },
+    },
+    {
         version = "4.58.0",
         date = "2026-08-09",
         lines = {

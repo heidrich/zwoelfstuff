@@ -4,6 +4,29 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.58.1] - 2026-08-09
+
+### Fixed
+
+- **The externals panel never appeared in Edit Mode.** `ShouldShow` read
+  `ns.EditMode.unlocked`, which is a FILE-LOCAL in that module and therefore
+  always nil - so the panel stayed hidden while placing and its mover had
+  nothing to sit on. Edit Mode calls `Externals:SetPlacing` now, the same door
+  the co-tank panel and the reminders are already opened through.
+- **Every picked slot is drawn while placing.** The panel hides a slot nobody
+  present can fill, and the group you are standing in while arranging it is
+  usually nobody at all - so there was nothing on screen to put anywhere.
+
+### Changed
+
+- **The list of externals no longer cares who is in your group.** Owner: "man
+  sollte auch ohne das die klassen in der gruppe sind sich sein set
+  zusammenstellen koennen". A set is built once, for the dungeons you run all
+  week; a list that greys itself out because you are standing alone can only
+  be used at the moment you have no time for it. The trailing text is the
+  spell's cooldown now - a fact about the spell - and WHO can cast it stays
+  where the names are, under "Who to ask".
+
 ## [4.58.0] - 2026-08-09
 
 ### Added
