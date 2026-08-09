@@ -4,6 +4,43 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.57.1] - 2026-08-09
+
+### Fixed
+
+- **The bag scan recognised nothing, ever.** `GetItemInfoInstant` answers the
+  class id as its SIXTH return; the code discarded four values after pcall's
+  `ok` and took the fifth, which is the ICON - so a texture file id was
+  compared against 0 and every potion in the bags was thrown away. Owner:
+  "der erkennt die silvermoon health potion nicht". It is `select(6, ...)`
+  now, which is how every installed addon writes it and the version that
+  cannot be miscounted.
+- **You could not type in a search field.** An EditBox built from Lua has no
+  mouse: Blizzard's `InputBoxTemplate` enables it in XML, and every addon that
+  builds one without the template turns it on by hand - AceGUI's
+  MultiLineEditBox, its slider box, BugSack's. Ours did neither, so the field
+  drew, showed its placeholder and could never be given focus by the only
+  gesture anybody tries. Menus with a filter now open with the box already
+  focused, which is what their own footer has been promising, and the keyboard
+  is handed back when the menu closes.
+
+### Added
+
+- **Drag an item out of your bags onto a consumable slot.** The owner asked
+  for it and it is the gesture the game's own action bars use. Both doors are
+  wired, because the client offers two: releasing a drag, and clicking a slot
+  while carrying something. This path reads the id off the CURSOR, so it does
+  not depend on the bag scan seeing the item at all.
+
+### Changed
+
+- The desktop harness has bags now. It had none, so the consumable code
+  returned at its first guard and every test of it was vacuous - which is
+  exactly how the class-id bug shipped. Its fixture holds a healthstone, a
+  potion, a sword and a hearthstone: the last two have use effects and are not
+  consumables, so a filter reading the wrong field is caught by the fixture
+  rather than by the owner.
+
 ## [4.57.0] - 2026-08-09
 
 ### Changed

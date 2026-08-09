@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Widgets - the design system.
 --
 -- One set of controls, one set of colours, one row geometry, used by every
@@ -1051,6 +1051,15 @@ local function GetPopup()
     catcher:SetScript("OnClick", function() popup:Hide() end)
     popup.catcher = catcher
 
+    -- The keyboard goes back when the menu does. A filter box that keeps
+    -- focus after its menu has gone swallows every key you press next -
+    -- including the one that would open something else.
+    popup:HookScript("OnHide", function(self)
+        if self.search and self.search.input then
+            self.search.input:ClearFocus()
+        end
+    end)
+
     popup:SetScript("OnHide", function(self)
         catcher:Hide()
         if self.owner and self.owner.SetOpen then self.owner:SetOpen(false) end
@@ -1441,6 +1450,11 @@ local function Build(filter)
     if spec.search then
         menu.search:SetText("")
         menu.search.UpdateGhost()
+        -- THE MENU OPENS READY TO TYPE. Its own foot says "type to filter",
+        -- which was a promise nothing kept: the box does not take focus by
+        -- itself, so every one of these menus needed a click into a field
+        -- most people never noticed was a field.
+        menu.search.input:SetFocus()
     end
 
     menu.foot:SetShown(spec.foot and true or false)
@@ -2157,6 +2171,19 @@ function UI.Input(parent, width, onSubmit, numeric, placeholder)
     local input = CreateFrame("EditBox", nil, holder)
     input:SetPoint("TOPLEFT", holder, "TOPLEFT", 6, 0)
     input:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -6, 0)
+
+    -- A BOX YOU COULD NOT CLICK INTO. Owner, 2026-08-09: "ich kann auch
+    -- nichts eingeben in das suchfeld".
+    --
+    -- An EditBox built from Lua has NO mouse. Blizzard's InputBoxTemplate
+    -- enables it in XML, which is why almost nobody hits this - and why every
+    -- addon that builds one without the template turns it on by hand:
+    -- AceGUI's MultiLineEditBox and its slider box both do, so does BugSack's.
+    -- Verified in the installed copies rather than remembered.
+    --
+    -- Without it the field draws, shows its placeholder, styles its edge on
+    -- focus - and can never be given focus by the only gesture anybody tries.
+    input:EnableMouse(true)
     input:SetAutoFocus(false)
     input:SetMaxLetters(numeric and 10 or 40)
     if numeric then input:SetNumeric(true) end
@@ -2451,7 +2478,41 @@ function UI.SpellSlot(parent, cfg)
         if cfg.onPick then cfg.onPick(spellID) end
     end
 
+    -- AN ITEM CARRIED ON THE CURSOR, dropped straight in.
+    --
+    -- Owner, 2026-08-09: "kann man das so machen, das man die sachen da
+    -- reinziehen kann und das addon die id ausliest?" - yes, and it is the
+    -- gesture the game itself uses for an action bar. A spell comes out of
+    -- our own list through the drag machinery above; an item comes off the
+    -- CLIENT'S cursor, which is a different road to the same slot.
+    --
+    -- Both doors, because the game offers both: drag-and-release fires
+    -- OnReceiveDrag, and picking an item up and clicking a target fires
+    -- OnClick with the item still on the cursor. Verified in EllesmereUIBags,
+    -- which wires exactly this pair - and ClearCursor is what puts the item
+    -- down; without it the cursor keeps carrying it.
+    local function TakeCursorItem()
+        if not (cfg.onDropItem and GetCursorInfo) then return false end
+        local kind, itemID = GetCursorInfo()
+        if kind ~= "item" or not itemID then return false end
+        if ClearCursor then ClearCursor() end
+        cfg.onDropItem(itemID)
+        return true
+    end
+
+    -- Only a slot that can actually take one registers for drag. A spell slot
+    -- is not a place to drop a sword, and RegisterForDrag changes what a
+    -- press-and-move means on a frame - not something to switch on for every
+    -- slot in the addon to serve the two that need it.
+    if cfg.onDropItem then
+        slot:RegisterForDrag("LeftButton")
+        slot:SetScript("OnReceiveDrag", TakeCursorItem)
+    end
+
     slot:SetScript("OnClick", function(_, button)
+        -- Before anything else: a click while carrying something is an
+        -- attempt to put it down, not a request to open a menu over it.
+        if TakeCursorItem() then return end
         if button == "RightButton" then
             if cfg.onClear then cfg.onClear() end
         elseif cfg.onEmptyClick then

@@ -86,6 +86,8 @@
     "SetPortraitTexture",
     "GetPhysicalScreenSize",
     "GetScreenWidth",
+    "GetCursorInfo",
+    "ClearCursor",
     "SetRaidTargetIconTexture",
     "SlashCmdList",
     "UIParent",

@@ -790,10 +790,22 @@ function Death.BagConsumables()
                 if okID and type(itemID) == "number" and not seen[itemID] then
                     seen[itemID] = true
 
+                    -- THE SIXTH RETURN, and it was reading the fifth.
+                    --
+                    -- GetItemInfoInstant answers, in order: itemID, type,
+                    -- subType, equipLoc, ICON, classID, subclassID. pcall
+                    -- puts its own `ok` in front of all of them, so four
+                    -- discards landed on the icon - and this then compared a
+                    -- texture file id against 0 and threw every potion in the
+                    -- bags away. Owner: "der erkennt die silvermoon health
+                    -- potion nicht". Every installed addon that wants this
+                    -- writes `select(6, ...)`, which is the version that
+                    -- cannot be miscounted.
                     local classID
                     if C_Item.GetItemInfoInstant then
-                        local ok, _, _, _, _, class = pcall(
-                            C_Item.GetItemInfoInstant, itemID)
+                        local ok, class = pcall(function()
+                            return select(6, C_Item.GetItemInfoInstant(itemID))
+                        end)
                         if ok then classID = class end
                     end
 

@@ -107,9 +107,13 @@ function Page:BuildPage(page, width)
     -- this half of the list is a fact rather than an estimate.
     --
     -- Same slots, because to the person reading the window it is the same
-    -- kind of thing: something you could have pressed and did not. They
-    -- cannot be dragged in from the spell list - it holds no items - so an
-    -- empty one opens a menu of what is actually in your bags.
+    -- kind of thing: something you could have pressed and did not.
+    --
+    -- TWO WAYS IN, because an item is not a spell. It cannot come out of the
+    -- spell list beside this page - that list holds no items - so either
+    -- DRAG IT OUT OF YOUR BAGS onto a slot, which is what the game's own
+    -- action bars accept and what the owner asked for, or click an empty one
+    -- and pick from what you are carrying.
     ---------------------------------------------------------------------
     grid:Section("Consumables")
 
@@ -153,6 +157,14 @@ function Page:BuildPage(page, width)
                 return pcall(tip.SetItemByID, tip, itemID)
             end,
             onEmptyClick = function() OfferItems(itemHost) end,
+            -- Dropped off the cursor. The id is the client's own answer, so
+            -- this path does not care whether the bag scan can see the item -
+            -- which is the whole reason it is the better door.
+            onDropItem = function(itemID)
+                ns.Death.PickedItems()[itemID] = true
+                ns.Death.ItemName(itemID)   -- asked to load, for the name
+                ns.Options:Refresh()
+            end,
             onClear = function()
                 local itemID = carried[index]
                 if itemID then
@@ -168,7 +180,8 @@ function Page:BuildPage(page, width)
 
     grid:Wide(itemHost, SLOT, 2, 10)
 
-    grid:Note("Click an empty slot to pick from what you are carrying; "
+    grid:Note("Drag anything out of your bags onto a slot, or click an empty "
+        .. "one to pick from what you are carrying; "
         .. "right-click a filled one to drop it from the list. A healthstone "
         .. "that stayed in the bag is the same verdict as a defensive that "
         .. "stayed off cooldown, so they are judged together - and drinking "

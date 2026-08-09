@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.57.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100DRAG A POTION OUT OF YOUR BAGS ONTO A CONSUMABLE SLOT.|r The same gesture as an action bar - drop it, or pick it up and click the slot.",
+            "|cffffd100The list of what you are carrying was empty for everybody|r, always: it was reading the wrong field and comparing an icon to a category. Your potions and healthstones are in there now.",
+            "|cffffd100You can type in the search fields.|r They had no mouse at all - the box drew, showed its hint, and could never be clicked into. A menu with a filter now opens ready to type.",
+        },
+    },
+    {
         version = "4.57.0",
         date = "2026-08-09",
         lines = {

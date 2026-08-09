@@ -1625,6 +1625,52 @@ local function TestDeath()
             "2026-08-09") == "07.08.  16:10:54")
     Check("A death with no day recorded still reads",
         Death.WhenLabel({ when = "16:10:54" }, "2026-08-09") == "16:10:54")
+
+    -----------------------------------------------------------------------
+    -- WHAT THE BAG SCAN OFFERS
+    --
+    -- Owner, 2026-08-09: "der erkennt die silvermoon health potion nicht".
+    -- It recognised nothing at all, ever: the class id is the SIXTH return of
+    -- GetItemInfoInstant, four values were discarded and the fifth taken -
+    -- the ICON - and a texture file id was then compared against 0.
+    --
+    -- This runs against YOUR bags, so it cannot expect particular items. What
+    -- it can do is re-derive the answer independently and require the filter
+    -- to have agreed: every item offered as a consumable must really be one,
+    -- and must really have something to press. The exact-contents test lives
+    -- in the desktop harness, which owns a bag it made up.
+    -----------------------------------------------------------------------
+    if C_Item and C_Item.GetItemInfoInstant and C_Container then
+        local offered = Death.BagConsumables()
+        Check("The bag scan answers with a list", type(offered) == "table")
+
+        local wrongClass, noUse = 0, 0
+        for _, itemID in ipairs(offered or {}) do
+            local ok, class = pcall(function()
+                return select(6, C_Item.GetItemInfoInstant(itemID))
+            end)
+            if not ok or class ~= 0 then wrongClass = wrongClass + 1 end
+
+            local okSpell, _, spellID = pcall(C_Item.GetItemSpell, itemID)
+            if not (okSpell and spellID) then noUse = noUse + 1 end
+        end
+        Check("Everything offered as a consumable really is one",
+            wrongClass == 0, wrongClass .. " were not")
+        Check("Everything offered has something to press",
+            noUse == 0, noUse .. " had no use effect")
+
+        -- The count is reported rather than judged: an empty bag is a fact
+        -- about your character, not a failure. Reported, though, because
+        -- "nothing usable in your bags" and "the scan is broken again" look
+        -- identical from the outside, and this is the line that tells them
+        -- apart.
+        if #offered == 0 then
+            Skip("What the bag scan found",
+                "nothing usable in your bags right now")
+        end
+    else
+        Skip("The bag scan", "this client has no container API")
+    end
 end
 
 local function TestLiveBars()
@@ -1892,6 +1938,42 @@ local function TestDesignSystem()
             Check("A wheel a list cannot use is handed back, not swallowed",
                 passed_)
         end
+    end
+
+    -----------------------------------------------------------------------
+    -- A SLOT TAKES WHAT IS ON THE CURSOR
+    --
+    -- The owner asked for it - "kann man das so machen, das man die sachen da
+    -- reinziehen kann" - and it is the gesture the game's own action bars
+    -- use. Two doors, because the client offers two: releasing a drag fires
+    -- OnReceiveDrag, and clicking a target while carrying something fires
+    -- OnClick with the item still on the cursor. A slot that wires only the
+    -- first works for drag and silently ignores click-to-place.
+    -----------------------------------------------------------------------
+    do
+        local host = CreateFrame("Frame", nil, UIParent)
+        host:Hide()
+
+        local plain = ns.UI.SpellSlot(host, { size = 40, get = function() end })
+        Check("A slot with nothing to drop into it takes no drag",
+            plain:GetScript("OnReceiveDrag") == nil)
+
+        local dropped
+        local taker = ns.UI.SpellSlot(host, {
+            size = 40,
+            get = function() end,
+            onDropItem = function(itemID) dropped = itemID end,
+        })
+        Check("A slot that accepts items answers a drag",
+            taker:GetScript("OnReceiveDrag") ~= nil)
+        Check("It also answers a click, for click-to-place",
+            taker:GetScript("OnClick") ~= nil)
+        -- Nothing is on the cursor in a test, so the handler must decline
+        -- quietly rather than raise - and must NOT swallow the click, or an
+        -- empty slot would stop opening its menu.
+        local ok = pcall(taker:GetScript("OnReceiveDrag"), taker)
+        Check("A drag with nothing on the cursor is declined, not raised", ok)
+        Check("Nothing was picked up out of an empty cursor", dropped == nil)
     end
 
     -- The screen measurement itself. It cannot be predicted out here, but it
