@@ -6,6 +6,41 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [4.42.0] - 2026-08-09
 
+### Added
+
+- **Profiles.** A set of settings now has a name of its own, and your
+  character points at one. It starts out pointing at a profile named after
+  itself, which is exactly how this worked before - so nothing moved when you
+  updated, and if you never open the page you will not notice it exists.
+
+  Point a second character at the same profile and they really are the same
+  settings rather than two copies drifting apart: change a colour on either
+  and both have it. You can make a new empty one, copy the one you are using,
+  rename it - every character using it follows - or delete it. The last
+  remaining profile cannot be deleted, because something has to be in use.
+
+- **Sharing, by string.** Copy what you have built into a piece of text and
+  paste it anywhere - a chat window, a Discord, a forum. Whoever gets it
+  pastes it back in.
+
+  You choose what travels: bars, reminders, the co-tank panel, your saved
+  looks, your settings - each with its own tick - and **one row per bar**
+  underneath, so "here is my Bone Shield bar" is a single string rather than
+  a whole profile somebody has to unpick.
+
+  The string remembers which class and specialisation it was made on and says
+  so before anything is written. Made on your class, the spells come with it;
+  made on another, the layout arrives and the cells are empty, because a Death
+  Knight's cooldowns are not castable on a Paladin. **Your character's name is
+  not in it** - a string is made to be pasted somewhere public, and a layout
+  is no reason to publish who built it.
+
+  **Nothing you already have is thrown away.** Bars and reminders from a
+  string are added to yours, not swapped for them - there is no undo here, and
+  a string somebody handed you must not be able to delete an evening's work. A
+  saved look whose name you already use keeps both. The co-tank panel and the
+  settings are single things, so those do get replaced.
+
 ### Fixed
 
 - **The two aura strips on a co-tank row were drawing on top of each other.**

@@ -2406,6 +2406,122 @@ local function TestCoTankStrips()
 end
 
 ---------------------------------------------------------------------------
+-- Moving somebody's settings from one shape to another
+--
+-- THE ONE FUNCTION IN THIS ADDON THAT CAN LOSE WORK. Everything else that
+-- goes wrong costs a reload; this one deletes the old copy after writing the
+-- new one, so a mistake here is bars that were there yesterday and are not
+-- there now. It runs once, on a login, against data nobody can hand back.
+--
+-- Asserted against a made-up store rather than trusted, and the case that
+-- matters most is the second run: a migration that is not idempotent has
+-- already worked once by the time anybody could notice.
+---------------------------------------------------------------------------
+local function TestProfileMigration()
+    local Profiles = ns.Profiles
+    if not (Profiles and Profiles.Migrate) then
+        Skip("Profile migration", "Profiles.lua did not load")
+        return
+    end
+
+    local key = ns.CharacterKey()
+    if not key then
+        Skip("Profile migration", "the client will not name this character")
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- A file written before profiles existed at all: everything sat at the
+    -- root and belonged to whoever was playing.
+    ---------------------------------------------------------------------
+    local ancient = {
+        bars = { { id = 1 } },
+        font = "Friz Quadrata TT",
+        procs = { [195181] = 10 },
+    }
+    Profiles.Migrate(ancient)
+
+    Check("An ancient file keeps its bars",
+        ancient.profiles and ancient.profiles[key]
+            and #ancient.profiles[key].bars == 1)
+    Check("An ancient file keeps its settings",
+        ancient.profiles[key].font == "Friz Quadrata TT")
+    Check("The character is pointed at its own profile",
+        ancient.charProfile and ancient.charProfile[key] == key)
+    Check("The measurements are lifted out to the account",
+        ancient.account and ancient.account.procs
+            and ancient.account.procs[195181] == 10)
+    Check("A measurement does not ALSO stay in the profile",
+        ancient.profiles[key].procs == nil)
+    Check("Nothing is left loose at the root", ancient.bars == nil)
+
+    ---------------------------------------------------------------------
+    -- The shape before this update: settings under a character key.
+    ---------------------------------------------------------------------
+    local chars = {
+        chars = {
+            ["Zwoelf - Destromath"] = { bars = { { id = 1 }, { id = 2 } } },
+            ["Alt - Destromath"]    = { bars = { { id = 9 } } },
+        },
+        account = { procs = {} },
+    }
+    Profiles.Migrate(chars)
+
+    Check("Every character becomes a profile named after it",
+        chars.profiles["Zwoelf - Destromath"] and chars.profiles["Alt - Destromath"])
+    Check("Each one keeps its own bars",
+        #chars.profiles["Zwoelf - Destromath"].bars == 2
+            and #chars.profiles["Alt - Destromath"].bars == 1)
+    Check("Each character points at its own",
+        chars.charProfile["Zwoelf - Destromath"] == "Zwoelf - Destromath"
+            and chars.charProfile["Alt - Destromath"] == "Alt - Destromath")
+    Check("The old shape is gone once it is safely moved", chars.chars == nil)
+
+    ---------------------------------------------------------------------
+    -- RUN IT AGAIN. This is the one that would go unnoticed: a migration
+    -- that is not idempotent has already succeeded once by the time anybody
+    -- could see it fail.
+    ---------------------------------------------------------------------
+    Profiles.Migrate(chars)
+    Check("Migrating twice changes nothing",
+        #chars.profiles["Zwoelf - Destromath"].bars == 2
+            and chars.charProfile["Alt - Destromath"] == "Alt - Destromath")
+
+    ---------------------------------------------------------------------
+    -- A name that is already taken must never be written over. The old
+    -- table is deleted right after, so an overwrite here is not a clash -
+    -- it is the other profile being gone.
+    ---------------------------------------------------------------------
+    local clash = {
+        chars = { ["Zwoelf - Destromath"] = { bars = { { id = 1 } } } },
+        profiles = { ["Zwoelf - Destromath"] = { bars = { { id = 7 }, { id = 8 } } } },
+        charProfile = {},
+    }
+    Profiles.Migrate(clash)
+    Check("A profile that already has the name is not written over",
+        #clash.profiles["Zwoelf - Destromath"].bars == 2
+            and clash.profiles["Zwoelf - Destromath"].bars[1].id == 7)
+
+    ---------------------------------------------------------------------
+    -- A fresh install has nothing to move and must not invent anything.
+    ---------------------------------------------------------------------
+    local fresh = { profiles = {}, charProfile = {}, account = {} }
+    Profiles.Migrate(fresh)
+    Check("A fresh file is left empty rather than seeded",
+        next(fresh.profiles) == nil and next(fresh.charProfile) == nil)
+
+    ---------------------------------------------------------------------
+    -- Names people type
+    ---------------------------------------------------------------------
+    Check("A name is trimmed", Profiles.CleanName("  Raid  ") == "Raid")
+    Check("A name of only spaces is refused", Profiles.CleanName("   ") == nil)
+    Check("An empty name is refused", Profiles.CleanName("") == nil)
+    Check("A non-string is refused", Profiles.CleanName(nil) == nil)
+    Check("A very long name is cut rather than refused",
+        #Profiles.CleanName(string.rep("x", 200)) == 64)
+end
+
+---------------------------------------------------------------------------
 -- Sharing
 --
 -- The one part of this addon whose output goes to a STRANGER. Everything else
@@ -2729,6 +2845,7 @@ function Test:Run()
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },
+        { "Profile migration", TestProfileMigration },
         { "Sharing",       TestShare },
         { "Your bars",     TestLiveBars },
     }
