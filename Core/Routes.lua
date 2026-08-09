@@ -97,6 +97,7 @@ end
 Routes.pulls = {}
 Routes.byNpc = {}          -- npcID -> { pull = index, want = how many }
 Routes.killed = {}         -- npcID -> how many have died this run
+Routes.nameToNpc = {}      -- what the mob is called -> its npcID
 Routes.index = 1
 
 ---------------------------------------------------------------------------
@@ -179,6 +180,7 @@ function Routes:Sync()
     local addon = Planner()
     wipe(self.pulls)
     wipe(self.byNpc)
+    wipe(self.nameToNpc)
     self.dungeonIdx = nil
     self.dungeonFrom = nil
     self.presetName = nil
@@ -199,6 +201,27 @@ function Routes:Sync()
     self.dungeonIdx = dungeonIdx
     self.dungeonFrom = from
     self.presetName = preset.text
+
+    -- WHAT EACH MOB IS CALLED, for the days the GUID cannot be read.
+    --
+    -- Built from every enemy in the dungeon rather than only the ones in the
+    -- route, so a mob that is genuinely not in your pulls can be told apart
+    -- from one we simply failed to identify. Names go through MDT's own
+    -- translation table, the way MDTHelper does it - MDT stores them in
+    -- English and MDT.L holds the client's language.
+    --
+    -- FIRST ID WINS on a shared name. Two npcIDs can be called the same
+    -- thing; a name can only point at one of them, and this path is the
+    -- fallback rather than the truth.
+    local L = addon.L
+    for _, enemy in pairs(enemies) do
+        if enemy and enemy.id and enemy.name then
+            local shown = (L and L[enemy.name]) or enemy.name
+            if self.nameToNpc[shown] == nil then
+                self.nameToNpc[shown] = enemy.id
+            end
+        end
+    end
 
     for order, pull in ipairs(pulls) do
         local entry = {
@@ -328,6 +351,37 @@ function Routes.NpcFromGUID(guid)
 end
 
 ---------------------------------------------------------------------------
+-- WHICH MOB IS ON A NAMEPLATE, BY WHATEVER MEANS THE CLIENT ALLOWS
+--
+-- The GUID is the right answer and it is not always available: on this patch
+-- UnitGUID can come back as a value an addon may not look at, and in a
+-- dungeon it does - all ten nameplates at once, which is what made "no
+-- badges" survive two fixes.
+--
+-- The name is the fallback. MDT stores a name for every enemy and the game
+-- will tell us what the thing in front of us is called, so the two can be
+-- joined even when the id cannot. It is weaker: two npcIDs can share a name,
+-- and only one of them can win. That is why it runs SECOND and never
+-- overrides an id that was readable.
+--
+-- Returns the npcID and how it was found ("id" or "name"), because the
+-- diagnostic has to be able to say which - a route working off names is
+-- worth knowing about before it surprises somebody.
+---------------------------------------------------------------------------
+function Routes:NpcForUnit(unit)
+    if not unit then return nil, nil end
+
+    local byID = Routes.NpcFromGUID(UnitGUID(unit))
+    if byID then return byID, "id" end
+
+    local name = UnitName(unit)
+    if not ns.CanCompute(name) or type(name) ~= "string" then return nil, nil end
+    local byName = self.nameToNpc[name]
+    if byName then return byName, "name" end
+    return nil, nil
+end
+
+---------------------------------------------------------------------------
 -- The badges
 ---------------------------------------------------------------------------
 local badges = {}          -- nameplate frame -> our badge
@@ -428,7 +482,7 @@ function Routes:Sweep()
 
     local seen = {}
     self.plateCount = self:ForEachPlate(function(unit, plate)
-        local npcID = Routes.NpcFromGUID(UnitGUID(unit))
+        local npcID = self:NpcForUnit(unit)
         local pullIndex = npcID and self:PullForNpc(npcID)
         local standing = Routes.Standing(pullIndex, self.index)
 
@@ -544,11 +598,19 @@ function Routes:Start()
             -- harness has no combat log, and a missing global must cost this
             -- one feature rather than the file.
             if not CombatLogGetCurrentEventInfo then return end
-            local _, subEvent, _, _, _, _, _, destGUID =
+            -- destName comes along for the same reason the nameplates need
+            -- it: the GUID in a combat log line can be withheld too, and a
+            -- kill that cannot be counted is a pull that never finishes.
+            local _, subEvent, _, _, _, _, _, destGUID, destName =
                 CombatLogGetCurrentEventInfo()
-            if subEvent == "UNIT_DIED" then
-                Routes:NoteKill(Routes.NpcFromGUID(destGUID))
+            if subEvent ~= "UNIT_DIED" then return end
+
+            local npcID = Routes.NpcFromGUID(destGUID)
+            if not npcID and ns.CanCompute(destName)
+                and type(destName) == "string" then
+                npcID = Routes.nameToNpc[destName]
             end
+            Routes:NoteKill(npcID)
             return
         end
 
@@ -673,25 +735,46 @@ function Routes:Dump()
     -- different way is describing a different screen, and this one already
     -- did once: it read plate.namePlateUnitToken, which is nil when polled.
     local lines = {}
-    local matched, unreadable = 0, 0
+    local matched, unreadable, byName = 0, 0, 0
+    local secretGuids, oddGuids = 0, 0
     local plateCount = self:ForEachPlate(function(unit)
         local guid = UnitGUID(unit)
-        local npcID = Routes.NpcFromGUID(guid)
+        local npcID, how = self:NpcForUnit(unit)
         local pullIndex = npcID and self:PullForNpc(npcID)
         if pullIndex then matched = matched + 1 end
-        if not npcID and guid ~= nil then unreadable = unreadable + 1 end
-        -- "could not be read" is its own answer, and a different one from
-        -- "not in the route": it means the GUID came back as something this
-        -- patch will not let an addon look at.
+        if how == "name" then byName = byName + 1 end
+
+        -- WHY the id could not be read, not just that it could not. Secret,
+        -- absent and malformed are three different faults with three
+        -- different answers, and one message for all of them sent this
+        -- investigation down the wrong road once already.
+        local trouble
+        if not ns.CanCompute(guid) then
+            if guid ~= nil then
+                trouble = "the client will not let us look at its GUID"
+                secretGuids = secretGuids + 1
+            end
+        elseif type(guid) ~= "string" then
+            trouble = "its GUID is a " .. type(guid)
+            oddGuids = oddGuids + 1
+        elseif not Routes.NpcFromGUID(guid) then
+            trouble = "its GUID has no npc id in it"
+            oddGuids = oddGuids + 1
+        end
+        if trouble and not npcID then unreadable = unreadable + 1 end
+
         local verdict
         if pullIndex then
             verdict = "pull " .. pullIndex
+                .. (how == "name" and " |cffff8040(by name)|r" or "")
         elseif npcID then
             verdict = "|cff888888not in the route|r"
-        elseif guid ~= nil then
-            verdict = "|cffff8040GUID could not be read|r"
+                .. (how == "name" and " |cffff8040(by name)|r" or "")
+        elseif trouble then
+            verdict = "|cffff8040" .. trouble .. ", and its name is not in "
+                .. "this dungeon's list|r"
         else
-            verdict = "|cff888888no unit|r"
+            verdict = "|cff888888not in the route|r"
         end
         lines[#lines + 1] = string.format("   %s |cff888888%s|r - %s",
             UnitName(unit) or "?", tostring(npcID or "-"), verdict)
@@ -717,13 +800,22 @@ function Routes:Dump()
     -- it is as long as the pack; a chat window shows the tail, and the answer
     -- has to be in the part that survives. It is also the one sentence worth
     -- pasting to somebody else.
+    if secretGuids > 0 then
+        ns.Print(string.format("|cff888888%d GUID(s) withheld by the client; "
+            .. "%d mob(s) found by name instead.|r", secretGuids, byName))
+    end
+    if oddGuids > 0 then
+        ns.Print(string.format("|cffff8040%d GUID(s) were readable but had no "
+            .. "npc id.|r", oddGuids))
+    end
+
     if matched > 0 then
         ns.Print(string.format("|cff40ff40%d of %d nameplates are in this "
             .. "route.|r", matched, plateCount))
     elseif unreadable > 0 then
-        ns.Print(string.format("|cffff4040None matched, and %d GUID(s) could "
-            .. "not be read.|r That is the client withholding them, not the "
-            .. "route.", unreadable))
+        ns.Print(string.format("|cffff4040None matched. %d could not be "
+            .. "identified at all|r - neither GUID nor name. Everything else "
+            .. "here is working; that is the client.", unreadable))
     else
         ns.Print("|cffff4040None of these mobs are in the route.|r Right "
             .. "dungeon, wrong pack - or the pull you are on is further along "

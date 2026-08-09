@@ -8,6 +8,44 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.38.0] - 2026-08-09
+
+### Fixed
+
+- **The client will not show an addon a mob's GUID in a dungeon, so Routes now
+  identifies mobs by name as well.** The owner's `/zs route` in Nexus Point
+  Xenas: switch on, enemy nameplates on, dungeon read from the zone, route
+  read with all four mobs listed - and *"None matched, and 10 GUID(s) could
+  not be read."* Ten of ten. Nothing in the addon was wrong by then; the id
+  simply is not available.
+
+  MDT stores a name for every enemy in a dungeon and the game will say what
+  the thing in front of you is called, so the two can be joined without an id.
+  The whole dungeon's names are indexed - not just the ones in your route - so
+  a mob that genuinely is not in your pulls can be told apart from one that
+  could not be identified.
+
+  **The GUID is still tried first and still wins.** The name is the fallback,
+  and it is weaker: where two npcIDs share a name only one of them can win.
+  That is stated on the panel rather than left to be discovered, and
+  `/zs route` marks every nameplate it resolved that way with `(by name)`.
+
+- **Kills are counted by name too.** A combat log line can withhold its GUID
+  the same way, and a kill that cannot be counted is a pull that never
+  finishes and never steps on by itself.
+
+### Changed
+
+- **`/zs route` says WHY an id could not be read**, not just that it could
+  not. Withheld by the client, wrong type, and a GUID with no id in it are
+  three different faults with three different answers; one message for all
+  three sent this investigation down the wrong road once already. It also
+  reports how many mobs it found by name.
+
+- **The desktop harness carries a third nameplate whose GUID gives up
+  nothing**, so the fallback is exercised end to end rather than trusted: it
+  has to resolve by name and end in a badge like the other two.
+
 ## [4.37.2] - 2026-08-09
 
 ### Changed

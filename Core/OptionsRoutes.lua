@@ -162,6 +162,12 @@ function OptionsRoutes:BuildPage(page, width)
     grid:Note("Nothing here writes to a nameplate. The badge is our own frame "
         .. "hung above it, so other nameplate addons have nothing to fight "
         .. "with.")
+    grid:Note("A mob is identified by the id inside its GUID. In a dungeon "
+        .. "this client often will not let an addon look at that, so the "
+        .. "mob's NAME is used instead - MDT stores one for every enemy. It "
+        .. "is the weaker of the two: where two different mobs share a name, "
+        .. "only one of them can win. Run /zs route to see which way each "
+        .. "nameplate was found.")
 
     local function Paint()
         test:SetText(Routes.testing and "Stop testing" or "Test the badges")

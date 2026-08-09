@@ -2053,6 +2053,15 @@ local function TestRoutes()
     Check("Rubbish gives nothing", Routes.NpcFromGUID("nonsense") == nil)
     Check("Nothing gives nothing", Routes.NpcFromGUID(nil) == nil)
 
+    -- THE SECOND ROUTE TO A MOB. In a dungeon this client will not let an
+    -- addon look at a nameplate's GUID, so the mob's name carries it instead.
+    -- The name index has to survive being asked before there is a route, and
+    -- asking about no unit at all has to be quiet rather than fatal.
+    Check("There is a name index", type(Routes.nameToNpc) == "table")
+    Check("No unit resolves to nothing", Routes:NpcForUnit(nil) == nil)
+    local _, how = Routes:NpcForUnit(nil)
+    Check("And says nothing about how", how == nil)
+
     -- THE BADGE RULE. Only the pull you are on and the one after it are
     -- marked. Marking everything ahead would badge half the room, which says
     -- nothing at all.

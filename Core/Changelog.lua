@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.38.0",
+        date = "2026-08-09",
+        lines = {
+            "THE CLIENT WILL NOT SHOW AN ADDON A MOB'S GUID IN A DUNGEON. Ten nameplates, ten refusals - and that is where the badges were dying, with everything else already correct: the switch on, the right dungeon read from where you stand, the route read, all four mobs listed by name.",
+            "So the NAME carries it now. MDT stores one for every enemy in a dungeon and the game will say what is in front of you, so the two can be joined without an id. The whole dungeon is indexed, not only your pulls, so \"not in the route\" and \"could not identify it\" stay different answers.",
+            "The GUID is still asked first and still wins. The name is weaker - where two mobs share a name, only one of them can win - so |cffffd100/zs route|r marks every nameplate it resolved that way with |cffff8040(by name)|r.",
+            "Kills are counted by name too. A combat log line can withhold its GUID the same way, and a kill that cannot be counted is a pull that never finishes.",
+            "|cffffd100/zs route|r now says WHY an id could not be read - withheld, wrong type, or a GUID with no id in it. Three faults, three answers; one message for all three cost a round of guessing.",
+        },
+    },
+    {
         version = "4.37.2",
         date = "2026-08-09",
         lines = {
