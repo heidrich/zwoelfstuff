@@ -2075,6 +2075,13 @@ function Screen:Start()
 
     -- Combat, a zone change, a group forming: everything that can change the
     -- answer to "should this bar be on screen". Event-driven, never polled.
+    --
+    -- STARTED BY Init NOW, not here. The reminders read the same evaluator,
+    -- and a shared thing started inside one module is a shared thing that
+    -- stops existing when somebody switches that module off. Called again
+    -- anyway, because it is one sample of the world and doing it twice costs
+    -- nothing - Start() being reachable only through a boot order is exactly
+    -- the fragility this line was moved out of.
     ns.Visibility:Start()
 
     -- Which spells these bars hold, before anything is drawn with them.

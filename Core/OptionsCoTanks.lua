@@ -742,6 +742,19 @@ local function StripSection(grid, key, label, note)
         end,
         function(r, g, b) El().borderColor = { r, g, b } end, Apply)
 
+    -- THE TWO NUMBERS ON AN ICON get the same pair the name and the health
+    -- text get. They were the only text this addon draws with no way to
+    -- choose its face - hard-coded to the shared bar font in one renderer and
+    -- to the WINDOW'S font in the other, which is how the same two numbers
+    -- ended up in two typefaces depending on the patch.
+    UI.MediaPicker(grid:FullRow("Number font",
+        { controlWidth = 190, icon = "media-font" }), "font",
+        ElGet("font", ""), ElSet("font"), Apply)
+
+    UI.Dropdown(grid:FullRow("Number outline", { controlWidth = 150 }),
+        ns.Media.OUTLINES, ElGet("outline", "OUTLINE"), ElSet("outline"),
+        { apply = Apply })
+
     UI.Toggle(grid:FullRow("Countdown", { controlWidth = 124 }),
         ElGet("countdown", true), ElSet("countdown"))
     UI.Slider(grid:FullRow("Countdown size", { controlWidth = 124 }), {

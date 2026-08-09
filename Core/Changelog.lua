@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.56.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100The numbers on a co-tank's aura icons get a font of their own|r - the countdown and the stack count, under Co-Tanks, Auras. They were the last text in this addon you could not choose the face of, and they were drawn in two different faces depending on your patch.",
+            "Under the hood: two things the reminders and the death log rely on used to be started by the Cooldown bars. Switch the bars off and a reminder would have run on a world nobody had looked at, and the death log would have kept reading the measurements of the spec you left.",
+        },
+    },
+    {
         version = "4.56.0",
         date = "2026-08-09",
         lines = {

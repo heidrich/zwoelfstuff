@@ -4,6 +4,25 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.56.1] - 2026-08-09
+
+### Fixed
+
+- **The two numbers on an aura icon can be given a font.** They were the only
+  text this addon draws with no way to choose its face - and worse, they were
+  fonted twice: hard-coded to the shared bar font in the 12.0 renderer and to
+  the OPTIONS WINDOW's font in the 12.1 engine path, so the same two numbers
+  changed typeface depending on which patch drew them. One picker, one
+  outline, both renderers, and the face is part of the container signature so
+  picking one takes effect at once.
+- **`Visibility:Start()` and the spec-key cache moved out of `Screen:Start()`
+  and into the machinery.** Both are shared - a reminder's "only in combat"
+  reads the same evaluator, and the spec key is the name the measured cooldown
+  lengths and the recorded procs are filed under. Started inside the Cooldowns
+  module they would have stopped existing for anybody who switched the bars
+  off: reminders on a state nobody sampled, and a death log reading Blood's
+  measurements while you played Frost.
+
 ## [4.56.0] - 2026-08-09
 
 ### Added

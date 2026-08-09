@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- CoTanks - a unit frame per tank in the group.
 --
 -- The only display in this addon that is about somebody else. As a Blood DK
@@ -494,14 +494,16 @@ local function StyleStrip(row, strip, cfg)
         -- taken a whole feature down in this addon once.
         local textSize = cfg.countdownSize
         if not textSize or textSize <= 0 then textSize = math.max(8, size * 0.42) end
-        ns.Media.ApplyFont(button.text, "", textSize, "OUTLINE", { 1, 1, 1 })
+        ns.Media.ApplyFont(button.text, cfg.font, textSize,
+            cfg.outline or "OUTLINE", { 1, 1, 1 })
         button.text:ClearAllPoints()
         button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
         button.text:SetShown(cfg.countdown and true or false)
 
         local countSize = cfg.stacksSize
         if not countSize or countSize <= 0 then countSize = math.max(8, size * 0.36) end
-        ns.Media.ApplyFont(button.count, "", countSize, "OUTLINE", { 1, 1, 1 })
+        ns.Media.ApplyFont(button.count, cfg.font, countSize,
+            cfg.outline or "OUTLINE", { 1, 1, 1 })
         button.count:ClearAllPoints()
         button.count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
         button.count:SetShown(cfg.stacks and true or false)
@@ -1359,7 +1361,13 @@ local function BuildEngineStrip(strip, cfg, filter)
                     local count = textLayer:CreateFontString(nil, "OVERLAY")
                     local countSize = cfg.stacksSize
                     if not countSize or countSize <= 0 then countSize = size * 0.36 end
-                    ns.StyleUIFont(count, math.max(8, countSize), "OUTLINE")
+                    -- ns.Media.ApplyFont, NOT ns.StyleUIFont. StyleUIFont is
+                    -- the OPTIONS WINDOW'S face - correct for a row of
+                    -- settings, wrong for a number read at a glance over a
+                    -- moving scene, and it meant these two numbers changed
+                    -- typeface depending on which patch drew them.
+                    ns.Media.ApplyFont(count, cfg.font, math.max(8, countSize),
+                        cfg.outline or "OUTLINE", { 1, 1, 1 })
                     count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
                     -- minCount 2 blanks a single application engine-side, so
                     -- a stack count never has to be compared by us.
@@ -1373,8 +1381,10 @@ local function BuildEngineStrip(strip, cfg, filter)
                     local textSize = cfg.countdownSize
                     if not textSize or textSize <= 0 then textSize = size * 0.42 end
                     -- Fonted BEFORE registration: the engine writes into it at
-                    -- bind time and an unfonted string hard-errors.
-                    ns.StyleUIFont(text, math.max(8, textSize), "OUTLINE")
+                    -- bind time and an unfonted string hard-errors. Same face
+                    -- as the stack count above, and the same reason.
+                    ns.Media.ApplyFont(text, cfg.font, math.max(8, textSize),
+                        cfg.outline or "OUTLINE", { 1, 1, 1 })
                     text:SetPoint("CENTER", button, "CENTER", 0, 0)
                     ns.Engine.BindDurationText(button, text)
                 end)
@@ -1404,6 +1414,10 @@ local function StripSignature(db)
             tostring(colour[1]), tostring(colour[2]), tostring(colour[3]),
             tostring(cfg.countdown), tostring(cfg.countdownSize),
             tostring(cfg.stacks), tostring(cfg.stacksSize),
+            -- The face is BAKED into the containers with everything else. Left
+            -- out, picking a font would change nothing until some other
+            -- setting happened to move - which reads as "the picker is broken".
+            tostring(cfg.font), tostring(cfg.outline),
         }, ",")
     end
     return table.concat(parts, "|")

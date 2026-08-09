@@ -376,11 +376,16 @@ ns.DEFAULTS = {
         -- strips draw in TEST MODE only - so every setting here is adjustable
         -- today and correct the moment the patch lands. The panel says this in
         -- as many words rather than showing an empty strip.
+        -- font "" is the SHARED bar font, the same default the name and the
+        -- health text carry. The two numbers on an aura icon are read over a
+        -- moving scene like everything else on this panel, so they belong to
+        -- that family and not to the window's.
         debuffs = {
             show = true, max = 8, size = 22, spacing = 1, perRow = 8,
             anchor = "TOPLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.75, 0.15, 0.15 },
+            font = "", outline = "OUTLINE",
             countdown = true, countdownSize = 0,
             stacks = true, stacksSize = 0,
         },
@@ -389,6 +394,7 @@ ns.DEFAULTS = {
             anchor = "BOTTOMLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.25, 0.55, 0.30 },
+            font = "", outline = "OUTLINE",
             countdown = true, countdownSize = 0,
             stacks = true, stacksSize = 0,
         },
@@ -1081,6 +1087,27 @@ boot:SetScript("OnEvent", function(_, event, arg1)
             -- The spell list is a live view of the Cooldown Manager, so a
             -- talent or spec change has to reach an open window.
             ns.CDM:OnChanged(function() ns.Options:OnCatalogChanged() end)
+        end)
+
+        -- WHERE YOU ARE AND WHO YOU ARE PLAYING, and it is machinery for the
+        -- same reason the Cooldown Manager is: a reminder's "only in combat"
+        -- reads this evaluator, not the bars'.
+        --
+        -- It used to be started inside Screen:Start, which was correct while
+        -- the bars were the addon and became a hole the moment they became a
+        -- module - Reminders without Cooldowns would have run on a state
+        -- nobody had ever sampled. It survived only because
+        -- PLAYER_ENTERING_WORLD samples it anyway, which is luck, not design.
+        Boot("Visibility", function()
+            ns.Visibility:Start()
+
+            -- THE CACHED SPEC KEY, dropped when the spec changes. Worse than
+            -- the above if it goes missing: that key is the name the measured
+            -- cooldown lengths and the recorded procs are FILED under, and
+            -- both belong to the account rather than to the bars. Left inside
+            -- Screen:Start, switching the bars off would have had the death
+            -- log reading Blood's measurements while you played Frost.
+            ns.Visibility:OnChanged(function() ns.ForgetSpecKey() end)
         end)
 
         -- THE FEATURES, in the order Core/Modules.lua lists them, which is
