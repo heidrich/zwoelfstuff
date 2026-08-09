@@ -487,6 +487,14 @@ local PAGES = {
 
     -- The third page about the fight. No third column: what it shows is the
     -- state of a route, and there is no list to pick from.
+    -- Its own page rather than a section of Settings. Everything on Settings
+    -- changes how something LOOKS; everything here changes which settings are
+    -- in use at all, and one of the buttons deletes them. Those two do not
+    -- belong on one page under two headings.
+    { key = "profiles", title = "Profiles", glyph = "sliders",
+      subtitle = "Name a set of settings, share it, or use somebody else's.",
+      build = function(page, width) return ns.OptionsProfiles:BuildPage(page, width) end },
+
     { key = "diagnostics", title = "Diagnostics", glyph = "pulse",
       subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
       build = BuildDiagnosticsPage },
@@ -887,6 +895,7 @@ function Options:Create()
         { page = "reminders" },
         { eyebrow = "System" },
         { page = "settings" },
+        { page = "profiles" },
         { page = "diagnostics" },
         { eyebrow = "Info" },
         { page = "about" },

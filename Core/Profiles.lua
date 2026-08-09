@@ -51,7 +51,12 @@ end
 -- against a database that never had the old shape at all - which is what a
 -- fresh install is.
 ---------------------------------------------------------------------------
-local function Migrate(store)
+-- Exported for the test, and only for the test. This is the one function in
+-- the addon that MOVES somebody's saved settings from one place to another,
+-- and the failure it can produce is the worst one there is: bars that were
+-- there yesterday and are not there now, with the old copy already deleted.
+-- It is asserted against a made-up store rather than trusted.
+function Profiles.Migrate(store)
     -- 1. Before profiles existed at all: everything sat at the root and
     --    belonged to whoever was playing. This was already here; it is kept
     --    because a database from that era can still be sitting in somebody's
@@ -114,7 +119,7 @@ end
 ---------------------------------------------------------------------------
 function ns.OpenProfile()
     local store = Store()
-    Migrate(store)
+    Profiles.Migrate(store)
 
     store.account = ns.ApplyDefaults(store.account or {}, ns.ACCOUNT_DEFAULTS)
     ns.account = store.account

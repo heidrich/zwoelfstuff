@@ -1977,7 +1977,16 @@ end
 --   enough inside a ScrollFrame, whose child is free-floating: the text wraps
 --   at zero and every character lands on its own line.
 ---------------------------------------------------------------------------
-function UI.TextArea(parent, width, height, onChange, placeholder)
+-- maxLetters: 0 for no limit at all, nil for the reminder-sized default.
+--
+-- The default exists because a reminder is a line of text somebody reads at a
+-- glance during a pull, and 240 is already more than that. It is a HARD cap in
+-- the client, though, not a nudge: text past it is discarded on the way in.
+-- A profile string is thousands of characters, so pasting one into a box with
+-- the default would have silently kept the first 240 and reported the result
+-- as damaged - a paste failing with a message about corruption, for a string
+-- that was perfectly fine.
+function UI.TextArea(parent, width, height, onChange, placeholder, maxLetters)
     local holder = CreateFrame("Frame", nil, parent)
     holder:SetSize(width, height or 74)
     Fill(holder, "BACKGROUND", C.canvasBg)
@@ -1991,7 +2000,7 @@ function UI.TextArea(parent, width, height, onChange, placeholder)
     local input = CreateFrame("EditBox", nil, scroll)
     input:SetMultiLine(true)
     input:SetAutoFocus(false)
-    input:SetMaxLetters(240)
+    input:SetMaxLetters(maxLetters or 240)
     input:SetWidth(width - 12)
     input:SetHeight(height or 74)
     ns.StyleUIFont(input, 12, "")

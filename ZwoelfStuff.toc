@@ -96,6 +96,7 @@ Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
 # growing a second one, so BuildSpellPane has to exist by the time this loads.
 Core\OptionsReminders.lua
+Core\OptionsProfiles.lua
 Core\Options.lua
 # Last, because it reads all of the above. /zs test - the checks that can only
 # be run inside the game, which is every check this addon has.

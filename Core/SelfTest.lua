@@ -2607,6 +2607,84 @@ local function TestShare()
     Check("Adopting a non-table is not an error", select(2, Share.AdoptBars(nil, NextID, false)) == 0)
 
     ---------------------------------------------------------------------
+    -- Packing up what is ticked, and writing one in
+    ---------------------------------------------------------------------
+    local db = {
+        bars = { { id = 1, rows = 1, cols = 2, cells = { 49028 } },
+                 { id = 2, rows = 1, cols = 2, cells = { 55233 } } },
+        lastBarID = 2,
+        reminders = { { text = "Bone Shield", spellID = 195181 } },
+        coTanks = { enabled = true, width = 240 },
+        barPresets = { Main = { barWidth = 200 } },
+        font = "Friz Quadrata TT",
+    }
+
+    local all = Share.Gather(db, {
+        bars = true, reminders = true, coTanks = true,
+        presets = true, settings = true,
+    })
+    Check("Everything ticked packs every part",
+        all.bars and all.reminders and all.coTanks and all.presets and all.settings)
+
+    -- lastBarID must NOT be a part. It is dropped as unknown on arrival, and
+    -- the receiver re-issues ids from its own counter anyway.
+    Check("The id counter is not packed as a part", all.lastBarID == nil)
+    Check("The id counter is not packed as a setting",
+        all.settings and all.settings.lastBarID == nil)
+    Check("The file's shape version does not travel",
+        all.settings and all.settings.dbVersion == nil)
+    Check("A loose setting travels without being listed anywhere",
+        all.settings and all.settings.font == "Friz Quadrata TT")
+
+    local one = Share.Gather(db, { bars = true, barIDs = { [2] = false } })
+    Check("A bar left unticked stays behind", one.bars and #one.bars == 1)
+    Check("The bar that travelled is the ticked one", one.bars[1].id == 1)
+    Check("Nothing else comes along uninvited",
+        one.reminders == nil and one.coTanks == nil and one.settings == nil)
+
+    -- A ticked part with nothing in it is left out. Otherwise the import
+    -- window promises reminders and none arrive.
+    local bare = Share.Gather({ bars = {} }, { bars = true, reminders = true })
+    Check("A ticked part with nothing in it is left out",
+        bare.bars == nil and bare.reminders == nil)
+
+    -- WRITING IN: added, never substituted. There is no undo here, and
+    -- pasting a stranger's string must not be able to delete an evening.
+    local target = {
+        bars = { { id = 40, cells = { 999 } } },
+        reminders = { { text = "already here" } },
+        barPresets = { Main = { barWidth = 111 } },
+    }
+    local nextFreeID = 500
+    local applied = Share.Apply(target, { parts = all }, {
+        nextID = function() nextFreeID = nextFreeID + 1 return nextFreeID end,
+        keepSpells = true,
+    })
+
+    Check("Imported bars are ADDED to the ones you have", #target.bars == 3)
+    Check("The bar you already had is untouched", target.bars[1].id == 40)
+    Check("Imported bars get ids from YOUR counter",
+        target.bars[2].id == 501 and target.bars[3].id == 502)
+    Check("Imported reminders are added too", #target.reminders == 2)
+    Check("The panel is a single thing, so it does replace",
+        target.coTanks and target.coTanks.width == 240)
+    Check("A look with a name you already use keeps BOTH",
+        target.barPresets.Main.barWidth == 111
+            and target.barPresets["Main (imported)"] ~= nil)
+    Check("Applying reports what it did",
+        applied.bars == 2 and applied.reminders == 1 and applied.presets == 1)
+
+    -- Without the spells: the writing survives, the spell does not.
+    local other = { reminders = {} }
+    Share.Apply(other, { parts = { reminders = all.reminders } }, {
+        nextID = function() return 1 end, keepSpells = false,
+    })
+    Check("A reminder crossing classes keeps its words",
+        other.reminders[1].text == "Bone Shield")
+    Check("A reminder crossing classes loses its spell",
+        other.reminders[1].spellID == nil)
+
+    ---------------------------------------------------------------------
     -- What the import window says before it writes anything
     ---------------------------------------------------------------------
     local lines = Share.Describe(payload)

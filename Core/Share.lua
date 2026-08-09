@@ -94,6 +94,46 @@ Share.PART_BY_KEY = {}
 for _, part in ipairs(Share.PARTS) do Share.PART_BY_KEY[part.key] = part end
 
 ---------------------------------------------------------------------------
+-- WHICH KEYS OF A PROFILE EACH PART OWNS.
+--
+-- "Settings" is defined as everything LEFT OVER, and that is the whole point.
+-- Written as a list of its own, it would be a second inventory of the profile
+-- that has to be remembered every time a setting is added - and the one that
+-- gets forgotten is the new one, which is exactly the setting somebody wanted
+-- to share. Subtracting instead means a new key in ns.DEFAULTS travels from
+-- the day it exists, without anybody adding it here.
+--
+-- lastBarID goes with the bars: it is the id counter, and a profile that
+-- gains bars without it hands out an id that is already in use.
+---------------------------------------------------------------------------
+Share.PART_OWNS = {
+    bars      = { "bars", "lastBarID" },
+    reminders = { "reminders" },
+    coTanks   = { "coTanks" },
+    presets   = { "barPresets" },
+}
+
+function Share.SettingsKeys()
+    local owned = {}
+    for part, keys in pairs(Share.PART_OWNS) do
+        if part ~= "settings" then
+            for _, key in ipairs(keys) do owned[key] = true end
+        end
+    end
+
+    local out = {}
+    for key in pairs(ns.DEFAULTS or {}) do
+        -- dbVersion is the shape of the FILE, not a setting. Carrying it into
+        -- somebody else's profile would tell their migrations that work
+        -- already ran on data that never had it done.
+        if not owned[key] and key ~= "dbVersion" then out[#out + 1] = key end
+    end
+
+    table.sort(out)
+    return out
+end
+
+---------------------------------------------------------------------------
 -- Copying
 --
 -- Local and private on purpose. Bars.lua has one of these too; this one is
@@ -331,6 +371,133 @@ function Share.Decode(text)
 
     payload.dropped = #unknown > 0 and unknown or nil
     return payload
+end
+
+---------------------------------------------------------------------------
+-- PACKING UP WHAT IS TICKED
+--
+-- selection is { [partKey] = true } plus an optional bars = { [barID] = false }
+-- for the bars left unticked. Absent means yes, so a bar made after the page
+-- was drawn travels rather than silently staying behind.
+--
+-- A part that is ticked and EMPTY is left out entirely. "Reminders" in a
+-- string that carries none is a promise the import window would print and
+-- nothing would arrive for.
+---------------------------------------------------------------------------
+function Share.Gather(db, selection)
+    local parts = {}
+    if type(db) ~= "table" or type(selection) ~= "table" then return parts end
+
+    if selection.bars then
+        local bars, skipped = {}, selection.barIDs or {}
+        for _, cfg in ipairs(db.bars or {}) do
+            if skipped[cfg.id] ~= false then bars[#bars + 1] = DeepCopy(cfg) end
+        end
+        -- NOT lastBarID. It is subtracted from the settings so it cannot
+        -- travel as one, and it must not travel here either: the ids are
+        -- re-issued from the RECEIVER's counter on the way in, so the
+        -- sender's would only overwrite a good counter with a foreign one.
+        -- It would also be dropped as an unknown part on arrival, which is
+        -- the sort of silent nothing that looks like it worked.
+        if #bars > 0 then parts.bars = bars end
+    end
+
+    if selection.reminders and db.reminders and #db.reminders > 0 then
+        parts.reminders = DeepCopy(db.reminders)
+    end
+
+    if selection.coTanks and type(db.coTanks) == "table" then
+        parts.coTanks = DeepCopy(db.coTanks)
+    end
+
+    if selection.presets and type(db.barPresets) == "table"
+        and next(db.barPresets) then
+        parts.presets = DeepCopy(db.barPresets)
+    end
+
+    if selection.settings then
+        local settings = {}
+        for _, key in ipairs(Share.SettingsKeys()) do
+            if db[key] ~= nil then settings[key] = DeepCopy(db[key]) end
+        end
+        if next(settings) then parts.settings = settings end
+    end
+
+    return parts
+end
+
+---------------------------------------------------------------------------
+-- WRITING ONE IN
+--
+-- BARS AND REMINDERS ARE ADDED, NOT SUBSTITUTED. Pasting a string somebody
+-- posted must not be able to destroy what you spent an evening building - and
+-- there is no undo here. Added is reversible by deleting three bars; replaced
+-- is not reversible at all. It also makes "here is my Bone Shield bar" work
+-- as the one gesture people actually want, rather than as a profile swap.
+--
+-- The single tables - the co-tank panel and the settings - do overwrite,
+-- because there is only one of each and merging two of them field by field
+-- produces a panel that is neither.
+---------------------------------------------------------------------------
+function Share.Apply(db, payload, opts)
+    opts = opts or {}
+    local applied = {}
+    if type(db) ~= "table" or type(payload) ~= "table" then return applied end
+
+    local parts = payload.parts or {}
+
+    if parts.bars and opts.nextID then
+        local taken = Share.AdoptBars(parts.bars, opts.nextID, opts.keepSpells)
+        db.bars = db.bars or {}
+        for _, bar in ipairs(taken) do db.bars[#db.bars + 1] = bar end
+        applied.bars = #taken
+    end
+
+    if parts.reminders then
+        db.reminders = db.reminders or {}
+        local added = 0
+        for _, cfg in ipairs(parts.reminders) do
+            local copy = DeepCopy(cfg)
+            -- The spell is the only thing on a reminder that a different
+            -- class cannot use. The text and the look are somebody's writing
+            -- and are worth keeping either way.
+            if not opts.keepSpells then copy.spellID = nil end
+            db.reminders[#db.reminders + 1] = copy
+            added = added + 1
+        end
+        applied.reminders = added
+    end
+
+    if type(parts.coTanks) == "table" then
+        db.coTanks = DeepCopy(parts.coTanks)
+        applied.coTanks = true
+    end
+
+    if type(parts.presets) == "table" then
+        db.barPresets = db.barPresets or {}
+        local added = 0
+        for name, preset in pairs(parts.presets) do
+            -- A name collision keeps BOTH. Overwriting a look somebody made
+            -- because a stranger's string happened to call theirs "Main" is
+            -- the one loss here that could not be seen coming.
+            local key = name
+            while db.barPresets[key] ~= nil do key = key .. " (imported)" end
+            db.barPresets[key] = DeepCopy(preset)
+            added = added + 1
+        end
+        applied.presets = added
+    end
+
+    if type(parts.settings) == "table" then
+        local count = 0
+        for key, value in pairs(parts.settings) do
+            db[key] = DeepCopy(value)
+            count = count + 1
+        end
+        applied.settings = count
+    end
+
+    return applied
 end
 
 ---------------------------------------------------------------------------
