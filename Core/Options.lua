@@ -487,14 +487,6 @@ local PAGES = {
 
     -- The third page about the fight. No third column: what it shows is the
     -- state of a route, and there is no list to pick from.
-    -- NOT "M+". Nothing in this feature is gated on a keystone - the mobs in
-    -- a normal dungeon are the same mobs with the same npcIDs, so a route
-    -- marks them just as well on any difficulty, and in a raid MDT has data
-    -- for. The owner's point, and the code already agreed with it.
-    { key = "routes", title = "Routes", glyph = "place-dungeon",
-      subtitle = "Your MDT pull, badged onto the mobs themselves.",
-      build = function(page, width) return ns.OptionsRoutes:BuildPage(page, width) end },
-
     { key = "diagnostics", title = "Diagnostics", glyph = "pulse",
       subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
       build = BuildDiagnosticsPage },
@@ -893,7 +885,6 @@ function Options:Create()
         { eyebrow = "Tank stuff" },
         { page = "cotanks" },
         { page = "reminders" },
-        { page = "routes" },
         { eyebrow = "System" },
         { page = "settings" },
         { page = "diagnostics" },

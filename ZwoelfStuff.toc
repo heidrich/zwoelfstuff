@@ -55,10 +55,6 @@ Core\CoTanks.lua
 # whose evaluator it borrows for "only in combat", and below CDM, which is the
 # only thing on this patch that can answer whether a buff is up at all.
 Core\Reminders.lua
-# M+ routes: reads Mythic Dungeon Tools and badges the mobs of the current
-# pull. Below CDM only for company - it needs nothing from it - and above
-# Widgets, because it builds its badges from plain frames and no design system.
-Core\Routes.lua
 Core\Minimap.lua
 # The other two ways in: the minimap button above, and an entry in the pause
 # menu. Both only call ns.Options at click time, so neither needs the window
@@ -75,7 +71,6 @@ Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
 # growing a second one, so BuildSpellPane has to exist by the time this loads.
 Core\OptionsReminders.lua
-Core\OptionsRoutes.lua
 Core\Options.lua
 # Last, because it reads all of the above. /zs test - the checks that can only
 # be run inside the game, which is every check this addon has.
@@ -101,3 +96,12 @@ Core\SelfTest.lua
 #   Core\Groups.lua        engine-backed tracking groups
 #   Core\CoTanks.lua       co-tank panel with engine aura strips
 #   Core\OptionsGroups.lua the options page for the above
+
+# Parked 2026-08-09, after measuring what a 12.0 client will say about a mob
+# inside a dungeon: its name, id, health, creature type and every position -
+# including the player's own - are all withheld or absent. Badging a mob by
+# which pull it belongs to therefore cannot be done, and the code is kept
+# rather than deleted because the MDT reading, the enemy forces progress and
+# the diagnostics are sound and may be worth something elsewhere.
+#   Core\Routes.lua        MDT route, badges, forces progress, /zs route
+#   Core\OptionsRoutes.lua the options page for the above

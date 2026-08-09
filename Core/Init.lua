@@ -119,29 +119,6 @@ ns.DEFAULTS = {
     -- that may not be in your build.
     reminders  = {},
 
-    -- M+ ROUTES: the pull you are on, badged onto the mobs themselves.
-    --
-    -- OFF until asked for, like the co-tank panel. It draws on top of every
-    -- nameplate in a dungeon, and a display that appears unbidden after an
-    -- update is worse than one nobody has found yet.
-    routes = {
-        enabled   = false,
-        showNext  = true,       -- badge the pull AFTER this one, dimmed
-        showNumber = true,      -- the pull number inside the badge
-        autoAdvance = true,     -- step on when the pull is down
-
-        -- How much of a pull's forces has to be down before it counts as
-        -- finished. Not all of it: a stray that ran off or a patrol that was
-        -- already dead would mean never advancing. MDTHelper lands on the
-        -- same four fifths.
-        forcesThreshold = 0.8,
-
-        size      = 30,
-        alpha     = 0.90,
-        nextAlpha = 0.45,
-        offsetX   = 0,
-        offsetY   = 4,
-    },
 
     -- Saved looks, by name. A preset carries ns.BAR_STYLE_KEYS only - sizes,
     -- spacing and colours - never the spells or the grid shape.
@@ -997,12 +974,6 @@ boot:SetScript("OnEvent", function(_, event, arg1)
             ns.Reminders:Rebuild()
             ns.Reminders:Start()
         end)
-        -- MDT may load after us, so the route is read on demand rather than
-        -- here: Start only puts the listeners up.
-        Boot("Routes", function()
-            ns.Routes:Sync()
-            ns.Routes:Start()
-        end)
         Boot("Minimap button", function() ns.MinimapButton:Create() end)
         Boot("Game menu entry", function() ns.GameMenu:Create() end)
     end
@@ -1133,31 +1104,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- this feature, and it has a printable answer.
     elseif cmd == "reminders" or cmd == "reminder" then
         ns.Reminders:Dump()
-
-    -- Routes. The diagnostic first, again: "it is not marking anything" has
-    -- three causes - no MDT, no route open, or the mobs in front of you are
-    -- not in it - and they look identical on screen.
-    elseif cmd == "route" or cmd == "routes" then
-        local sub = (rest or ""):match("^(%S*)"):lower()
-        if sub == "next" then
-            ns.Routes:Step(1)
-            ns.Print("Pull", ns.Routes.index)
-        elseif sub == "prev" or sub == "back" then
-            ns.Routes:Step(-1)
-            ns.Print("Pull", ns.Routes.index)
-        elseif sub == "reset" then
-            ns.Routes:Sync()
-            ns.Routes:ResetRun()
-            ns.Print("Route re-read, back to pull 1.")
-        elseif sub == "probe" then
-            -- Every question about a mob at once, and what came back. Its own
-            -- word because it is the thing to run when a badge is missing and
-            -- the rest of the report already looks correct.
-            ns.Routes:Probe()
-        else
-            ns.Routes:Sync()
-            ns.Routes:Dump()
-        end
 
     elseif cmd == "test" then
         ns.SelfTest:Run()
