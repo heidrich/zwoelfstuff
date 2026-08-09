@@ -4,6 +4,26 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.42.1] - 2026-08-09
+
+### Fixed
+
+- **`/zs` listed a command that does not exist.** `/zs route` stayed in the
+  help after the MDT pull badges were parked, so typing it did nothing at all.
+  A menu naming something that does nothing is worse than a shorter menu.
+
+- The help's one-line description of **`/zs reset`** still said it restored
+  every default. It resets the profile you are using, and nothing else.
+
+### Documentation
+
+- **The README was rewritten.** It had been describing a different addon: it
+  claimed 166 checks where there are 694, documented the *Arc* and *Diagonal*
+  arrangements that were removed in 4.8.0, called the co-tank panel parked when
+  it has been shipping since 4.41.0, listed a source file deleted in 4.9.0, and
+  had nothing at all about reminders, profiles or sharing. It is the first page
+  anyone sees on GitHub.
+
 ## [4.42.0] - 2026-08-09
 
 ### Added

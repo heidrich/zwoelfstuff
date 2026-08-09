@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.42.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100/zs|r listed a command that does not exist: |cffffd100/zs route|r stayed in the help after the MDT pull badges were parked, so typing it did nothing at all. A menu naming something that does nothing is worse than a shorter menu.",
+            "The one-line description of |cffffd100/zs reset|r still said it restored every default. It resets the profile you are using, and nothing else.",
+            "The README on the project page was rewritten - it had been describing a different addon, down to arrangements removed in 4.8.0 and a co-tank panel it called parked while shipping it.",
+        },
+    },
+    {
         version = "4.42.0",
         date = "2026-08-09",
         lines = {

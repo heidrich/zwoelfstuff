@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.42.0"
+ns.version = "4.42.1"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -979,11 +979,13 @@ local usage = {
     "  Tank stuff",
     "  |cffffd100/zs tanks|r - the co-tank panel (|cffffd100test|r fakes a raid)",
     "  |cffffd100/zs reminders|r - every reminder, and why each one is or is not up",
-    "  |cffffd100/zs route|r - your MDT pull on the mobs (|cffffd100next|r / |cffffd100prev|r / |cffffd100reset|r)",
+    -- /zs route was listed here after Routes was parked, so the help printed a
+    -- command that had no handler at all. A menu naming something that does
+    -- nothing is worse than one that is short.
     "",
     "  |cffffd100/zs test|r - run the addon's own checks and report failures",
     "  |cffffd100/zs minimap|r - show or hide the minimap button",
-    "  |cffffd100/zs reset|r - restore defaults, keeping recorded procs",
+    "  |cffffd100/zs reset|r - reset the profile you are using, keeping procs",
 }
 
 SLASH_ZWOELFSTUFF1 = "/zs"
