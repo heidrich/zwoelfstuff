@@ -1037,6 +1037,10 @@ local SIDE_ROW_H = 34
 -- sized to the setting would build fifty frames to show twelve.
 local SIDE_ROWS = 12
 local HEADER_BOTTOM = 82
+-- How small and how large this window may be dragged. Below 60% the event
+-- rows stop being readable at arm's length; above 140% it outgrows a 1080p
+-- screen, which is the size it would be wanted at least of all.
+local SCALE_MIN, SCALE_MAX = 0.6, 1.4
 
 -- The four columns of the event table, measured from the row's left edge.
 -- The header labels and the cells read the SAME numbers, or a header is a
@@ -1056,6 +1060,10 @@ local function BuildWindow()
     frame:SetSize(SIDE_X + SIDE_W + 16, 520)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
     frame:SetFrameStrata("DIALOG")
+    -- See Replay.lua: the two windows share a strata and lie on each other,
+    -- so whichever is clicked has to come forward. Without it this window's
+    -- buttons drew through the replay standing in front of it.
+    frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -1363,27 +1371,38 @@ local function BuildWindow()
     end, "primary")
     share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 12)
 
-    -- The size, one click at a time. Not a slider and not a settings page:
-    -- this window is read in the ten seconds before you release, and the
-    -- moment you want it smaller is the moment it is in front of you.
-    local scale
-    scale = UI.Button(frame, "Size 100%", 96, function()
-        local cfg = ns.db.death or {}
-        ns.db.death = cfg
-        cfg.scale = Death.NextScale(cfg.scale)
-        Death.ApplyScale()
-        scale.label:SetText(string.format("Size %d%%",
-            math.floor((cfg.scale or 1) * 100 + 0.5)))
-    end)
-    scale:SetPoint("LEFT", share, "RIGHT", 8, 0)
-    frame.scaleButton = scale
-
     -- The replay. The owner's words: "du kannst das live nachvollziehen".
     local replay = UI.Button(frame, "Replay", 90, function()
         ns.Replay:Open(Death.log[Death.showing or #Death.log])
     end)
-    replay:SetPoint("LEFT", scale, "RIGHT", 8, 0)
+    replay:SetPoint("LEFT", share, "RIGHT", 8, 0)
     frame.replayButton = replay
+
+    -- The size, on the window rather than in a settings page: the moment
+    -- you want this smaller is the moment it is in front of you. A slider
+    -- rather than a button walking six steps - the owner asked, and he is
+    -- right that dragging to a size beats clicking past four of them.
+    local scaleRow = UI.Row(frame, "Size", { controlWidth = 110 })
+    scaleRow:SetWidth(170)
+    scaleRow:SetPoint("LEFT", replay, "RIGHT", 12, 0)
+    scaleRow.rule:Hide()
+    UI.Slider(scaleRow, {
+        get = function() return (ns.db.death and ns.db.death.scale) or 1 end,
+        set = function(value)
+            ns.db.death = ns.db.death or {}
+            ns.db.death.scale = value
+        end,
+        min = SCALE_MIN, max = SCALE_MAX, step = 0.05,
+        -- scale: the box shows and takes PERCENT. Without it a typed "80"
+        -- would be stored as eighty and paint this window over four screens.
+        scale = 100,
+        silent = true,
+        format = function(v)
+            return string.format("%d%%", math.floor((v or 1) * 100 + 0.5))
+        end,
+        apply = function() Death.ApplyScale() end,
+    })
+    frame.scaleRow = scaleRow
 
     local dismiss = UI.Button(frame, "Close", 90, function()
         frame:Hide()
@@ -1395,19 +1414,6 @@ end
 -- screen - and Core/Replay.lua opens on that snapshot.
 function Death.Showing()
     return Death.log[Death.showing or #Death.log]
-end
-
--- The steps the size button walks, and the rule for walking them. Pure and
--- tested: a cycle that skips or sticks at an end is the kind of thing that
--- is only ever noticed by the person clicking it.
-local SCALES = { 0.7, 0.8, 0.9, 1.0, 1.15, 1.3 }
-
-function Death.NextScale(current)
-    local at = 0
-    for index, value in ipairs(SCALES) do
-        if math.abs(value - (current or 1)) < 0.001 then at = index end
-    end
-    return SCALES[(at % #SCALES) + 1]
 end
 
 function Death.ApplyScale()
@@ -1503,8 +1509,7 @@ function Death:Show(index)
     if not frame then BuildWindow() end
     frame.disarmClear()
     Death.ApplyScale()
-    frame.scaleButton.label:SetText(string.format("Size %d%%",
-        math.floor(((ns.db.death and ns.db.death.scale) or 1) * 100 + 0.5)))
+    frame.scaleRow.Refresh()
 
     -- The killer, when the recap named one readably. The name is already
     -- through SafeName's door or it would not be in the snapshot.
@@ -1873,6 +1878,26 @@ function Death:Probe()
     end
     ns.Print(string.format("  %d recap events. The newest, every field:", #raw))
     if raw[1] then DumpTable("event 1", raw[1]) end
+
+    -- A HEALING event, in full. It is a different shape from a hit and it
+    -- carries the two things the replay's bottom lane needs: who cast it,
+    -- and whether an absorb or a shield is in there at all. Nothing else
+    -- can answer that - the owner asked for shields and the honest reply
+    -- until this prints is "we do not know yet".
+    local healed
+    for i = 1, #raw do
+        local kind = raw[i].event
+        if ns.CanCompute(kind) and type(kind) == "string"
+            and kind:find("HEAL", 1, true) then
+            healed = raw[i]
+            break
+        end
+    end
+    if healed then
+        DumpTable("the newest HEAL event, every field", healed)
+    else
+        ns.Print("  |cff888888no healing event in this recap to look at|r")
+    end
 
     -- What the header can draw and say, measured rather than assumed.
     local _, _, _, _, art = Death.ReadRecap(recapID)

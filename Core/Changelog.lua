@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.49.0",
+        date = "2026-08-09",
+        lines = {
+            "THE REPLAY HAS THREE LANES NOW. |cffffd100Damage on you|r above the axis, |cffffd100what you pressed|r below it, and |cffffd100healing on you|r under that - with the amount, the spell's icon and |cffffd100the name of whoever cast it|r, in their class colour. Healing used to be a green column in among the red ones; \"was anybody healing me\" is its own question and now it has its own row.",
+            "The killer's portrait sits in the corner of the replay, and the hover says what HE did to you: how many hits, the total, the biggest, and which of his abilities landed. What else a mob can do is not something the client will tell an addon on this patch, and the tooltip says so rather than leaving a gap.",
+            "The health bar says |cffffd100Your health|r over it. It is the only bar in the window and it was being read as the mob's.",
+            "Speed is a slider from a quarter to triple, and the death window's size is a slider too - both were buttons walking a fixed list, and dragging to the one you want beats clicking past three you do not.",
+            "The death window's buttons drew straight through the replay standing in front of it. Two windows in one layer: whichever you click comes forward now.",
+        },
+    },
+    {
         version = "4.48.0",
         date = "2026-08-09",
         lines = {

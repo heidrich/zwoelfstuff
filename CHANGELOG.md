@@ -4,6 +4,44 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.49.0] - 2026-08-09
+
+### Added
+
+- **A third lane on the replay: healing on you.** The amount, the spell's
+  icon and **who cast it**, in their class colour where the client will
+  give it (`UnitClass` answers for someone in your group and nothing else,
+  so it is asked under pcall and the plain name is the fallback). Healing
+  used to be a green column among the red ones; "was anybody healing me" is
+  its own question and now it has its own row. The window is taller for it,
+  and worth it.
+
+- **The killer's portrait on the replay**, with what he did to you on the
+  hover: hits, total, biggest, and which of his abilities landed
+  (`Replay.KillerSummary`, summed from the events already read). What else
+  a mob *can* do is not something the client will tell an addon on this
+  patch - there is no call for an arbitrary NPC's abilities, and a mob
+  inside a dungeon withholds even its name. The tooltip says so instead of
+  leaving a gap.
+
+- **"Your health"** over the health bar. It is the only bar in the window
+  and it was being read as the mob's.
+
+### Changed
+
+- **Speed is a slider** (a quarter to triple), and **the death window's
+  size is a slider**. Both were buttons walking a fixed list; a quarter and
+  a half are different things to want, and dragging to one beats clicking
+  past three others to reach it.
+
+### Fixed
+
+- **The death window drew through the replay in front of it.** Two movable
+  windows in one frame strata: the window's children sit above the other
+  window's background, so its buttons punched through. Both are `SetToplevel`
+  now - whichever is clicked comes forward - and opening a replay raises it
+  without needing a click.
+
 ## [4.48.0] - 2026-08-09
 
 ### Added

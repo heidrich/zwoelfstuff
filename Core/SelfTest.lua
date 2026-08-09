@@ -1313,12 +1313,34 @@ local function TestDeath()
         Check("A moment off the end of the plot is clamped onto it",
             Replay.Fraction(40, 10) == 0 and Replay.Fraction(-5, 10) == 1)
 
-        local speeds, at = {}, 1
-        for _ = 1, 4 do at = Replay.NextSpeed(at); speeds[at] = true end
-        local seenSpeeds = 0
-        for _ in pairs(speeds) do seenSpeeds = seenSpeeds + 1 end
-        Check("Every speed is reachable and the cycle wraps",
-            seenSpeeds == 4 and at == 1)
+        -- What the killer's portrait says on hover, summed from the events
+        -- we already read. There is no client call for "what can this NPC
+        -- do" and a dungeon mob withholds even its name, so this is what
+        -- HE did to YOU rather than a page from a database.
+        local facts = Replay.KillerSummary({
+            { t = 4, amount = 50000, name = "Scratch", who = "Golem" },
+            { t = 2, amount = 900000, name = "Melee", who = "Golem" },
+            { t = 1, amount = 300000, heal = true, name = "Heal",
+              who = "Healyboi" },
+            { t = 0, amount = 10000, name = "Melee", who = "Someone else" },
+        }, "Golem")
+        Check("The portrait counts only what that mob did",
+            facts.hits == 2 and facts.total == 950000)
+        Check("It names his biggest hit", facts.biggest == 900000)
+        Check("It lists what he used, once each",
+            #facts.spells == 2 and facts.spells[1] == "Scratch")
+        Check("A heal is never counted as something he did to you",
+            facts.total == 950000)
+        Check("No named killer is an empty summary, not an error",
+            Replay.KillerSummary({ { t = 1, amount = 5 } }, nil).hits == 0)
+
+        Check("A speed outside what is watchable is pulled back in",
+            Replay.ClampSpeed(0.01) > 0 and Replay.ClampSpeed(0.01) <= 1
+                and Replay.ClampSpeed(50) <= 10)
+        Check("A speed inside the range is left alone",
+            Replay.ClampSpeed(1.5) == 1.5)
+        Check("A speed that is not a number answers real time",
+            Replay.ClampSpeed(nil) == 1 and Replay.ClampSpeed("fast") == 1)
 
         Check("A hit worth half your health draws half a column",
             math.abs(Replay.ColumnHeight(500, 1000)
@@ -1328,8 +1350,8 @@ local function TestDeath()
         Check("Without a maximum health there is nothing to scale by",
             Replay.ColumnHeight(500, nil) == 6)
         Check("The speed label does not invent precision",
-            Replay.SpeedLabel(1) == "Speed 1x"
-                and Replay.SpeedLabel(0.25) == "Speed 0.25x")
+            Replay.SpeedLabel(1) == "1x"
+                and Replay.SpeedLabel(0.25) == "0.25x")
 
         -- Play at the end must mean "again". Un-pausing a clock that has
         -- already run out changes nothing on screen, and a live-looking
@@ -1376,22 +1398,6 @@ local function TestDeath()
     Check("A defensive that WAS pressed is credited on its own",
         #rightOne.defensivesPressed == 1
             and rightOne.defensivesPressed[1] == "Icebound Fortitude")
-
-    -- The size button walks its steps and wraps at the end. A cycle that
-    -- sticks at one end is only ever found by the person clicking it.
-    local first = Death.NextScale(nil)
-    local seen, at = { [first] = true }, first
-    for _ = 1, 5 do
-        at = Death.NextScale(at)
-        seen[at] = true
-    end
-    local count = 0
-    for _ in pairs(seen) do count = count + 1 end
-    Check("Every size step is reachable by clicking", count == 6)
-    Check("The steps wrap rather than stopping at the largest",
-        Death.NextScale(at) == first)
-    Check("A size nobody recognises lands back on a real step",
-        seen[Death.NextScale(3.7)] == true)
 
     -- The clock in the list. Today it is a time; older, the day goes first.
     Check("A death from today reads as a clock",
