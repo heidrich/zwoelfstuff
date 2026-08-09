@@ -9,6 +9,11 @@
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
 ## X-License: MIT
 ## X-Category: Buffs & Debuffs
+# Which CurseForge project a tag uploads to. The BigWigs packager reads this
+# line and nothing else to find the project - without it a tagged build runs,
+# succeeds, and uploads nowhere. Public information; the API key that goes
+# with it is a repository secret and is never in this file.
+## X-Curse-Project-ID: 1644286
 
 # Embedded libraries. Not a design decision reversed - LibSharedMedia is a
 # REGISTRY, not a look: it is how the fonts and textures the user already has
