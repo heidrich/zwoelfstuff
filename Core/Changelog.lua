@@ -8,6 +8,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.37.2",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100/zs route|r ENDS WITH THE VERDICT IN ONE LINE. \"4 of 6 nameplates are in this route\", or that none of them are, or that the client would not let us read their GUIDs. The list of nameplates is the evidence and it is as long as the pack - a chat window shows the tail, so the answer belongs where scrolling cannot cut it off.",
+            "And while test mode is on, the badge count says so: everything gets a badge regardless of the route, which is not a route match and no longer reads like one.",
+            "Behind the scenes: the desktop test now runs the whole chain - zone, dungeon, route, pulls, nameplate, GUID, npc id, badge - against a faked planner. This feature has broken twice at two different links, and until now neither could be reproduced without logging in.",
+        },
+    },
+    {
         version = "4.37.1",
         date = "2026-08-09",
         lines = {

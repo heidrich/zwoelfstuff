@@ -8,6 +8,37 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.37.2] - 2026-08-09
+
+### Changed
+
+- **`/zs route` ends with the verdict in one line.** "4 of 6 nameplates are in
+  this route", or "none of these mobs are in the route", or "none matched, and
+  2 GUIDs could not be read - that is the client withholding them, not the
+  route". The per-nameplate list is the evidence and it is as long as the
+  pack; a chat window shows the tail, so the answer belongs in the part that
+  survives scrolling. It is also the one sentence worth pasting to somebody
+  else.
+
+- **In test mode the badge count says so.** "badges drawn: 6" while test mode
+  is on means every nameplate got one regardless of the route, which is not a
+  route match and no longer reads like one.
+
+### Added
+
+- **The desktop harness runs the whole route chain end to end.** Zone →
+  dungeon index → preset → pulls → npcIDs → the nameplate walk → GUID →
+  npcID → which pull → a badge drawn, against a faked planner holding a known
+  two-pull route and two nameplates whose ids are in it. Routes has broken
+  twice at two different links and neither break could be reproduced off the
+  live client until now.
+
+  These assertions live in the harness rather than in `/zs test` on purpose:
+  they need a planner holding a known route and a screen holding known mobs,
+  and in game both are whatever you happen to be standing in front of. A check
+  that goes red because you walked into a different dungeon is a check nobody
+  will trust for long.
+
 ## [4.37.1] - 2026-08-09
 
 ### Fixed

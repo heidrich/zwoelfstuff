@@ -673,10 +673,13 @@ function Routes:Dump()
     -- different way is describing a different screen, and this one already
     -- did once: it read plate.namePlateUnitToken, which is nil when polled.
     local lines = {}
+    local matched, unreadable = 0, 0
     local plateCount = self:ForEachPlate(function(unit)
         local guid = UnitGUID(unit)
         local npcID = Routes.NpcFromGUID(guid)
         local pullIndex = npcID and self:PullForNpc(npcID)
+        if pullIndex then matched = matched + 1 end
+        if not npcID and guid ~= nil then unreadable = unreadable + 1 end
         -- "could not be read" is its own answer, and a different one from
         -- "not in the route": it means the GUID came back as something this
         -- patch will not let an addon look at.
@@ -697,11 +700,33 @@ function Routes:Dump()
     -- Collected first, printed after: the count belongs above the list, and
     -- it is not known until the walk is done.
     ns.Print(string.format("Nameplates on screen: |cffffd100%d|r, badges "
-        .. "drawn: |cffffd100%d|r", plateCount, self.drawn or 0))
+        .. "drawn: |cffffd100%d|r%s", plateCount, self.drawn or 0,
+        self.testing and "  |cffff8040(test mode badges everything - that "
+            .. "number is not a route match)|r" or ""))
     for _, line in ipairs(lines) do ns.Print(line) end
 
     if plateCount == 0 then
         ns.Print("|cffffd100No nameplates|r - stand in front of a pack, in "
             .. "combat or not, and run this again.")
+        return
+    end
+
+    -- THE VERDICT, LAST AND IN ONE LINE.
+    --
+    -- Deliberately at the bottom. The per-nameplate list is the evidence and
+    -- it is as long as the pack; a chat window shows the tail, and the answer
+    -- has to be in the part that survives. It is also the one sentence worth
+    -- pasting to somebody else.
+    if matched > 0 then
+        ns.Print(string.format("|cff40ff40%d of %d nameplates are in this "
+            .. "route.|r", matched, plateCount))
+    elseif unreadable > 0 then
+        ns.Print(string.format("|cffff4040None matched, and %d GUID(s) could "
+            .. "not be read.|r That is the client withholding them, not the "
+            .. "route.", unreadable))
+    else
+        ns.Print("|cffff4040None of these mobs are in the route.|r Right "
+            .. "dungeon, wrong pack - or the pull you are on is further along "
+            .. "than you are.")
     end
 end
