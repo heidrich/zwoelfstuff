@@ -606,6 +606,91 @@ local function BuildWindow()
     frame:EnableMouseWheel(true)
     frame:SetScript("OnMouseWheel", Scroll)
 
+    -----------------------------------------------------------------------
+    -- DRAGGING THE PLOT ALONG. Owner, 2026-08-09: "ich haette nur gern, dass
+    -- wenn ich beim replay reinzoome, die timeline mit der maus verschieben
+    -- kann".
+    --
+    -- A pane over the plot, and it does BOTH gestures rather than stealing
+    -- one: zoomed in it pans, and at zoom 1 - where there is nothing to pan
+    -- to - it moves the window, which is what grabbing this area did before
+    -- it existed. Taking that away to add panning would be a trade, not a
+    -- feature.
+    --
+    -- AT THE PARENT'S OWN LEVEL, which puts it UNDER every mark: a child
+    -- frame sits one level above its parent by default, so the icons keep
+    -- their tooltips and this pane only ever gets the empty space between
+    -- them - which is most of the plot.
+    --
+    -- The cursor is divided by THIS frame's effective scale, not UIParent's.
+    -- The two only agree while the window is at 100%, and the size slider on
+    -- this very window makes that the exception rather than the rule.
+    -----------------------------------------------------------------------
+    local pan = CreateFrame("Frame", nil, frame)
+    pan:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 20))
+    pan:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
+        -(LANE_HEAL_Y + 100))
+    pan:SetFrameLevel(frame:GetFrameLevel())
+    pan:EnableMouse(true)
+
+    local function CursorX()
+        local x = GetCursorPosition()
+        return x / (frame:GetEffectiveScale() or 1)
+    end
+
+    pan:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then return end
+        local state = Replay.state
+        if not (state and state.zoom > 1) then
+            -- Nothing to pan to. The gesture goes back to what it was.
+            self.moving = true
+            frame:StartMoving()
+            return
+        end
+        state.following = false
+        self.grabAt = CursorX()
+        self.grabPan = state.pan or state.now
+        self.dragging = true
+    end)
+
+    local function StopPan(self)
+        if self.moving then
+            frame:StopMovingOrSizing()
+            self.moving = nil
+        end
+        self.dragging = nil
+    end
+    pan:SetScript("OnMouseUp", StopPan)
+    -- The button can be released outside the pane - over the buttons, off
+    -- the window, anywhere. Without this the plot keeps following a cursor
+    -- nobody is pressing any more.
+    pan:SetScript("OnHide", StopPan)
+
+    pan:SetScript("OnUpdate", function(self)
+        if not self.dragging then return end
+        local state = Replay.state
+        if not (state and state.zoom > 1) then
+            StopPan(self)
+            return
+        end
+        if not IsMouseButtonDown("LeftButton") then
+            StopPan(self)
+            return
+        end
+
+        local visible = state.span / state.zoom
+        -- Dragging RIGHT pulls the plot right, which brings EARLIER seconds
+        -- into view - the axis runs oldest on the left. The content follows
+        -- the hand; a plot that moves the other way feels like a scrollbar
+        -- nailed to the wrong end.
+        local moved = (CursorX() - (self.grabAt or 0)) / PLOT_W * visible
+        state.pan = math.max(visible / 2, math.min(state.span - visible / 2,
+            (self.grabPan or state.now) + moved))
+        Replay.Redraw()
+    end)
+
+    frame.pan = pan
+
     frame.healthText = UI.Label(frame.health, "", 11, C.text)
     frame.healthText:SetPoint("LEFT", frame.health, "LEFT", 6, 0)
 

@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.57.2",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100Zoom into the replay and drag the plot with the mouse|r to move along it. Not zoomed in, grabbing it still moves the window, the way it always did.",
+        },
+    },
+    {
         version = "4.57.1",
         date = "2026-08-09",
         lines = {

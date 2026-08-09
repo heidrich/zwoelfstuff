@@ -4,6 +4,17 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.57.2] - 2026-08-09
+
+### Added
+
+- **Drag the replay's plot to move along it when zoomed in.** The wheel
+  already scrolled it; the hand is the gesture people reach for. The pane
+  does BOTH rather than stealing one - at zoom 1, where there is nothing to
+  pan to, grabbing the plot still moves the window, which is what it did
+  before. It sits at the parent's own frame level, so it is UNDER every mark
+  and the icons keep their tooltips.
+
 ## [4.57.1] - 2026-08-09
 
 ### Fixed
