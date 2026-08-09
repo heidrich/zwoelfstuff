@@ -8,6 +8,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.40.0",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100/zs route probe|r - EVERY QUESTION ABOUT A MOB AT ONCE. In a dungeon this client withholds the GUID and the NAME: 10 of 10 nameplates, with the name list built and holding 31 mobs for that dungeon. Two trips in, two guesses, two dead ends.",
+            "So it stops guessing one avenue per trip. For the first three nameplates it asks name, GUID, max health, level, creature type, classification, the unit's own criteria values, and what the nameplate is actually displaying - and prints each as its value, or nil, or WITHHELD.",
+            "MDT stores id, forces, health, creature type and level for every enemy, so whichever of those survives is a way to join a live mob to a planned one. The probe decides nothing; it reports.",
+            "It also runs by itself at the end of |cffffd100/zs route|r when nothing on screen could be identified.",
+        },
+    },
+    {
         version = "4.39.1",
         date = "2026-08-09",
         lines = {

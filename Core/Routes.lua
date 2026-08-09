@@ -812,6 +812,84 @@ function Routes:Start()
 end
 
 ---------------------------------------------------------------------------
+-- WHAT THIS CLIENT WILL TELL US ABOUT A MOB AT ALL
+--
+-- Written after three trips into a dungeon that each tested one guess. The
+-- GUID is withheld; the name is withheld too. Rather than guess a fourth
+-- time, this asks EVERY question at once and prints what came back, so one
+-- run settles which doors are open.
+--
+-- MDT stores more than a name for each enemy - id, count (its forces),
+-- health, creatureType, level - so any of those that survives is a possible
+-- join. Nothing here decides anything; it only reports.
+---------------------------------------------------------------------------
+local function Describe(ok, value)
+    if not ok then return "|cffff4040raised|r" end
+    if value == nil then return "|cff888888nil|r" end
+    if not ns.CanCompute(value) then return "|cffff8040withheld|r" end
+    local kind = type(value)
+    if kind == "string" then return string.format("\"%s\"", value) end
+    if kind == "number" or kind == "boolean" then return tostring(value) end
+    return kind
+end
+
+local function Ask(fn, ...)
+    if type(fn) ~= "function" then return Describe(true, nil) end
+    return Describe(pcall(fn, ...))
+end
+
+function Routes:Probe()
+    ns.Print("|cffffd100--------- what this client will say about a mob ---------|r")
+
+    local shown = 0
+    self:ForEachPlate(function(unit, plate)
+        if shown >= 3 then return end
+        shown = shown + 1
+        ns.Print("|cffffd100" .. unit .. "|r")
+
+        ns.Print("   UnitName          " .. Ask(UnitName, unit))
+        ns.Print("   UnitGUID          " .. Ask(UnitGUID, unit))
+        ns.Print("   UnitHealthMax     " .. Ask(UnitHealthMax, unit))
+        ns.Print("   UnitLevel         " .. Ask(UnitLevel, unit))
+        ns.Print("   UnitCreatureType  " .. Ask(UnitCreatureType, unit))
+        ns.Print("   UnitClassification " .. Ask(UnitClassification, unit))
+
+        -- The forces this one mob is worth. MDT stores the same number as
+        -- enemy.count, so if it survives it is a join - a coarse one, but a
+        -- join. It is also the only unit call MDTHelper trusts in a dungeon.
+        local crit = C_ScenarioInfo and C_ScenarioInfo.GetUnitCriteriaProgressValues
+        if crit then
+            local ok, value, percent = pcall(crit, unit)
+            ns.Print("   criteria value    " .. Describe(ok, value))
+            ns.Print("   criteria percent  " .. Describe(ok, percent))
+        else
+            ns.Print("   criteria value    |cff888888no api|r")
+        end
+
+        -- What the nameplate itself is DISPLAYING. The engine draws a name up
+        -- there; whether an addon may read it back is a different question
+        -- from whether it may ask the unit, and worth knowing.
+        -- Every step type-checked. Nameplate frames are decorated by whatever
+        -- else is installed, so none of these fields is promised to be what
+        -- it looks like - and a diagnostic that raises is worse than useless,
+        -- because it fails at the moment its answer is wanted. The desktop
+        -- harness threw here on the first run, which is exactly the point.
+        local uf = plate and (plate.UnitFrame or plate.unitFrame)
+        if type(uf) ~= "table" then uf = nil end
+        local fs = uf and uf.name
+        if type(fs) == "table" and type(fs.GetText) == "function" then
+            ns.Print("   nameplate text    " .. Ask(fs.GetText, fs))
+        else
+            ns.Print("   nameplate text    |cff888888no such font string|r")
+        end
+    end)
+
+    if shown == 0 then
+        ns.Print("No nameplates. Stand in front of a pack and run it again.")
+    end
+end
+
+---------------------------------------------------------------------------
 -- Diagnosis
 --
 -- /zs route. What MDT is holding, which pull we think you are on, and what
@@ -1019,5 +1097,12 @@ function Routes:Dump()
         ns.Print("|cffff4040None of these mobs are in the route.|r Right "
             .. "dungeon, wrong pack - or the pull you are on is further along "
             .. "than you are.")
+    end
+
+    -- When NOTHING could be identified, the next question is always "what
+    -- CAN we read then", so it is answered here rather than waiting to be
+    -- asked. /zs probe runs it on its own.
+    if matched == 0 and plateCount > 0 and unreadable == plateCount then
+        self:Probe()
     end
 end

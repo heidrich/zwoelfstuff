@@ -8,6 +8,34 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.40.0] - 2026-08-09
+
+### Added
+
+- **`/zs route probe` - every question about a mob at once.** In a dungeon on
+  this client, `UnitGUID` is withheld and so is `UnitName`: 10 of 10
+  nameplates, with the name index built and holding 31 mobs for that dungeon.
+  Two trips in, two guesses, two dead ends.
+
+  So this stops guessing one avenue per trip and asks all of them in one go,
+  for the first three nameplates on screen: `UnitName`, `UnitGUID`,
+  `UnitHealthMax`, `UnitLevel`, `UnitCreatureType`, `UnitClassification`, the
+  unit's own criteria progress values, and what the nameplate frame is
+  actually displaying. Each answer is reported as its value, or `nil`, or
+  `withheld`, or `raised`.
+
+  MDT stores id, forces count, health, creature type and level for every
+  enemy, so whichever of those survives is a possible way to join a live mob
+  to a planned one. The probe decides nothing - it reports.
+
+  It runs by itself at the end of `/zs route` when nothing on screen could be
+  identified, because that is the only moment the question comes up.
+
+- Every field the probe touches is type-checked before it is indexed.
+  Nameplate frames are decorated by whatever else is installed, so none of
+  those fields is promised to be what it looks like - and the desktop harness
+  threw on the very first run of this, which is the argument in one line.
+
 ## [4.39.1] - 2026-08-09
 
 ### Changed

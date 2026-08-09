@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.39.1"
+ns.version = "4.40.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -1149,6 +1149,11 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Routes:Sync()
             ns.Routes:ResetRun()
             ns.Print("Route re-read, back to pull 1.")
+        elseif sub == "probe" then
+            -- Every question about a mob at once, and what came back. Its own
+            -- word because it is the thing to run when a badge is missing and
+            -- the rest of the report already looks correct.
+            ns.Routes:Probe()
         else
             ns.Routes:Sync()
             ns.Routes:Dump()
