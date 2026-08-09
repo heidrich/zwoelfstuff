@@ -41,22 +41,6 @@ local pick = {
 -- a payload from a string that is no longer in the box.
 local pending, pendingWhy
 
-local function ButtonStrip(grid, buttons)
-    local strip = CreateFrame("Frame", nil, grid.content)
-    strip:SetSize(grid.width, 28)
-
-    local x = 0
-    for _, spec in ipairs(buttons) do
-        local btn = UI.Button(strip, spec.text, spec.width or 120, spec.onClick, spec.style)
-        btn:SetPoint("LEFT", strip, "LEFT", x, 0)
-        x = x + (spec.width or 120) + 8
-        spec.frame = btn
-    end
-
-    grid:Wide(strip, 36)
-    return strip
-end
-
 ---------------------------------------------------------------------------
 -- The page
 ---------------------------------------------------------------------------
@@ -162,11 +146,11 @@ function Page:BuildPage(page, width)
     -- Deleting one. Two steps, because there is no undo.
     ---------------------------------------------------------------------
     local armed, deleteStrip = false, nil
-    deleteStrip = ButtonStrip(grid, {
+    deleteStrip = grid:Buttons({
         {
             text = "Delete this profile", width = 170, style = "primary",
             onClick = function()
-                local button = deleteStrip.button
+                local button = deleteStrip.buttons[1].frame
                 if not armed then
                     armed = true
                     button:SetText("Really delete it?")
@@ -231,7 +215,7 @@ function Page:BuildPage(page, width)
         barRows[index] = row
     end
 
-    ButtonStrip(grid, {
+    grid:Buttons({
         {
             text = "Copy a string", width = 150, style = "primary",
             onClick = function()
@@ -277,7 +261,7 @@ function Page:BuildPage(page, width)
     end, "paste a ZwoelfStuff string here", 0)
     grid:Wide(paste, 84)
 
-    ButtonStrip(grid, {
+    grid:Buttons({
         {
             text = "Read it", width = 110,
             onClick = function()
@@ -347,6 +331,95 @@ function Page:BuildPage(page, width)
         .. "already have is thrown away: bars and reminders from a string are "
         .. "ADDED to yours. The co-tank panel and the settings are single "
         .. "things, so those do get replaced.")
+
+    ---------------------------------------------------------------------
+    -- From your own characters. No string: their layout is already in this
+    -- file. Lived on Settings until 4.43.0, which is the page about how
+    -- things LOOK - taking a layout changes which settings you have, and
+    -- that is what this page is for.
+    ---------------------------------------------------------------------
+    grid:Section("From your own characters")
+
+    -- A FUNCTION, not a table: another character's profile appears the moment
+    -- they log out, and a list built once at login would never show them.
+    -- UI.Dropdown takes either.
+    local function OtherCharacters()
+        local out = {}
+        for _, entry in ipairs(ns.OtherProfiles()) do
+            out[#out + 1] = {
+                value = entry.key,
+                text = string.format("%s  |cff888888%d %s|r", entry.key,
+                    entry.bars, entry.bars == 1 and "bar" or "bars"),
+            }
+        end
+        if #out == 0 then
+            out[1] = { value = false, text = "|cff888888No other character yet|r" }
+        end
+        return out
+    end
+
+    local layoutRow = grid:FullRow("Take a layout from", { controlWidth = 190 })
+    UI.Dropdown(layoutRow, OtherCharacters, function() return nil end,
+        function(value)
+            if not value then return end
+            local ok, result = ns.Bars:CopyLayoutFrom(value)
+            if ok then
+                ns.Print(string.format("Copied %d bar%s from |cffffd100%s|r. "
+                    .. "The cells are empty - a spell belongs to the character "
+                    .. "that can cast it.",
+                    result, result == 1 and "" or "s", value))
+            else
+                ns.Print("|cffff4040Nothing copied|r - " .. tostring(result) .. ".")
+            end
+        end, { emptyText = "Pick a character" })
+
+    grid:Note("Everything they built comes across - the bars, their "
+        .. "arrangements, sizes, looks, rules and positions - and every cell "
+        .. "arrives EMPTY. The spells stay behind on purpose: a Death Knight's "
+        .. "cooldowns are not castable on a Paladin, and copying them is the "
+        .. "bug this whole split exists to prevent. This replaces the bars you "
+        .. "have here. A character already sharing this very profile is not "
+        .. "offered - there is nothing to copy that you do not already have.")
+
+    ---------------------------------------------------------------------
+    -- Start over. Beside the delete button in spirit: the two things on
+    -- this page with no undo, kept on the page whose subject is which
+    -- settings you have rather than next to a font picker.
+    ---------------------------------------------------------------------
+    grid:Section("Start over")
+
+    local resetArmed = false
+    local resetStrip
+    resetStrip = grid:Buttons({
+        {
+            text = "Reset all settings", width = 160, style = "primary",
+            onClick = function()
+                local button = resetStrip.buttons[1].frame
+                -- Two-step, because this throws away every bar, position and
+                -- colour the user has set.
+                if not resetArmed then
+                    resetArmed = true
+                    button:SetText("Really reset? Click again")
+                    C_Timer.After(4, function()
+                        resetArmed = false
+                        if button and button.SetText then
+                            button:SetText("Reset all settings")
+                        end
+                    end)
+                    return
+                end
+                resetArmed = false
+                button:SetText("Reset all settings")
+                SlashCmdList.ZWOELFSTUFF("reset")
+            end,
+        },
+    })
+
+    grid:Note("Resets the profile you are using to the defaults - bars, "
+        .. "presets, positions, the minimap button - and every character "
+        .. "pointing at it follows. Recorded procs are kept: those are "
+        .. "measurements, and they cannot be typed back in. No other profile "
+        .. "is touched. There is no undo.")
 
     grid:Layout()
 

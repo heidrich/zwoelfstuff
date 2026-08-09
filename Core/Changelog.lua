@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.43.0",
+        date = "2026-08-09",
+        lines = {
+            "The Settings page finally says what applies to what. Three sections, one axis: |cffffd100Every bar|r (taking the Cooldown Manager display over, the bar text font), |cffffd100This window|r (the panel font), and |cffffd100Ways in|r (the minimap button and the game menu entry). It used to say \"applies to every bar\" over rows about the minimap.",
+            "\"Take a layout from\" and \"Reset all settings\" moved to the Profiles page. Everything on Settings changes how something looks; those two change which settings you have at all - and that is the page whose subject that is.",
+            "\"Take a layout from\" had been broken since 4.42.0: picking a character always answered \"that character has no bars\", because the copy still read the old saved-variable shape that the profiles update moves everything out of. It reads the new one now.",
+            "A character sharing your profile is no longer offered as a copy source. The copy empties every cell on the way over, so taking your own layout would have stripped the spells off your own bars.",
+        },
+    },
+    {
         version = "4.42.1",
         date = "2026-08-09",
         lines = {

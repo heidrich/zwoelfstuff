@@ -2477,6 +2477,19 @@ local function TestProfileMigration()
             and chars.charProfile["Alt - Destromath"] == "Alt - Destromath")
     Check("The old shape is gone once it is safely moved", chars.chars == nil)
 
+    -- THE COPY PATH AND THE MIGRATION MUST AGREE ABOUT WHERE BARS LIVE.
+    -- CopyLayoutFrom read the pre-migration shape for a whole version -
+    -- store.chars, which the migration deletes - so every "Take a layout
+    -- from" answered "that character has no bars" while the dropdown listed
+    -- them. This asks the migrated store through the same lookup the copy
+    -- uses now.
+    local lifted = ns.Profiles:BarsOfCharacter("Alt - Destromath", chars)
+    Check("The copy path finds a migrated character's bars",
+        lifted ~= nil and #lifted == 1 and lifted[1].id == 9)
+    Check("The copy path does not resurrect the deleted shape",
+        ns.Profiles:BarsOfCharacter("Alt - Destromath",
+            { chars = { ["Alt - Destromath"] = { bars = { { id = 9 } } } } }) == nil)
+
     ---------------------------------------------------------------------
     -- RUN IT AGAIN. This is the one that would go unnoticed: a migration
     -- that is not idempotent has already succeeded once by the time anybody

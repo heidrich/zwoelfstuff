@@ -3059,6 +3059,31 @@ function Grid:FullRow(label, opts)
     return row
 end
 
+-- A strip of buttons that flows like any other block in the grid.
+--
+-- Two Options files each carried their own local copy of this. They had not
+-- drifted yet, and the way to keep it that way is for there to be one. Each
+-- spec gets its button back in `spec.frame`, and the strip keeps the specs in
+-- `strip.buttons` - a two-step button ("Really delete it?") needs a handle on
+-- itself, and fishing it back out with GetChildren was the old workaround.
+function Grid:Buttons(buttons)
+    local strip = CreateFrame("Frame", nil, self.content)
+    strip:SetSize(self.width, 28)
+
+    local x = 0
+    for _, spec in ipairs(buttons) do
+        local btn = UI.Button(strip, spec.text, spec.width or 120,
+            spec.onClick, spec.style)
+        btn:SetPoint("LEFT", strip, "LEFT", x, 0)
+        x = x + (spec.width or 120) + 8
+        spec.frame = btn
+    end
+    strip.buttons = buttons
+
+    self:Wide(strip, 36)
+    return strip
+end
+
 -- Places everything and returns the y the next free line would start at.
 --
 -- Every block carries its own padTop and padBottom, and the pads of two

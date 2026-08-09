@@ -399,10 +399,25 @@ local function DeepCopy(value)
     return copy
 end
 
-function Bars:CopyLayoutFrom(profileKey)
-    local store = ZwoelfStuffDB and ZwoelfStuffDB.chars
-    local source = store and store[profileKey]
-    if not (source and source.bars) then return false, "that character has no bars" end
+function Bars:CopyLayoutFrom(charKey)
+    -- Through Profiles:BarsOfCharacter, which knows a character is a POINTER
+    -- since 4.42.0. This read ZwoelfStuffDB.chars directly - the shape the
+    -- profiles migration deletes on first login - so from 4.42.0 on, every
+    -- copy answered "that character has no bars" while the dropdown beside it
+    -- happily listed them. The lookup existed, one file over, with a comment
+    -- saying it was written for this caller. It had no callers.
+    local sourceBars = ns.Profiles:BarsOfCharacter(charKey)
+    if not (sourceBars and #sourceBars > 0) then
+        return false, "that character has no bars"
+    end
+
+    -- Copying a profile ONTO ITSELF is not a copy, it is data loss: the cells
+    -- are emptied on the way over, so "take my own layout" would strip every
+    -- spell off the bars it claims to duplicate. Two characters may point at
+    -- one profile since 4.42.0, which is how this becomes reachable at all.
+    if sourceBars == ns.db.bars then
+        return false, "that character shares this very profile"
+    end
 
     -- ONE RULE, IN ONE PLACE. Re-issuing the ids, remapping the attachments
     -- and dropping everything that names a spell used to be spelled out here
@@ -412,7 +427,7 @@ function Bars:CopyLayoutFrom(profileKey)
     -- keepSpells is false here and not a choice: a Death Knight's cooldowns
     -- are not castable on a Paladin, and this path exists precisely to move a
     -- layout between two characters who may share nothing but their owner.
-    local copied = ns.Share.AdoptBars(source.bars, function() return self:NextID() end, false)
+    local copied = ns.Share.AdoptBars(sourceBars, function() return self:NextID() end, false)
 
     if #copied == 0 then return false, "that character has no bars" end
 

@@ -40,180 +40,6 @@ local PAD       = 20
 local HEADER_H  = UI.HEADER_H
 
 ---------------------------------------------------------------------------
--- Shared page helpers
----------------------------------------------------------------------------
-
--- A strip of buttons that flows like any other block in the grid.
-local function ButtonStrip(grid, buttons)
-    local strip = CreateFrame("Frame", nil, grid.content)
-    strip:SetSize(grid.width, 28)
-
-    local x = 0
-    for _, spec in ipairs(buttons) do
-        local btn = UI.Button(strip, spec.text, spec.width or 120, spec.onClick, spec.style)
-        btn:SetPoint("LEFT", strip, "LEFT", x, 0)
-        x = x + (spec.width or 120) + 8
-        spec.frame = btn
-    end
-
-    grid:Wide(strip, 36)
-    return strip
-end
-
----------------------------------------------------------------------------
--- Settings
----------------------------------------------------------------------------
-local function BuildGeneralPage(page, width)
-    local grid = UI.Page(page, width, { explain = true })
-
-    grid:Section("Text")
-
-    -- Two fonts, two jobs. Panel text is read in rows in a window; bar text is
-    -- read at a glance over a moving scene. The design draws the window in a
-    -- narrow grotesk, and the client's own face is not one.
-    UI.MediaPicker(grid:FullRow("Panel font", { controlWidth = 220 }), "font",
-        function() return ns.db.panelFont or ns.Media.PanelFont() end,
-        function(value) ns.db.panelFont = value end,
-        function() ns.Print("Panel font set. |cffffd100/reload|r to redraw the window in it.") end)
-
-    grid:Note("The window you are looking at - its labels, values and headings. "
-        .. "It is a separate setting from the bars on purpose: a face that is "
-        .. "right over a moving 3D scene is rarely the one that is right for "
-        .. "forty rows of settings. The list is whatever your other addons have "
-        .. "registered.")
-
-    UI.MediaPicker(grid:FullRow("Bar text", { controlWidth = 220 }), "font",
-        function() return ns.db.font end,
-        function(value) ns.db.font = value end,
-        function() ns.Screen:Render() end)
-
-    grid:Note("Every piece of text on every bar, unless that one piece has "
-        .. "been given its own font in the bar's own settings. The list is "
-        .. "whatever your other addons have registered - so a font you "
-        .. "installed for ElvUI or WeakAuras is already in it.")
-
-    grid:Section("Blizzard's Cooldown Manager")
-
-    UI.Toggle(grid:Row("Take the display over",
-        { sublabel = "Hide the cooldowns you have not placed on a bar" }),
-        function() return ns.db.takeOverCDM ~= false end,
-        function(value)
-            ns.db.takeOverCDM = value and true or false
-            if not value then ns.Screen:ReleaseAll() end
-            ns.Screen:Render()
-        end)
-
-    grid:Note("Every icon on your bars IS one of Blizzard's - it owns the timing, "
-        .. "the charges and the stacks, and on this patch no addon may read those "
-        .. "for itself. Moving one onto your bar leaves a hole in Blizzard's own "
-        .. "row, because its layout does not know the icon left. With this off you "
-        .. "get that row back, holes included.")
-
-    grid:Section("Minimap button")
-    UI.Toggle(grid:Row("Show the button"),
-        function() return ns.db.minimap.show end,
-        function(value) ns.MinimapButton:SetShown(value) end)
-    UI.Toggle(grid:Row("Lock its position"),
-        function() return ns.db.minimap.locked end,
-        function(value) ns.db.minimap.locked = value end)
-
-    grid:Note("Left click opens this window, right click moves the bars, and "
-        .. "drag moves the button around the minimap edge.")
-
-    grid:Section("Game menu")
-    UI.Toggle(grid:Row("Show in the game menu"),
-        function() return ns.db.gameMenu ~= false end,
-        function(value) ns.GameMenu:SetShown(value) end)
-
-    grid:Note("An entry under the last of Blizzard's own, where you look for "
-        .. "an addon when you have forgotten what its slash command was. It "
-        .. "stands down while you are in combat: pressing it closes the pause "
-        .. "menu, and the game does not let an addon do that mid-fight.")
-
-    ---------------------------------------------------------------------
-    -- Another character's layout
-    --
-    -- The other half of settings being per character. Without this, every
-    -- alt starts from an empty screen and nobody builds the same interface
-    -- twice - which is why the owner asked for it in the same breath as the
-    -- per-character rule itself.
-    ---------------------------------------------------------------------
-    -- A FUNCTION, not a table: another character's profile appears the moment
-    -- they log out, and a list built once at login would never show them.
-    -- UI.Dropdown takes either.
-    local function OtherCharacters()
-        local out = {}
-        for _, entry in ipairs(ns.OtherProfiles()) do
-            out[#out + 1] = {
-                value = entry.key,
-                text = string.format("%s  |cff888888%d %s|r", entry.key,
-                    entry.bars, entry.bars == 1 and "bar" or "bars"),
-            }
-        end
-        if #out == 0 then
-            out[1] = { value = false, text = "|cff888888No other character yet|r" }
-        end
-        return out
-    end
-
-    local copyRow = grid:FullRow("Take a layout from", { controlWidth = 190 })
-    UI.Dropdown(copyRow, OtherCharacters, function() return nil end,
-        function(value)
-            if not value then return end
-            local ok, result = ns.Bars:CopyLayoutFrom(value)
-            if ok then
-                ns.Print(string.format("Copied %d bar%s from |cffffd100%s|r. "
-                    .. "The cells are empty - a spell belongs to the character "
-                    .. "that can cast it.",
-                    result, result == 1 and "" or "s", value))
-            else
-                ns.Print("|cffff4040Nothing copied|r - " .. tostring(result) .. ".")
-            end
-        end, { emptyText = "Pick a character" })
-
-    grid:Note("Everything you built comes across - the bars, their "
-        .. "arrangements, sizes, looks, rules and positions - and every cell "
-        .. "arrives EMPTY. The spells stay behind on purpose: a Death Knight's "
-        .. "cooldowns are not castable on a Paladin, and copying them is the "
-        .. "bug this whole split exists to prevent. This replaces the bars you "
-        .. "have here.")
-
-    grid:Section("Everything")
-
-    local resetArmed = false
-    local resetStrip
-    resetStrip = ButtonStrip(grid, {
-        {
-            text = "Reset all settings", width = 160, style = "primary",
-            onClick = function()
-                -- Two-step, because this throws away every bar, position and
-                -- colour the user has set.
-                if not resetArmed then
-                    resetArmed = true
-                    resetStrip.reset:SetText("Really reset? Click again")
-                    C_Timer.NewTimer(4, function()
-                        resetArmed = false
-                        if resetStrip.reset then resetStrip.reset:SetText("Reset all settings") end
-                    end)
-                    return
-                end
-                resetArmed = false
-                resetStrip.reset:SetText("Reset all settings")
-                SlashCmdList.ZWOELFSTUFF("reset")
-            end,
-        },
-    })
-    resetStrip.reset = select(1, resetStrip:GetChildren())
-
-    grid:Note("Restores every default: your bars, your presets and the minimap "
-        .. "button. Recorded procs are kept - those are measurements, and they "
-        .. "cannot be typed back in. There is no undo for the rest.")
-
-    grid:Layout()
-    page.Refresh = function() grid:Refresh() end
-end
-
----------------------------------------------------------------------------
 -- Diagnostics
 ---------------------------------------------------------------------------
 local function BuildDiagnosticsPage(page, width)
@@ -224,7 +50,7 @@ local function BuildDiagnosticsPage(page, width)
         .. "already knows the spells, binds the auras and has the timing, none of "
         .. "which an addon can do for itself on this patch.")
 
-    ButtonStrip(grid, {
+    grid:Buttons({
         { text = "What it holds", width = 150, style = "primary", onClick = function()
             ns.CDM:Dump()
         end },
@@ -234,7 +60,7 @@ local function BuildDiagnosticsPage(page, width)
     grid:Note("Procs are recorded while you play, per class and spec, and their "
         .. "duration is measured rather than assumed. Output goes to your chat frame.")
 
-    ButtonStrip(grid, {
+    grid:Buttons({
         { text = "What was seen", width = 150, style = "primary", onClick = function()
             ns.Auras:Dump()
         end },
@@ -463,9 +289,14 @@ local PAGES = {
     { key = "cooldowns", title = "Cooldowns", glyph = "grid", side = true,
       status = true },
 
+    -- Through the namespace like the pages below it: the builder lives in
+    -- Core/OptionsSettings.lua. What this page holds is the split its own
+    -- header comment explains - every bar, this window, the ways in - and
+    -- nothing that changes WHICH settings you have. That is Profiles.
     { key = "settings", title = "Settings", glyph = "sliders",
-      subtitle = "Applies to every bar.",
-      explain = true, build = BuildGeneralPage },
+      subtitle = "Every bar, this window, and the ways in.",
+      explain = true,
+      build = function(page, width) return ns.OptionsSettings:BuildPage(page, width) end },
 
     -- The one page that is about somebody ELSE. It carries its own right-hand
     -- column - not the bar inspector and not the explain panel - because what

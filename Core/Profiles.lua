@@ -195,7 +195,14 @@ function ns.OtherProfiles()
 
     for charKey, name in pairs(store.charProfile or {}) do
         local profile = type(name) == "string" and store.profiles[name]
-        if charKey ~= ns.profileKey and type(profile) == "table" then
+        -- A character POINTING AT THE PROFILE IN USE is left off the list.
+        -- Its layout is the one you are looking at, so there is nothing to
+        -- copy - and taking it would not be nothing: the copy empties every
+        -- cell on the way over, so it would strip the spells off your own
+        -- bars. CopyLayoutFrom refuses it too; this just keeps the refusal
+        -- out of the menu.
+        if charKey ~= ns.profileKey and name ~= ns.profileName
+            and type(profile) == "table" then
             out[#out + 1] = {
                 key = charKey, name = name, bars = #(profile.bars or {}),
             }
@@ -208,10 +215,16 @@ end
 
 -- The bars belonging to a character, by character key. One place, so the
 -- copy path does not have to know that a character is a pointer now.
-function Profiles:BarsOfCharacter(charKey)
-    local store = Store()
+--
+-- It went unused for one whole version: CopyLayoutFrom kept reading the
+-- pre-migration shape directly and answered "no bars" for every character.
+-- The store can be handed in so the self test can assert, against a made-up
+-- one, that this and the migration agree about where bars live.
+function Profiles:BarsOfCharacter(charKey, store)
+    store = store or Store()
     local name = store.charProfile and store.charProfile[charKey]
-    local profile = type(name) == "string" and store.profiles[name]
+    local profile = type(name) == "string" and store.profiles
+        and store.profiles[name]
     return type(profile) == "table" and profile.bars or nil
 end
 

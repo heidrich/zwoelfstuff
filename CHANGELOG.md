@@ -4,6 +4,36 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.43.0] - 2026-08-09
+
+### Changed
+
+- **The Settings page finally says what applies to what.** It used to say
+  "Applies to every bar" over rows about the minimap, and filed one font for
+  the window and one for the bars under a single heading called "Text". It is
+  three sections now, one axis: *Every bar* (taking over the Cooldown Manager
+  display, the bar text font), *This window* (the panel font), and *Ways in*
+  (the minimap button and the game menu entry).
+
+- **"Take a layout from" and "Reset all settings" moved to Profiles.**
+  Everything on Settings changes how something looks; those two change which
+  settings you have at all - and that is the page whose subject that is, next
+  to the delete button that already lives there.
+
+### Fixed
+
+- **"Take a layout from" had been broken since 4.42.0.** The dropdown listed
+  your other characters, and picking one always answered "that character has
+  no bars": the copy still read the saved-variable shape that the profiles
+  migration deletes on first login. It reads the migrated one now, and the
+  self test pins the two to the same answer.
+
+- **A character sharing your profile is no longer offered as a copy source.**
+  Copying a profile onto itself is not a copy: the cells are emptied on the
+  way over, so "take my own layout" would have stripped every spell off the
+  bars it claimed to duplicate. Possible at all since two characters can
+  point at one profile.
+
 ## [4.42.1] - 2026-08-09
 
 ### Fixed
