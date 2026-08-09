@@ -404,36 +404,17 @@ function Bars:CopyLayoutFrom(profileKey)
     local source = store and store[profileKey]
     if not (source and source.bars) then return false, "that character has no bars" end
 
-    local copied = {}
-    for _, cfg in ipairs(source.bars) do
-        local bar = DeepCopy(cfg)
-
-        -- Everything that names a spell is dropped, and the ids are re-issued
-        -- so an attachment cannot end up pointing at one of OUR bars by
-        -- coincidence of numbering.
-        bar.cellsBySpec, bar.parkedBySpec = nil, nil
-        bar.cells, bar.parked = {}, {}
-        bar.id = 0
-
-        copied[#copied + 1] = bar
-    end
+    -- ONE RULE, IN ONE PLACE. Re-issuing the ids, remapping the attachments
+    -- and dropping everything that names a spell used to be spelled out here
+    -- AND in the importer. They had already disagreed about what happens to an
+    -- anchor whose target did not come along. See ns.Share.AdoptBars.
+    --
+    -- keepSpells is false here and not a choice: a Death Knight's cooldowns
+    -- are not castable on a Paladin, and this path exists precisely to move a
+    -- layout between two characters who may share nothing but their owner.
+    local copied = ns.Share.AdoptBars(source.bars, function() return self:NextID() end, false)
 
     if #copied == 0 then return false, "that character has no bars" end
-
-    -- Attachments are by id, so the old ids have to be mapped onto the new
-    -- ones. Done in a second pass, because a bar can be attached to one that
-    -- comes after it in the list.
-    local newID = {}
-    for index, bar in ipairs(copied) do
-        newID[source.bars[index].id] = self:NextID()
-        bar.id = newID[source.bars[index].id]
-    end
-    for _, bar in ipairs(copied) do
-        if bar.anchor then
-            bar.anchor.to = newID[bar.anchor.to]
-            if not bar.anchor.to then bar.anchor = nil end
-        end
-    end
 
     ns.db.bars = copied
     self:Prepare()

@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.41.1
+## Version: 4.42.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -19,12 +19,37 @@
 # REGISTRY, not a look: it is how the fonts and textures the user already has
 # from their other addons show up in our pickers, under the names they know.
 # Licences stay with the libraries: LibStub is public domain, CallbackHandler
-# is BSD, LibSharedMedia is LGPL 2.1. Load order is dependency order.
+# is BSD, LibSharedMedia is LGPL 2.1, LibSerialize is MIT and LibDeflate is
+# zlib. Load order is dependency order.
+#
+# LibSerialize and LibDeflate are the pair every addon that shares a string
+# uses - WeakAuras, Plater, MDT and EllesmereUI all reach for exactly these
+# two. Serialize turns a table into bytes, Deflate squeezes them and turns
+# them into something you can paste into a chat window. Writing either by hand
+# would be a worse copy of a solved problem.
+#
+# NOTE ON THE LIBDEFLATE LICENCE: the copy shipped beside LibDeflate in one of
+# the addons on this machine was the LGPL, which is NOT its licence -
+# LibDeflate.lua says zlib in its own header, and the LICENSE.txt here is the
+# matching one. Copying the file that happens to sit next to a library is how
+# a project ends up claiming the wrong terms.
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+Libs\LibSerialize\LibSerialize.lua
+Libs\LibDeflate\LibDeflate.lua
 
 Core\Init.lua
+
+# Turning a layout into a string and back. High up because Bars.lua uses its
+# adopt rule - the one that re-issues ids and remaps anchors - and that rule
+# has to exist before anything that copies a bar.
+Core\Share.lua
+
+# Which settings a character is using. Owns ns.OpenProfile, which every file
+# after this one reads the result of through ns.db.
+Core\Profiles.lua
+
 Core\Media.lua
 # The bar textures this addon ships, registered into the SHARED registry -
 # so they sit next to everything the user's other addons put there, and are

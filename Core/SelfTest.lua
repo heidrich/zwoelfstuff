@@ -733,6 +733,40 @@ local function TestSpellIdentity()
     local second = ranks[2] and (ranks[2] * 10000) or math.huge
     Check("A viewer's band cannot reach into the next one", first < second)
 
+    -- WHICH HEADING AN ENTRY IS LISTED UNDER.
+    --
+    -- Above the live check on purpose. Everything below this block needs a
+    -- running Cooldown Manager and is skipped on a desktop, which is where
+    -- "the picker groups the viewers" has been going unchecked - so the one
+    -- part of the answer that is a pure decision is asserted here, where it
+    -- runs every time.
+    local GroupKeyFor = ns.OptionsBars and ns.OptionsBars.GroupKeyFor
+    if GroupKeyFor then
+        -- The spells Blizzard's Cooldown Manager knows but is not currently
+        -- displaying. They used to carry a heading of their own that called
+        -- them "Not shown by Blizzard", which described Blizzard's settings
+        -- panel rather than the spell. They are this spec's cooldowns and
+        -- they are listed with the rest.
+        Check("Spells Blizzard is not displaying list under Cooldowns",
+            GroupKeyFor(CDM.HIDDEN_KEY) == "essential",
+            GroupKeyFor(CDM.HIDDEN_KEY))
+
+        -- And every real viewer still keeps its own, or the line above would
+        -- have swallowed the whole list into one heading.
+        for _, viewer in ipairs(CDM.VIEWERS) do
+            Check("Viewer " .. viewer.key .. " keeps its own heading",
+                GroupKeyFor(viewer.key) == viewer.key,
+                GroupKeyFor(viewer.key))
+        end
+
+        -- The catch-all, both ways in. A viewer key a later patch renames must
+        -- cost one "Other" row, never a spell that quietly disappears.
+        Check("An unknown viewer falls through to Other",
+            GroupKeyFor("no such viewer") == "other")
+        Check("An entry with no viewer at all falls through to Other",
+            GroupKeyFor(nil) == "other")
+    end
+
     -- READ-ONLY, against whatever the Cooldown Manager is holding right now.
     -- The reported symptom was groups interleaving, so the catalogue is asked
     -- whether it ever returns to a viewer it has already left behind.
@@ -1769,11 +1803,19 @@ local function TestCoTanks()
         end
     end
 
-    -- The strips grow away from OPPOSITE ends, or the two meet in the middle
-    -- of a narrow row and draw on top of each other.
-    Check("The two strips grow apart, not into each other",
-        defaults.debuffs.growth ~= defaults.buffs.growth,
-        defaults.debuffs.growth .. " / " .. defaults.buffs.growth)
+    -- WHERE THE STRIPS SIT is checked in its own suite now - see "Co-tank
+    -- strips" below.
+    --
+    -- What stood here asserted the opposite of what is true: "the two strips
+    -- grow apart, not into each other", which is what opposite growth
+    -- directions on the SAME edge look like in a comment and never was on a
+    -- screen. Eight icons at 22 is 183 of a 240 row, so they met in the
+    -- middle and drew on top of each other from the fifth icon on.
+    --
+    -- It is worth the extra lines to say why: this check went RED the moment
+    -- the arrangement was fixed. A test that restates the design instead of
+    -- the requirement reports a correct change as a regression, and the
+    -- cheapest way past a red test is to undo the fix.
 
     -- The gradients the co-tank frame offers are the same three the bars
     -- offer, for the same reason: those are the three the engine can draw.
@@ -2296,6 +2338,288 @@ local function TestAnchors()
     Check("No icon leaves the whole width", left == 5 and right == 5)
 end
 
+---------------------------------------------------------------------------
+-- The two aura strips on a co-tank row
+--
+-- They shipped drawing on top of each other and nothing here noticed, because
+-- nothing here asked. The old arrangement was two strips on the SAME edge
+-- growing towards each other, which reads as "away from each other" and is
+-- not: eight icons at 22 is 183 of a 240 row, so they met in the middle.
+--
+-- The rule that replaces it is one a test can hold: the two strips live on
+-- DIFFERENT vertical edges. That is true at any icon count, any size and any
+-- row width, which the old arrangement never was at any of them.
+---------------------------------------------------------------------------
+local function TestCoTankStrips()
+    local defaults = ns.DEFAULTS and ns.DEFAULTS.coTanks
+    if not defaults then
+        Skip("Co-tank strips", "no co-tank defaults")
+        return
+    end
+
+    local function Edge(anchor)
+        return tostring(anchor):find("TOP") and "top" or "bottom"
+    end
+
+    Check("The two strips do not share an edge",
+        Edge(defaults.debuffs.anchor) ~= Edge(defaults.buffs.anchor),
+        defaults.debuffs.anchor .. " / " .. defaults.buffs.anchor)
+    Check("Debuffs sit on the top edge", defaults.debuffs.anchor == "TOPLEFT")
+    Check("Buffs sit on the bottom edge", defaults.buffs.anchor == "BOTTOMLEFT")
+    Check("Both strips read left to right",
+        defaults.debuffs.growth == "right" and defaults.buffs.growth == "right")
+
+    -- THE ARITHMETIC THAT WAS NEVER DONE. Kept as a check rather than a
+    -- comment: if somebody widens the strips or narrows the row later, the
+    -- old arrangement stops being merely wrong and starts being wrong again.
+    local width = defaults.debuffs.perRow * defaults.debuffs.size
+        + (defaults.debuffs.perRow - 1) * defaults.debuffs.spacing
+    Check("A full strip is wider than half the row - which is why one edge each",
+        width > defaults.width / 2, width .. " of " .. defaults.width)
+
+    ---------------------------------------------------------------------
+    -- The migration off the overlapping pair
+    ---------------------------------------------------------------------
+    local old = {
+        debuffs = { anchor = "BOTTOMLEFT", growth = "right" },
+        buffs   = { anchor = "BOTTOMRIGHT", growth = "left" },
+    }
+    ns.CoTanks:Migrate(old)
+    Check("An untouched panel is moved off the overlap",
+        old.debuffs.anchor == "TOPLEFT" and old.buffs.anchor == "BOTTOMLEFT"
+            and old.buffs.growth == "right")
+
+    -- AND THE ONE THAT MUST NOT MOVE. A setting that changes itself back
+    -- after somebody has fixed it is worse than the fault it is fixing.
+    local chosen = {
+        debuffs = { anchor = "BOTTOMLEFT", growth = "right" },
+        buffs   = { anchor = "TOPRIGHT",  growth = "left" },
+    }
+    ns.CoTanks:Migrate(chosen)
+    Check("A panel somebody has already moved is left alone",
+        chosen.debuffs.anchor == "BOTTOMLEFT" and chosen.buffs.anchor == "TOPRIGHT"
+            and chosen.buffs.growth == "left")
+
+    local bare = {}
+    ns.CoTanks:Migrate(bare)
+    Check("A profile with no strips yet is not invented", bare.debuffs == nil)
+end
+
+---------------------------------------------------------------------------
+-- Sharing
+--
+-- The one part of this addon whose output goes to a STRANGER. Everything else
+-- that breaks costs the person who broke it a reload; a string that packs
+-- wrong is pasted into a Discord and fails on somebody else's machine, where
+-- nobody can see what happened. So the round trip is asserted here rather
+-- than trusted, and so is every refusal - a wrong error message sends the
+-- reader to a bug report when the real problem was a truncated paste.
+---------------------------------------------------------------------------
+local function TestShare()
+    local Share = ns.Share
+    if not Share then
+        Skip("Sharing", "Share.lua did not load")
+        return
+    end
+
+    -- THE LIBRARIES, first and by name. Everything below is meaningless if
+    -- these are absent, and "nothing failed" while nothing ran is the exact
+    -- shape of a check more generous than the thing it checks.
+    local haveSerialize = LibStub and LibStub("LibSerialize", true) and true or false
+    local haveDeflate   = LibStub and LibStub("LibDeflate", true) and true or false
+    Check("LibSerialize is loaded", haveSerialize)
+    Check("LibDeflate is loaded", haveDeflate)
+    if not (haveSerialize and haveDeflate) then return end
+
+    ---------------------------------------------------------------------
+    -- Out and back
+    ---------------------------------------------------------------------
+    local payload = {
+        stamp = { class = "DEATHKNIGHT", spec = 250, specName = "Blood" },
+        label = "Zwoelf M+",
+        parts = {
+            bars = {
+                { id = 3, rows = 2, cols = 4, cells = { [1] = 49028, [2] = 55233 },
+                  colour = { 0.1, 0.2, 0.3, 1 }, anchor = { to = 7, point = "TOP" } },
+                { id = 7, rows = 1, cols = 6, cells = {} },
+            },
+            reminders = { { text = "Bone Shield", spellID = 195181, trigger = "missing" } },
+            presets = { ["My look"] = { barWidth = 210, gap = 3 } },
+        },
+    }
+
+    local text, err = Share.Encode(payload)
+    Check("A profile packs into a string", type(text) == "string", err)
+
+    if type(text) == "string" then
+        Check("The string carries the format in its prefix",
+            text:sub(1, #Share.PREFIX) == Share.PREFIX, text:sub(1, 8))
+
+        -- Printable in the sense the name promises: this gets pasted into a
+        -- chat window, and one byte the client eats takes the whole string.
+        Check("The string is printable text",
+            not text:find("[%z\1-\31\127]"), "control character in the string")
+
+        local back, backErr = Share.Decode(text)
+        Check("The string unpacks again", type(back) == "table", backErr)
+
+        if type(back) == "table" then
+            Check("The format version survives", back.v == Share.FORMAT)
+            Check("The label survives", back.label == "Zwoelf M+")
+            Check("The class stamp survives", back.stamp and back.stamp.class == "DEATHKNIGHT")
+            Check("Both bars survive", back.parts.bars and #back.parts.bars == 2)
+
+            local first = back.parts.bars and back.parts.bars[1]
+            Check("A bar's grid survives", first and first.rows == 2 and first.cols == 4)
+            Check("A spell in a cell survives", first and first.cells and first.cells[1] == 49028)
+            Check("A colour survives to the decimal",
+                first and first.colour and first.colour[1] == 0.1 and first.colour[4] == 1)
+            Check("An attachment survives", first and first.anchor and first.anchor.to == 7)
+            Check("A reminder survives",
+                back.parts.reminders and back.parts.reminders[1]
+                and back.parts.reminders[1].spellID == 195181)
+            Check("A saved look survives by its name",
+                back.parts.presets and back.parts.presets["My look"]
+                and back.parts.presets["My look"].barWidth == 210)
+        end
+
+        -- Whitespace at either end is what a forum and a chat window add, and
+        -- it is far more common than real corruption.
+        local padded = Share.Decode("  \n" .. text .. "\n  ")
+        Check("A string pasted with spaces around it still opens", type(padded) == "table")
+    end
+
+    ---------------------------------------------------------------------
+    -- Every refusal, in its own words
+    ---------------------------------------------------------------------
+    local function Refuses(name, input, wanted)
+        local got, why = Share.Decode(input)
+        local ok = got == nil and type(why) == "string" and why:find(wanted, 1, true) ~= nil
+        Check(name, ok, why or "it was ACCEPTED")
+    end
+
+    Refuses("Nothing pasted in says so", "", "nothing pasted in")
+    Refuses("Only spaces says the same", "   \n ", "nothing pasted in")
+    Refuses("Somebody else's string names ours", "!EUI_abcdef", "not a ZwoelfStuff string")
+    Refuses("Plain typing is not a string", "hello", "not a ZwoelfStuff string")
+
+    -- The one that matters most: a FUTURE format has to read as "update the
+    -- addon", not as "damaged". They are different problems and only one of
+    -- them is the reader's to fix.
+    Refuses("A newer format asks for an update", "!ZS9_abcdef", "newer ZwoelfStuff")
+
+    Refuses("A cut-short string says it was cut short",
+        Share.PREFIX .. "!!!!not printable at all!!!!", "cut short")
+
+    if type(text) == "string" then
+        -- Half a string. The prefix is intact and the payload is not, which is
+        -- exactly what a chat window's length limit produces.
+        Refuses("Half a string is reported as damaged",
+            text:sub(1, math.floor(#text / 2)), "damaged")
+    end
+
+    -- A valid string holding nothing is not an error in the format; it is an
+    -- empty export, and saying "damaged" would send somebody looking for a
+    -- corruption that is not there.
+    local empty = Share.Encode({ parts = {} })
+    Refuses("An empty export says it is empty", empty, "nothing in it")
+
+    ---------------------------------------------------------------------
+    -- A PART THIS BUILD DOES NOT KNOW must cost that part and nothing else.
+    -- The alternative is that adding a sixth part in a later version makes
+    -- every string from it unopenable in this one.
+    ---------------------------------------------------------------------
+    local mixed = Share.Encode({
+        parts = { bars = { { id = 1 } }, somethingNewer = { 1, 2, 3 } },
+    })
+    local got = mixed and Share.Decode(mixed)
+    Check("An unknown part is dropped, not refused",
+        type(got) == "table" and got.parts.bars ~= nil and got.parts.somethingNewer == nil)
+    Check("The dropped part is reported",
+        type(got) == "table" and got.dropped and got.dropped[1] == "somethingNewer")
+
+    local allNew = Share.Encode({ parts = { somethingNewer = { 1 } } })
+    Refuses("A string of nothing BUT unknown parts says so", allNew, "newer version")
+
+    ---------------------------------------------------------------------
+    -- Whose spells these are
+    ---------------------------------------------------------------------
+    local mine = { class = "DEATHKNIGHT" }
+    Check("The same class fits",
+        Share.SpellsFit({ class = "DEATHKNIGHT" }, mine) == true)
+    Check("A different class does not fit",
+        Share.SpellsFit({ class = "PALADIN" }, mine) == false)
+
+    -- THREE ANSWERS, NOT TWO. An unstamped string used to read as a match,
+    -- which is the same silent yes as a real one and the more dangerous of
+    -- the two - it puts uncastable spells on a bar and says nothing.
+    Check("An unstamped string answers 'cannot tell'",
+        Share.SpellsFit(nil, mine) == nil)
+    Check("A stamp with no class answers 'cannot tell'",
+        Share.SpellsFit({ spec = 250 }, mine) == nil)
+
+    ---------------------------------------------------------------------
+    -- Taking somebody else's bars
+    ---------------------------------------------------------------------
+    local counter = 100
+    local function NextID() counter = counter + 1 return counter end
+
+    local source = {
+        { id = 1, cells = { 49028 }, cellsBySpec = { [250] = { 49028 } },
+          parked = { 55233 }, rows = 1, cols = 3 },
+        { id = 2, anchor = { to = 1, point = "TOP" } },
+        { id = 3, anchor = { to = 99, point = "TOP" } },  -- target never travels
+    }
+
+    local taken = Share.AdoptBars(source, NextID, false)
+    Check("Every bar comes across", #taken == 3)
+    Check("Every bar gets a new id",
+        taken[1].id == 101 and taken[2].id == 102 and taken[3].id == 103)
+    Check("An attachment follows its bar to the new id", taken[2].anchor.to == 101)
+    Check("An attachment to a bar that did not travel is dropped",
+        taken[3].anchor == nil)
+
+    Check("Without the spells, the cells arrive empty",
+        taken[1].cells and next(taken[1].cells) == nil)
+    Check("Without the spells, the per-spec cells are gone too",
+        taken[1].cellsBySpec == nil)
+    Check("Without the spells, the parked ones are gone as well",
+        taken[1].parked and next(taken[1].parked) == nil)
+    Check("The grid still comes across",
+        taken[1].rows == 1 and taken[1].cols == 3)
+
+    -- THE SOURCE MUST NOT MOVE. It is somebody's live profile on the copy
+    -- path, and a shallow copy here would have edited their bars while
+    -- claiming to read them.
+    Check("Adopting does not touch what it read from",
+        source[1].cells[1] == 49028 and source[3].anchor ~= nil
+            and source[1].id == 1)
+
+    counter = 200
+    local kept = Share.AdoptBars(source, NextID, true)
+    Check("With the spells, the cells arrive filled", kept[1].cells[1] == 49028)
+    Check("With the spells, the per-spec cells arrive too",
+        kept[1].cellsBySpec and kept[1].cellsBySpec[250]
+            and kept[1].cellsBySpec[250][1] == 49028)
+    Check("With the spells, the ids are still re-issued", kept[1].id == 201)
+
+    Check("Nothing to adopt is not an error", select(2, Share.AdoptBars({}, NextID, false)) == 0)
+    Check("Adopting a non-table is not an error", select(2, Share.AdoptBars(nil, NextID, false)) == 0)
+
+    ---------------------------------------------------------------------
+    -- What the import window says before it writes anything
+    ---------------------------------------------------------------------
+    local lines = Share.Describe(payload)
+    Check("The preview lists one line per part", #lines == 3)
+    Check("The preview counts the bars",
+        lines[1].label == "Bars" and lines[1].detail == "2 bars")
+    Check("The preview counts one reminder in the singular",
+        lines[2].detail == "1 reminder")
+    Check("The preview counts saved looks, which have no order",
+        lines[3].detail == "1 look")
+    Check("The preview of nothing is empty", #Share.Describe(nil) == 0)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -2319,6 +2643,7 @@ function Test:Run()
         { "Gradients",     TestGradients },
         { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },
+        { "Co-tank strips", TestCoTankStrips },
         { "Reminders",     TestReminders },
         { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
@@ -2326,6 +2651,7 @@ function Test:Run()
         { "Visibility",    TestVisibility },
         { "Effects",       TestEffects },
         { "Media",         TestMedia },
+        { "Sharing",       TestShare },
         { "Your bars",     TestLiveBars },
     }
 

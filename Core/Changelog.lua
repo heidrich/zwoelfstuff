@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.42.0",
+        date = "2026-08-09",
+        lines = {
+            "The two aura strips on a co-tank row were drawing on top of each other. They sat at opposite ends of the same edge and grew towards each other - which sounds like it keeps them apart and does not, because eight icons fill more than half the row. Debuffs now run along the top of the row and buffs along the bottom, both left to right. If you never moved either strip, yours is moved for you; if you did, your arrangement stays exactly as you set it.",
+            "|cffffd100/zs reset|r threw away your recorded procs while telling you it kept them, and it reset every character on the account instead of the one you typed it on. It now resets the settings you are using, and nothing else.",
+            "|cffffd100Not shown by Blizzard|r is gone as a heading. Those were never a different kind of thing - they are your spec's cooldowns, and on a default setup they are most of the list. They sit under |cffffd100Cooldowns|r with the rest, the ones you arranged first. What was worth knowing is still said on the entry itself: Blizzard is not displaying that spell, so there is no frame to adopt yet, and one drag in Blizzard's own Cooldown Manager settings fixes it.",
+        },
+    },
+    {
         version = "4.41.1",
         date = "2026-08-09",
         lines = {

@@ -653,12 +653,53 @@ local GROUPS = {
     -- Not from the Cooldown Manager: procs this character has been seen to
     -- raise. What is shown is the aura; what drives it is the glow underneath.
     { key = "aura",      label = "Auras" },
-    -- Everything Blizzard's Cooldown Manager knows and is not showing. On a
-    -- default setup that is most of the spec, so it is a GROUP rather than a
-    -- footnote - it is just the last one, under the spells you arranged.
-    { key = ns.CDM.HIDDEN_KEY, label = "Not shown by Blizzard" },
     { key = "other",     label = "Other" },
 }
+
+-- WHICH HEADING AN ENTRY IS LISTED UNDER, which is not the same question as
+-- where it CAME FROM.
+--
+-- Everything Blizzard's Cooldown Manager knows but is not currently displaying
+-- used to be a group of its own, called "Not shown by Blizzard". That was a
+-- statement about Blizzard's settings panel dressed up as a category, and it
+-- read as though those entries were a different KIND of thing. They are not:
+-- they are this spec's spells and cooldowns, the same as the ones above them,
+-- and on a default setup they are most of the list.
+--
+-- So they are listed under Cooldowns with everything else. The distinction is
+-- kept where it is actually true and actually useful - on the entry itself,
+-- as the tooltip line that says there is no frame to adopt yet and names the
+-- one drag that fixes it.
+--
+-- The ORDER still separates them without a heading: the catalogue bands its
+-- sort key by viewer rank, and the hidden band ranks after all four viewers.
+-- The spells you arranged in Blizzard's own Cooldown Manager stay at the top
+-- of Cooldowns, in your order, and the rest follow underneath.
+local DISPLAY_GROUP = {
+    [ns.CDM.HIDDEN_KEY] = "essential",
+}
+
+-- Which heading one entry is listed under. PURE, and exported, for the reason
+-- the harness prints two lines below its own result: it cannot check "the
+-- picker groups the viewers" at all, because that check needs a live Cooldown
+-- Manager and there is none on a desktop. So the DECISION is lifted out of the
+-- fill loop, where it was three lines nothing could reach, and the test asserts
+-- it directly.
+local GROUP_KEYS = {}
+for _, group in ipairs(GROUPS) do GROUP_KEYS[group.key] = true end
+
+function Workspace.GroupKeyFor(viewerKey)
+    local key = viewerKey or "other"
+
+    -- Re-homed first: an entry can come from a source that is not a heading of
+    -- its own, and the not-currently-displayed spells are exactly that.
+    key = DISPLAY_GROUP[key] or key
+
+    -- Then the catch-all, so a viewer key this build does not know costs one
+    -- "Other" row rather than a spell that silently vanishes.
+    if not GROUP_KEYS[key] then key = "other" end
+    return key
+end
 
 ---------------------------------------------------------------------------
 -- WHO THE LIST IS FILLING IN FOR.
@@ -718,7 +759,10 @@ function Workspace:BuildSpellPane(parent, width, host)
             { key = "buffIcon",  text = "Buffs" },
             { key = "buffBar",   text = "Buff bars" },
             { key = "aura",      text = "Auras" },
-            { key = ns.CDM.HIDDEN_KEY, text = "Not shown" },
+            -- No chip for the not-currently-displayed spells: they are listed
+            -- under Cooldowns now (see DISPLAY_GROUP), and a chip for them
+            -- would filter on a key no entry carries any more - it would come
+            -- back empty every time.
         },
         current = function() return filter end,
         onSelect = function(key)
@@ -796,8 +840,7 @@ function Workspace:BuildSpellPane(parent, width, host)
                 or entry.name:lower():find(query, 1, true)
                 or tostring(entry.spellID):find(query, 1, true)
 
-            local key = entry.viewer or "other"
-            if not buckets[key] then key = "other" end
+            local key = Workspace.GroupKeyFor(entry.viewer)
 
             if hit and (filter == "all" or filter == key) then
                 matched = matched + 1
@@ -912,12 +955,16 @@ function Workspace:BuildSpellPane(parent, width, host)
                         }
                     end
 
-                    -- WHAT "NOT SHOWN" COSTS, said on the entry rather than
-                    -- discovered later. A bar cell adopts Blizzard's frame,
-                    -- and a reminder reads it - neither has anything to work
-                    -- with while the spell sits in Blizzard's Hidden
-                    -- category. It is one drag in their settings to fix, so
-                    -- the line says where.
+                    -- NOW THE ONLY PLACE THE DISTINCTION IS MADE, and the
+                    -- reason it may not be dropped along with the heading.
+                    --
+                    -- A bar cell adopts Blizzard's frame and a reminder reads
+                    -- it; neither has anything to work with while the spell
+                    -- sits in Blizzard's Hidden category. Since these entries
+                    -- are listed under Cooldowns with everything else, this
+                    -- line is what stops one being placed into a cell that can
+                    -- never light up without saying so first. It is one drag in
+                    -- Blizzard's own settings to fix, so the line says where.
                     if entry.viewer == ns.CDM.HIDDEN_KEY then
                         row.dkLines[#row.dkLines + 1] = {
                             text = "Blizzard's Cooldown Manager knows this spell "

@@ -4,6 +4,35 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.42.0] - 2026-08-09
+
+### Fixed
+
+- **The two aura strips on a co-tank row were drawing on top of each other.**
+  They sat at opposite ends of the same edge and grew towards each other,
+  which sounds like it keeps them apart and does not: eight icons fill more
+  than half the row, so from the fifth one on they were in the same place.
+  Debuffs now sit along the top of the row and buffs along the bottom, both
+  reading left to right, which cannot collide at any icon count or size. If
+  you had never moved either strip yourself, yours is moved for you; if you
+  had, your arrangement is left exactly as you set it.
+
+- **`/zs reset` threw away your recorded procs**, despite saying it kept
+  them. It also reset every character on the account, not the one you typed
+  it on. It now resets the settings you are using and nothing else, and the
+  procs really do survive.
+
+### Changed
+
+- **"Not shown by Blizzard" is gone as a heading.** The spells under it were
+  not a different kind of thing - they are your spec's cooldowns, and on a
+  default setup they are most of the list. They are listed under **Cooldowns**
+  with everything else, in Blizzard's own order, with the ones you arranged
+  first. The one thing that was worth knowing is still said, on the entry
+  itself: a spell Blizzard is not currently displaying has no frame for this
+  addon to adopt, and it takes one drag in Blizzard's Cooldown Manager
+  settings to change that.
+
 ## [4.41.1] - 2026-08-09
 
 ### Fixed

@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.41.1"
+ns.version = "4.42.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -322,8 +322,21 @@ ns.DEFAULTS = {
         rangeFade     = true,
         rangeAlpha    = 0.45,
 
-        -- Aura strips. One per polarity, growing away from opposite ends of
-        -- the row so they cannot collide in the middle.
+        -- Aura strips. One per polarity, ONE ABOVE THE OTHER and both
+        -- growing to the right.
+        --
+        -- They used to sit at opposite ends of the same edge - debuffs from
+        -- the bottom left, buffs from the bottom right - on the reasoning
+        -- that growing away from each other kept them apart. It does not, and
+        -- the arithmetic was there to be done all along: eight icons at 22
+        -- with a point between them is 183 wide, and the row is 240. From the
+        -- fifth icon on, the two strips are drawing in the same place. On a
+        -- real pull, when both are full, they were simply on top of one
+        -- another.
+        --
+        -- Separating them by EDGE instead of by direction cannot collide at
+        -- any count, at any icon size, on any row width. Both read left to
+        -- right, which is also the direction everything else on the row does.
         --
         -- LIVE DATA NEEDS PATCH 12.1. Auras on another player are secret on
         -- this client and no addon may read them at all; the sanctioned route
@@ -333,7 +346,7 @@ ns.DEFAULTS = {
         -- as many words rather than showing an empty strip.
         debuffs = {
             show = true, max = 8, size = 22, spacing = 1, perRow = 8,
-            anchor = "BOTTOMLEFT", growth = "right",
+            anchor = "TOPLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.75, 0.15, 0.15 },
             countdown = true, countdownSize = 0,
@@ -341,7 +354,7 @@ ns.DEFAULTS = {
         },
         buffs = {
             show = true, max = 8, size = 22, spacing = 1, perRow = 8,
-            anchor = "BOTTOMRIGHT", growth = "left",
+            anchor = "BOTTOMLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.25, 0.55, 0.30 },
             countdown = true, countdownSize = 0,
@@ -831,7 +844,11 @@ function ns.CharacterKey()
 end
 
 -- The measurements, shared by every character on the account.
-local ACCOUNT_DEFAULTS = {
+--
+-- On the namespace rather than a local: Profiles.lua owns opening the store
+-- now, and it needs this list to tell a measurement apart from a setting when
+-- it migrates an old database.
+ns.ACCOUNT_DEFAULTS = {
     procs       = {},
     auraLinks   = {},
     procsHidden = {},
@@ -850,63 +867,9 @@ local ACCOUNT_DEFAULTS = {
     activeStates = {},
 }
 
-function ns.OpenProfile()
-    local store = ZwoelfStuffDB
-
-    -- A file written before profiles existed: everything in it belonged to
-    -- whoever was playing, so it becomes that character's profile and the
-    -- measurements are lifted out to the account.
-    if store.chars == nil then
-        local old = {}
-        for key, value in pairs(store) do
-            old[key] = value
-            store[key] = nil
-        end
-
-        store.account = {}
-        for key in pairs(ACCOUNT_DEFAULTS) do
-            store.account[key] = old[key]
-            old[key] = nil
-        end
-
-        store.chars = {}
-        local key = ns.CharacterKey()
-        if key and next(old) then store.chars[key] = old end
-    end
-
-    store.account = ns.ApplyDefaults(store.account or {}, ACCOUNT_DEFAULTS)
-    ns.account = store.account
-
-    local key = ns.CharacterKey() or "unknown"
-    store.chars[key] = store.chars[key] or {}
-
-    -- BEFORE ApplyDefaults, never after. A migration that runs afterwards is
-    -- overwritten by the default it was meant to replace on the very next
-    -- login, which is the class of bug that eats a saved setting in silence.
-    -- Same placement, and the same reasoning, as the fill-direction migration
-    -- in Bars:Prepare.
-    if ns.CoTanks and ns.CoTanks.Migrate then
-        pcall(ns.CoTanks.Migrate, ns.CoTanks, store.chars[key].coTanks)
-    end
-
-    ns.db = ns.ApplyDefaults(store.chars[key], ns.DEFAULTS)
-    ns.profileKey = key
-end
-
--- Every other character with a profile, newest list built on demand because
--- it changes whenever somebody else logs out.
-function ns.OtherProfiles()
-    local out = {}
-    if not (ZwoelfStuffDB and ZwoelfStuffDB.chars) then return out end
-
-    for key, profile in pairs(ZwoelfStuffDB.chars) do
-        if key ~= ns.profileKey and type(profile) == "table" then
-            out[#out + 1] = { key = key, bars = #(profile.bars or {}) }
-        end
-    end
-    table.sort(out, function(a, b) return a.key < b.key end)
-    return out
-end
+-- ns.OpenProfile and ns.OtherProfiles used to live here. They are in
+-- Core/Profiles.lua now, together with the migration that gives a profile a
+-- name of its own and lets a second character point at it.
 
 ---------------------------------------------------------------------------
 -- Lifecycle
@@ -1195,16 +1158,22 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         -- Recorded procs survive. They are measurements that took hours of
         -- playing to collect and cannot be typed back in, so they are not
         -- "settings" - /zs auras forget is how those go away.
-        local procs = ns.account.procs
-        ZwoelfStuffDB = {}
-        ns.db = ns.ApplyDefaults(ZwoelfStuffDB, ns.DEFAULTS)
-        ns.account.procs = procs or ns.account.procs
+        -- THIS PROFILE, and nothing else in the file.
+        --
+        -- It used to be ZwoelfStuffDB = {}, which threw away every other
+        -- character's settings as well - and worse, it DETACHED the account
+        -- table, so ns.account pointed at a table no longer in the saved
+        -- variable. The very next line wrote the rescued procs into that
+        -- orphan, and they were gone on the next login. The promise in the
+        -- message above lived in the comment and never in the code.
+        local store = ZwoelfStuffDB
+        store.profiles[ns.profileName] = {}
+        ns.db = ns.ApplyDefaults(store.profiles[ns.profileName], ns.DEFAULTS)
+
         ns.Bars:Seed()
-        ns.Bars:Prepare()
-        ns.Auras:Invalidate()
-        ns.Bars:Changed()
-        if ns.Options.Refresh then ns.Options:Refresh() end
-        ns.Print("Settings reset to defaults. Recorded procs kept.")
+        ns.Profiles:Reload()
+        ns.Print(string.format("|cffffd100%s|r reset to defaults. Recorded "
+            .. "procs kept, and no other profile was touched.", ns.profileName))
 
     else
         for _, line in ipairs(usage) do print(line) end

@@ -971,6 +971,29 @@ function CoTanks:Migrate(db)
         db.targetBorder = into
     end
     db.targetHighlight, db.targetColor = nil, nil
+
+    -- THE TWO AURA STRIPS STOP OVERLAPPING.
+    --
+    -- They shipped anchored to opposite ends of the SAME edge, growing
+    -- towards each other. Eight icons at 22 with a point between them is 183
+    -- wide and the row is 240, so from the fifth icon on the two strips drew
+    -- in the same place - and with both full they were simply on top of one
+    -- another. Debuffs move to the top edge and both now read left to right,
+    -- which cannot collide at any count or size.
+    --
+    -- ONLY WHEN BOTH ARE STILL EXACTLY AS THEY SHIPPED. Anyone who has moved
+    -- either strip has said where they want it, and a migration that argues
+    -- with that is worse than the overlap - it is a setting changing itself
+    -- back after the user fixed it. Matching all four values is what makes
+    -- "untouched" a fact here rather than a guess.
+    local debuffs, buffs = db.debuffs, db.buffs
+    if type(debuffs) == "table" and type(buffs) == "table"
+        and debuffs.anchor == "BOTTOMLEFT" and debuffs.growth == "right"
+        and buffs.anchor == "BOTTOMRIGHT" and buffs.growth == "left" then
+        debuffs.anchor = "TOPLEFT"
+        buffs.anchor = "BOTTOMLEFT"
+        buffs.growth = "right"
+    end
 end
 
 function CoTanks:Create()

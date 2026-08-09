@@ -750,9 +750,9 @@ function CDM:Dump()
         "only in the category set, |cffffd100%d|r not displayed by Blizzard.",
         arranged, extra, hidden))
     if hidden > 0 then
-        ns.Print("   |cff888888The last group is listed too, under \"Not shown|r")
-        ns.Print("   |cff888888by Blizzard\" - they have no frame, so they can be|r")
-        ns.Print("   |cff888888picked but not yet tracked.|r")
+        ns.Print("   |cff888888That last group is listed too, under Cooldowns|r")
+        ns.Print("   |cff888888with the rest - no frame yet, so each one can be|r")
+        ns.Print("   |cff888888picked but not tracked. The entry says so.|r")
     end
     if arranged == 0 then
         ns.Print("   |cff888888No arrangement read - Blizzard's Cooldown Manager|r")
