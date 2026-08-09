@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Changelog data.
 --
 -- Kept in its own file: it only ever grows, and it is data, not layout.
@@ -12,6 +12,16 @@
 local _, ns = ...
 
 ns.CHANGELOG = {
+    {
+        version = "4.55.0",
+        date = "2026-08-09",
+        lines = {
+            "THE PAGE IS CALLED |cffffd100Death-log|r NOW, with a skull in the rail - the same skull that sits on your screen counting deaths, rather than a second mark for one feature.",
+            "|cffffd100Your defensives are SLOTS|r, at the top of the page where the work is. Drag a spell out of the list on the right and drop it in, or click it there; right-click a slot to clear it. The same picture the cooldown bars use, instead of a list of rows with a Remove button each.",
+            "Consumables get the same slots. An empty one opens a menu of what you are actually carrying.",
+            "The settings under them sit |cffffd100two to a line|r and their paragraphs are on the rows - point at one and it explains itself. Three switches used to fill a screen and a half with the right half of every line empty.",
+        },
+    },
     {
         version = "4.54.0",
         date = "2026-08-09",

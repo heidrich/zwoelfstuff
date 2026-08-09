@@ -4,6 +4,31 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.55.0] - 2026-08-09
+
+### Changed
+
+- **"Deaths" is "Death-log", with a skull in the rail.** `UI.Glyph` grew a
+  `RAW_TEXTURES` branch for marks that are the client's own art - one entry,
+  and it earns it: the rail's skull is the same picture as the skull on the
+  screen, and drawing a second one out of rectangles would be two marks for
+  one feature.
+- **The defensives are SLOTS, at the top of the page.** `UI.SpellSlot` in a
+  grid, so a spell is dragged out of the right-hand list and dropped, and
+  right-click clears it - the same gesture the cooldown bars use. The list is
+  the only thing on the page that is *work*; the switches under it are set
+  once and were standing in front of it. The slots are a VIEW of the picked
+  set, sorted by name: a defensive is picked or it is not, and giving it a
+  position would be a second thing to keep in step.
+- **Consumables use the same slots.** They cannot be dragged in - the spell
+  list holds no items - so an empty one opens a menu of what is in your bags.
+  `UI.SpellSlot` took two optional hooks for it (`texture`, `tooltip`) rather
+  than growing a second slot widget.
+- **The settings pair two to a line** (`tooltipNotes = true`, like the bars
+  page): every paragraph moved onto its row as a hover explanation. Three
+  toggles used to fill a screen and a half with the right half of every line
+  empty.
+
 ## [4.54.0] - 2026-08-09
 
 ### Removed

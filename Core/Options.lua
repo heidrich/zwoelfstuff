@@ -324,7 +324,7 @@ local PAGES = {
     --
     -- It carries the spell palette as its third column, because picking your
     -- defensives out of a dropdown of forty names was the worst part of it.
-    { key = "deaths", title = "Deaths", glyph = "effect-flash", deaths = true,
+    { key = "deaths", title = "Death-log", glyph = "skull", deaths = true,
       subtitle = "What killed you, and what could have prevented it.",
       build = function(page, width) return ns.OptionsDeaths:BuildPage(page, width) end },
 

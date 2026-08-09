@@ -1,10 +1,17 @@
----------------------------------------------------------------------------
--- OptionsDeaths.lua - the Deaths page
+﻿---------------------------------------------------------------------------
+-- OptionsDeaths.lua - the Death-log page
 --
--- The feature itself lives in Core/Death.lua and fires on its own; this
--- page is the two switches the owner asked for in as many words - "an
--- option that a window opens right on death" and the chat share - plus the
--- honest paragraph about where the numbers come from.
+-- Everything about dying: which spells and consumables count as defensives,
+-- what is recorded, the skull on the screen, and where a death is shared.
+-- The feature itself lives in Core/Death.lua and Core/Replay.lua and fires
+-- on its own.
+--
+-- THE LIST COMES FIRST because it is the only thing here that is work. The
+-- switches under it are set once and never touched again, and they were
+-- standing in front of it. Its notes are on the rows rather than under
+-- them, so the settings pair two to a line instead of running down a
+-- screen and a half - the owner asked for both in one sentence: "das ui
+-- muessen wir aufraeumen ... orientiere dich an den anderen fenstern".
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -18,7 +25,155 @@ local function Config()
 end
 
 function Page:BuildPage(page, width)
-    local grid = UI.Page(page, width)
+    -- NOTES AS TOOLTIPS, like the bars page. This page had a paragraph under
+    -- every switch, which pushed three toggles down a screen and a half and
+    -- left the right half of every line empty. The owner looked at it and
+    -- said so: "das ui muessen wir aufraeumen ... optionen kann man auch
+    -- nebeneinander machen, orientiere dich an den anderen fenstern".
+    --
+    -- The words are not lost - they are on the row, where somebody who wants
+    -- them points at it. Half-width rows then pair two to a line by
+    -- themselves, which is what they were built to do.
+    local grid = UI.Page(page, width, { tooltipNotes = true })
+
+    ---------------------------------------------------------------------
+    -- YOUR DEFENSIVES, first and as slots
+    --
+    -- At the top because it is the only thing on this page that is WORK:
+    -- the switches below are set once and never touched again, and they
+    -- were standing in front of the list you actually come here to edit.
+    --
+    -- Slots rather than rows, at the owner's word: the same picture the
+    -- cooldown bars use, so a spell is dragged out of the list on the right
+    -- and dropped, and right-click clears it. A list of named rows with a
+    -- Remove button each is a form; this is the thing itself.
+    ---------------------------------------------------------------------
+    grid:Section("Your defensives")
+
+    local SLOT, GAP, PER_ROW, SLOTS = 40, 8, 8, 16
+
+    local slotHost = CreateFrame("Frame", nil, grid.content)
+    local slotRows = math.ceil(SLOTS / PER_ROW)
+    slotHost:SetHeight(slotRows * SLOT + (slotRows - 1) * GAP)
+
+    -- Which spell each slot shows. Sorted by name and rebuilt on every
+    -- refresh: the slots are a VIEW of the picked set, not an order of
+    -- their own - a defensive is picked or it is not, and inventing a
+    -- position for it would be a second thing to keep in step.
+    local picked = {}
+
+    local slots = {}
+    for index = 1, SLOTS do
+        local slot = UI.SpellSlot(slotHost, {
+            size = SLOT,
+            get = function() return picked[index] end,
+            onPick = function(spellID)
+                if not spellID then return end
+                ns.db.defensives = ns.db.defensives or {}
+                ns.db.defensives[spellID] = true
+                ns.Options:Refresh()
+            end,
+            onClear = function()
+                local spellID = picked[index]
+                if spellID and ns.db.defensives then
+                    ns.db.defensives[spellID] = nil
+                    ns.Options:Refresh()
+                end
+            end,
+        })
+        local row = math.floor((index - 1) / PER_ROW)
+        local col = (index - 1) % PER_ROW
+        slot:SetPoint("TOPLEFT", slotHost, "TOPLEFT",
+            col * (SLOT + GAP), -(row * (SLOT + GAP)))
+        slots[index] = slot
+    end
+
+    grid:Wide(slotHost, slotHost:GetHeight(), 2, 10)
+
+    grid:Note("Drag one out of the list on the right, or click it there. "
+        .. "Right-click a slot to clear it. These are the spells judged as "
+        .. "defensives: the verdict says which were still ready when you "
+        .. "fell, and the replay draws a bar for each one you pressed. "
+        .. "Readiness is our own estimate - your last cast plus the base "
+        .. "cooldown - because the client will not let an addon read a live "
+        .. "cooldown on this patch.")
+
+    ---------------------------------------------------------------------
+    -- Consumables
+    --
+    -- The owner: "wir brauchen zudem noch neben spells consumables wie
+    -- traenke oder healthstones, das sind auch def cds". They are, and
+    -- unlike a spell the client still answers what their cooldown is - so
+    -- this half of the list is a fact rather than an estimate.
+    --
+    -- Same slots, because to the person reading the window it is the same
+    -- kind of thing: something you could have pressed and did not. They
+    -- cannot be dragged in from the spell list - it holds no items - so an
+    -- empty one opens a menu of what is actually in your bags.
+    ---------------------------------------------------------------------
+    grid:Section("Consumables")
+
+    local ITEM_SLOTS = 8
+    local itemHost = CreateFrame("Frame", nil, grid.content)
+    itemHost:SetHeight(SLOT)
+
+    local carried = {}
+
+    local function OfferItems(owner)
+        local items = {}
+        local have = ns.Death.PickedItems()
+        for _, itemID in ipairs(ns.Death.BagConsumables()) do
+            if not have[itemID] then
+                items[#items + 1] = {
+                    text = ns.Death.ItemName(itemID) or ("Item " .. itemID),
+                    iconTexture = ns.Death.ItemIcon(itemID),
+                    onClick = function()
+                        ns.Death.PickedItems()[itemID] = true
+                        ns.Options:Refresh()
+                    end,
+                }
+            end
+        end
+        if #items == 0 then
+            items[1] = { text = "Nothing usable in your bags", disabled = true }
+        end
+        UI.ShowMenu(owner, {
+            items = items, width = 300, search = true, rowHeight = 26,
+            foot = "What you are carrying right now",
+        })
+    end
+
+    local itemSlots = {}
+    for index = 1, ITEM_SLOTS do
+        local slot = UI.SpellSlot(itemHost, {
+            size = SLOT,
+            get = function() return carried[index] end,
+            texture = function(itemID) return ns.Death.ItemIcon(itemID) end,
+            tooltip = function(tip, itemID)
+                return pcall(tip.SetItemByID, tip, itemID)
+            end,
+            onEmptyClick = function() OfferItems(itemHost) end,
+            onClear = function()
+                local itemID = carried[index]
+                if itemID then
+                    ns.Death.PickedItems()[itemID] = nil
+                    ns.Options:Refresh()
+                end
+            end,
+        })
+        slot:SetPoint("TOPLEFT", itemHost, "TOPLEFT",
+            (index - 1) * (SLOT + GAP), 0)
+        itemSlots[index] = slot
+    end
+
+    grid:Wide(itemHost, SLOT, 2, 10)
+
+    grid:Note("Click an empty slot to pick from what you are carrying; "
+        .. "right-click a filled one to drop it from the list. A healthstone "
+        .. "that stayed in the bag is the same verdict as a defensive that "
+        .. "stayed off cooldown, so they are judged together - and drinking "
+        .. "one is a cast like any other on this patch, so the replay draws "
+        .. "it on the timeline with everything else.")
 
     ---------------------------------------------------------------------
     -- When you die
@@ -32,10 +187,10 @@ function Page:BuildPage(page, width)
     grid:Note("Reads Blizzard's own death recap and damage meter the moment "
         .. "you fall - what hit you, how hard, the health you had left after "
         .. "each blow - plus which of your defensives were still ready by "
-        .. "our own clock, and whether a healthstone or a potion was in the "
-        .. "bags. They are kept for this character and survive logging out; "
-        .. "anything past the number below falls off the end, and "
-        .. "|cffffd100Clear list|r in the window empties them.")
+        .. "our own clock, and whether a potion was in the bags. They are "
+        .. "kept for this character and survive logging out; anything past "
+        .. "the number beside this falls off the end, and |cffffd100Clear "
+        .. "list|r in the window empties them.")
 
     UI.Slider(grid:Row("How many to keep"), {
         get = function() return ns.Death.KeepCount() end,
@@ -50,11 +205,9 @@ function Page:BuildPage(page, width)
         apply = function() ns.Death.Trim() end,
     })
 
-    grid:Note("Ten by default. They are kept for this character and survive "
-        .. "logging out, so the number is how far back you want to be able "
-        .. "to look - the window shows twelve at a time and the list "
-        .. "scrolls. Lowering it drops the oldest immediately, and there is "
-        .. "no undo.")
+    grid:Note("Ten by default, three to fifty. Lowering it drops the oldest "
+        .. "immediately, and there is no undo. The window shows twelve at a "
+        .. "time and the list scrolls.")
 
     UI.Toggle(grid:Row("Open the window right away"),
         function() return Config().openOnDeath ~= false end,
@@ -67,9 +220,9 @@ function Page:BuildPage(page, width)
         .. "want it smaller is the moment it is in front of you.")
 
     ---------------------------------------------------------------------
-    -- The icon on the screen
+    -- The skull on the screen
     ---------------------------------------------------------------------
-    grid:Section("The icon on the screen")
+    grid:Section("The skull on the screen")
 
     UI.Toggle(grid:Row("Show it"),
         function()
@@ -104,7 +257,7 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Sharing")
 
-    UI.Dropdown(grid:FullRow("Post it to", { controlWidth = 200 }), {
+    UI.Dropdown(grid:Row("Post it to", { controlWidth = 150 }), {
         { value = "AUTO",          text = "The group I am in" },
         { value = "PARTY",         text = "Party" },
         { value = "RAID",          text = "Raid" },
@@ -116,12 +269,12 @@ function Page:BuildPage(page, width)
         function(value) Config().channel = value end)
 
     grid:Note("|cffffd100The group I am in|r picks for itself: the instance "
-        .. "group first, then the raid, then the party - which is what this "
-        .. "did before there was a setting. Any other choice is taken "
-        .. "literally, and when it is not available - Raid while you are in "
-        .. "a party of three - the analysis is printed in your own chat "
-        .. "frame and the reason is said out loud. A share that quietly "
-        .. "goes nowhere is the one thing this must never do.")
+        .. "group first, then the raid, then the party. Any other choice is "
+        .. "taken literally, and when it is not available - Raid while you "
+        .. "are in a party of three - the analysis is printed in your own "
+        .. "chat frame and the reason is said out loud. A share that quietly "
+        .. "goes nowhere is the one thing this must never do. Words the "
+        .. "client marks secret never go into chat.")
 
     grid:Buttons({
         { text = "Open it", width = 120, style = "primary", onClick = function()
@@ -132,148 +285,26 @@ function Page:BuildPage(page, width)
         end },
     })
 
-    grid:Note("Share posts the short version - where you were, who killed "
-        .. "you, the total taken, the biggest hit and what was still ready. "
-        .. "Words the client marks secret never go into chat; where a "
-        .. "spell's name is withheld, the line says \"a spell\" rather than "
-        .. "guessing. The window keeps the last ten deaths of the session in "
-        .. "a list down its right side, and Share posts the one you are "
-        .. "looking at - |cffffd100Clear list|r there throws them away.")
-
-    ---------------------------------------------------------------------
-    -- Your defensives
-    --
-    -- This list used to live on a Timeline page of its own, and that page
-    -- is gone: what it drew live was the fight's next scheduled hit, which
-    -- the replay answers afterwards with everything the panel could never
-    -- show. The list was always read by this window anyway.
-    --
-    -- It decides three things: what the verdict calls "still ready", which
-    -- presses get a bar in the replay, and how long that bar runs.
-    ---------------------------------------------------------------------
-    grid:Section("Your defensives")
-
-    grid:Note("Pick them from the list on the right - what the Cooldown "
-        .. "Manager knows for this character. These are the spells judged as "
-        .. "defensives: the verdict says which were |cffffd100still ready|r "
-        .. "when you fell, and the replay draws a bar for each one you did "
-        .. "press. Readiness is our own estimate - your last cast plus the "
-        .. "base cooldown - because the client will not let an addon read a "
-        .. "live cooldown on this patch. Charges, resets and haste are not "
-        .. "in it, so it says about and means it.")
-
-    local SPELL_ROWS = 14
-    local spellRows = {}
-    for i = 1, SPELL_ROWS do
-        local row = grid:FullRow("", { controlWidth = 90 })
-        local remove = UI.Button(row.slot, "Remove", 90, function()
-            if row.dkSpell and ns.db.defensives then
-                ns.db.defensives[row.dkSpell] = nil
-                ns.Options:Refresh()
-            end
-        end)
-        remove:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-        spellRows[i] = row
-    end
-
-    ---------------------------------------------------------------------
-    -- Consumables
-    --
-    -- The owner: "wir brauchen zudem noch neben spells consumables wie
-    -- traenke oder healthstones, das sind auch def cds". They ARE - and
-    -- unlike a spell, the client still answers what their cooldown is, so
-    -- this half of the list is a fact rather than an estimate.
-    ---------------------------------------------------------------------
-    grid:Section("Consumables")
-
-    grid:Note("A healthstone that stayed in the bag is the same verdict as a "
-        .. "defensive that stayed off cooldown, so they are judged in one "
-        .. "list. Drinking one is a cast like any other on this patch, which "
-        .. "means the replay draws it on the timeline with everything else. "
-        .. "What is offered is whatever is in your bags right now.")
-
-    UI.Dropdown(grid:FullRow("Add one", { controlWidth = 260 }),
-        function()
-            local out = {}
-            local picked = ns.Death.PickedItems()
-            for _, itemID in ipairs(ns.Death.BagConsumables()) do
-                if not picked[itemID] then
-                    out[#out + 1] = {
-                        value = itemID,
-                        text = ns.Death.ItemName(itemID) or ("Item " .. itemID),
-                        iconTexture = ns.Death.ItemIcon(itemID),
-                        itemID = itemID,
-                    }
-                end
-            end
-            return out
-        end,
-        function() return nil end,
-        function(value)
-            if not value then return end
-            ns.Death.PickedItems()[value] = true
-            ns.Options:Refresh()
-        end, { emptyText = "Nothing usable found in your bags",
-               search = true, rowHeight = 26 })
-
-    local ITEM_ROWS = 8
-    local itemRows = {}
-    for i = 1, ITEM_ROWS do
-        local row = grid:FullRow("", { controlWidth = 90 })
-        local remove = UI.Button(row.slot, "Remove", 90, function()
-            if row.dkItem then
-                ns.Death.PickedItems()[row.dkItem] = nil
-                ns.Options:Refresh()
-            end
-        end)
-        remove:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-        itemRows[i] = row
-    end
-
     grid:Layout()
 
     page.Refresh = function()
-        local picked = {}
+        wipe(picked)
         for spellID in pairs((ns.db and ns.db.defensives) or {}) do
             picked[#picked + 1] = spellID
         end
         table.sort(picked, function(a, b)
             return (ns.SpellName(a) or "") < (ns.SpellName(b) or "")
         end)
+        for _, slot in ipairs(slots) do slot.Refresh() end
 
-        for i, row in ipairs(spellRows) do
-            local spellID = picked[i]
-            row.dkSpell = spellID
-            row:SetShown(spellID ~= nil)
-            if spellID then
-                row.label:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
-                UI.MakeRowASpell(row, spellID)
-            end
-        end
-
-        local items = {}
+        wipe(carried)
         for itemID in pairs(ns.Death.PickedItems()) do
-            items[#items + 1] = itemID
+            carried[#carried + 1] = itemID
         end
-        table.sort(items, function(a, b)
+        table.sort(carried, function(a, b)
             return (ns.Death.ItemName(a) or "") < (ns.Death.ItemName(b) or "")
         end)
-
-        for i, row in ipairs(itemRows) do
-            local itemID = items[i]
-            row.dkItem = itemID
-            row:SetShown(itemID ~= nil)
-            if itemID then
-                local count = ns.Death.ItemCount(itemID)
-                row.label:SetText((ns.Death.ItemName(itemID)
-                    or ("Item " .. itemID))
-                    .. (count > 0 and ("  |cff9ba3af x" .. count .. "|r")
-                        or "  |cff626a76none carried|r"))
-                -- The icon and the item's own tooltip, the same treatment
-                -- every spell in this addon gets.
-                UI.MakeRowAnItem(row, itemID)
-            end
-        end
+        for _, slot in ipairs(itemSlots) do slot.Refresh() end
 
         grid:Refresh()
     end

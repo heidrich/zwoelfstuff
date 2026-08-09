@@ -2464,7 +2464,12 @@ function UI.SpellSlot(parent, cfg)
         local spellID = cfg.get and cfg.get()
         if not (GameTooltip and spellID) then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        if not pcall(GameTooltip.SetSpellByID, GameTooltip, spellID) then
+        -- cfg.tooltip lets a slot hold something that is not a spell - a
+        -- consumable, say - without a second slot widget existing. Same
+        -- reason cfg.texture exists: one slot, two kinds of contents.
+        local shown = cfg.tooltip and cfg.tooltip(GameTooltip, spellID)
+        if not shown
+            and not pcall(GameTooltip.SetSpellByID, GameTooltip, spellID) then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:AddLine(ns.SpellName(spellID) or tostring(spellID))
         end
@@ -2483,7 +2488,8 @@ function UI.SpellSlot(parent, cfg)
     slot.Refresh = function()
         local spellID = cfg.get and cfg.get()
         if spellID then
-            slot.icon:SetTexture(ns.SpellTexture(spellID))
+            slot.icon:SetTexture((cfg.texture and cfg.texture(spellID))
+                or ns.SpellTexture(spellID))
             slot.icon:Show()
             slot.mark:Hide()
         else
@@ -3719,8 +3725,35 @@ function UI.HasIcon(kind)
     return ICON_FILES[kind] ~= nil
 end
 
+-- A mark that is the CLIENT'S art rather than ours. One entry so far and it
+-- earns its place: the death log's skull in the nav rail is the same picture
+-- as the skull that sits on the screen counting your deaths, and drawing a
+-- second one out of rectangles would be two marks for one feature.
+local RAW_TEXTURES = {
+    skull = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
+}
+
 function UI.Glyph(parent, kind, size, colour)
     size = size or 12
+
+    local raw = RAW_TEXTURES[kind]
+    if raw then
+        local glyph = CreateFrame("Frame", nil, parent)
+        -- Blizzard's skull is drawn small inside its own file, so it is given
+        -- more room than a glyph of ours would get at the same nominal size.
+        glyph:SetSize(size + 4, size + 4)
+
+        local tex = glyph:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints(glyph)
+        tex:SetTexture(raw)
+
+        glyph.SetColor = function(_, r, g, b) tex:SetVertexColor(r, g, b, 1) end
+        glyph.SetKind = function() return false end
+
+        local c = colour or C.textDim
+        glyph:SetColor(c[1], c[2], c[3])
+        return glyph
+    end
 
     local file = ICON_FILES[kind]
     if file then
