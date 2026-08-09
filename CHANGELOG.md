@@ -4,6 +4,29 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.52.0] - 2026-08-09
+
+### Added
+
+- **A fourth source for a bar's length: the spell's own tooltip.** The owner,
+  looking at two defensives still drawing as marks: *"viele def cds haben
+  FESTE zeiten, die auch so in den tooltips stehen"*. He is right, and this
+  is not the rule against guessing - it is the opposite of it. The client
+  writes the number in `C_Spell.GetSpellDescription` itself (BigWigs reads
+  the same call), so reading it is asking, exactly like asking for a name or
+  an icon.
+  - `ns.SpellDuration` is tried **last**, after the measured window, the
+    number you set and the measured store: a tooltip says what is *supposed*
+    to happen - before talents, before haste, before the hit that cut it
+    short. `Replay.LengthNote` names the source on hover.
+  - **The unit word comes from the client too.** `SECONDS_ABBR` /
+    `D_SECONDS` are Blizzard's own formats in whatever language is installed
+    (`"%d |4Sekunde:Sekunden;"`), so both forms are extracted and neither was
+    typed here. `ns.DurationWords` and `ns.DurationInText` are pure and
+    tested against German, English and minutes; the word is escaped before
+    it is used as a pattern, because `Sek.` carries a dot and an unescaped
+    one matches anything.
+
 ## [4.51.2] - 2026-08-09
 
 ### Added

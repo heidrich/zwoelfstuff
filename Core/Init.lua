@@ -431,6 +431,105 @@ function ns.SpellName(spellID)
     return info and info.name
 end
 
+---------------------------------------------------------------------------
+-- HOW LONG A SPELL LASTS, off its own tooltip
+--
+-- The owner, looking at a replay where two defensives drew as marks: "viele
+-- def cds haben FESTE zeiten, die auch so in den tooltips stehen". He is
+-- right, and this is not the rule against guessing - it is the opposite of
+-- it. The client writes the number in the description itself; reading it is
+-- asking, exactly like asking for the name or the icon.
+--
+-- It is still the LAST source the replay tries. A window this addon watched
+-- is what happened; a tooltip is what is supposed to happen, before
+-- talents, before haste, before the hit that cut it short.
+--
+-- THE UNIT WORDS COME FROM THE CLIENT TOO. "sec" would work on one client
+-- and nowhere else; the owner plays German. SECONDS_ABBR and D_SECONDS are
+-- Blizzard's own formats in whatever language is installed - "%d
+-- |4Sekunde:Sekunden;" - so both forms of the word are in there and neither
+-- was typed here.
+---------------------------------------------------------------------------
+
+-- "%d |4Sekunde:Sekunden;" -> { "sekunde", "sekunden" }. Pure, exported for
+-- the self test: a locale this addon has never seen must still be checkable.
+function ns.DurationWords(templates)
+    local seen, out = {}, {}
+    local function Add(word)
+        word = (word or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+        if word == "" or seen[word] then return end
+        seen[word] = true
+        out[#out + 1] = word
+    end
+
+    for _, template in ipairs(templates or {}) do
+        if type(template) == "string" then
+            -- Strip the format spec, in every shape a locale writes it:
+            -- %d, %s, %1$d, %.1f.
+            local body = template:gsub("%%[%d%$%.%-]*%a", "")
+            local singular, plural = body:match("|4(.-):(.-);")
+            if singular then
+                Add(singular)
+                Add(plural)
+            else
+                Add(body)
+            end
+        end
+    end
+
+    -- Longest first, so "sekunden" is tried before "sek" and a match cannot
+    -- stop halfway through the word it is looking at.
+    table.sort(out, function(a, b) return #a > #b end)
+    return out
+end
+
+-- The first "N <word>" in a description, in seconds. nil when the text says
+-- no such thing - which is an answer, not a failure.
+function ns.DurationInText(text, words, factor)
+    if type(text) ~= "string" then return nil end
+    local hay = text:lower()
+    for _, word in ipairs(words or {}) do
+        -- The word is data, not a pattern: "sek." carries a dot, and an
+        -- unescaped one matches any character at all.
+        local escaped = word:gsub("(%W)", "%%%1")
+        local found = hay:match("(%d+[%.,]?%d*)%s*" .. escaped)
+        if found then
+            local seconds = tonumber((found:gsub(",", ".")))
+            if seconds and seconds > 0 then return seconds * (factor or 1) end
+        end
+    end
+    return nil
+end
+
+local secondWords, minuteWords
+
+function ns.ForgetDurationWords()
+    secondWords, minuteWords = nil, nil
+end
+
+-- Seconds off the spell's own description, or nil. Capped: anything past
+-- two minutes in a defensive's text is another sentence's number.
+function ns.SpellDuration(spellID)
+    if not (spellID and ns.CanCompute(spellID)) then return nil end
+    local get = C_Spell and C_Spell.GetSpellDescription
+    if not get then return nil end
+
+    if not secondWords then
+        secondWords = ns.DurationWords({ SECONDS_ABBR, D_SECONDS, "%d sec" })
+        minuteWords = ns.DurationWords({ MINUTES_ABBR, D_MINUTES, "%d min" })
+    end
+
+    local ok, text = pcall(get, spellID)
+    if not (ok and ns.CanCompute(text) and type(text) == "string") then
+        return nil
+    end
+
+    local seconds = ns.DurationInText(text, secondWords)
+        or ns.DurationInText(text, minuteWords, 60)
+    if seconds and seconds >= 1 and seconds <= 120 then return seconds end
+    return nil
+end
+
 -- Resolves a spell name to its ID using the player's own client, so no spell
 -- ID ever has to be hardcoded or guessed.
 function ns.SpellIDByName(name)

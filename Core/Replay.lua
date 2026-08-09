@@ -245,6 +245,17 @@ function Replay.DurationOf(spellID)
         end
     end
 
+    -- LAST, and only last: the number written in the spell's own tooltip.
+    -- The owner is right that most defensives have a fixed length and that
+    -- the game states it - reading it is asking, not guessing. It comes
+    -- after the three above because a tooltip says what is SUPPOSED to
+    -- happen: before talents, before haste, before the hit that cut it
+    -- short. See ns.SpellDuration.
+    if ns.SpellDuration then
+        local seconds = ns.SpellDuration(spellID)
+        if seconds then return seconds, "tooltip" end
+    end
+
     return nil
 end
 
@@ -270,6 +281,10 @@ function Replay.LengthNote(source, seconds)
     elseif source == "set" then
         return string.format("%.0fs - the length you set for it on the Auras "
             .. "page.", seconds)
+    elseif source == "tooltip" then
+        return string.format("%.0fs - the length written in its own tooltip. "
+            .. "Nothing has measured this one yet, so talents and haste are "
+            .. "not in it.", seconds)
     end
     return "No length has been measured for this one yet, so it is a mark "
         .. "rather than a bar."

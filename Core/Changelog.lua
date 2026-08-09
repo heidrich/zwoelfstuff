@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.52.0",
+        date = "2026-08-09",
+        lines = {
+            "EVERY DEFENSIVE GETS A BAR NOW. Most of them have a fixed length and the game writes it in the tooltip - so the addon reads it there. That is asking the client, not guessing, and it was the missing fourth source: what this press actually did, then the length you set yourself, then what has been measured on this spec, and finally the number in the tooltip.",
+            "The word for \"seconds\" comes out of the client too, in whatever language it is installed in - a tooltip that says |cffffd1005 Sek.|r is read exactly like one that says 5 sec.",
+            "Hovering a bar says which of the four it came from, so a length that looks wrong can be traced instead of doubted.",
+        },
+    },
+    {
         version = "4.51.2",
         date = "2026-08-09",
         lines = {

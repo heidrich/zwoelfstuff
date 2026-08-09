@@ -1041,6 +1041,40 @@ local function TestHistory()
         measured[871] == 12)
     History.NoteMeasured(measured, 871, 999)
     Check("A reading that never closed is not stored", measured[871] == 12)
+
+    -----------------------------------------------------------------------
+    -- THE NUMBER IN THE TOOLTIP. The owner: "viele def cds haben FESTE
+    -- zeiten, die auch so in den tooltips stehen". Reading it is asking the
+    -- client, not guessing - but the WORD for "seconds" has to come from
+    -- the client as well, or this works in English and nowhere else. He
+    -- plays German.
+    -----------------------------------------------------------------------
+    local words = ns.DurationWords({ "%d |4Sekunde:Sekunden;", "%d |4Sek.:Sek.;" })
+    Check("Both forms of the word come out of the client's own format",
+        (function()
+            local found = {}
+            for _, word in ipairs(words) do found[word] = true end
+            return found["sekunde"] and found["sekunden"] and found["sek."]
+        end)())
+    Check("The longest word is tried first, so a short one cannot cut it off",
+        #words[1] >= #words[#words])
+
+    Check("A German description answers in seconds",
+        ns.DurationInText("Umgibt Euch 5 Sek. lang mit einer Hülle.",
+            words) == 5)
+    Check("An English one does too",
+        ns.DurationInText("Reduces damage taken for 8 sec.",
+            ns.DurationWords({ "%d sec" })) == 8)
+    Check("Minutes are converted, not read as seconds",
+        ns.DurationInText("Lasts 2 min.", ns.DurationWords({ "%d min" }), 60)
+            == 120)
+    Check("A dot in the word is a dot, not 'any character'",
+        ns.DurationInText("12 Sekx", ns.DurationWords({ "%d |4Sek.:Sek.;" }))
+            == nil)
+    Check("A description with no duration in it says so",
+        ns.DurationInText("Erhöht Euren Schaden um 30%.", words) == nil)
+    Check("Text that is not text is not parsed",
+        ns.DurationInText(nil, words) == nil)
 end
 
 ---------------------------------------------------------------------------
@@ -1452,6 +1486,8 @@ local function TestDeath()
             Replay.BarLength({ spellID = 99999901 }) == nil)
         Check("A bar with no length is called a mark, not a bar",
             Replay.LengthNote(nil, nil):find("mark", 1, true) ~= nil)
+        Check("A tooltip length says it came off the tooltip",
+            Replay.LengthNote("tooltip", 8):find("tooltip", 1, true) ~= nil)
         Check("A measured window says it was measured",
             Replay.LengthNote("window", 8):find("measured", 1, true) ~= nil)
         Check("A still-running buff is worded as still running",
