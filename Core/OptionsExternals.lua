@@ -93,6 +93,74 @@ function Page:BuildPage(page, width)
         .. "play, and every one of them is drawn while you place the panel.")
 
     ---------------------------------------------------------------------
+    -- Assignment
+    --
+    -- DIRECTLY UNDER THE SLOTS, at his word - and it belongs there: these
+    -- rows and the slots above them are the same decision seen twice, "which
+    -- spells do I want and who gives me each one". Everything below is what
+    -- the panel LOOKS like, which is a different afternoon.
+    --
+    -- Owner: "im raid sollte man das zuweisen koennen. ggf. einstellungen
+    -- wenn man im raid ist, werden die spieler im tool aufgelistet, dann
+    -- einfach hinter dem spell anklicken".
+    --
+    -- One row per PICKED spell, and the control lists whoever in the group
+    -- can actually cast it. Not every player and not every spell: a dropdown
+    -- of forty names against fourteen spells is a wall, and thirty-nine of
+    -- those names cannot cast the thing anyway.
+    ---------------------------------------------------------------------
+    grid:Section("Who to ask")
+
+    for index = 1, ns.Externals.MAX_SLOTS do
+        local row = grid:FullRow("", { controlWidth = 220 })
+        local function SpellID() return ns.Externals.Picked()[index] end
+
+        UI.Dropdown(row, function()
+            local spellID = SpellID()
+            local spell = spellID and ns.Externals.Get(spellID)
+            local items = { { value = "", text = "The healer of that class" } }
+            for _, member in ipairs(ns.Externals.Candidates(spell,
+                ns.Externals.Roster())) do
+                items[#items + 1] = { value = member.name, text = member.name }
+            end
+            return items
+        end, function()
+            local spellID = SpellID()
+            return (spellID and Cfg().assigned[spellID]) or ""
+        end, function(value)
+            local spellID = SpellID()
+            if spellID then
+                Cfg().assigned[spellID] = (value ~= "" and value) or nil
+            end
+        end, { emptyText = "The healer of that class" })
+
+        -- UI.Dropdown HANGS ITS OWN Refresh ON THE ROW, and the line below
+        -- used to replace it - so the control never repainted and every one
+        -- of these boxes was blank, including the "The healer of that class"
+        -- that says what happens when you leave it alone. Two things want one
+        -- hook; the second has to call the first, not take it.
+        local paintControl = row.Refresh
+
+        row.Refresh = function()
+            if paintControl then paintControl() end
+            local spellID = SpellID()
+            -- A row for a slot you have not filled is not an empty row, it is
+            -- no row: SetRelevant takes it out of the layout entirely.
+            row:SetRelevant(spellID ~= nil)
+            if spellID then
+                UI.MakeRowASpell(row, spellID)
+                row.label:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
+            end
+        end
+    end
+
+    grid:Note("Left alone, a click asks the healer of that class - which in a "
+        .. "five-man is the only person who has it. In a raid, name somebody. "
+        .. "The names offered are whoever is in the group right now, so this "
+        .. "is a thing to set once the raid has formed - picking the spells "
+        .. "themselves works anywhere, alone included.")
+
+    ---------------------------------------------------------------------
     -- The panel
     ---------------------------------------------------------------------
     grid:Section("The panel")
@@ -288,69 +356,6 @@ function Page:BuildPage(page, width)
             ns.Externals:Dump()
         end },
     }, 14)
-
-    ---------------------------------------------------------------------
-    -- Assignment
-    --
-    -- Owner: "im raid sollte man das zuweisen koennen. ggf. einstellungen
-    -- wenn man im raid ist, werden die spieler im tool aufgelistet, dann
-    -- einfach hinter dem spell anklicken".
-    --
-    -- One row per PICKED spell, and the control lists whoever in the group
-    -- can actually cast it. Not every player and not every spell: a dropdown
-    -- of forty names against fourteen spells is a wall, and thirty-nine of
-    -- those names cannot cast the thing anyway.
-    ---------------------------------------------------------------------
-    grid:Section("Who to ask")
-
-    for index = 1, ns.Externals.MAX_SLOTS do
-        local row = grid:FullRow("", { controlWidth = 220 })
-        local function SpellID() return ns.Externals.Picked()[index] end
-
-        UI.Dropdown(row, function()
-            local spellID = SpellID()
-            local spell = spellID and ns.Externals.Get(spellID)
-            local items = { { value = "", text = "The healer of that class" } }
-            for _, member in ipairs(ns.Externals.Candidates(spell,
-                ns.Externals.Roster())) do
-                items[#items + 1] = { value = member.name, text = member.name }
-            end
-            return items
-        end, function()
-            local spellID = SpellID()
-            return (spellID and Cfg().assigned[spellID]) or ""
-        end, function(value)
-            local spellID = SpellID()
-            if spellID then
-                Cfg().assigned[spellID] = (value ~= "" and value) or nil
-            end
-        end, { emptyText = "The healer of that class" })
-
-        -- UI.Dropdown HANGS ITS OWN Refresh ON THE ROW, and the line below
-        -- used to replace it - so the control never repainted and every one
-        -- of these boxes was blank, including the "The healer of that class"
-        -- that says what happens when you leave it alone. Two things want one
-        -- hook; the second has to call the first, not take it.
-        local paintControl = row.Refresh
-
-        row.Refresh = function()
-            if paintControl then paintControl() end
-            local spellID = SpellID()
-            -- A row for a slot you have not filled is not an empty row, it is
-            -- no row: SetRelevant takes it out of the layout entirely.
-            row:SetRelevant(spellID ~= nil)
-            if spellID then
-                UI.MakeRowASpell(row, spellID)
-                row.label:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
-            end
-        end
-    end
-
-    grid:Note("Left alone, a click asks the healer of that class - which in a "
-        .. "five-man is the only person who has it. In a raid, name somebody. "
-        .. "The names offered are whoever is in the group right now, so this "
-        .. "is a thing to set once the raid has formed - picking the spells "
-        .. "themselves works anywhere, alone included.")
 
     grid:Layout()
 

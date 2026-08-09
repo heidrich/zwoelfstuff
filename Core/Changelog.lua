@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.60.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100Who to ask|r sits directly under your slots now, where it belongs - the two are the same decision seen twice.",
+        },
+    },
+    {
         version = "4.60.0",
         date = "2026-08-09",
         lines = {
