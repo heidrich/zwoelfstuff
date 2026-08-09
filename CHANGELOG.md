@@ -4,6 +4,30 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.53.0] - 2026-08-09
+
+### Changed
+
+- **Only picked defensives get bars; the rest of the rotation gets a row of
+  its own.** The owner: *"normale spells brauchen eigentlich keinen balken,
+  nur def cds die man einstellt. das verwirrt nur."* He is right - a bar
+  means "this was up for this long", and a Death Strike has nothing that is
+  up, so drawing one off its tooltip's number invented a state that does not
+  exist. Non-defensive casts are icons on `LANE_CAST_Y`, directly under the
+  axis, each on a hairline reaching up to it.
+- **A drop line from the axis to every bar**, standing on the moment it was
+  cast, in the bar's own colour: *"auch fehlt so ein mittelstrich zur
+  timeline, das man sieht wann die losgehen"*. Only for bars that start
+  inside the view - one clamped to the left edge started off screen, and a
+  line there would point at a moment that is not under it.
+- **The "What you pressed" caption is gone** - *"das sieht jeder"*.
+- **`UI.SpellChips`**: a list of spells is now laid out (icon, name, the
+  client's own tooltip, flowing and wrapping into rows) instead of written
+  into a font string with inline icons. Six inline escapes in a wrapping
+  sentence wrap wherever they like and strand a name on the next line
+  without its icon, which is exactly what the death window's footer did.
+  One implementation, used by that footer and the replay's legend.
+
 ## [4.52.0] - 2026-08-09
 
 ### Added

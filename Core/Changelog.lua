@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.53.0",
+        date = "2026-08-09",
+        lines = {
+            "BARS ARE FOR DEFENSIVES, and only for the ones you picked on the Timeline page. A bar says \"this was up for this long\", and a Death Strike has nothing that is up - drawing it as one invented a state that does not exist. The rest of your rotation now has |cffffd100a row of its own|r right under the axis, as icons: moments, which is what they are.",
+            "Every bar carries |cffffd100a line up to the time axis|r from the moment it was cast, so you can see where it starts without sighting across an empty gap.",
+            "|cffffd100What you pressed|r as a caption is gone. A row of your own spell icons under a time axis needs no label.",
+            "The list of defensives under a death is laid out as icons with tooltips instead of being written into a sentence that wrapped wherever it liked and left names stranded without their icon.",
+        },
+    },
+    {
         version = "4.52.0",
         date = "2026-08-09",
         lines = {

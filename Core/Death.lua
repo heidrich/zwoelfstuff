@@ -1491,13 +1491,24 @@ local function BuildWindow()
     end
     frame:SetScript("OnHide", function() frame.disarmClear() end)
 
-    -- Availability column footer: what was ready, what was in the bags.
+    -- Availability footer: what was ready. A caption and then the spells
+    -- LAID OUT as chips - icon, name, the client's own tooltip - rather
+    -- than written into a wrapping sentence, where six inline icons wrap
+    -- wherever they like and strand a name on the next line without one.
+    -- The block grows UPWARDS from just above the buttons: the strip is
+    -- anchored by its bottom and the caption rides its top, so one row of
+    -- defensives or three both sit clear of the buttons instead of one
+    -- fitting and the other running over them.
+    frame.availChips = UI.SpellChips(frame, {
+        width = MAIN_W, max = 12, size = 11, colour = C.textDim,
+    })
+    frame.availChips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 46)
+
     frame.avail = UI.Label(frame, "", 11, C.textDim)
-    frame.avail:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 46)
+    frame.avail:SetPoint("BOTTOMLEFT", frame.availChips, "TOPLEFT", 0, 3)
     frame.avail:SetWidth(MAIN_W)
     frame.avail:SetJustifyH("LEFT")
-    frame.avail:SetJustifyV("BOTTOM")
-    frame.avail:SetSpacing(2)
+    frame.avail:SetWordWrap(false)
 
     local share = UI.Button(frame, "Share in chat", 130, function()
         Death:Share()
@@ -1788,8 +1799,9 @@ function Death:Show(index)
 
     if snapshot.reason then
         frame.avail:SetText("|cffff8040" .. snapshot.reason .. "|r")
+        frame.availChips.Paint({})
     else
-        local bits = {}
+        local chips = {}
         for _, entry in ipairs(snapshot.avail or {}) do
             -- ONLY WHAT WE ACTUALLY KNOW gets written after the name. The
             -- other two answers - "no known cooldown", "not cast since
@@ -1798,22 +1810,20 @@ function Death:Show(index)
             -- read that footer and said they can go, and he is right: a
             -- column of non-answers is worse than a bare list of names,
             -- because it takes as long to read and says nothing.
-            local state
+            local suffix
             if entry.remaining == 0 then
-                state = ":  |cff67c971ready|r"
+                suffix = "  |cff67c971ready|r"
             elseif entry.remaining then
-                state = string.format(":  |cff9ba3af%ds to go|r",
+                suffix = string.format("  |cff9ba3af%ds|r",
                     math.floor(entry.remaining + 0.5))
-            else
-                state = ""
             end
-            -- Icon in front of the name here too: this footer is a list of
-            -- spells, and a list of spells in this game shows its icons.
-            bits[#bits + 1] = Death.SpellText(entry.spellID, entry.name) .. state
+            chips[#chips + 1] = {
+                spellID = entry.spellID, name = entry.name, suffix = suffix,
+            }
         end
-        frame.avail:SetText(#bits > 0
-            and ("Defensives by our own clock -  " .. table.concat(bits, "   "))
+        frame.avail:SetText(#chips > 0 and "Defensives by our own clock"
             or "No defensives picked on the Timeline page yet.")
+        frame.availChips.Paint(chips)
     end
 
     frame:Show()

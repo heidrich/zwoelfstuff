@@ -33,11 +33,11 @@ local frame
 -- The plot. The axis runs the full width between these margins, time
 -- flowing left to right and ending at the killing blow on the right edge.
 local PLOT_L, PLOT_R = 30, 30
-local FRAME_W, FRAME_H = 780, 590
+local FRAME_W, FRAME_H = 780, 596
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
 local AXIS_Y = 268          -- from the top of the frame
 local COLUMN_MAX = 70       -- tallest an incoming column may draw
-local MARKS_IN, MARKS_OUT, MARKS_HEAL = 28, 20, 20
+local MARKS_IN, MARKS_OUT, MARKS_HEAL, MARKS_CAST = 28, 20, 20, 24
 
 -- The columns stand clear of the axis rather than on it: the seconds are
 -- written ON the line now, and a column starting at the line drew straight
@@ -56,8 +56,9 @@ local AVATAR = 30
 -- Three lanes and where each starts, measured from the top of the frame.
 local HEALTH_Y = 84         -- your own health bar
 local LANE_IN_Y = 112       -- "what came in", growing UP to the axis
-local LANE_OUT_Y = 296      -- your presses, as bars under the axis
-local LANE_HEAL_Y = 396     -- "who healed you", under those
+local LANE_CAST_Y = 272     -- everything else you cast, as icons only
+local LANE_OUT_Y = 312      -- your DEFENSIVES, as bars, under those
+local LANE_HEAL_Y = 400     -- "who healed you", under those
 
 -- The press bars: how tall each row is and how many rows may stack before
 -- the rest are dropped onto the last one. Four is more overlapping
@@ -482,6 +483,18 @@ local function BuildMark(parent, kind)
     mark.column = mark:CreateTexture(nil, "ARTWORK")
     mark.column:SetWidth(kind == "in" and 8 or 3)
 
+    -- THE DROP LINE, for a bar under the axis. A bar three rows down starts
+    -- somewhere along a plot ten seconds wide, and reading its start off
+    -- the scale means sighting up an empty gap. The owner asked for the
+    -- line: "auch fehlt so ein mittelstrich zur timeline, das man sieht
+    -- wann die losgehen". One pixel, from the axis to the top of the bar,
+    -- standing exactly on the moment it was cast.
+    if kind == "press" then
+        mark.drop = mark:CreateTexture(nil, "BACKGROUND")
+        mark.drop:SetWidth(1)
+        mark.drop:Hide()
+    end
+
     -- No border. The icons carried one and it drew a box round every mark,
     -- which on a plot of twenty of them is twenty boxes and no picture.
     mark.icon = mark:CreateTexture(nil, "ARTWORK")
@@ -641,21 +654,18 @@ local function BuildWindow()
 
     -- Three lanes: what hit you above the axis, what you pressed below it,
     -- and who was healing you under that.
-    frame.incoming, frame.outgoing, frame.heals = {}, {}, {}
+    frame.incoming, frame.outgoing, frame.heals, frame.casts = {}, {}, {}, {}
     for i = 1, MARKS_IN do frame.incoming[i] = BuildMark(frame, "in") end
     for i = 1, MARKS_OUT do frame.outgoing[i] = BuildMark(frame, "press") end
     for i = 1, MARKS_HEAL do frame.heals[i] = BuildMark(frame, "heal") end
+    for i = 1, MARKS_CAST do frame.casts[i] = BuildMark(frame, "press") end
 
     frame.laneIn = UI.Eyebrow(frame, "Damage on you")
     frame.laneIn:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_IN_Y)
-    -- ABOVE its own bars, where the other two lanes carry their names. It
-    -- sat at a fixed offset that landed on the third row of bars - which
-    -- nothing reached while every press drew as a stub - and moving it
-    -- under the stack only made it look like the heading of the lane below
-    -- it. The stack starts fourteen pixels lower instead, and the name goes
-    -- in the gap between the axis and the first row.
-    frame.laneOut = UI.Eyebrow(frame, "What you pressed")
-    frame.laneOut:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(AXIS_Y + 8))
+    -- No caption over the press lanes. The owner: "what you pressed als
+    -- text kann eigentlich raus, das sieht jeder" - a row of your own spell
+    -- icons under a time axis needs no label, and the legend at the foot of
+    -- the window already names the defensives among them.
     frame.laneHeal = UI.Eyebrow(frame, "Healing on you")
     frame.laneHeal:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_HEAL_Y)
 
@@ -745,35 +755,13 @@ local function BuildWindow()
     frame.legend:SetJustifyH("LEFT")
     frame.legend:SetWordWrap(false)
 
-    frame.chips = {}
-    for i = 1, 10 do
-        local chip = CreateFrame("Button", nil, frame)
-        chip:SetHeight(20)
-
-        chip.icon = chip:CreateTexture(nil, "ARTWORK")
-        chip.icon:SetSize(16, 16)
-        chip.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        chip.icon:SetPoint("LEFT", chip, "LEFT", 0, 0)
-
-        chip.label = UI.Label(chip, "", 11, C.text)
-        chip.label:SetPoint("LEFT", chip.icon, "RIGHT", 4, 0)
-        chip.label:SetWordWrap(false)
-
-        chip:SetScript("OnEnter", function(self)
-            if not (GameTooltip and self.spellID) then return end
-            GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-            if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID) then
-                GameTooltip:ClearLines()
-                GameTooltip:AddLine(self.spellName or "", 1, 1, 1)
-            end
-            GameTooltip:Show()
-        end)
-        chip:SetScript("OnLeave", function()
-            if GameTooltip then GameTooltip:Hide() end
-        end)
-        chip:Hide()
-        frame.chips[i] = chip
-    end
+    -- The same strip the death window's footer uses. One implementation of
+    -- "a list of spells", or the two would drift into two answers to the
+    -- same question.
+    frame.chips = UI.SpellChips(frame, {
+        width = PLOT_W - 140, max = 10, size = 11,
+    })
+    frame.chips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 46)
 
     local dismiss = UI.Button(frame, "Close", 90, function()
         Replay:Close()
@@ -786,32 +774,22 @@ end
 -- abilities they are.
 local function PaintLegend(analysis)
     local used = (analysis and analysis.defensivesUsed) or {}
-    local room = #frame.chips
-    local shown = math.min(#used, room)
-    local extra = #used - shown
 
-    frame.legend:SetText(shown > 0
-        and ("Defensives used:" .. (extra > 0
-            and (" (+" .. extra .. " more)") or ""))
+    frame.legend:SetText(#used > 0 and "Defensives used:"
         or "|cffe0a05eNo defensive was used in these seconds.|r")
 
-    local anchor = frame.legend
-    for index = 1, shown do
-        local entry, chip = used[index], frame.chips[index]
-        chip.spellID = entry.spellID
-        chip.spellName = entry.name
-        chip.icon:SetTexture(entry.spellID and ns.SpellTexture(entry.spellID))
-        chip.icon:SetShown(entry.spellID and true or false)
-        chip.label:SetText(entry.name or "?")
-        chip:SetWidth(20 + (chip.label:GetStringWidth() or 40))
-        chip:ClearAllPoints()
-        chip:SetPoint("LEFT", anchor, "RIGHT", 8, 0)
-        chip:Show()
-        anchor = chip
-    end
-    for index = shown + 1, room do
-        frame.chips[index].spellID = nil
-        frame.chips[index]:Hide()
+    -- Measured, not guessed: the caption's own width decides where the
+    -- chips start, so a long caption in another language cannot run under
+    -- the first icon.
+    local _, dropped = frame.chips.Paint(used)
+    frame.chips:ClearAllPoints()
+    frame.chips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT",
+        PLOT_L + (#used > 0 and ((frame.legend:GetStringWidth() or 90) + 12)
+            or 0), 40)
+
+    if dropped > 0 then
+        frame.legend:SetText(string.format("Defensives used: (+%d more)",
+            dropped))
     end
 end
 
@@ -971,17 +949,71 @@ local function Place(snapshot, from, to)
     -- YOUR PRESSES, AS BARS. Each starts where you cast it and runs for as
     -- long as it is up, so an overlap is two bars on two rows rather than
     -- two icons on top of each other. The icon rides the bar's left end.
+    -- TWO ROWS, NOT ONE. The owner: "normale spells brauchen eigentlich
+    -- keinen balken, nur def cds die man einstellt. das verwirrt nur. ich
+    -- wuerde auch normale spells in eine eigene reihe legen."
+    --
+    -- He is right on both counts. A bar means "this was up for this long",
+    -- and a Death Strike has nothing that is up - drawing it as a bar off
+    -- its tooltip's number invents a state that does not exist. So the
+    -- rotation goes in a row of its own, as icons: moments, which is what
+    -- they are. Only the defensives picked on the Timeline page get bars.
     local colourOf, nextColour = {}, 0
-    local bars = {}
+    local bars, others = {}, {}
     for _, cast in ipairs(snapshot.casts or {}) do
-        -- The window this press actually opened, first. See Replay.BarLength.
-        local duration, source = Replay.BarLength(cast)
-        bars[#bars + 1] = {
-            t = cast.t, name = cast.name, spellID = cast.spellID,
-            cast = true, defensive = cast.defensive,
-            duration = duration, source = source,
-        }
+        if cast.defensive then
+            -- The window this press opened, first. See Replay.BarLength.
+            local duration, source = Replay.BarLength(cast)
+            bars[#bars + 1] = {
+                t = cast.t, name = cast.name, spellID = cast.spellID,
+                cast = true, defensive = true,
+                duration = duration, source = source,
+            }
+        else
+            others[#others + 1] = {
+                t = cast.t, name = cast.name, spellID = cast.spellID,
+                cast = true,
+            }
+        end
     end
+
+    -- The rotation, as icons on their own line right under the axis, each
+    -- on a hairline that reaches up to it - "man sieht wann die losgehen".
+    slot = 0
+    for _, item in ipairs(others) do
+        slot = slot + 1
+        if slot <= MARKS_CAST then
+            local mark = frame.casts[slot]
+            mark.item = item
+            if not Replay.Visible(item.t, from, to) then
+                mark:Hide()
+            else
+                local x = PLOT_L + Replay.Fraction(item.t, from, to) * PLOT_W
+                mark:ClearAllPoints()
+                mark:SetPoint("TOP", frame, "TOPLEFT", x, -LANE_CAST_Y)
+                mark:SetSize(20, 27)
+
+                mark.column:ClearAllPoints()
+                mark.column:SetPoint("TOP", mark, "TOP", 0, 0)
+                mark.column:SetWidth(1)
+                mark.column:SetHeight(7)
+                mark.column:SetColorTexture(0.45, 0.49, 0.55, 0.9)
+
+                mark.icon:ClearAllPoints()
+                mark.icon:SetSize(18, 18)
+                mark.icon:SetPoint("TOP", mark.column, "BOTTOM", 0, -1)
+                mark.icon:SetTexture(item.spellID
+                    and ns.SpellTexture(item.spellID))
+                mark.value:SetText("")
+                mark:Show()
+            end
+        end
+    end
+    for i = slot + 1, MARKS_CAST do
+        frame.casts[i].item = nil
+        frame.casts[i]:Hide()
+    end
+
     local stacked = Replay.StackRows(bars)
 
     slot = 0
@@ -1025,8 +1057,7 @@ local function Place(snapshot, from, to)
                 mark.column:ClearAllPoints()
                 mark.column:SetPoint("TOPLEFT", mark, "TOPLEFT", 9, 0)
                 mark.column:SetPoint("BOTTOMRIGHT", mark, "BOTTOMRIGHT", 0, 0)
-                mark.column:SetColorTexture(colour[1], colour[2], colour[3],
-                    bar.defensive and 0.85 or 0.35)
+                mark.column:SetColorTexture(colour[1], colour[2], colour[3], 0.85)
 
                 mark.icon:ClearAllPoints()
                 mark.icon:SetPoint("LEFT", mark, "LEFT", 0, 0)
@@ -1034,6 +1065,23 @@ local function Place(snapshot, from, to)
                 mark.icon:SetTexture(bar.spellID
                     and ns.SpellTexture(bar.spellID))
                 mark.value:SetText("")
+
+                -- The drop line: from the axis down to this bar's own row,
+                -- standing on the moment it was cast. Only for a bar that
+                -- starts inside the view - one clamped to the left edge
+                -- started off screen, and a line there would point at a
+                -- moment that is not under it.
+                if mark.drop then
+                    local started = Replay.Visible(bar.t, from, to)
+                    if started then
+                        mark.drop:ClearAllPoints()
+                        mark.drop:SetPoint("BOTTOMLEFT", mark, "TOPLEFT", 9, 0)
+                        mark.drop:SetHeight(math.max(1, top - AXIS_Y - 3))
+                        mark.drop:SetColorTexture(colour[1], colour[2],
+                            colour[3], 0.55)
+                    end
+                    mark.drop:SetShown(started)
+                end
                 mark:Show()
             end
         end
@@ -1102,7 +1150,8 @@ local function Paint(now)
     local state = Replay.state
     local from, to = state.viewFrom or state.span, state.viewTo or 0
 
-    for _, lane in ipairs({ frame.incoming, frame.outgoing, frame.heals }) do
+    for _, lane in ipairs({ frame.incoming, frame.outgoing, frame.heals,
+        frame.casts }) do
         for _, mark in ipairs(lane) do
             if mark.item then
                 -- Landed marks stand at full strength; the rest wait at a

@@ -483,6 +483,116 @@ function UI.MakeRowASpell(row, spellID, texture)
     return row
 end
 
+---------------------------------------------------------------------------
+-- A ROW OF SPELLS, drawn the way this game draws spells
+--
+-- The owner's rule: anything with an icon and a tooltip shows both. Written
+-- into a sentence that wraps, that is an inline texture escape - and a list
+-- of six of them packed with spaces wraps wherever it likes, leaves a name
+-- stranded on the next line without its icon, and reads as a mess. He said
+-- so: "icons sind alle verschoben, das kann man auch in einer eigenen zeile
+-- anzeigen. einfach bissel schoenes ui machen".
+--
+-- So a list of spells is LAID OUT, not written: icon and name as one chip,
+-- chips flowing left to right, wrapping onto as many rows as they need, the
+-- client's own tooltip on each. One implementation, used by the death
+-- window's footer and the replay's legend, because two would drift.
+--
+-- Paint(entries) takes { spellID, name, suffix } and returns the height it
+-- used, so whatever sits above it can be anchored to the real number rather
+-- than to a guess about how many rows there would be.
+---------------------------------------------------------------------------
+function UI.SpellChips(parent, opts)
+    opts = opts or {}
+    local size = opts.size or 11
+    local iconSize = opts.iconSize or 16
+    local rowHeight = opts.rowHeight or (iconSize + 5)
+    local gap = opts.gap or 14
+    local width = opts.width or 400
+
+    local strip = CreateFrame("Frame", nil, parent)
+    strip:SetSize(width, rowHeight)
+    strip.chips = {}
+
+    for index = 1, (opts.max or 12) do
+        local chip = CreateFrame("Button", nil, strip)
+        chip:SetHeight(rowHeight)
+
+        chip.icon = chip:CreateTexture(nil, "ARTWORK")
+        chip.icon:SetSize(iconSize, iconSize)
+        chip.icon:SetPoint("LEFT", chip, "LEFT", 0, 0)
+        chip.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        chip.label = UI.Label(chip, "", size, opts.colour or UI.C.text)
+        chip.label:SetPoint("LEFT", chip.icon, "RIGHT", 5, 0)
+        chip.label:SetWordWrap(false)
+
+        chip:SetScript("OnEnter", function(self)
+            if not (self.spellID and GameTooltip) then return end
+            GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+            if pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID) then
+                GameTooltip:Show()
+            else
+                GameTooltip:Hide()
+            end
+        end)
+        chip:SetScript("OnLeave", function()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+        chip:Hide()
+        strip.chips[index] = chip
+    end
+
+    -- Returns the height used and how many entries did not fit, so a caller
+    -- can say "+3 more" rather than silently dropping them.
+    function strip.Paint(entries)
+        local x, y, rows, shown = 0, 0, 1, 0
+
+        for _, entry in ipairs(entries or {}) do
+            local chip = strip.chips[shown + 1]
+            if not chip then break end
+
+            local texture = entry.spellID and ns.SpellTexture(entry.spellID)
+            chip.spellID = entry.spellID
+            chip.icon:SetTexture(texture)
+            chip.icon:SetShown(texture and true or false)
+            chip.label:SetText((entry.name or "?") .. (entry.suffix or ""))
+            chip.label:SetPoint("LEFT", chip.icon, "RIGHT",
+                texture and 5 or -iconSize, 0)
+
+            local chipWidth = (texture and (iconSize + 5) or 0)
+                + (chip.label:GetStringWidth() or 40)
+            -- Wrap before drawing, not after: a chip that has already been
+            -- placed cannot be moved without another pass.
+            if x > 0 and x + chipWidth > width then
+                x, y, rows = 0, y - rowHeight, rows + 1
+            end
+
+            chip:SetWidth(chipWidth)
+            chip:ClearAllPoints()
+            chip:SetPoint("TOPLEFT", strip, "TOPLEFT", x, y)
+            chip:Show()
+
+            x = x + chipWidth + gap
+            shown = shown + 1
+        end
+
+        for index = shown + 1, #strip.chips do
+            strip.chips[index].spellID = nil
+            strip.chips[index]:Hide()
+        end
+
+        -- Nothing shown is no height at all, not one empty row: whatever is
+        -- anchored to this strip must close up rather than leave a gap
+        -- where a list would have been.
+        local height = (shown > 0) and (rows * rowHeight) or 0
+        strip:SetHeight(math.max(1, height))
+        return height, math.max(0, #(entries or {}) - shown)
+    end
+
+    return strip
+end
+
 -- onToggle turns the header into a disclosure: the caption gains a marker
 -- and the whole strip becomes clickable. Used to fold away everything that
 -- is set once and then never touched again, so the page shows the work
