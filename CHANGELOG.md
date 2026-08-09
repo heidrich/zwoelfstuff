@@ -4,6 +4,22 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.60.2] - 2026-08-09
+
+### Added
+
+- **The externals preview stays put while the settings scroll under it.**
+  Owner: "vorschau sticky machen! sprich content darunter scrollt." It is the
+  thing being edited, and the rows below it are the settings for it - watching
+  your own slots while you change how they look is what a preview is for.
+- `UI.Page` grew an `opts.sticky` band for it: a strip at the top that does
+  not scroll, filled by the page and measured by it. The scroll area starts
+  below the band and clips its own children, so nothing can be drawn into it
+  from underneath.
+- The band is as tall as the slot rows actually shown, re-measured whenever
+  the count changes. Sized for all twenty-four it would hold a third of the
+  page empty for slots nobody asked for.
+
 ## [4.60.1] - 2026-08-09
 
 ### Changed

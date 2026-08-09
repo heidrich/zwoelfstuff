@@ -38,14 +38,29 @@ Page.selected = nil
 -- The page
 ---------------------------------------------------------------------------
 function Page:BuildPage(page, width)
-    local grid = UI.Page(page, width, { tooltipNotes = true })
+    local grid = UI.Page(page, width, { tooltipNotes = true, sticky = true })
 
     ---------------------------------------------------------------------
     -- What you have picked
+    --
+    -- IN THE STICKY BAND, at his word: "vorschau sticky machen! sprich
+    -- content darunter scrollt." It is the thing you are editing, and the
+    -- forty rows under it are the settings for it - watching your own slots
+    -- while you change what they look like is the whole point of a preview.
     ---------------------------------------------------------------------
-    grid:Section("Your externals")
+    local band = grid.sticky
+    UI.Fill(band, "BACKGROUND", C.windowBg)
 
-    local host = CreateFrame("Frame", nil, grid.content)
+    local bandTitle = UI.Eyebrow(band, "Your externals")
+    bandTitle:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -6)
+
+    local bandRule = band:CreateTexture(nil, "ARTWORK")
+    bandRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    bandRule:SetHeight(1)
+    bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
+    bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
+
+    local host = CreateFrame("Frame", nil, band)
     local MAX = ns.Externals.MAX_SLOTS
     local HOST_H = math.ceil(MAX / PER_ROW) * (SLOT + GAP)
     host:SetHeight(HOST_H)
@@ -84,12 +99,22 @@ function Page:BuildPage(page, width)
         slots[index] = slot
     end
 
-    grid:Wide(host, HOST_H, 2, 10)
+    host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -24)
+
+    -- The band is as tall as the rows that are actually shown, measured when
+    -- the count changes. A band sized for twenty-four slots would be a third
+    -- of the page held empty for slots nobody asked for.
+    band.Fit = function()
+        local rows = math.max(1, math.ceil(ns.Externals.Count() / PER_ROW))
+        host:SetHeight(rows * SLOT + (rows - 1) * GAP)
+        band:SetHeight(24 + host:GetHeight() + 10)
+    end
+    band.Fit()
 
     grid:Note("Pick from the list on the right - any of them, at any time, "
         .. "whoever happens to be in your group. On your screen, clicking one "
-        .. "of these whispers whoever can cast it; right-click a slot here to "
-        .. "drop it. A slot nobody present can fill is not drawn while you "
+        .. "of these whispers whoever can cast it; right-click a slot above "
+        .. "to drop it. A slot nobody present can fill is not drawn while you "
         .. "play, and every one of them is drawn while you place the panel.")
 
     ---------------------------------------------------------------------
@@ -361,6 +386,7 @@ function Page:BuildPage(page, width)
 
     page.Refresh = function()
         local count = ns.Externals.Count()
+        band.Fit()
         -- The selection cannot outlive the slot it points at: drag the count
         -- down past the marked one and it would sit on a slot nobody can see.
         if Page.selected and Page.selected > count then Page.selected = nil end

@@ -3149,13 +3149,44 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     return scroll, content
 end
 
+-- opts.sticky asks for a band at the TOP of the page that does not scroll.
+-- The caller fills `grid.sticky` and then sets its height; everything laid
+-- out through the grid scrolls underneath it.
+--
+-- Owner, 2026-08-09, about the externals page: "vorschau sticky machen!
+-- sprich content darunter scrollt." Which is right for any page whose top is
+-- the thing you are editing and whose bottom is the settings for it - you
+-- want to see what you are changing while you change it.
+--
+-- The scroll area CLIPS its own children, so nothing can be drawn into the
+-- band from below: the band is simply above where the scrolling starts. The
+-- hairline under it is the caller's, because only the caller knows whether
+-- its block ends in something that already reads as an edge.
 function UI.Page(parent, width, opts)
     local contentWidth = width - 14
-    local scroll, content = UI.ScrollArea(parent, contentWidth)
+
+    local host, sticky = parent, nil
+    if opts and opts.sticky then
+        sticky = CreateFrame("Frame", nil, parent)
+        sticky:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+        sticky:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+        sticky:SetHeight(1)
+
+        -- THREE POINTS, NOT FOUR. Top left and top right give the width and
+        -- where it starts; bottom left gives where it ends. A centre point
+        -- among them would be a second opinion about the left edge.
+        host = CreateFrame("Frame", nil, parent)
+        host:SetPoint("TOPLEFT", sticky, "BOTTOMLEFT", 0, 0)
+        host:SetPoint("TOPRIGHT", sticky, "BOTTOMRIGHT", 0, 0)
+        host:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+    end
+
+    local scroll, content = UI.ScrollArea(host, contentWidth)
 
     local grid = setmetatable({
         content  = content,
         scroll   = scroll,
+        sticky   = sticky,
         explain  = opts and opts.explain or nil,
         tooltipNotes = opts and opts.tooltipNotes or nil,
         width    = contentWidth,

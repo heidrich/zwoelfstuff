@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.60.2",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100Your slots stay on screen while the settings scroll under them.|r Change the border or the size and watch it happen on the same picture, instead of scrolling back up to see what you did.",
+        },
+    },
+    {
         version = "4.60.1",
         date = "2026-08-09",
         lines = {
