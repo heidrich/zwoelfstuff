@@ -12,6 +12,8 @@
     "C_CooldownViewer",
     "C_Map",
     "C_NamePlate",
+    "C_Scenario",
+    "C_ScenarioInfo",
     "C_SpecializationInfo",
     "C_Spell",
     "C_SpellActivationOverlay",

@@ -202,6 +202,11 @@ function Routes:Sync()
     self.dungeonFrom = from
     self.presetName = preset.text
 
+    -- What the whole dungeon is worth, so a pull's forces can be turned into
+    -- a share of the counter the game keeps.
+    local totals = addon.dungeonTotalCount and addon.dungeonTotalCount[dungeonIdx]
+    self.dungeonForces = type(totals) == "table" and totals.normal or nil
+
     -- WHAT EACH MOB IS CALLED, for the days the GUID cannot be read.
     --
     -- Built from every enemy in the dungeon rather than only the ones in the
@@ -545,6 +550,12 @@ function Routes:NoteKill(npcID)
     local db = ns.db and ns.db.routes
     if not (db and db.autoAdvance) then return end
 
+    -- IN A KEYSTONE THE FORCES COUNTER IS THE AUTHORITY, and it is already
+    -- stepping the route on. Counting deaths as well would advance twice for
+    -- one pull and skip the next one. lastForces is only ever set by a
+    -- reading that worked, so its presence IS "there is a counter here".
+    if self.lastForces ~= nil then return end
+
     local pull = self:Current()
     if not pull then return end
 
@@ -565,9 +576,144 @@ function Routes:NoteKill(npcID)
     end
 end
 
+---------------------------------------------------------------------------
+-- PROGRESS THE WAY THE GAME COUNTS IT
+--
+-- The enemy forces counter - the 91/591 on your objective tracker - is a far
+-- better answer than counting deaths, and for three reasons.
+--
+-- It needs no GUID, which on this patch is the difference between working and
+-- not. It counts a mob a team-mate killed two rooms away, which a nameplate
+-- never sees. And it is the number the dungeon itself is scored on, so it
+-- cannot drift from what the run actually is.
+--
+-- This is how MDTHelper does it and it is the only thing MDTHelper does for
+-- progress: it has an npcKills table that is wiped and never written to. It
+-- does not know which mob is still standing. Neither does anything else -
+-- that question is answered here by the nameplate, which is the whole reason
+-- this feature exists.
+--
+-- IT ONLY EXISTS IN A KEYSTONE. A normal dungeon has no weighted criterion,
+-- so kill counting stays as the fallback rather than being replaced.
+---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- The counter as a share of the whole, 0..1, out of the string the game
+-- writes on the objective tracker.
+--
+-- Pure and exported because the shape of that string is the one thing here
+-- nobody can be sure of from reading: MDTHelper pulls the first run of digits
+-- out of it, EllesmereUIMythicTimer strips a percent sign and swaps a comma
+-- for a decimal point. Those two cannot both be describing the same string,
+-- so both shapes are handled and both are pinned by a test.
+---------------------------------------------------------------------------
+function Routes.ParseForces(text)
+    if type(text) ~= "string" then return nil, nil end
+
+    -- "91/591" - a count against a total.
+    local a, b = text:match("(%d+)%s*/%s*(%d+)")
+    if a and b and tonumber(b) and tonumber(b) > 0 then
+        return tonumber(a) / tonumber(b), "fraction"
+    end
+
+    -- "15.40%", or "15,40%" on a client that writes decimals the German way.
+    local cleaned = text:gsub("%%", "")
+    if cleaned:find(",") and not cleaned:find("%.") then
+        cleaned = cleaned:gsub(",", ".")
+    end
+    local pct = tonumber(cleaned)
+    if pct then return pct / 100, "percent" end
+
+    return nil, nil
+end
+
+function Routes:ForcesFraction()
+    if not (C_Scenario and C_Scenario.GetStepInfo
+        and C_ScenarioInfo and C_ScenarioInfo.GetCriteriaInfo) then
+        return nil, "no scenario api"
+    end
+
+    local ok, numCriteria = pcall(function()
+        return select(3, C_Scenario.GetStepInfo())
+    end)
+    if not ok or type(numCriteria) ~= "number" then return nil, "no step" end
+
+    for i = 1, numCriteria do
+        local got, info = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+        if got and type(info) == "table" and info.isWeightedProgress then
+            -- The numbers first, because they are exact. They can also be
+            -- withheld, which is why the string exists as a second answer.
+            local qty, total = info.quantity, info.totalQuantity
+            if ns.CanCompute(qty) and ns.CanCompute(total)
+                and type(qty) == "number" and type(total) == "number"
+                and total > 0 then
+                return qty / total, "counted"
+            end
+
+            local text = info.quantityString
+            if ns.CanCompute(text) and type(text) == "string" then
+                local share, shape = Routes.ParseForces(text)
+                if share then return share, shape end
+                return nil, "unparsed: " .. text
+            end
+            return nil, "withheld"
+        end
+    end
+    return nil, "no forces here"
+end
+
+-- What share of the dungeon this pull is worth, 0..1.
+function Routes:PullShare(pull)
+    if not (pull and self.dungeonForces and self.dungeonForces > 0) then
+        return nil
+    end
+    return pull.forces / self.dungeonForces
+end
+
+-- Called whenever the counter moves. The DELTA is accumulated against the
+-- pull you are on, not the absolute total, so stepping back and forth by hand
+-- does not make the next pull complete itself.
+function Routes:NoteForces(fraction)
+    if type(fraction) ~= "number" then return end
+
+    local last = self.lastForces
+    self.lastForces = fraction
+    if type(last) ~= "number" then return end       -- first reading is a baseline
+
+    local delta = fraction - last
+    if delta <= 0 then return end                    -- a reset, or no movement
+
+    local db = ns.db and ns.db.routes
+    if not (db and db.autoAdvance) then return end
+
+    self.forcesAccum = (self.forcesAccum or 0) + delta
+
+    local pull = self:Current()
+    local share = self:PullShare(pull)
+    if not share or share <= 0 then return end
+
+    -- NOT the whole pull. A stray that ran off, a patrol that was already
+    -- dead, an add nobody counted - waiting for the last percent of a pull
+    -- means never advancing. MDTHelper lands on four fifths as well.
+    -- The nudge is not superstition. Underneath these are whole numbers of
+    -- forces out of a whole-number total, and the exact case - a pull worth
+    -- a tenth, four fifths of it down - lands on 0.07999999999999999 against
+    -- 0.08000000000000002. Without it, a pull cleared to precisely the
+    -- threshold never advances, which is the one case most likely to happen.
+    local threshold = db.forcesThreshold or 0.8
+    if self.forcesAccum + 1e-9 < share * threshold then return end
+
+    self.forcesAccum = math.max(0, self.forcesAccum - share)
+    if self.index < #self.pulls then
+        self.index = self.index + 1
+        self:Sweep()
+    end
+end
+
 function Routes:ResetRun()
     wipe(self.killed)
     self.index = 1
+    self.forcesAccum = 0
+    self.lastForces = nil
     self:Sweep()
 end
 
@@ -588,6 +734,9 @@ function Routes:Start()
         -- MDT has no zone event of its own, so this is where the route for
         -- the place you are actually standing in gets picked up.
         "ZONE_CHANGED_NEW_AREA",
+        -- The enemy forces counter moved. The better half of progress, and
+        -- the only half that needs nothing from a unit.
+        "SCENARIO_CRITERIA_UPDATE",
     }) do
         pcall(self.events.RegisterEvent, self.events, event)
     end
@@ -620,6 +769,11 @@ function Routes:Start()
             -- one you are in.
             Routes:Sync()
             Routes:ResetRun()
+            return
+        end
+
+        if event == "SCENARIO_CRITERIA_UPDATE" then
+            Routes:NoteForces((Routes:ForcesFraction()))
             return
         end
 
@@ -729,6 +883,23 @@ function Routes:Dump()
             ns.Print(string.format("   %s |cff888888%d|r  x%d, %d killed",
                 pull.names[npcID] or "?", npcID, want, self.killed[npcID] or 0))
         end
+    end
+
+    -- WHICH OF THE TWO WAYS OF MEASURING PROGRESS IS ALIVE. In a keystone the
+    -- game's own forces counter drives the route on; outside one there is no
+    -- such counter and deaths are counted instead. They are never both on,
+    -- and which one it is changes what "it did not advance" means.
+    local fraction, readAs = self:ForcesFraction()
+    if fraction then
+        local share = self:PullShare(pull)
+        ns.Print(string.format("Forces: |cffffd100%.1f%%|r of the dungeon "
+            .. "|cff888888(read as %s)|r. This pull is worth %s; %s counted "
+            .. "since it began.", fraction * 100, readAs,
+            share and string.format("%.1f%%", share * 100) or "?",
+            string.format("%.1f%%", (self.forcesAccum or 0) * 100)))
+    else
+        ns.Print(string.format("Forces: |cff888888none - %s.|r Pulls step on "
+            .. "by counting kills here.", tostring(readAs)))
     end
 
     -- The SAME walk the sweep does. A diagnostic that finds its nameplates a

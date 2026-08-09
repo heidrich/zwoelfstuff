@@ -11,7 +11,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.version = "4.38.0"
+ns.version = "4.39.0"
 
 -- The addon's own mark, used by the minimap button. Kept next to the TOC's
 -- IconTexture line so the two cannot drift apart.
@@ -129,6 +129,12 @@ ns.DEFAULTS = {
         showNext  = true,       -- badge the pull AFTER this one, dimmed
         showNumber = true,      -- the pull number inside the badge
         autoAdvance = true,     -- step on when the pull is down
+
+        -- How much of a pull's forces has to be down before it counts as
+        -- finished. Not all of it: a stray that ran off or a patrol that was
+        -- already dead would mean never advancing. MDTHelper lands on the
+        -- same four fifths.
+        forcesThreshold = 0.8,
 
         size      = 30,
         alpha     = 0.90,

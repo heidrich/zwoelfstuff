@@ -8,6 +8,42 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
      changelog in Core/Changelog.lua carried them throughout and is the
      source these were written back from. -->
 
+## [4.39.0] - 2026-08-09
+
+### Added
+
+- **In a keystone, the route steps on with the game's own enemy forces
+  counter.** The 91/591 on your tracker, read off `SCENARIO_CRITERIA_UPDATE`.
+  It needs no mob id at all, which on this patch is the difference between
+  working and not; it counts what a team-mate kills two rooms away, which no
+  nameplate ever sees; and it is the number the run is actually scored on, so
+  it cannot drift from the dungeon.
+
+  A pull is finished at **four fifths of its forces** rather than all of them
+  - a stray that ran off or a patrol somebody already killed would otherwise
+  mean never advancing - and that share is a slider on the panel.
+
+  **Outside a keystone there is no such counter**, so counting the pull's mobs
+  dying stays as the fallback. The two never run at once: with a counter
+  present, deaths do not advance as well, or one pull would step twice and
+  skip the next.
+
+- **`/zs route` says which of the two is driving**, and for the counter, what
+  the criterion returned and how it was read.
+
+### Changed
+
+- The forces string is parsed by an exported, tested rule. Two working addons
+  read that string in two ways that cannot both describe the same text -
+  MDTHelper takes the first run of digits, EllesmereUIMythicTimer strips a
+  percent sign and swaps a comma for a decimal point - so both shapes are
+  handled, plus a bare number, and all of them are pinned by checks.
+
+  The threshold comparison carries a one-part-in-a-billion nudge, and that is
+  not superstition: a pull worth exactly a tenth of the dungeon, cleared to
+  exactly four fifths, lands on 0.07999999999999999 against
+  0.08000000000000002 and would never advance. The harness caught it.
+
 ## [4.38.0] - 2026-08-09
 
 ### Fixed

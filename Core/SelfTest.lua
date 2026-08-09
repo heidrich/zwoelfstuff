@@ -2062,6 +2062,25 @@ local function TestRoutes()
     local _, how = Routes:NpcForUnit(nil)
     Check("And says nothing about how", how == nil)
 
+    -- THE FORCES STRING. The one thing about this feature that could not be
+    -- settled by reading: two working addons parse that string in two ways
+    -- that cannot both describe the same text. Both shapes are handled, and
+    -- pinned here so neither can be lost to a tidy-up.
+    local function Share(text)
+        local value = Routes.ParseForces(text)
+        return value and math.floor(value * 10000 + 0.5) / 10000 or nil
+    end
+    Check("A count over a total reads as a share", Share("91/591") ~= nil
+        and math.abs(Share("91/591") - 91 / 591) < 0.001, tostring(Share("91/591")))
+    Check("A percentage reads as a share", Share("15.40%") == 0.154,
+        tostring(Share("15.40%")))
+    Check("A German decimal comma reads the same", Share("15,40%") == 0.154,
+        tostring(Share("15,40%")))
+    Check("A bare number is a percentage", Share("40") == 0.4, tostring(Share("40")))
+    Check("Nothing in it gives nothing", Routes.ParseForces("") == nil)
+    Check("Not a string gives nothing", Routes.ParseForces(nil) == nil)
+    Check("A total of zero is not a share", Routes.ParseForces("0/0") == nil)
+
     -- THE BADGE RULE. Only the pull you are on and the one after it are
     -- marked. Marking everything ahead would badge half the room, which says
     -- nothing at all.

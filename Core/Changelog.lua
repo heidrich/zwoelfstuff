@@ -8,6 +8,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.39.0",
+        date = "2026-08-09",
+        lines = {
+            "IN A KEY, THE ROUTE STEPS ON WITH THE GAME'S OWN FORCES COUNTER - the 91/591 on your tracker. It needs no mob id at all, it counts what your team kills two rooms away, and it is the number the run is scored on, so it cannot drift from the dungeon.",
+            "A pull counts as done at four fifths of its forces, not all of them: one stray that ran off would otherwise mean never advancing. That share is a slider now.",
+            "OUTSIDE A KEY there is no such counter, so the pull's mobs dying stays as the fallback. Never both at once - that would step twice for one pull and skip the next.",
+            "This is how MDTHelper does it, and it is ALL MDTHelper does: it has a kills table that is wiped and never written to. It does not know which mob is still standing. Nothing does - that question is answered here by the nameplate, which is the whole reason this exists.",
+            "|cffffd100/zs route|r says which of the two is driving, and what the counter returned.",
+        },
+    },
+    {
         version = "4.38.0",
         date = "2026-08-09",
         lines = {

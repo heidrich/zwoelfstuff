@@ -119,7 +119,19 @@ function OptionsRoutes:BuildPage(page, width)
         "Dimmed, so it reads as a hint rather than a second job")
     Switch("Number inside the badge", "showNumber")
     Switch("Step on by itself", "autoAdvance",
-        "When everything the pull wanted is down")
+        "In a key, off the game's own forces counter - it needs no mob ids "
+        .. "and it counts what your team kills out of sight. Elsewhere, off "
+        .. "the mobs of the pull dying")
+
+    UI.Slider(grid:FullRow("Enough of a pull", { controlWidth = 124,
+        sublabel = "How much of its forces has to be down before it steps on. "
+            .. "Never all of it - a stray that ran off would mean never "
+            .. "advancing" }), {
+        get = function() return DB().forcesThreshold end,
+        set = function(value) DB().forcesThreshold = value end,
+        min = 0.5, max = 1, step = 0.05, scale = 100,
+        format = function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end,
+    })
 
     UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
         get = function() return DB().size end,
