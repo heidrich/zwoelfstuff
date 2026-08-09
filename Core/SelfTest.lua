@@ -1307,6 +1307,15 @@ local function TestDeath()
         Check("The speed label does not invent precision",
             Replay.SpeedLabel(1) == "Speed 1x"
                 and Replay.SpeedLabel(0.25) == "Speed 0.25x")
+
+        -- Play at the end must mean "again". Un-pausing a clock that has
+        -- already run out changes nothing on screen, and a live-looking
+        -- button that changes nothing is read as broken.
+        Check("Play in the middle of a replay pauses and resumes",
+            Replay.PlayAction(4) == "toggle")
+        Check("Play at the end starts it over instead of doing nothing",
+            Replay.PlayAction(0) == "restart"
+                and Replay.PlayAction(-1) == "restart")
     else
         Skip("The replay window", "Replay.lua did not load")
     end

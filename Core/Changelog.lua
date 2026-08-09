@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.47.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100Restart|r on the replay: from the top, running. |cffffd100Stop|r rewinds and waits - the one you want when you are about to point at something - and Restart is the one you want when you just missed it.",
+            "|cffffd100Play|r at the end of a replay starts it over rather than doing nothing. The clock had already run out, so un-pausing it changed nothing on screen: a button that looks live and moves nothing reads as broken.",
+        },
+    },
+    {
         version = "4.47.0",
         date = "2026-08-09",
         lines = {

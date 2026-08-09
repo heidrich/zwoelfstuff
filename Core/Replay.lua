@@ -76,6 +76,15 @@ function Replay.NextSpeed(current)
     return SPEEDS[(at % #SPEEDS) + 1]
 end
 
+-- What the play button MEANS at a given moment. At the end of a replay the
+-- clock has run out, so un-pausing it would do nothing anybody can see -
+-- a button that looks live and changes nothing reads as broken. There, and
+-- only there, play means play it again.
+function Replay.PlayAction(now)
+    if (now or 0) <= 0 then return "restart" end
+    return "toggle"
+end
+
 -- How tall an incoming column stands: its share of the health bar, floored
 -- so a small hit is still a visible mark rather than a line.
 function Replay.ColumnHeight(amount, maxHP)
@@ -249,17 +258,30 @@ local function BuildWindow()
     ---------------------------------------------------------------------
     local play
     play = UI.Button(frame, "Pause", 90, function()
-        if not Replay.state then return end
-        Replay.state.paused = not Replay.state.paused
-        play.label:SetText(Replay.state.paused and "Play" or "Pause")
+        local state = Replay.state
+        if not state then return end
+        if Replay.PlayAction(state.now) == "restart" then
+            Replay:Restart()
+            return
+        end
+        state.paused = not state.paused
+        play.label:SetText(state.paused and "Play" or "Pause")
     end, "primary")
     play:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 12)
     frame.playButton = play
 
+    -- Again, from the top, running. Stop rewinds and WAITS - which is the
+    -- one you want when you are about to point at something - and this one
+    -- is the one you want when you just missed it.
+    local again = UI.Button(frame, "Restart", 90, function()
+        Replay:Restart()
+    end)
+    again:SetPoint("LEFT", play, "RIGHT", 8, 0)
+
     local stop = UI.Button(frame, "Stop", 80, function()
         Replay:Rewind()
     end)
-    stop:SetPoint("LEFT", play, "RIGHT", 8, 0)
+    stop:SetPoint("LEFT", again, "RIGHT", 8, 0)
 
     local speed
     speed = UI.Button(frame, "Speed 1x", 96, function()
@@ -502,6 +524,18 @@ function Replay:Open(snapshot)
     end)
 
     frame:Show()
+end
+
+-- From the top, playing.
+function Replay:Restart()
+    local state = Replay.state
+    if not state then return end
+    state.now = state.span
+    state.paused = false
+    if frame then
+        frame.playButton.label:SetText("Pause")
+        Paint(state.now)
+    end
 end
 
 -- Back to the start, paused - the second look is the one that finds it.

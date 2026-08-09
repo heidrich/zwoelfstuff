@@ -4,6 +4,21 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.47.1] - 2026-08-09
+
+### Added
+
+- **Restart on the replay** - from the top, running. **Stop** rewinds and
+  waits, which is what you want when you are about to point at something;
+  Restart is what you want when you just missed it.
+
+### Fixed
+
+- **Play at the end of a replay did nothing.** The clock had already run
+  out, so un-pausing it changed nothing on screen - a button that looks
+  live and moves nothing reads as broken. There, and only there, Play now
+  means play it again (`Replay.PlayAction`).
+
 ## [4.47.0] - 2026-08-09
 
 ### Added
