@@ -4,6 +4,16 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.55.1] - 2026-08-09
+
+### Changed
+
+- **The Sharing row is full width and the buttons have air above them.**
+  Half-width put a 150-pixel menu in the middle of the line with its label
+  stranded at the far left, and the button strip underneath then read as part
+  of that setting. `Grid:Buttons` took a `padTop` for it - pads collapse with
+  the neighbour's, so a strip that wants air has to ask for a real amount.
+
 ## [4.55.0] - 2026-08-09
 
 ### Changed

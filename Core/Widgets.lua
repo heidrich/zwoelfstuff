@@ -3335,7 +3335,13 @@ end
 -- The FIRST button comes back as a second return: a two-step button
 -- ("Really delete it?") needs a handle on itself to rewrite its own label,
 -- and fishing it out of GetChildren was the old workaround in both copies.
-function Grid:Buttons(buttons)
+-- padTop is the air ABOVE the strip, and it is a parameter because a strip
+-- of buttons under a row of settings had none: they sat against the control
+-- above them and read as part of that setting rather than as the page's own
+-- actions. Pads collapse with the neighbour's, so a value smaller than the
+-- row gap changes nothing - which is why the callers that want the air ask
+-- for a real amount of it.
+function Grid:Buttons(buttons, padTop)
     local strip = CreateFrame("Frame", nil, self.content)
     strip:SetSize(self.width, 28)
 
@@ -3348,7 +3354,7 @@ function Grid:Buttons(buttons)
         if not first then first = btn end
     end
 
-    self:Wide(strip, 36)
+    self:Wide(strip, 36, padTop or 0)
     return strip, first
 end
 

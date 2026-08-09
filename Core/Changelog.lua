@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.55.1",
+        date = "2026-08-09",
+        lines = {
+            "|cffffd100Post it to|r sits on a line of its own with air under it, so the two buttons read as the page's actions rather than as part of that setting.",
+            "Worth knowing: a death recorded before 4.54.0 carries no consumables - it was captured when they were not part of the list. They appear in the footer of the |cffffd100next|r death after you pick them.",
+        },
+    },
+    {
         version = "4.55.0",
         date = "2026-08-09",
         lines = {

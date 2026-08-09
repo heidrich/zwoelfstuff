@@ -257,7 +257,12 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Sharing")
 
-    UI.Dropdown(grid:Row("Post it to", { controlWidth = 150 }), {
+    -- A FULL-width row for the one control on this page that is not a
+    -- switch. Half-width put a 150-pixel menu in the middle of the line
+    -- with its label stranded at the far left and nothing beside it, and
+    -- the buttons underneath then read as part of the setting rather than
+    -- as the page's own actions.
+    UI.Dropdown(grid:FullRow("Post it to", { controlWidth = 200 }), {
         { value = "AUTO",          text = "The group I am in" },
         { value = "PARTY",         text = "Party" },
         { value = "RAID",          text = "Raid" },
@@ -283,7 +288,7 @@ function Page:BuildPage(page, width)
         { text = "Share in chat", width = 130, onClick = function()
             ns.Death:Share()
         end },
-    })
+    }, 14)
 
     grid:Layout()
 
