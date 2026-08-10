@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.63.0
+## Version: 4.64.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -137,6 +137,12 @@ Core\Options.lua
 # Last, because it reads all of the above. /zs test - the checks that can only
 # be run inside the game, which is every check this addon has.
 Core\SelfTest.lua
+
+# The game's own key list. Not Lua: the game reads this file itself and runs
+# the line inside it, which is why what it calls is a GLOBAL - Bindings.xml
+# cannot see this addon's private table. The two strings the key list shows
+# are set in Core/Taunts.lua.
+Bindings.xml
 
 # Deleted in 4.9.0: Core\Glow.lua, the expanding proc ring. It went with the
 # single-aura window in 4.4.0 and nothing has called it since - it was still

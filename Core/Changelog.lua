@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.64.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Three ways to ask the other tank to taunt.|r A button on your screen, a real keybinding in the game's own Key Bindings under |cffffd100ZwoelfStuff|r, and a macro the addon writes for you - all three do the same thing, pick whichever fits your hands.",
+            "|cffffd100The button is yours to style:|r pick its icon (your own taunt by default), its size, its border and its backdrop, and place it in Edit Mode like everything else. Off until you switch it on.",
+            "|cffffd100Make the macro|r writes |cffffd100ZS Taunt|r with your icon and keeps it up to date - drag it onto a bar once and it stays right.",
+        },
+    },
+    {
         version = "4.63.0",
         date = "2026-08-10",
         lines = {

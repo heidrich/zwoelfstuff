@@ -70,9 +70,31 @@ end
 Taunts.DEFAULT_MESSAGE = "Taunt: %t"
 Taunts.DEFAULT_ASK = "%n, bitte taunten!"
 
+-- THE BUTTON'S LOOK, under the SAME key names a bar uses - so ns.PaintSurface
+-- and ns.PaintBorder paint it without knowing what it is, exactly as the
+-- externals panel is painted. There is no second renderer in this addon and
+-- there is not about to be a third.
+Taunts.BUTTON_DEFAULTS = {
+    size            = 44,
+    scale           = 1.0,
+    alpha           = 1.0,
+    borderSize      = 1,
+    borderTexture   = "None",
+    backdrop        = true,
+    backdropAlpha   = 0.90,
+    backdropTexture = "Blizzard",
+    iconZoom        = 0.08,
+}
+
 function Taunts.Config()
     ns.db.taunts = ns.db.taunts or {}
     local cfg = ns.db.taunts
+
+    for key, value in pairs(Taunts.BUTTON_DEFAULTS) do
+        if cfg[key] == nil then cfg[key] = value end
+    end
+    cfg.borderColor = cfg.borderColor or { 0, 0, 0 }
+    cfg.backdropColor = cfg.backdropColor or { 0, 0, 0 }
 
     -- The channels are seeded HERE and not in ns.DEFAULTS, for the reason the
     -- externals ones are: a channel you switch OFF is stored by being
@@ -275,6 +297,230 @@ function Taunts:Start()
     watcher:SetScript("OnEvent", function(_, _, _, _, spellID)
         Taunts.OnCast(spellID)
     end)
+end
+
+---------------------------------------------------------------------------
+-- THE BUTTON ON YOUR SCREEN
+--
+-- Owner: "kann man das nicht einbauen, also fertiges dynamisches macro, und
+-- als button zum stylen mit icon auswahl?" - so three ways in, and they all
+-- run the same Ask:
+--
+--   this button      click it. Placed in Edit Mode like everything else this
+--                    addon draws, and painted by the bar's own painters.
+--   a keybinding     Bindings.xml, so it is in the game's own key list under
+--                    ZwoelfStuff rather than something you have to build.
+--   a macro          made and kept up to date BY the addon, for people who
+--                    want it on an action bar with everything else.
+--
+-- None of them is protected: a chat message on a click is the player's own
+-- action, which is the same ground the externals panel already stands on.
+---------------------------------------------------------------------------
+local button
+
+function Taunts.Frame() return button end
+
+-- WHICH ICON. Your own class taunt unless you picked something else - which
+-- is the right default because it is the picture you already press.
+function Taunts.Icon()
+    local cfg = Taunts.Config()
+    if cfg.icon then return cfg.icon end
+
+    local _, class = UnitClass("player")
+    for _, entry in ipairs(Taunts.SPELLS) do
+        if entry.class == class then
+            local texture = ns.SpellTexture(entry.spellID)
+            if texture then return texture end
+        end
+    end
+    -- Nothing to go on: the question mark, which is what the game itself uses
+    -- for a macro with no icon.
+    return 134400
+end
+
+function Taunts.Style()
+    local cfg = Taunts.Config()
+    return {
+        borderSize       = math.max(0, cfg.borderSize or 1),
+        borderColor      = cfg.borderColor or { 0, 0, 0 },
+        borderTexture    = cfg.borderTexture or "None",
+        borderGradient   = cfg.borderGradient,
+        backdrop         = cfg.backdrop ~= false,
+        backdropColor    = cfg.backdropColor or { 0, 0, 0 },
+        backdropAlpha    = cfg.backdropAlpha or 0.9,
+        backdropTexture  = cfg.backdropTexture or "Blizzard",
+        backdropGradient = cfg.backdropGradient,
+        iconZoom         = cfg.iconZoom or 0.08,
+    }
+end
+
+function Taunts:ShouldShow()
+    local cfg = Taunts.Config()
+    if not ns.Modules:IsOn("cotanks") then return false end
+    if Taunts.placing then return true end
+    if not cfg.button then return false end
+    if cfg.buttonOnlyInGroup ~= false and not IsInGroup() then return false end
+    return true
+end
+
+function Taunts:Create()
+    if button then return button end
+
+    button = CreateFrame("Button", "ZwoelfStuffTauntButton", UIParent)
+    button:SetClampedToScreen(true)
+    button:RegisterForClicks("LeftButtonUp")
+    button:Hide()
+
+    button.bg = button:CreateTexture(nil, "BACKGROUND")
+    button.bg:SetAllPoints(button)
+
+    button.chrome = ns.CreateChrome(button)
+
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+    button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+
+    button.hover = ns.CreateBorder(button, 2, "OVERLAY")
+    button.hover:SetColor(ns.UI.C.accent[1], ns.UI.C.accent[2],
+        ns.UI.C.accent[3], 1)
+    button.hover:Hide()
+
+    button:SetScript("OnEnter", function(self)
+        self.hover:Show()
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Ask for a taunt")
+        local person = Taunts.CoTank(ns.Roster(), Taunts.Config().assigned)
+        GameTooltip:AddLine(person
+            and ("Tells |cffffd100" .. person.name .. "|r to take it")
+            or "|cff888888Nobody else here is tanking|r", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+
+    button:SetScript("OnLeave", function(self)
+        self.hover:Hide()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+
+    button:SetScript("OnClick", function()
+        local sent, why = Taunts.Ask()
+        if not sent then ns.Print("|cffff8040" .. tostring(why) .. ".|r") end
+    end)
+
+    self:ApplyLayout()
+    return button
+end
+
+function Taunts:ApplyLayout()
+    if not button then return end
+    local cfg = Taunts.Config()
+    local size = math.max(16, cfg.size or 44)
+
+    button:SetSize(size, size)
+    button:ClearAllPoints()
+    button:SetPoint("CENTER", UIParent, "CENTER", cfg.x or -260, cfg.y or -220)
+    button:SetScale(math.max(0.3, math.min(3, cfg.scale or 1)))
+    button:SetAlpha(math.max(0, math.min(1, cfg.alpha or 1)))
+
+    local style = Taunts.Style()
+    ns.PaintSurface(button.bg, style)
+    ns.PaintBorder(button.chrome, style, false)
+
+    button.icon:SetTexture(Taunts.Icon())
+    local zoom = style.iconZoom
+    button.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+
+    button:SetShown(self:ShouldShow())
+end
+
+function Taunts.Refresh()
+    if button then ns.Taunts:ApplyLayout() end
+end
+
+function Taunts:SavePosition()
+    if not button then return end
+    local cfg = Taunts.Config()
+    local x, y = button:GetCenter()
+    local px, py = UIParent:GetCenter()
+    if x and y and px and py then
+        cfg.x = math.floor(x - px + 0.5)
+        cfg.y = math.floor(y - py + 0.5)
+    end
+end
+
+-- Edit Mode is open and this button is one of the things being placed. Same
+-- door the co-tank panel and the externals panel are opened through - never
+-- by reading a field off EditMode, which is a file-local there and answers
+-- nil forever.
+function Taunts:SetPlacing(on)
+    Taunts.placing = on and true or false
+    if not Taunts.placing then self:SavePosition() end
+    Taunts.Refresh()
+end
+
+---------------------------------------------------------------------------
+-- THE MACRO THE ADDON KEEPS
+--
+-- Owner: "fertiges dynamisches macro". So the addon writes it, names it and
+-- keeps its icon in step - all you do is drag it onto a bar.
+--
+-- SIXTEEN CHARACTERS is the limit on a macro name, which is why it is not
+-- called "ZwoelfStuff Taunt". CreateMacro and EditMacro both refuse in
+-- combat, so the refusal is a sentence rather than an error.
+---------------------------------------------------------------------------
+Taunts.MACRO_NAME = "ZS Taunt"
+Taunts.MACRO_BODY = "/zs taunt ask"
+
+function Taunts.MacroExists()
+    if not GetMacroIndexByName then return false end
+    local index = GetMacroIndexByName(Taunts.MACRO_NAME)
+    return (index or 0) > 0, index
+end
+
+-- Answers what happened, in a sentence, because every one of these is a thing
+-- the person pressing the button needs to be told rather than left to guess.
+function Taunts.MakeMacro()
+    if InCombatLockdown and InCombatLockdown() then
+        return false, "not while you are in combat - the game will not let an addon write a macro then"
+    end
+    if not (CreateMacro and EditMacro) then
+        return false, "this client has no macro API"
+    end
+
+    local icon = Taunts.Icon()
+    local exists, index = Taunts.MacroExists()
+
+    if exists then
+        local ok = pcall(EditMacro, index, Taunts.MACRO_NAME, icon,
+            Taunts.MACRO_BODY)
+        if not ok then return false, "the macro could not be updated" end
+        return true, "updated - it is already on your bars"
+    end
+
+    -- `nil` for perCharacter: the general tab. A tank plays one character at
+    -- a time and a macro that only exists on one of them is a surprise on the
+    -- next. The general tab is also the one with room in it.
+    local ok, created = pcall(CreateMacro, Taunts.MACRO_NAME, icon,
+        Taunts.MACRO_BODY, nil)
+    if not ok or not created then
+        return false, "no free macro slot - the general tab holds 120"
+    end
+    return true, "made - drag it onto a bar from the macro window"
+end
+
+---------------------------------------------------------------------------
+-- The keybinding's way in
+--
+-- A global, because Bindings.xml runs a plain line of Lua and cannot see this
+-- file's locals. The two BINDING_ strings are what the game shows in its own
+-- key list; without them the row reads as the raw binding name.
+---------------------------------------------------------------------------
+BINDING_HEADER_ZWOELFSTUFF = "ZwoelfStuff"
+BINDING_NAME_ZWOELFSTUFF_TAUNT_ASK = "Ask the other tank to taunt"
+
+function ZwoelfStuff_TauntAsk()
+    local sent, why = Taunts.Ask()
+    if not sent then ns.Print("|cffff8040" .. tostring(why) .. ".|r") end
 end
 
 ---------------------------------------------------------------------------

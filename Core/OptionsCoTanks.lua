@@ -322,10 +322,102 @@ function OptionsCoTanks:BuildPage(page, width)
         function() return TCfg().onlyInInstance and true or false end,
         function(value) TCfg().onlyInInstance = value and true or false end)
 
+    ---------------------------------------------------------------------
+    -- THREE WAYS TO ASK, and they all run the same line
+    --
+    -- Owner: "kann man das nicht einbauen, also fertiges dynamisches macro,
+    -- und als button zum stylen mit icon auswahl?"
+    ---------------------------------------------------------------------
+    grid:Section("Asking for a taunt")
+
+    UI.Toggle(grid:FullRow("A button on your screen", {
+        controlWidth = 124,
+        sublabel = "Click it to tell the other tank to take it",
+    }), function() return TCfg().button and true or false end,
+        function(value)
+            TCfg().button = value and true or false
+            ns.Taunts.Refresh()
+        end)
+
+    UI.Toggle(grid:FullRow("Only in a group", { controlWidth = 124 }),
+        function() return TCfg().buttonOnlyInGroup ~= false end,
+        function(value)
+            TCfg().buttonOnlyInGroup = value and true or false
+            ns.Taunts.Refresh()
+        end)
+
+    -- THE ICON, with the class taunts as the likely answers. Yours is the
+    -- default and it is the right one: it is the picture you already press.
+    local iconRow = grid:FullRow("Icon", { controlWidth = 124 })
+    local iconButton = UI.MenuButton(iconRow.slot, 124, UI.BUTTON_H)
+    iconButton:SetPoint("RIGHT", iconRow.slot, "RIGHT", 0, 0)
+
+    local iconPreview = iconButton:CreateTexture(nil, "ARTWORK")
+    iconPreview:SetSize(UI.BUTTON_H - 8, UI.BUTTON_H - 8)
+    iconPreview:SetPoint("LEFT", iconButton, "LEFT", 6, 0)
+    iconPreview:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    iconButton:SetScript("OnClick", function(self)
+        local quick = {}
+        for _, entry in ipairs(ns.Taunts.SPELLS) do
+            local texture = ns.SpellTexture(entry.spellID)
+            if texture then quick[#quick + 1] = texture end
+        end
+        UI.ShowIconPicker(self, {
+            current = ns.Taunts.Icon(),
+            quick = quick,
+            onPick = function(texture)
+                -- The class default is stored as "no choice", not as the
+                -- number it happens to be today: change spec or character and
+                -- a stored number would be somebody else's taunt.
+                local _, class = UnitClass("player")
+                local mine
+                for _, entry in ipairs(ns.Taunts.SPELLS) do
+                    if entry.class == class then
+                        mine = mine or ns.SpellTexture(entry.spellID)
+                    end
+                end
+                TCfg().icon = (texture ~= mine) and texture or nil
+                ns.Taunts.Refresh()
+                ns.Options:Refresh()
+            end,
+        })
+    end)
+
+    iconRow.Refresh = function()
+        iconPreview:SetTexture(ns.Taunts.Icon())
+        iconButton:SetText(TCfg().icon and "Chosen" or "Your taunt")
+    end
+
+    UI.Slider(grid:FullRow("Button size", { controlWidth = 124 }), {
+        get = function() return TCfg().size or 44 end,
+        set = function(value) TCfg().size = value end,
+        min = 20, max = 80, step = 2,
+        apply = function() ns.Taunts.Refresh() end,
+    })
+
+    grid:Note("The button is placed in |cffffd100Edit mode|r like everything "
+        .. "else this addon draws, and it has the same cog and padlock the "
+        .. "panels do. Its border and backdrop are the bar settings, under "
+        .. "|cffffd100Look|r on the right.")
+
     grid:Buttons({
+        { text = "Make the macro", width = 150, style = "primary",
+          onClick = function()
+              local ok, why = ns.Taunts.MakeMacro()
+              ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
+                  or ("|cffff8040Not made:|r " .. tostring(why)))
+          end },
         { text = "What a taunt would say", width = 190,
           onClick = function() ns.Taunts:Dump() end },
     }, 10)
+
+    grid:Note("|cffffd100Make the macro|r writes a macro called "
+        .. "|cffffd100ZS Taunt|r with the icon above and keeps it in step - "
+        .. "drag it onto a bar from the macro window. Or skip the macro "
+        .. "entirely: the game's own |cffffd100Key Bindings|r has a "
+        .. "|cffffd100ZwoelfStuff|r section with |cffffd100Ask the other tank "
+        .. "to taunt|r in it. All three do the same thing.")
 
     grid:Note("|cffff8040What this cannot do:|r tell you when the OTHER tank "
         .. "taunts. Since 12.0.5 another player's instant cast is not "

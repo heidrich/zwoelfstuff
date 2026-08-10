@@ -79,8 +79,12 @@ local LIST = {
         Boot = function()
             ns.CoTanks:Create()
             ns.Taunts:Start()
+            ns.Taunts:Create()
         end,
-        Apply = function() ns.CoTanks:Refresh() end,
+        Apply = function()
+            ns.CoTanks:Refresh()
+            ns.Taunts.Refresh()
+        end,
     },
     {
         key = "reminders", title = "Reminders", glyph = "bell", since = 1,

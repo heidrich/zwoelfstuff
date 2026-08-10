@@ -1543,6 +1543,209 @@ end
 UI.ShowMenu = ShowMenu
 
 ---------------------------------------------------------------------------
+-- PICKING AN ICON
+--
+-- Owner, about the taunt button: "als button zum stylen mit icon auswahl".
+--
+-- A GRID, PAGED, and no search box - which is a decision rather than a
+-- shortcut. On this client GetMacroIcons answers a list of file IDs and
+-- NOTHING ELSE: there are no names to type against, which is exactly why
+-- Blizzard's own macro picker is a nameless grid you page through. A search
+-- field over numbers would be a control that cannot work.
+--
+-- What replaces it is the row of QUICK PICKS at the top - the icons that are
+-- actually likely, handed in by the caller - so the common answer is one
+-- click and the grid is there for the rest.
+---------------------------------------------------------------------------
+UI.ICON_COLUMNS = 10
+UI.ICON_ROWS = 8
+
+-- Pure: which slice of the list a page shows, and how many pages there are.
+-- Its own function because "page 4 of 3" and an off-by-one at the end of the
+-- last page are the two things that go wrong here, and neither is visible
+-- until somebody scrolls to the end.
+function UI.IconPage(total, page, perPage)
+    local pages = math.max(1, math.ceil(total / perPage))
+    page = math.max(1, math.min(pages, page or 1))
+    local first = (page - 1) * perPage + 1
+    local last = math.min(total, first + perPage - 1)
+    return first, last, page, pages
+end
+
+-- Every icon the game offers a macro, gathered once. The four calls are the
+-- set Blizzard's own picker uses, in the order NorthernSkyRaidTools reads
+-- them - spells first, then the loose ones, then the general lists.
+local iconList
+local function IconList()
+    if iconList then return iconList end
+    iconList = {}
+
+    -- The question mark first, always: it is what a macro with no icon shows,
+    -- so it is the "none of these" answer and belongs where it can be found.
+    iconList[1] = 134400
+
+    for _, getter in ipairs({ "GetLooseMacroItemIcons", "GetLooseMacroIcons",
+        "GetMacroIcons", "GetMacroItemIcons" }) do
+        local fn = _G[getter]
+        if type(fn) == "function" then pcall(fn, iconList) end
+    end
+    return iconList
+end
+
+local iconPicker
+
+local function BuildIconPicker()
+    if iconPicker then return iconPicker end
+
+    local CELL, GAP, PAD = 34, 4, 14
+    local width = PAD * 2 + UI.ICON_COLUMNS * CELL + (UI.ICON_COLUMNS - 1) * GAP
+
+    local frame = CreateFrame("Frame", nil, UIParent)
+    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:SetClampedToScreen(true)
+    frame:EnableMouse(true)
+    frame:Hide()
+    Fill(frame, "BACKGROUND", C.sidebarBg)
+    ns.CreateBorder(frame, 1, "BORDER"):SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    local title = UI.Label(frame, "Pick an icon", UI.FS.card, C.text)
+    title:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -12)
+
+    local close = CreateFrame("Button", nil, frame)
+    close:SetSize(20, 20)
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
+    local closeGlyph = UI.Glyph(close, "ui-close", 12, C.textFaint)
+    closeGlyph:SetPoint("CENTER", close, "CENTER", 0, 0)
+    close:SetScript("OnClick", function() frame:Hide() end)
+
+    -- The quick picks, on their own line with a word in front of them: they
+    -- are answers, not a first page of the grid, and running them together
+    -- would read as one list where the first six happen to be different.
+    local quickLabel = UI.Eyebrow(frame, "Likely")
+    quickLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -40)
+
+    local function Cell(parent)
+        local cell = CreateFrame("Button", nil, parent)
+        cell:SetSize(CELL, CELL)
+        cell.icon = cell:CreateTexture(nil, "ARTWORK")
+        cell.icon:SetAllPoints(cell)
+        cell.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        cell.edge = ns.CreateBorder(cell, 1, "OVERLAY")
+        cell.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+        cell.pick = ns.CreateBorder(cell, 2, "OVERLAY")
+        cell.pick:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        cell.pick:Hide()
+        cell:SetScript("OnEnter", function(self) self.pick:Show() end)
+        cell:SetScript("OnLeave", function(self)
+            self.pick:SetShown(self.chosen and true or false)
+        end)
+        cell:SetScript("OnClick", function(self)
+            if frame.onPick and self.texture then frame.onPick(self.texture) end
+            frame:Hide()
+        end)
+        return cell
+    end
+
+    frame.quick = {}
+    for index = 1, UI.ICON_COLUMNS do
+        local cell = Cell(frame)
+        cell:SetPoint("TOPLEFT", frame, "TOPLEFT",
+            PAD + (index - 1) * (CELL + GAP), -60)
+        frame.quick[index] = cell
+    end
+
+    local gridTop = 60 + CELL + 16
+    local gridLabel = UI.Eyebrow(frame, "Everything the game offers")
+    gridLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(gridTop - 16))
+
+    frame.cells = {}
+    for index = 1, UI.ICON_COLUMNS * UI.ICON_ROWS do
+        local cell = Cell(frame)
+        local column = (index - 1) % UI.ICON_COLUMNS
+        local row = math.floor((index - 1) / UI.ICON_COLUMNS)
+        cell:SetPoint("TOPLEFT", frame, "TOPLEFT",
+            PAD + column * (CELL + GAP), -(gridTop + row * (CELL + GAP)))
+        frame.cells[index] = cell
+    end
+
+    local footTop = gridTop + UI.ICON_ROWS * (CELL + GAP) + 8
+
+    frame.pageLabel = UI.Label(frame, "", UI.FS.meta, C.textFaint)
+    frame.pageLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(footTop + 6))
+
+    local prev = UI.Button(frame, "Back", 70, function()
+        frame.page = frame.page - 1
+        frame.Paint()
+    end)
+    prev:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -(PAD + 78), -footTop)
+
+    local next_ = UI.Button(frame, "More", 70, function()
+        frame.page = frame.page + 1
+        frame.Paint()
+    end)
+    next_:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -footTop)
+
+    frame:SetSize(width, footTop + UI.BUTTON_H + PAD)
+
+    frame.Paint = function()
+        local list = IconList()
+        local perPage = UI.ICON_COLUMNS * UI.ICON_ROWS
+        local first, last, page, pages = UI.IconPage(#list, frame.page, perPage)
+        frame.page = page
+
+        for index, cell in ipairs(frame.cells) do
+            local texture = list[first + index - 1]
+            cell.texture = texture
+            cell.chosen = texture ~= nil and texture == frame.current
+            cell.icon:SetTexture(texture)
+            cell.pick:SetShown(cell.chosen)
+            cell:SetShown(texture ~= nil and index <= (last - first + 1))
+        end
+
+        frame.pageLabel:SetText(string.format("%d - %d of %d", first, last, #list))
+        prev:SetEnabled(page > 1)
+        next_:SetEnabled(page < pages)
+    end
+
+    iconPicker = frame
+    return frame
+end
+
+-- spec = { current, quick = { textureID, ... }, onPick = function(texture) }
+function UI.ShowIconPicker(owner, spec)
+    local frame = BuildIconPicker()
+
+    if frame:IsShown() and frame.owner == owner then
+        frame:Hide()
+        return
+    end
+
+    frame.owner = owner
+    frame.onPick = spec.onPick
+    frame.current = spec.current
+    frame.page = 1
+
+    for index, cell in ipairs(frame.quick) do
+        local texture = spec.quick and spec.quick[index]
+        cell.texture = texture
+        cell.chosen = texture ~= nil and texture == spec.current
+        cell.icon:SetTexture(texture)
+        cell.pick:SetShown(cell.chosen)
+        cell:SetShown(texture ~= nil)
+    end
+
+    frame.Paint()
+
+    -- The owner's own scale, or a picker opened from a scaled window hangs off
+    -- it at the wrong size - the same rule the shared menu follows.
+    frame:SetScale((owner and owner.GetEffectiveScale and owner:GetEffectiveScale())
+        or 1)
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPRIGHT", owner, "BOTTOMRIGHT", 0, -4)
+    frame:Show()
+end
+
+---------------------------------------------------------------------------
 -- The button half of a dropdown, without the row wrapper
 ---------------------------------------------------------------------------
 function UI.MenuButton(parent, width, height)

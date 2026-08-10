@@ -4370,6 +4370,58 @@ local function TestTaunts()
     -- second answer to "which channel am I in" - the one thing the handoff
     -- said not to do before this feature was written.
     ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    -- THE THREE WAYS TO ASK
+    --
+    -- A button, a keybinding and a macro, and all three have to run the same
+    -- line - three ways in is a feature, three implementations is a bug
+    -- waiting for one of them to drift.
+    ---------------------------------------------------------------------
+    Check("The keybinding has something to call",
+        type(_G.ZwoelfStuff_TauntAsk) == "function")
+    Check("And the game has a name to show for it",
+        type(_G.BINDING_NAME_ZWOELFSTUFF_TAUNT_ASK) == "string"
+        and type(_G.BINDING_HEADER_ZWOELFSTUFF) == "string")
+
+    -- SIXTEEN CHARACTERS is the limit on a macro name. Over it, the macro is
+    -- created under a truncated name, GetMacroIndexByName never finds it
+    -- again, and every press of "Make the macro" makes another one.
+    Check("The macro name fits in a macro name", #T.MACRO_NAME <= 16,
+        T.MACRO_NAME)
+    Check("And its body is the command that exists",
+        T.MACRO_BODY == "/zs taunt ask", T.MACRO_BODY)
+
+    -- The button is painted by the BAR's painters, under the bar's key names,
+    -- exactly as the externals panel is. Renaming one here would leave the
+    -- painters quietly using their defaults while the setting looks live.
+    local style = T.Style()
+    for _, key in ipairs({ "borderSize", "borderColor", "borderTexture",
+        "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
+        "iconZoom" }) do
+        local found = false
+        for _, barKey in ipairs(ns.BAR_STYLE_KEYS) do
+            if barKey == key then found = true break end
+        end
+        Check("The taunt button's '" .. key .. "' is a bar's word", found)
+        Check("And it has a value", style[key] ~= nil)
+    end
+
+    -- THE ICON PICKER'S PAGING. Pure, and it is the pair of off-by-ones that
+    -- only shows up on the last page of four thousand icons.
+    Check("The first page starts at one",
+        select(1, ns.UI.IconPage(400, 1, 80)) == 1)
+    Check("The last page stops at the end",
+        select(2, ns.UI.IconPage(400, 5, 80)) == 400)
+    Check("A page past the end is clamped to the last one",
+        select(3, ns.UI.IconPage(400, 99, 80)) == 5)
+    Check("A page before the first is clamped too",
+        select(3, ns.UI.IconPage(400, 0, 80)) == 1)
+    Check("A short last page does not run past the list",
+        select(2, ns.UI.IconPage(85, 2, 80)) == 85,
+        tostring(select(2, ns.UI.IconPage(85, 2, 80))))
+    Check("An empty list is still one page",
+        select(4, ns.UI.IconPage(0, 1, 80)) == 1)
+
     Check("There is one set of channel rules", ns.Chat ~= nil)
     if ns.Chat then
         Check("And the externals panel uses it",

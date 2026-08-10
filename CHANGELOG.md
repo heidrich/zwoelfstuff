@@ -4,6 +4,40 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.64.0] - 2026-08-10
+
+### Added
+
+- **Three ways to ask the other tank for a taunt**, and they all run the same
+  line. Owner: "kann man das nicht einbauen, also fertiges dynamisches macro,
+  und als button zum stylen mit icon auswahl?"
+  - **A button on your screen.** Placed in Edit Mode like everything else this
+    addon draws, with the same cog and padlock the panels have, painted by the
+    bar's own painters. Off by default.
+  - **A keybinding.** The game's own Key Bindings window has a **ZwoelfStuff**
+    section with *Ask the other tank to taunt* in it - no macro needed.
+  - **A macro the addon writes and keeps.** "Make the macro" on the Co-Tanks
+    page creates **ZS Taunt** with your chosen icon and updates it in place
+    afterwards; drag it onto a bar once and it stays right.
+- **An icon picker.** Your class taunt is the default and the likely icons sit
+  on their own row at the top; the rest of the game's macro icons are a paged
+  grid under them. No search box, and that is a decision: this client answers
+  `GetMacroIcons` with file IDs and no names at all, which is exactly why
+  Blizzard's own picker is a nameless grid you page through.
+
+### Changed
+
+- The taunt button belongs to the **Co-Tanks module**: one switch turns off
+  the panel, the announce and the button together, and its mover reads that
+  same switch.
+- The button's border and backdrop are the **bar's settings under the bar's
+  key names**, so `ns.PaintSurface` and `ns.PaintBorder` paint it without
+  knowing what it is. There is still exactly one renderer in this addon.
+- The self test pins what cannot be seen: that the macro name fits the game's
+  sixteen-character limit (over it, every press would make another macro), that
+  the keybinding has a global to call and strings to show, and that the icon
+  pager does not run off the end of the last page.
+
 ## [4.63.0] - 2026-08-10
 
 ### Added

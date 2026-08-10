@@ -1,0 +1,13 @@
+<Bindings>
+    <!--
+        The game's own key list, under a ZwoelfStuff heading. The two strings
+        it shows - BINDING_HEADER_ZWOELFSTUFF and BINDING_NAME_* - are set in
+        Core/Taunts.lua; without them the row reads as the raw binding name.
+
+        The body is a plain line of Lua run by the game, so it can only reach
+        a GLOBAL. Everything else in this addon lives in its private table.
+    -->
+    <Binding name="ZWOELFSTUFF_TAUNT_ASK" category="ZwoelfStuff" header="ZWOELFSTUFF">
+        ZwoelfStuff_TauntAsk()
+    </Binding>
+</Bindings>

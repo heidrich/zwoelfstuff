@@ -1251,6 +1251,46 @@ local function RefreshExternalMover()
     RefreshPanelMover(externalMover, ExternalPanel, cfg.x, cfg.y)
 end
 
+-- THE TAUNT BUTTON, placed the same way. It belongs to the co-tank module, so
+-- that is the switch its mover reads and the page its cog opens - a third
+-- mover type for a forty-pixel square would be the drift this builder exists
+-- to prevent.
+local tauntMover
+
+local function TauntButton()
+    local frame = ns.Taunts and ns.Taunts.Frame()
+    if frame and frame:IsShown() then return frame end
+    return nil
+end
+
+local function ApplyTauntMove(x, y)
+    local cfg = ns.Taunts.Config()
+    cfg.x, cfg.y = x, y
+    ns.Taunts.Refresh()
+end
+
+local function RefreshTauntMover()
+    if not ns.Modules:IsOn("cotanks") then
+        if tauntMover then tauntMover:Hide() end
+        return
+    end
+    if not tauntMover then
+        tauntMover = CreatePanelMover({
+            label = "Taunt button",
+            page = "cotanks",
+            module = "cotanks",
+            config = function() return ns.Taunts.Config() end,
+            apply = function(x, y) ApplyTauntMove(x, y) end,
+            origin = function()
+                local cfg = ns.Taunts.Config()
+                return cfg.x or 0, cfg.y or 0
+            end,
+        })
+    end
+    local cfg = ns.Taunts.Config()
+    RefreshPanelMover(tauntMover, TauntButton, cfg.x, cfg.y)
+end
+
 local function RefreshTankMover()
     -- A module that is not running has nothing on screen to place. Its frames
     -- still EXIST once it has run at all, so "is there a panel" is not the
@@ -2464,6 +2504,7 @@ function EditMode:Refresh()
     end
 
     RefreshTankMover()
+    RefreshTauntMover()
     RefreshExternalMover()
     RefreshReminderMovers()
 
@@ -2485,7 +2526,8 @@ end
 -- adds a third panel and builds it by hand. Nil until edit mode has been
 -- opened once - they are made on first refresh.
 function EditMode:PanelMovers()
-    return { tanks = tankMover, externals = externalMover }
+    return { tanks = tankMover, externals = externalMover,
+        taunt = tauntMover }
 end
 
 function EditMode:SetGridShown(shown)
@@ -2562,6 +2604,7 @@ function EditMode:SetUnlocked(state, wanted)
     -- standing in while placing it is usually nobody at all. Placing shows
     -- every slot you picked, or there is nothing on screen to put anywhere.
     if ns.Externals then ns.Externals:SetPlacing(state) end
+    if ns.Taunts then ns.Taunts:SetPlacing(state) end
 
     -- AND SO DO THE REMINDERS, for the same reason one layer sharper: a
     -- reminder is on screen only while the thing it names is wrong. Waiting
