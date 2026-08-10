@@ -89,26 +89,36 @@ function Page:BuildPage(page, width)
     -- for the same reason the slots are up here: they act on the thing the
     -- band shows. At the bottom of a page this long they were forty rows of
     -- scrolling away from what they switch.
+    -- ONE UNDER THE OTHER, IN A COLUMN OF THEIR OWN. Owner, 2026-08-10, with
+    -- a picture of them shoulder to shoulder: "kannste die 3 buttons alle
+    -- untereinander machen, das sieht nicht gut aus." Three boxes in a row,
+    -- each a different width, read as a toolbar somebody stopped styling;
+    -- stacked and all one width they read as what they are - the short list
+    -- of things you can do to the thing beside them.
     local BAND_ACTIONS = {
-        { text = "Who would be asked", width = 150,
-          onClick = function() ns.Externals:Dump() end },
-        { text = "Test mode", width = 106, onClick = function()
+        { text = "Move the panel", style = "primary",
+          onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
+        { text = "Set keys",
+          onClick = function() ns.Keys:SetActive(true) end },
+        { text = "Test mode", onClick = function()
             ns.Externals:SetTestMode(not ns.Externals.testing)
             ns.Options:Refresh()
         end },
-        { text = "Move the panel", width = 124, style = "primary",
-          onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
+        { text = "Who would be asked",
+          onClick = function() ns.Externals:Dump() end },
     }
 
-    -- Right to left, so the primary action is the one nearest the edge and
-    -- the row keeps its shape whatever the widths are.
+    local ACTION_W = 156
+    local ACTION_GAP = 6
+    local ACTIONS_H = #BAND_ACTIONS * (UI.BUTTON_H + ACTION_GAP) - ACTION_GAP
+
     local testButton
-    local x = -14
+    local y = -6
     for _, spec in ipairs(BAND_ACTIONS) do
-        local button = UI.Button(band, spec.text, spec.width, spec.onClick,
+        local button = UI.Button(band, spec.text, ACTION_W, spec.onClick,
             spec.style or "ghost")
-        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", x, -6)
-        x = x - spec.width - 6
+        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, y)
+        y = y - UI.BUTTON_H - ACTION_GAP
         if spec.text == "Test mode" then testButton = button end
     end
 
@@ -120,9 +130,14 @@ function Page:BuildPage(page, width)
     -- which is exactly what made this look like lost saved data: an empty
     -- band over a "Who to ask" list that still named two spells. Two points
     -- across, or SetWidth - never a lone corner.
+    -- The slots keep the left, the actions have the right. Two columns rather
+    -- than one thing above another: a stacked list of buttons over a row of
+    -- icons would push the preview - the thing this band exists to show - off
+    -- the bottom of a sticky area that has to stay small.
     local host = CreateFrame("Frame", nil, band)
     host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -BAND_HEAD)
-    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, -BAND_HEAD)
+    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -(14 + ACTION_W + 14),
+        -BAND_HEAD)
     host:SetHeight(SLOT)
 
     -- THE PREVIEW IS THE PANEL'S OWN LATTICE. Rows and columns, filled the
@@ -170,8 +185,9 @@ function Page:BuildPage(page, width)
         local cfg = Cfg()
         local count = ns.Externals.Count()
         local down = cfg.growth == "down"
+        -- The preview gets what the action column leaves it.
         local size = Page.PreviewSize(cfg.rows, cfg.columns,
-            width - 28, BAND_MAX_H)
+            width - 28 - ACTION_W - 14, BAND_MAX_H)
 
         for index = 1, count do
             local slot = SlotAt(index)
@@ -193,8 +209,11 @@ function Page:BuildPage(page, width)
 
         -- Always exactly the lattice: rows times columns IS the count, so
         -- both fill orders end up filling the same rectangle.
+        -- Whichever column is taller decides. A lattice of one row is shorter
+        -- than four buttons; six rows is taller than they are.
         host:SetHeight(cfg.rows * size + (cfg.rows - 1) * GAP)
-        band:SetHeight(BAND_HEAD + host:GetHeight() + 10)
+        band:SetHeight(math.max(BAND_HEAD + host:GetHeight(),
+            ACTIONS_H + 12) + 10)
     end
     band.Fit()
 
@@ -273,31 +292,25 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- Keys
     --
-    -- HERE, not in the game's menu. Owner, 2026-08-10: "die sollten schon
-    -- direkt mit bei den bars mit drin sein, nicht erst im blizzard menü."
-    -- These write the game's own bindings - the same two calls its key panel
-    -- makes - so they show up there as well and survive a reload without
-    -- this addon keeping a copy.
+    -- ON THE PANEL, not in a list. Owner, 2026-08-10, after being handed
+    -- eight rows: "du machst da einen keybind button, dann grauen die buttons
+    -- aus und du kannst auf den button klicken und einen key belegen."
+    --
+    -- A key belongs to a place on the screen, and the screen is right there.
+    -- The button is at the bottom with the other things this page does.
     ---------------------------------------------------------------------
     grid:Section("Keys")
 
-    grid:Note("Bound to the |cffffd100place|r, not to the spell: what sits in "
-        .. "the third slot changes as people come and go, and a slot nobody "
-        .. "present can fill is not drawn at all - the ones after it move up. "
-        .. "The key shows in the corner of the slot. Press one with nothing in "
-        .. "it and it says so rather than going quiet.")
-
-    for index = 1, ns.Externals.KEYS do
-        local row = grid:FullRow("Slot " .. index, { controlWidth = 130 })
-        UI.KeyBind(row, {
-            binding = ns.Externals.BindingName(index),
-            label = "Ask for cooldown " .. index,
-        })
-    end
-
-    grid:Note("Click one, press the key. Right-click clears it. They are the "
-        .. "game's own bindings, so they are also under Escape, Key Bindings, "
-        .. "|cffffd100ZwoelfStuff|r if you would rather set them there.")
+    grid:Note("|cffffd100Set keys|r at the bottom of this page puts the panel "
+        .. "on screen with a square over every place. Click one, press the "
+        .. "key, Escape when you are done.\n\nBound to the |cffffd100place|r, "
+        .. "not to the spell: what sits in the third slot changes as people "
+        .. "come and go, and a slot nobody present can fill is not drawn at "
+        .. "all - the ones after it move up. The key then shows in the corner "
+        .. "of the slot while you play. Press one with nothing in it and it "
+        .. "says so rather than going quiet.\n\nThese are the game's own "
+        .. "bindings, so they are under Escape, Key Bindings, "
+        .. "|cffffd100ZwoelfStuff|r as well.")
 
     grid:Note("Left alone, a click asks the healer of that class - which in a "
         .. "five-man is the only person who has it. In a raid, name somebody. "

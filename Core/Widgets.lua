@@ -750,27 +750,13 @@ function UI.Toggle(row, get, set)
 end
 
 ---------------------------------------------------------------------------
--- KEY BIND - click it, press a key
+-- THE KEY THE PLAYER PRESSED, as the game names it
 --
--- Owner, 2026-08-10: "wo finde ich denn die keybind im addon? die sollten
--- schon direkt mit bei den bars mit drin sein, nicht erst im blizzard menü."
--- Right: a key belongs beside the thing it presses. Sending somebody to
--- Escape, Key Bindings, scroll to ZwoelfStuff, find the right row of eight
--- identically named entries is a settings page admitting it is not one.
---
--- IT WRITES THE GAME'S OWN BINDING, it does not invent a second system.
--- SetBinding plus SaveBindings is exactly what Blizzard's own key panel does
--- with the same two calls, so a key set here shows up there and survives a
--- reload without this addon storing a thing.
---
--- OUT OF COMBAT ONLY, because SetBinding is protected in combat - and it says
--- so rather than doing nothing, which is the failure this whole evening was
--- about.
---
--- spec = { binding = "ZWOELFSTUFF_EXTERNAL_1", label = "Slot 1" }
+-- Setting a key is a MODE on the screen now, not a control in a row - see
+-- Core/Keys.lua and the owner's own description of it. What stayed here is
+-- the one piece of it that is pure and belongs to the design system: turning
+-- a key press into the string the binding system uses.
 ---------------------------------------------------------------------------
-local capturing = nil     -- only ever one at a time, across every page
-
 -- The key the player actually pressed, as the game names it. Modifiers are a
 -- prefix, and a modifier PRESSED ALONE is not a binding - it is the first
 -- half of one, and taking it would make every combination impossible to
@@ -789,161 +775,6 @@ function UI.Chord(key)
     if IsControlKeyDown and IsControlKeyDown() then prefix = prefix .. "CTRL-" end
     if IsShiftKeyDown and IsShiftKeyDown() then prefix = prefix .. "SHIFT-" end
     return prefix .. key
-end
-
--- A mouse button as the binding system names it. The left one is missing on
--- purpose: it is how you got into capture mode, so binding it would mean the
--- click that opened the control also closed it.
-local MOUSE_KEYS = {
-    MiddleButton = "BUTTON3", Button4 = "BUTTON4", Button5 = "BUTTON5",
-}
-
-function UI.KeyBind(row, spec)
-    local button = CreateFrame("Button", nil, row.slot)
-    button:SetSize(spec.width or 110, 20)
-    button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-    button:RegisterForClicks("AnyUp")
-    ClaimRow(row, button)
-
-    local bed = Fill(button, "BACKGROUND", C.control)
-    local text = UI.Label(button, "", 11, C.text)
-    text:SetPoint("CENTER", button, "CENTER", 0, 0)
-
-    local function Current()
-        if not GetBindingKey then return nil end
-        local ok, key = pcall(GetBindingKey, spec.binding)
-        if not ok then return nil end
-        return key
-    end
-
-    button.Refresh = function()
-        if capturing == button then
-            text:SetText("press a key")
-            text:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
-            bed:SetColorTexture(C.accentSoft[1], C.accentSoft[2],
-                C.accentSoft[3], 1)
-            return
-        end
-        local key = Current()
-        text:SetText(key and (GetBindingText and GetBindingText(key) or key)
-            or "not set")
-        if key then
-            text:SetTextColor(C.text[1], C.text[2], C.text[3])
-        else
-            text:SetTextColor(C.textGhost[1], C.textGhost[2], C.textGhost[3])
-        end
-        bed:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
-    end
-
-    local function Stop()
-        if capturing ~= button then return end
-        capturing = nil
-        button:EnableKeyboard(false)
-        button:EnableMouseWheel(false)
-        if button.SetPropagateKeyboardInput then
-            button:SetPropagateKeyboardInput(true)
-        end
-        button.Refresh()
-    end
-
-    local function Save()
-        if SaveBindings and GetCurrentBindingSet then
-            pcall(SaveBindings, GetCurrentBindingSet())
-        end
-    end
-
-    local function Clear()
-        if not (SetBinding and GetBindingKey) then return end
-        local key = Current()
-        while key do
-            SetBinding(key, nil)
-            key = Current()
-        end
-        Save()
-        button.Refresh()
-    end
-
-    -- WHAT WAS ON THAT KEY BEFORE. Taking a key silently off something else
-    -- is the addon deciding for you; saying which one it was costs one line
-    -- and is the whole difference.
-    local function Bind(key)
-        if not key then return end
-        if InCombatLockdown and InCombatLockdown() then
-            ns.Print("|cffff8040Not in combat|r - the game does not allow a "
-                .. "key to be re-bound during a fight.")
-            Stop()
-            return
-        end
-
-        local taken = GetBindingAction and GetBindingAction(key)
-        if taken and taken ~= "" and taken ~= spec.binding then
-            local name = _G["BINDING_NAME_" .. taken] or taken
-            ns.Print(string.format("|cffffd100%s|r taken from |cffffd100%s|r.",
-                GetBindingText and GetBindingText(key) or key, name))
-        end
-
-        Clear()
-        if SetBinding then SetBinding(key, spec.binding) end
-        Save()
-        Stop()
-    end
-
-    button:SetScript("OnClick", function(_, mouse)
-        -- Right-click clears, and it clears from either state: the way out of
-        -- "press a key" has to be something you can find without reading.
-        if mouse == "RightButton" then
-            if capturing == button then Stop() else Clear() end
-            return
-        end
-
-        if capturing == button then Stop() return end
-        if capturing then capturing.Refresh() end
-
-        capturing = button
-        button:EnableKeyboard(true)
-        button:EnableMouseWheel(true)
-        if button.SetPropagateKeyboardInput then
-            button:SetPropagateKeyboardInput(false)
-        end
-        button.Refresh()
-    end)
-
-    button:SetScript("OnKeyDown", function(_, key)
-        if capturing ~= button then return end
-        if key == "ESCAPE" then Stop() return end
-        Bind(UI.Chord(key))
-    end)
-
-    button:SetScript("OnMouseWheel", function(_, delta)
-        if capturing ~= button then return end
-        Bind(UI.Chord(delta > 0 and "MOUSEWHEELUP" or "MOUSEWHEELDOWN"))
-    end)
-
-    button:SetScript("OnMouseDown", function(_, mouse)
-        if capturing ~= button then return end
-        local key = MOUSE_KEYS[mouse]
-        if key then Bind(UI.Chord(key)) end
-    end)
-
-    button:SetScript("OnEnter", function(self)
-        if not GameTooltip then return end
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(spec.label or "Key")
-        GameTooltip:AddLine("Click, then press a key.", 1, 1, 1)
-        GameTooltip:AddLine("Right-click to clear it.", 0.61, 0.64, 0.69)
-        GameTooltip:Show()
-    end)
-    button:SetScript("OnLeave", function()
-        if GameTooltip then GameTooltip:Hide() end
-    end)
-    -- Losing the page while it is waiting for a key would leave the keyboard
-    -- swallowed by a button nobody can see.
-    button:SetScript("OnHide", Stop)
-
-    button.Refresh()
-    row.control = button
-    row.Refresh = button.Refresh
-    return row
 end
 
 ---------------------------------------------------------------------------
@@ -3862,20 +3693,36 @@ end
 -- actions. Pads collapse with the neighbour's, so a value smaller than the
 -- row gap changes nothing - which is why the callers that want the air ask
 -- for a real amount of it.
+-- ONE PER LINE. Owner, 2026-08-10, looking at three of them side by side:
+-- "kannste die 3 buttons alle untereinander machen, das sieht nicht gut aus."
+--
+-- He is right, and the reason is that a row of them is a row of NOTHING ELSE:
+-- every other block on these pages is a line with a name on the left and a
+-- control on the right, so three boxes shoulder to shoulder read as a dialog
+-- that wandered in. Stacked, they are a short list of things the page can do,
+-- which is what they are. All to the widest one's width so they line up on
+-- both edges rather than making a staircase.
 function Grid:Buttons(buttons, padTop)
     local strip = CreateFrame("Frame", nil, self.content)
-    strip:SetSize(self.width, 28)
 
-    local x, first = 0, nil
+    local GAP = 6
+    local width = 0
     for _, spec in ipairs(buttons) do
-        local btn = UI.Button(strip, spec.text, spec.width or 120,
-            spec.onClick, spec.style)
-        btn:SetPoint("LEFT", strip, "LEFT", x, 0)
-        x = x + (spec.width or 120) + 8
+        width = math.max(width, spec.width or 120)
+    end
+
+    local y, first = 0, nil
+    for _, spec in ipairs(buttons) do
+        local btn = UI.Button(strip, spec.text, width, spec.onClick,
+            spec.style)
+        btn:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, y)
+        y = y - (UI.BUTTON_H + GAP)
         if not first then first = btn end
     end
 
-    self:Wide(strip, 36, padTop or 0)
+    local height = math.max(1, #buttons * (UI.BUTTON_H + GAP) - GAP)
+    strip:SetSize(self.width, height)
+    self:Wide(strip, height + 8, padTop or 0)
     return strip, first
 end
 

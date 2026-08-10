@@ -196,27 +196,18 @@ function Page:BuildPage(page, width)
         .. "is where you want to be.")
 
     ---------------------------------------------------------------------
-    -- Keys, beside the thing they press rather than in the game's menu.
+    -- Keys - on the bar itself, not in a list of eight rows.
     ---------------------------------------------------------------------
     grid:Section("Keys")
 
-    grid:Note("Counted the way the bar is drawn: along the first row, then "
-        .. "the next. The key shows in the corner of the cell.\n\nA key here "
-        .. "does not cast by itself - it presses the cell, and the cell casts. "
-        .. "That is the only way a key can reach a spell at all, and it is why "
-        .. "these are the game's own bindings rather than something this addon "
-        .. "invented.")
-
-    for index = 1, ns.Answers.KEYS do
-        local row = grid:FullRow("Cell " .. index, { controlWidth = 130 })
-        UI.KeyBind(row, {
-            binding = ns.Answers.BindingName(index),
-            label = "Answer cell " .. index,
-        })
-    end
-
-    grid:Note("Click one, press the key. Right-click clears it. They are also "
-        .. "under Escape, Key Bindings, |cffffd100ZwoelfStuff|r.")
+    grid:Note("|cffffd100Set keys|r at the bottom of this page puts the bar on "
+        .. "screen with a square over every cell. Click one, press the key, "
+        .. "Escape when you are done - and the key then shows in the corner of "
+        .. "the cell while you play.\n\nA key does not cast by itself: it "
+        .. "presses the cell, and the cell casts. That is the only way a key "
+        .. "can reach a spell at all, and it is why these are the game's own "
+        .. "bindings rather than something this addon invented - they are "
+        .. "under Escape, Key Bindings, |cffffd100ZwoelfStuff|r too.")
 
     UI.Toggle(grid:FullRow("A quick menu on the bar", {
         controlWidth = 124,
@@ -337,8 +328,10 @@ function Page:BuildPage(page, width)
         function(value) Cfg().backdropTexture = value end, Apply)
 
     grid:Buttons({
-        { text = "Move the bar", width = 150, style = "primary",
+        { text = "Move the bar", width = 220, style = "primary",
           onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
+        { text = "Set keys", width = 220,
+          onClick = function() ns.Keys:SetActive(true) end },
         -- The report, and it is worth finding: it prints the macro each cell
         -- would run, which is the one thing that says whether this works.
         { text = "What every cell would cast", width = 220,

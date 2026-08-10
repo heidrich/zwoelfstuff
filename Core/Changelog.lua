@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.68.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Setting a key is its own mode now.|r Press |cffffd100Set keys|r and the panel comes out with a square over every place - click one, press the key, Escape when you are done. No list of rows to count through.",
+            "|cffffd100The buttons on a page stand one under the other|r, all the same width.",
+        },
+    },
+    {
         version = "4.67.0",
         date = "2026-08-10",
         lines = {

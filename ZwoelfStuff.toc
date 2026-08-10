@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.67.0
+## Version: 4.68.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -128,6 +128,11 @@ Core\GameMenu.lua
 Core\Widgets.lua
 Core\Screen.lua
 Core\EditMode.lua
+# Setting a key is its own mode on the screen, next to Edit Mode and for the
+# same reason: what you are deciding lives out there, not in a list. Below
+# Widgets - it is built from the design system - and it reaches the two panels
+# only when it opens, so their own load order does not matter here.
+Core\Keys.lua
 Core\Changelog.lua
 # The first window a character ever sees, and the one place the modules can be
 # switched without hunting for a page. Below Widgets, whose design system it

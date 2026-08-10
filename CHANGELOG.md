@@ -4,6 +4,22 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.68.0] - 2026-08-10
+
+### Changed
+
+- **Setting a key is a mode on the screen now, not a list of rows.** Press
+  **Set keys** and the panel comes out with a square over every place: click
+  one, press the key, Escape when you are done. A key belongs to a place on
+  the screen, and a row called "Slot 3" asks you to hold a picture of the
+  panel in your head and count. The squares are their own frames on top -
+  an answer cell is a spell button, and a click that reached it would cast.
+- **The buttons on a page stand one under the other**, all one width. Three
+  boxes shoulder to shoulder, each a different size, read as a toolbar
+  somebody stopped styling; stacked they read as what they are - the short
+  list of things the page can do. On the externals page they are a column
+  beside the preview rather than a row above it.
+
 ## [4.67.0] - 2026-08-10
 
 ### Added

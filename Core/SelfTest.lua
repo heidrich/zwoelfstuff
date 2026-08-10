@@ -4783,6 +4783,38 @@ local function TestAnswers()
     Check("Nor is nothing at all", ns.UI.Chord(nil) == nil)
 
     ---------------------------------------------------------------------
+    -- SETTING A KEY IS A MODE, NOT A LIST
+    --
+    -- Owner, 2026-08-10, having been handed eight rows: "du machst da einen
+    -- keybind button, dann grauen die buttons aus und du kannst auf den
+    -- button klicken und einen key belegen." A key belongs to a place on the
+    -- screen, and the screen is right there.
+    ---------------------------------------------------------------------
+    Check("There is a key mode", ns.Keys ~= nil)
+    if ns.Keys then
+        local binding = ns.Externals.BindingName(1)
+        local kept = ns.Keys.Current(binding)
+        ns.Keys.Clear(binding)
+
+        Check("A key can be bound to a place", ns.Keys.Bind(binding, "F9")
+            and ns.Keys.Current(binding) == "F9",
+            tostring(ns.Keys.Current(binding)))
+
+        -- One key, one command. Announced when it is taken from something
+        -- else, never left on both.
+        SetBinding("F9", A.BindingName(1))
+        ns.Keys.Bind(binding, "F9")
+        Check("One key answers to one thing", ns.Keys.Current(A.BindingName(1))
+            == nil and ns.Keys.Current(binding) == "F9")
+
+        ns.Keys.Clear(binding)
+        Check("And it can be taken off again",
+            ns.Keys.Current(binding) == nil)
+
+        if kept then ns.Keys.Bind(binding, kept) end
+    end
+
+    ---------------------------------------------------------------------
     -- THE QUICK MENU ON THE BAR
     --
     -- Owner, 2026-08-10: "kann man das als button an die answer bar hauen,
