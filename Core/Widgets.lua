@@ -706,6 +706,9 @@ function UI.SectionHeader(parent, text, onToggle, isOpen)
     local header = onToggle and CreateFrame("Button", nil, parent)
         or CreateFrame("Frame", nil, parent)
     header:SetHeight(UI.SECTION_H)
+    -- Read by Grid:Layout, which restarts the alternating grounds here so no
+    -- section opens on the darker tone and reads as a continuation.
+    header.dkSection = true
 
     -- The air goes ABOVE the heading, not below it. A heading belongs to what
     -- follows it, and spacing it evenly is what makes a long page read as one
@@ -3679,28 +3682,18 @@ function Grid:Note(text, height)
     -- alle viel zu nah an den trennlinien ... mehr space oben und unten."
     note.dkMeasure = height == nil
 
-    -- THE LINE BELONGS UNDER THE PAIR, NOT THROUGH IT.
+    -- A NOTE BELONGS TO THE BLOCK ABOVE IT, AND NOW SHARES ITS GROUND.
     --
-    -- A row draws its hairline along its own bottom edge. With a sentence
-    -- underneath, that line falls BETWEEN a setting and its own explanation,
-    -- so the sentence reads as an introduction to whatever comes next. Owner:
-    -- "auch sind die immer unter der linie, obwohl die eigentlich zu der
-    -- funktion darueber sind."
+    -- It used to be cut off from that block by the row's own hairline, which
+    -- fell between a setting and its own explanation - owner: "auch sind die
+    -- immer unter der linie, obwohl die eigentlich zu der funktion darueber
+    -- sind." There is no hairline any more: Layout paints one ground under the
+    -- row and its sentence together, so the grouping is the SURFACE and there
+    -- is no edge to be on the wrong side of.
     --
-    -- So the rows above give their line up and the note carries one instead.
-    -- The page keeps the same number of hairlines; they now fall between
-    -- groups rather than through one.
-    --
-    -- WHICH rows give it up is decided in Layout, because that is the only
-    -- place that knows which of them share a line: a row can be dropped from
-    -- the page at refresh time, and that changes who its neighbour is.
+    -- A note with nothing above it - the opening paragraph under a heading -
+    -- gets no ground and floats on the page, which is what it is.
     note.dkClosesGroup = true
-    note.dkRule = Tex(self.content, "BACKGROUND",
-        C.separator[1], C.separator[2], C.separator[3], 1)
-    note.dkRule:SetHeight(1)
-    note.dkRule:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -9)
-    note.dkRule:SetPoint("TOPRIGHT", note, "BOTTOMRIGHT", 0, -9)
-    note.dkRule:Hide()
 
     return self:Wide(note, height or note:GetStringHeight(), 9, 15, NOTE_INDENT)
 end
@@ -3843,21 +3836,43 @@ function Grid:Layout()
     local y, column, lineHeight = 0, 0, 0
     local pending = 0        -- the bottom pad the previous block asked for
 
-    -- The rows sharing the line being filled, and the last line that closed.
-    -- A note takes the hairlines off the line above it; only this loop knows
-    -- which rows those are.
-    local line, lastLine = {}, {}
+    -- THE GROUNDS.
+    --
+    -- One per BLOCK - a line of settings plus the sentence explaining it -
+    -- alternating between two tones, and reset to the first at every heading
+    -- so each section starts the same way.
+    --
+    -- Pooled and re-pointed rather than rebuilt: Layout runs on every refresh
+    -- and a texture created per pass is a leak with a slow fuse.
+    --
+    -- Drawn on the CONTENT frame at BACKGROUND, which puts them behind every
+    -- row - rows are frames, and a frame is always above its parent's own
+    -- textures, so nothing has to be told about layers.
+    self.bands = self.bands or {}
+    local bandCount, bandTone = 0, 0
+    local blockTop, blockBottom, blockOpen = 0, 0, false
 
-    -- EVERY HAIRLINE BACK ON FIRST. Layout runs again on every refresh, and a
-    -- line hidden under the last pass's conditions would stay hidden under
-    -- this one's - a rule that disappears when a row above it is switched off
-    -- and never comes back.
-    for _, item in ipairs(self.items) do
-        local region = item.region
-        if region then
-            if region.rule then region.rule:Show() end
-            if region.dkRule then region.dkRule:Hide() end
+    local function CloseBlock()
+        if not blockOpen then return end
+        blockOpen = false
+
+        local height = blockTop - blockBottom
+        if height <= 0 then return end
+
+        bandCount = bandCount + 1
+        local band = self.bands[bandCount]
+        if not band then
+            band = self.content:CreateTexture(nil, "BACKGROUND")
+            self.bands[bandCount] = band
         end
+        local tone = (bandTone == 0) and C.band or C.bandAlt
+        band:SetColorTexture(tone[1], tone[2], tone[3], 1)
+        band:ClearAllPoints()
+        band:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, blockTop)
+        band:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, blockTop)
+        band:SetHeight(height)
+        band:Show()
+        bandTone = 1 - bandTone
     end
 
     local function EndLine()
@@ -3865,7 +3880,7 @@ function Grid:Layout()
             y = y - lineHeight
             pending = math.max(pending, UI.ROW_GAP)
             column, lineHeight = 0, 0
-            lastLine, line = line, {}
+            blockBottom = y
         end
     end
 
@@ -3888,28 +3903,28 @@ function Grid:Layout()
             -- that still contributed a gap is a hole nobody can explain.
         elseif item.wide then
             EndLine()
+
+            -- A NOTE JOINS THE GROUND ABOVE IT; ANYTHING ELSE ENDS IT.
+            --
+            -- That is the whole grouping rule, and it is stated once, here,
+            -- rather than by every page remembering to put its sentences in
+            -- the right place. A heading, a chip row, a card or a strip of
+            -- buttons all close the block - they are their own thing and sit
+            -- on the page rather than on a band.
+            if not (region and region.dkClosesGroup and blockOpen) then
+                CloseBlock()
+            end
+
+            -- A heading starts the alternation over, so no section ever opens
+            -- on the darker tone and reads as a continuation of the one above.
+            if region and region.dkSection then bandTone = 0 end
+
             OpenGap(item.padTop)
             if region then
                 region:ClearAllPoints()
                 region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
                     item.indent or 0, y)
                 region:Show()
-
-                if region.dkClosesGroup then
-                    -- Nothing above to group with - an opening sentence under
-                    -- a heading, or a second note in a run - so it neither
-                    -- takes a line away nor draws one.
-                    for _, above in ipairs(lastLine) do
-                        if above.rule then above.rule:Hide() end
-                    end
-                    if region.dkRule and #lastLine > 0 then
-                        region.dkRule:Show()
-                    end
-                end
-
-                -- A full-width ROW is a line of its own; anything else - a
-                -- heading, a note, a card - closes the group above it.
-                lastLine = region.rule and { region } or {}
             end
             -- dkHeight lets a block that grows with its content - a grid
             -- gaining a row - report its real height instead of the one it
@@ -3923,7 +3938,17 @@ function Grid:Layout()
             elseif region and region.dkHeight then
                 height = region.dkHeight
             end
+            -- A full-width ROW opens a block of its own. It is recognised
+            -- by carrying a hairline: only UI.Row builds one, so "has a rule"
+            -- IS "is a settings row" without a second flag to keep in step.
+            if region and region.rule and not blockOpen then
+                blockTop, blockOpen = y, true
+            end
+
             y = y - height
+            if region and (region.rule or region.dkClosesGroup) then
+                blockBottom = y
+            end
             pending = item.padBottom or UI.ROW_GAP
         else
             if column == 0 then OpenGap(item.padTop) end
@@ -3931,13 +3956,19 @@ function Grid:Layout()
             region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
                 (item.indent or 0) + column * (self.colWidth + UI.COL_GAP), y)
             region:Show()
-            line[#line + 1] = region
+            if not blockOpen then blockTop, blockOpen = y, true end
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
             if column >= 2 then EndLine() end
         end
     end
     EndLine()
+    CloseBlock()
+
+    -- Bands the page no longer needs. A row can be dropped at refresh time, so
+    -- this pass may use fewer than the last one did, and a leftover strip of
+    -- colour under nothing is the kind of thing you only see in a screenshot.
+    for index = bandCount + 1, #self.bands do self.bands[index]:Hide() end
 
     self.content:SetHeight(math.max(1, -y + 12))
     if self.scroll.Update then self.scroll.Update() end

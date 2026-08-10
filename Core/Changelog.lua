@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.73.0",
+        date = "2026-08-11",
+        lines = {
+            "|cffffd100The lines between settings are gone.|r Each setting and its explanation sit on a ground of their own instead, two shades taking turns. Nothing to look at, and the grouping reads without being pointed out.",
+            "|cffffd100The window takes the font you already have.|r If any of your other addons ships |cffffd100Expressway|r it is used by default now - the settings page has been offering it for months while the window was quietly drawn in Arial Narrow. Pick any other under |cffffd100Settings|r.",
+            "|cffffd100About says what this addon is|r, in the author's own words, and spells his name properly.",
+        },
+    },
+    {
         version = "4.72.0",
         date = "2026-08-10",
         lines = {

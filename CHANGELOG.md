@@ -4,6 +4,25 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.73.0] - 2026-08-11
+
+### Changed
+
+- **There are no lines between settings any more.** A setting and its
+  explanation share a ground of their own, and consecutive blocks alternate
+  between two shades. A line is a thing you have to look at; a change of ground
+  is one you do not — the eye reads the stripes and never resolves an edge. The
+  grouping that took a hairline to state is now simply what the surface says.
+- **The window uses the font you already have.** If any of your other addons
+  ships **Expressway** it is registered with LibSharedMedia, and it is now the
+  default here. The settings page had been *showing* it as the default for
+  months while the window was drawn in Arial Narrow, because nothing ever asked
+  for it. Nothing is bundled: the file stays where it was installed, and on a
+  client that has none of them Arial Narrow is used exactly as before. Any font
+  your addons register can be picked under **Settings**.
+- **About says what this addon is** — the same words the README opens with,
+  from its author — and spells his name properly.
+
 ## [4.72.0] - 2026-08-10
 
 ### Changed

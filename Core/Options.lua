@@ -209,11 +209,35 @@ end
 local function BuildAboutPage(page, width)
     local scroll, content = UI.ScrollArea(page, width - 14)
 
-    local author = UI.Label(content, "Zwolf  -  EU Destromath", 15, C.accent)
+    -- Zwoelf with the umlaut: this line names the PERSON. The addon keeps the
+    -- transliteration everywhere it is an identifier. Owner: "der charakter
+    -- heisst Zwölf! das addon zwoelf, wichtig!"
+    local author = UI.Label(content, "Zwölf  -  EU Destromath", 15, C.accent)
     author:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
 
     local version = UI.Label(content, "Version " .. ns.version, 12, C.textDim)
     version:SetPoint("TOPLEFT", author, "BOTTOMLEFT", 0, -6)
+
+    -- WHY THIS ADDON EXISTS, IN HIS OWN WORDS, and the same words the README
+    -- opens with. Owner: "der text sollte auch ins about!" - and he is right
+    -- that it belongs here rather than only on a page nobody reads from inside
+    -- the game. Everything under it is what the addon cannot do and why, which
+    -- is a different question and a colder one.
+    local intro = UI.Label(content, table.concat({
+        "After many years I have built a new addon again, one that serves my own",
+        "needs as a tank first, and those of my M+ groups and friends. You will find",
+        "a lot of these features in other addons too - but like everybody, I have my",
+        "own ideas about what I want in the game. Hence this addon. I hope it is as",
+        "useful to you as it is to me.",
+        "",
+        "This addon is no replacement for EllesmereUI or ElvUI. I love both of them",
+        "and use them for my own UI. This is a collection of the features I like,",
+        "done my way. And of course - feature requests and feedback are welcome!",
+    }, "\n"), 13, C.textBody)
+    intro:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -16)
+    intro:SetJustifyH("LEFT")
+    intro:SetJustifyV("TOP")
+    intro:SetWidth(width - 30)
 
     local body = UI.Label(content, table.concat({
         "Blizzard's Cooldown Manager can only show spells that exist in its own",
@@ -251,11 +275,11 @@ local function BuildAboutPage(page, width)
         "  /zs minimap            show or hide the minimap button",
         "  /zs reset              restore defaults, keeping recorded procs",
     }, "\n"), 12, C.text)
-    body:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -18)
+    body:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -22)
     body:SetJustifyV("TOP")
     body:SetWidth(width - 30)
 
-    content:SetHeight(body:GetStringHeight() + 90)
+    content:SetHeight(intro:GetStringHeight() + body:GetStringHeight() + 130)
     if scroll.Update then scroll.Update() end
 end
 
