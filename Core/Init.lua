@@ -217,7 +217,16 @@ ns.DEFAULTS = {
     -- The font every piece of text on every bar uses unless that one piece
     -- has been given its own. One place to change it, and no need to visit
     -- three sections on four bars to change a typeface.
-    font       = "Friz Quadrata TT",
+    --
+    -- Arial Narrow rather than the client's own Friz Quadrata: bar text is
+    -- read at a glance over a moving scene, and a narrow grotesk fits more
+    -- name into the same bar without dropping in size. It is what the panel
+    -- uses too, so the addon reads as one thing out of the box.
+    --
+    -- ONLY REACHES A NEW PROFILE. Anyone who already has one keeps the face
+    -- stored in it, deliberate or not; a default is not licence to reach into
+    -- a saved setting.
+    font       = "Arial Narrow",
 
     -- The PANEL font - the options window, not the bars. Two different jobs:
     -- bar text is read at a glance over a moving scene, panel text is read in
@@ -853,20 +862,15 @@ function ns.StyleUIFont(fontString, size, flags)
 
     -- WITH NO CHOICE MADE, ASK MEDIA RATHER THAN JUMPING TO THE FLOOR.
     --
-    -- Media.PanelFont already knows the order the design wants - Expressway
-    -- first, Arial Narrow under it - and the settings page has been SHOWING
-    -- its answer as the default for as long as it has existed. It was never
-    -- the font that got used: with nothing picked, this went straight past it
-    -- to the fallback, so the picker said "Expressway" while the window was
-    -- drawn in Arial Narrow.
+    -- Media.PanelFont is what the settings page has been SHOWING as the
+    -- default for as long as it has existed, and for most of that time it was
+    -- not the font that got used: with nothing picked, this went straight past
+    -- it to the fallback below. The picker named one face while the window was
+    -- drawn in another, and nobody could have found that by reading either.
     --
-    -- Owner: "nimm seine schriftart, die passt." This is the whole of taking
-    -- it. The file itself says "(c) 2005 Typodermic. Do not distribute", so it
-    -- is not ours to ship and never will be - but it arrives with ElvUI and
-    -- half a dozen other UIs, it registers itself with LibSharedMedia when it
-    -- does, and USING what is already installed on the machine is what every
-    -- font dropdown in the game does. Nothing is copied. On a client that has
-    -- none of them the line below finds Arial Narrow and behaves as before.
+    -- The two now agree, and they answer "Arial Narrow" - see PANEL_FONTS in
+    -- Core/Media.lua for why nothing installed by another addon gets to be the
+    -- default any more.
     if not path and ns.Media and ns.Media.PanelFont then
         path = ns.Media.Font(ns.Media.PanelFont())
     end

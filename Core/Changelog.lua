@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.75.0",
+        date = "2026-08-11",
+        lines = {
+            "|cffffd100The light and dark stripes are gone.|r They were meant to group a setting with its explanation without drawing a line, and in this window they did the opposite: half the page stands in two columns, and one stripe ran under a pair of them. Air does the grouping now - a sentence sits close to the setting it belongs to and further from the next one.",
+            "|cffffd100Labels start where the headings do.|r The indent existed to keep text off the edge of a stripe. With the stripes gone it was just a gap at the front of every line.",
+            "|cffffd100Arial Narrow is the default font again|r, for the window and for bar text. The file the last version picked up from other addons is a bold cut whatever its name says, which made the whole window heavier than it is drawn. It is still in the picker under |cffffd100Settings|r, along with everything else your addons register.",
+            "|cffffd100About names the addons this one was written by reading|r - EllesmereUI, ElvUI, BigWigs, MRT, MDT, Details!, WeakAuras, Plater, LibOpenRaid - and says what was taken from them: no code, facts about the game's API that are written down nowhere else.",
+        },
+    },
+    {
         version = "4.74.0",
         date = "2026-08-11",
         lines = {

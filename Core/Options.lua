@@ -239,6 +239,43 @@ local function BuildAboutPage(page, width)
     intro:SetJustifyV("TOP")
     intro:SetWidth(width - 30)
 
+    -- THE CREDIT, WORD FOR WORD FROM THE README.
+    --
+    -- Owner: "in about muss unter meinen text noch der info text aus der
+    -- readme rein." It belongs in both places for the same reason it exists at
+    -- all: the people who would recognise these names are players, and a
+    -- player never opens a repository. Kept as one text in two forms rather
+    -- than reworded here, so there is no version of it that says less.
+    local thanks = UI.Label(content, "Standing on other people's shoulders",
+        14, C.accentCool)
+    thanks:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -22)
+
+    local credit = UI.Label(content, table.concat({
+        "This addon was written by reading other addons - EllesmereUI, ElvUI, BigWigs,",
+        "Method Raid Tools, Mythic Dungeon Tools, Details!, WeakAuras, Plater,",
+        "LibOpenRaid and a few more. Their authors have our thanks.",
+        "",
+        "No code was copied from any of them. What we took is a different thing: facts",
+        "about the game's API. Which field a table actually carries, which event fires",
+        "first, which call answers on a fresh login and which one returns nothing until",
+        "a frame later, which values the client withholds in a dungeon. None of that is",
+        "documented anywhere, and on a patch that keeps closing doors it is often not",
+        "discoverable at all except by reading code that already works.",
+        "",
+        "So the comments in Core/ cite those addons by name and by line, and they say",
+        "'read off working code on this machine' rather than pretending we knew. That is",
+        "deliberate. A number nobody can re-check is a number that quietly goes wrong two",
+        "patches later - see Core/CDM.lua, which is mostly a record of where each fact",
+        "came from.",
+        "",
+        "If you are one of those authors and you would rather not be named here, say so",
+        "and we will take the citation out.",
+    }, "\n"), 12, C.textBody)
+    credit:SetPoint("TOPLEFT", thanks, "BOTTOMLEFT", 0, -10)
+    credit:SetJustifyH("LEFT")
+    credit:SetJustifyV("TOP")
+    credit:SetWidth(width - 30)
+
     local body = UI.Label(content, table.concat({
         "Blizzard's Cooldown Manager can only show spells that exist in its own",
         "C_CooldownViewer data set. Boiling Point (1265968) is not in that set, so it",
@@ -275,11 +312,15 @@ local function BuildAboutPage(page, width)
         "  /zs minimap            show or hide the minimap button",
         "  /zs reset              restore defaults, keeping recorded procs",
     }, "\n"), 12, C.text)
-    body:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -22)
+    body:SetPoint("TOPLEFT", credit, "BOTTOMLEFT", 0, -22)
     body:SetJustifyV("TOP")
     body:SetWidth(width - 30)
 
-    content:SetHeight(intro:GetStringHeight() + body:GetStringHeight() + 130)
+    -- Every block that grows is asked for its own height. The credit was the
+    -- third one on this page and the sum did not know about it, which scrolls
+    -- to a stop with the last paragraph still below the edge.
+    content:SetHeight(intro:GetStringHeight() + credit:GetStringHeight()
+        + body:GetStringHeight() + 170)
     if scroll.Update then scroll.Update() end
 end
 

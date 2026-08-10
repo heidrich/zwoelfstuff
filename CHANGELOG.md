@@ -4,6 +4,40 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.75.0] - 2026-08-11
+
+### Changed
+
+- **The alternating light/dark grounds are gone.** They were meant to group a
+  setting with its own sentence without drawing a line — the mechanism another
+  UI uses, and a sound one. It does not survive this window: a stripe is
+  anchored across the full content width, but half of every page stands in
+  **two columns** of half-width rows, so one stripe ran under a pair that has
+  nothing to do with each other and the alternation stopped meaning anything.
+  Grouping is done with air now: a sentence sits close to the setting above it
+  and twice as far from whatever comes next.
+- **Labels start on the same line as the headings again.** The 14-pixel indent
+  existed to keep text off the edge of a stripe. Without one it was the thing
+  that had been complained about in the first place — space at the front of
+  every line, and labels not lining up with anything.
+- **Arial Narrow is the default font again, for the window and for bar text.**
+  The version before this took Expressway from whichever other addon had
+  installed it. Two things were wrong with that: the file is the **bold** cut
+  whatever it calls itself, so the window came out heavier than it is drawn,
+  and a default that depends on which *other* addons you have is not a default
+  — two players on the same version saw different type. Expressway is still in
+  the picker under **Settings** for anyone who wants it. An existing profile
+  keeps the bar font stored in it; a default does not reach into a saved
+  setting.
+
+### Added
+
+- **About names the addons this one was written by reading** — EllesmereUI,
+  ElvUI, BigWigs, Method Raid Tools, Mythic Dungeon Tools, Details!, WeakAuras,
+  Plater, LibOpenRaid — and says exactly what was taken from them: no code,
+  facts about the game's API that are documented nowhere else. The same words
+  the README carries, in the place a player will actually see them.
+
 ## [4.74.0] - 2026-08-11
 
 ### Changed

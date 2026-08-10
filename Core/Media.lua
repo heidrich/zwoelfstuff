@@ -48,13 +48,19 @@ Media.DEFAULT = {
     border    = "None",
 }
 
--- The panel wants a NARROW GROTESK. The design names Expressway; it is not
--- ours to ship, it arrives with ElvUI and half a dozen other addons, so it is
--- taken if it is there. Arial Narrow is registered by LibSharedMedia itself
--- and is the same shape, which makes it the floor rather than a compromise.
--- Friz Quadrata is last because it is the face the design was drawn to get
--- away from.
-local PANEL_FONTS = { "Expressway", "Arial Narrow", "Friz Quadrata TT" }
+-- The panel wants a NARROW GROTESK, and Arial Narrow is it.
+--
+-- Expressway used to stand in front of it here, taken from whatever addon had
+-- installed it. Two things were wrong with that. The file on this machine is
+-- the BOLD cut whatever it calls itself, so the window came out heavier than
+-- it was drawn - owner: "ich wuerde ggf auch mal die fette schrift rausnehmen,
+-- dann wirds eleganter". And a default that changes depending on which OTHER
+-- addons happen to be installed is not a default; two players comparing
+-- screenshots of the same version see different type.
+--
+-- Arial Narrow is registered by LibSharedMedia itself, so it is there on every
+-- client, on its own. Expressway stays in the picker for anyone who has it.
+local PANEL_FONTS = { "Arial Narrow", "Friz Quadrata TT" }
 
 function Media.PanelFont()
     if LSM then

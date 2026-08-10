@@ -45,18 +45,19 @@ local C = {
     controlHi  = { 0.200, 0.224, 0.255 },  -- #333941  control under the cursor
     separator  = { 0.122, 0.137, 0.165 },  -- #1F232A  hairline
 
-    -- THE TWO GROUNDS A LIST OF SETTINGS ALTERNATES BETWEEN.
+    -- THE ALTERNATING GROUNDS ARE GONE, AND THEY ARE NOT COMING BACK.
     --
-    -- Owner, with another UI open beside ours: "der kommt so viel besser ohne
-    -- linien aus, alles sehr gut lesbar, gut sortiert." What that UI actually
-    -- does is separate by SURFACE: every row sits on its own tone, and there
-    -- is not one hairline between settings anywhere in it.
+    -- 4.74.0 painted a light/dark stripe under every block, reading the other
+    -- UI's "separate by surface" as something to copy. It measured badly in the
+    -- window: a stripe is anchored across the full content width, but half the
+    -- page is TWO columns of half-width rows, so one band ran under a pair and
+    -- the alternation stopped meaning anything. Owner: "entferne bitte nochmal
+    -- die bg farben hell dunkel, das zerschiesst gerade das layout."
     --
-    -- A line is a thing you have to look at. A change of ground is one you do
-    -- not - the eye reads the stripes and never resolves an edge. Two tones a
-    -- step apart, both above the page, so neither reads as a box.
-    band       = { 0.098, 0.110, 0.129 },  -- #191C21  a block's ground
-    bandAlt    = { 0.082, 0.090, 0.110 },  -- #15171C  the next one down
+    -- What separates a setting from the next one now is AIR, and nothing else -
+    -- no stripe, and no hairline either (that one he had already thrown out).
+    -- If a page ever needs a ground again it has to be per ROW, not per block,
+    -- because a row is the only thing here that knows its own width.
     edge       = { 0.165, 0.184, 0.216 },  -- #2A2F37  card outline, window edge
 
     accent     = { 1.000, 0.478, 0.239 },  -- #FF7A3D  ZwoelfStuff orange
@@ -127,15 +128,17 @@ UI.C = C
 -- rather than counting boxes, and the same page shows a third more of itself.
 UI.ROW_H      = 32
 
--- THE AIR INSIDE A ROW'S OWN GROUND.
+-- BACK TO NOUGHT, WITH THE GROUNDS THAT NEEDED IT.
 --
--- Nought until the grounds arrived, and nought was right while the separator
--- was a hairline running edge to edge: text on a page, with nothing behind it
--- to be inside of. Now every row sits on a filled band, and a label flush
--- against its left edge reads as text that has fallen out of the box.
--- Owner: "bei uns passen einfach die abstaende nicht."
-UI.ROW_PAD    = 14
-UI.ROW_GAP    = 1
+-- An indent is only correct when there is a filled shape to be inside of. On a
+-- bare page it is the thing the owner complained about in the first place -
+-- "auch sind nicht alle texte linksbuendig, oft ist viel platz vorn" - and it
+-- pushed every label off the line that headings and notes already sit on.
+UI.ROW_PAD    = 0
+
+-- A hairline used to do the separating and one pixel was plenty. With neither
+-- line nor stripe left, the gap IS the separator, so it has to be visible.
+UI.ROW_GAP    = 6
 UI.SECTION_H  = 36
 UI.COL_GAP    = 18
 
@@ -715,9 +718,6 @@ function UI.SectionHeader(parent, text, onToggle, isOpen)
     local header = onToggle and CreateFrame("Button", nil, parent)
         or CreateFrame("Frame", nil, parent)
     header:SetHeight(UI.SECTION_H)
-    -- Read by Grid:Layout, which restarts the alternating grounds here so no
-    -- section opens on the darker tone and reads as a continuation.
-    header.dkSection = true
 
     -- The air goes ABOVE the heading, not below it. A heading belongs to what
     -- follows it, and spacing it evenly is what makes a long page read as one
@@ -3694,22 +3694,16 @@ function Grid:Note(text, height)
     -- alle viel zu nah an den trennlinien ... mehr space oben und unten."
     note.dkMeasure = height == nil
 
-    -- A NOTE BELONGS TO THE BLOCK ABOVE IT, AND NOW SHARES ITS GROUND.
+    -- A NOTE BELONGS TO THE SETTING ABOVE IT, AND AIR IS WHAT SAYS SO.
     --
-    -- It used to be cut off from that block by the row's own hairline, which
-    -- fell between a setting and its own explanation - owner: "auch sind die
+    -- It used to be cut off from that setting by the row's own hairline, which
+    -- fell between a function and its own explanation - owner: "auch sind die
     -- immer unter der linie, obwohl die eigentlich zu der funktion darueber
-    -- sind." There is no hairline any more: Layout paints one ground under the
-    -- row and its sentence together, so the grouping is the SURFACE and there
-    -- is no edge to be on the wrong side of.
-    --
-    -- A note with nothing above it - the opening paragraph under a heading -
-    -- gets no ground and floats on the page, which is what it is.
-    note.dkClosesGroup = true
-
-    -- Inside the ground it shares with the rows above, so these are the top
-    -- and bottom padding of that band rather than margins between blocks.
-    return self:Wide(note, height or note:GetStringHeight(), 6, 12, NOTE_INDENT)
+    -- sind." Neither line nor stripe is left to group them, so the ONLY thing
+    -- still saying "these two belong together" is that the gap above is half
+    -- the gap below. Keep that ratio: make them equal and the sentence drifts
+    -- back to looking like the opening of whatever comes next.
+    return self:Wide(note, height or note:GetStringHeight(), 6, 16, NOTE_INDENT)
 end
 
 -- On a page with a third column, every row publishes itself when pointed at,
@@ -3850,51 +3844,15 @@ function Grid:Layout()
     local y, column, lineHeight = 0, 0, 0
     local pending = 0        -- the bottom pad the previous block asked for
 
-    -- THE GROUNDS.
-    --
-    -- One per BLOCK - a line of settings plus the sentence explaining it -
-    -- alternating between two tones, and reset to the first at every heading
-    -- so each section starts the same way.
-    --
-    -- Pooled and re-pointed rather than rebuilt: Layout runs on every refresh
-    -- and a texture created per pass is a leak with a slow fuse.
-    --
-    -- Drawn on the CONTENT frame at BACKGROUND, which puts them behind every
-    -- row - rows are frames, and a frame is always above its parent's own
-    -- textures, so nothing has to be told about layers.
-    self.bands = self.bands or {}
-    local bandCount, bandTone = 0, 0
-    local blockTop, blockBottom, blockOpen = 0, 0, false
-
-    local function CloseBlock()
-        if not blockOpen then return end
-        blockOpen = false
-
-        local height = blockTop - blockBottom
-        if height <= 0 then return end
-
-        bandCount = bandCount + 1
-        local band = self.bands[bandCount]
-        if not band then
-            band = self.content:CreateTexture(nil, "BACKGROUND")
-            self.bands[bandCount] = band
-        end
-        local tone = (bandTone == 0) and C.band or C.bandAlt
-        band:SetColorTexture(tone[1], tone[2], tone[3], 1)
-        band:ClearAllPoints()
-        band:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, blockTop)
-        band:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, blockTop)
-        band:SetHeight(height)
-        band:Show()
-        bandTone = 1 - bandTone
-    end
+    -- NO GROUNDS ARE PAINTED HERE ANY MORE. A block used to get an alternating
+    -- stripe; see the note beside C.edge for why that came out. Spacing is the
+    -- only thing this function decides now, which is what it is named after.
 
     local function EndLine()
         if column > 0 then
             y = y - lineHeight
             pending = math.max(pending, UI.ROW_GAP)
             column, lineHeight = 0, 0
-            blockBottom = y
         end
     end
 
@@ -3917,22 +3875,6 @@ function Grid:Layout()
             -- that still contributed a gap is a hole nobody can explain.
         elseif item.wide then
             EndLine()
-
-            -- A NOTE JOINS THE GROUND ABOVE IT; ANYTHING ELSE ENDS IT.
-            --
-            -- That is the whole grouping rule, and it is stated once, here,
-            -- rather than by every page remembering to put its sentences in
-            -- the right place. A heading, a chip row, a card or a strip of
-            -- buttons all close the block - they are their own thing and sit
-            -- on the page rather than on a band.
-            if not (region and region.dkClosesGroup and blockOpen) then
-                CloseBlock()
-            end
-
-            -- A heading starts the alternation over, so no section ever opens
-            -- on the darker tone and reads as a continuation of the one above.
-            if region and region.dkSection then bandTone = 0 end
-
             OpenGap(item.padTop)
             if region then
                 region:ClearAllPoints()
@@ -3952,17 +3894,7 @@ function Grid:Layout()
             elseif region and region.dkHeight then
                 height = region.dkHeight
             end
-            -- A full-width ROW opens a block of its own. It is recognised
-            -- by carrying a hairline: only UI.Row builds one, so "has a rule"
-            -- IS "is a settings row" without a second flag to keep in step.
-            if region and region.rule and not blockOpen then
-                blockTop, blockOpen = y, true
-            end
-
             y = y - height
-            if region and (region.rule or region.dkClosesGroup) then
-                blockBottom = y
-            end
             pending = item.padBottom or UI.ROW_GAP
         else
             if column == 0 then OpenGap(item.padTop) end
@@ -3970,19 +3902,12 @@ function Grid:Layout()
             region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
                 (item.indent or 0) + column * (self.colWidth + UI.COL_GAP), y)
             region:Show()
-            if not blockOpen then blockTop, blockOpen = y, true end
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
             if column >= 2 then EndLine() end
         end
     end
     EndLine()
-    CloseBlock()
-
-    -- Bands the page no longer needs. A row can be dropped at refresh time, so
-    -- this pass may use fewer than the last one did, and a leftover strip of
-    -- colour under nothing is the kind of thing you only see in a screenshot.
-    for index = bandCount + 1, #self.bands do self.bands[index]:Hide() end
 
     self.content:SetHeight(math.max(1, -y + 12))
     if self.scroll.Update then self.scroll.Update() end
