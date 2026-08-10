@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.65.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Answering - somebody asks, and a button lights up.|r When a tank asks for one of your cooldowns, the cell for that spell ON THAT TANK brightens; you click it and it goes off. Your own taunt answers a tank-swap request the same way. New page under Tank stuff, off until you switch it on.",
+            "|cffffd100You can finally see whether the healer still HAS it.|r Their own client says so over an invisible addon channel, with the real length - so the slot shows a proper cooldown, not a guess. Somebody without the addon shows nothing at all rather than a hopeful clock.",
+            "A green ring on your slot means somebody is casting it right now - sent when the spell actually goes out, not when they click.",
+            "|cffff8040The addon never casts for you|r, and only people who also run it can light up. Everybody else still gets the chat line.",
+        },
+    },
+    {
         version = "4.64.0",
         date = "2026-08-10",
         lines = {

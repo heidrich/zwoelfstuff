@@ -4432,6 +4432,169 @@ local function TestTaunts()
 end
 
 ---------------------------------------------------------------------------
+-- THE ADDON CHANNEL, and the bar at the other end of it
+--
+-- Every rule here is about data from ANOTHER MACHINE, which is the one kind
+-- this addon can never inspect while it is happening. So the wire is pure
+-- both ways and the answering rules take the world as arguments: a group with
+-- two tanks, a message from a version that does not exist yet, a request for
+-- a spell your class does not have.
+---------------------------------------------------------------------------
+local function TestComm()
+    local C = ns.Comm
+    Check("The addon channel exists", C ~= nil)
+    if not C then return end
+
+    -- SIXTEEN CHARACTERS is the limit on a prefix. Over it,
+    -- RegisterAddonMessagePrefix refuses and NOTHING is ever received, while
+    -- everything on the sending side looks perfectly healthy.
+    Check("The prefix fits in a prefix", #C.PREFIX <= 16, C.PREFIX)
+
+    ---------------------------------------------------------------------
+    -- The wire
+    ---------------------------------------------------------------------
+    local wire = C.Encode(C.REQUEST, C.EXTERNAL, 6940)
+    local back = C.Decode(wire)
+    Check("A request survives the wire",
+        back and back.what == C.REQUEST and back.kind == C.EXTERNAL
+        and back.spellID == 6940, wire)
+
+    local used = C.Decode(C.Encode(C.USED, C.EXTERNAL, 633, 480))
+    Check("A cooldown carries its own length", used and used.value == 480,
+        used and tostring(used.value))
+
+    local taunt = C.Decode(C.Encode(C.REQUEST, C.TAUNT))
+    Check("A taunt request names no spell",
+        taunt and taunt.kind == C.TAUNT and taunt.spellID == nil)
+
+    -- EVERYTHING THAT IS NOT UNDERSTOOD IS DROPPED. This is data somebody
+    -- else's machine sent; the only safe thing to do with a shape this
+    -- version does not know is nothing.
+    Check("A message from a newer version is dropped",
+        C.Decode("9|REQ|EXT|6940|0") == nil)
+    Check("A message from another addon is dropped",
+        C.Decode("hello everybody") == nil)
+    Check("An unknown verb is dropped", C.Decode("1|WAT|EXT|6940|0") == nil)
+    Check("An unknown kind is dropped", C.Decode("1|REQ|XXX|6940|0") == nil)
+    Check("An external with no spell is dropped",
+        C.Decode("1|REQ|EXT|0|0") == nil)
+    Check("Nothing at all is dropped", C.Decode(nil) == nil)
+
+    -- A version behind sends four fields. Dropping those would make an addon
+    -- that only works when both sides updated on the same evening.
+    Check("A message without the number still arrives",
+        (C.Decode("1|REQ|EXT|6940") or {}).spellID == 6940)
+
+    ---------------------------------------------------------------------
+    -- Which channel it goes on
+    ---------------------------------------------------------------------
+    Check("Alone, an addon message goes nowhere", C.Channel(false) == nil)
+    Check("In a party it is PARTY", C.Channel(true, false, false) == "PARTY")
+    Check("In a raid it is RAID", C.Channel(true, true, false) == "RAID")
+    Check("IN A DUNGEON FROM THE FINDER IT IS INSTANCE_CHAT",
+        C.Channel(true, false, true) == "INSTANCE_CHAT")
+
+    Check("The first message goes out", C.MaySend("x", 100, nil))
+    Check("The same one again straight after does not",
+        C.MaySend("x", 100.2, 100) == false)
+end
+
+local function TestAnswers()
+    local A, C = ns.Answers, ns.Comm
+    Check("The answering side exists", A ~= nil)
+    if not A then return end
+
+    ---------------------------------------------------------------------
+    -- What a class can be asked for
+    ---------------------------------------------------------------------
+    local paladin = A.Offers("PALADIN")
+    Check("A paladin can be asked for several things", #paladin >= 5,
+        tostring(#paladin))
+
+    local hasTaunt = false
+    for _, offer in ipairs(paladin) do
+        if offer.kind == C.TAUNT then hasTaunt = true end
+    end
+    Check("And one of them is his taunt", hasTaunt)
+
+    Check("A rogue can be asked for nothing", #A.Offers("ROGUE") == 0)
+    Check("With no class there is nothing to offer", #A.Offers(nil) == 0)
+
+    -- DEATH GRIP IS NOT OFFERED. It taunts in Blood only, and a cell that
+    -- taunts nothing is worse than no cell: it is a promise to a tank.
+    for _, offer in ipairs(A.Offers("DEATHKNIGHT")) do
+        Check("Death Grip is not on the answer bar", offer.spellID ~= 49576)
+    end
+
+    -- A spell switched off is not built, so nobody can ask for it.
+    local fewer = A.Offers("PALADIN", { [6940] = false })
+    Check("Switching one off takes it off the bar", #fewer == #paladin - 1)
+
+    ---------------------------------------------------------------------
+    -- Who might ask
+    ---------------------------------------------------------------------
+    local ROSTER = {
+        { name = "Heiler",  class = "PALADIN", role = "HEALER", isPlayer = true },
+        { name = "Zwoelf",  class = "DEATHKNIGHT", role = "TANK" },
+        { name = "Zweit",   class = "WARRIOR", role = "TANK" },
+        { name = "Schaden", class = "MAGE",    role = "DAMAGER" },
+    }
+    local askers = A.Askers(ROSTER)
+    Check("Both tanks could ask", #askers == 2, tostring(#askers))
+    Check("You are never one of them", (function()
+        for _, member in ipairs(askers) do
+            if member.isPlayer then return false end
+        end
+        return true
+    end)())
+    Check("Nobody tanking means no cells at all", #A.Askers({}) == 0)
+
+    ---------------------------------------------------------------------
+    -- Which cell answers which request
+    --
+    -- The rule the whole feature turns on: the right one lights up and the
+    -- others do not.
+    ---------------------------------------------------------------------
+    local cell = { who = "Zwoelf", kind = C.EXTERNAL, spellID = 6940 }
+    Check("The cell for that spell on that tank matches",
+        A.Matches(cell, { from = "Zwoelf", kind = C.EXTERNAL, spellID = 6940 }))
+    Check("The same spell for the OTHER tank does not",
+        A.Matches(cell, { from = "Zweit", kind = C.EXTERNAL, spellID = 6940 })
+            == false)
+    Check("A different spell for the same tank does not",
+        A.Matches(cell, { from = "Zwoelf", kind = C.EXTERNAL, spellID = 1022 })
+            == false)
+
+    -- A taunt request names no spell: any taunt of yours answers it.
+    local tauntCell = { who = "Zwoelf", kind = C.TAUNT, spellID = 355 }
+    Check("Any taunt answers a taunt request",
+        A.Matches(tauntCell, { from = "Zwoelf", kind = C.TAUNT }))
+
+    ---------------------------------------------------------------------
+    -- What is waiting, and for how long
+    ---------------------------------------------------------------------
+    local list = {}
+    A.Remember(list, { fromShort = "Zwoelf", kind = C.EXTERNAL, spellID = 6940 }, 100)
+    Check("A request is remembered", #list == 1)
+
+    A.Remember(list, { fromShort = "Zwoelf", kind = C.EXTERNAL, spellID = 6940 }, 101)
+    Check("Asking twice is ONE row, not two", #list == 1)
+    Check("And the clock restarts", list[1].at == 101, tostring(list[1].at))
+
+    A.Remember(list, { fromShort = "Zweit", kind = C.EXTERNAL, spellID = 6940 }, 101)
+    Check("Two people asking is two rows", #list == 2)
+
+    Check("A cell knows the one that is its own",
+        A.Waiting(list, cell, 102, 8) ~= nil)
+    Check("And ignores one that is not",
+        A.Waiting(list, { who = "Nobody", kind = C.EXTERNAL, spellID = 6940 },
+            102, 8) == nil)
+
+    A.Prune(list, 130, 8)
+    Check("An old request stops shouting", #list == 0)
+end
+
+---------------------------------------------------------------------------
 -- THE PANEL MOVERS
 --
 -- Owner, 2026-08-09, with a screenshot of the externals mover: "hier fehlt
@@ -4551,6 +4714,8 @@ function Test:Run()
         { "Your bars",     TestLiveBars },
         { "Panel movers",  TestPanelMovers },
         { "Taunts",        TestTaunts },
+        { "Addon channel", TestComm },
+        { "Answering",     TestAnswers },
     }
 
     for _, suite in ipairs(suites) do

@@ -1291,6 +1291,46 @@ local function RefreshTauntMover()
     RefreshPanelMover(tauntMover, TauntButton, cfg.x, cfg.y)
 end
 
+-- THE ANSWER BAR, placed like the rest. Its cells are SECURE buttons, so the
+-- mover never touches them - it sits over the frame they live in, and every
+-- protected change (a size, an anchor, an attribute) happens in
+-- Answers.Rebuild, out of combat.
+local answerMover
+
+local function AnswerBar()
+    local frame = ns.Answers and ns.Answers.Frame()
+    if frame and frame:IsShown() then return frame end
+    return nil
+end
+
+local function ApplyAnswerMove(x, y)
+    local cfg = ns.Answers.Config()
+    cfg.x, cfg.y = x, y
+    ns.Answers.Rebuild()
+end
+
+local function RefreshAnswerMover()
+    if not ns.Modules:IsOn("answers") then
+        if answerMover then answerMover:Hide() end
+        return
+    end
+    if not answerMover then
+        answerMover = CreatePanelMover({
+            label = "Answering",
+            page = "answers",
+            module = "answers",
+            config = function() return ns.Answers.Config() end,
+            apply = function(x, y) ApplyAnswerMove(x, y) end,
+            origin = function()
+                local cfg = ns.Answers.Config()
+                return cfg.x or 0, cfg.y or 0
+            end,
+        })
+    end
+    local cfg = ns.Answers.Config()
+    RefreshPanelMover(answerMover, AnswerBar, cfg.x, cfg.y)
+end
+
 local function RefreshTankMover()
     -- A module that is not running has nothing on screen to place. Its frames
     -- still EXIST once it has run at all, so "is there a panel" is not the
@@ -2505,6 +2545,7 @@ function EditMode:Refresh()
 
     RefreshTankMover()
     RefreshTauntMover()
+    RefreshAnswerMover()
     RefreshExternalMover()
     RefreshReminderMovers()
 
@@ -2527,7 +2568,7 @@ end
 -- opened once - they are made on first refresh.
 function EditMode:PanelMovers()
     return { tanks = tankMover, externals = externalMover,
-        taunt = tauntMover }
+        taunt = tauntMover, answers = answerMover }
 end
 
 function EditMode:SetGridShown(shown)
@@ -2605,6 +2646,7 @@ function EditMode:SetUnlocked(state, wanted)
     -- every slot you picked, or there is nothing on screen to put anywhere.
     if ns.Externals then ns.Externals:SetPlacing(state) end
     if ns.Taunts then ns.Taunts:SetPlacing(state) end
+    if ns.Answers then ns.Answers:SetPlacing(state) end
 
     -- AND SO DO THE REMINDERS, for the same reason one layer sharper: a
     -- reminder is on screen only while the thing it names is wrong. Waiting

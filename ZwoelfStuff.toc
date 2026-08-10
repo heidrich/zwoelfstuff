@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.64.0
+## Version: 4.65.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -61,6 +61,11 @@ Core\Modules.lua
 # a party or an instance group", because getting that wrong sends a message
 # nowhere at all and says nothing about it.
 Core\Chat.lua
+# The addon channel. Above everything that asks or answers, and registered at
+# LOAD rather than from a module's Boot: an unregistered prefix drops every
+# message before any addon code sees it, and a channel that depends on which
+# features somebody switched on works for one of you and not the other.
+Core\Comm.lua
 
 Core\Media.lua
 # The bar textures this addon ships, registered into the SHARED registry -
@@ -103,6 +108,10 @@ Core\Taunts.lua
 # the same kind of thing - a panel with its own placement - and it needs
 # nothing from anybody: class and the roster are all it reads.
 Core\Externals.lua
+# The other end of a request: somebody asks, a button lights up, you press it.
+# Below Externals and Taunts, whose spell lists it reads to know what you can
+# be asked for.
+Core\Answers.lua
 Core\History.lua
 Core\Death.lua
 # The death, played back on a timeline: what came in above the axis, what
@@ -130,6 +139,7 @@ Core\OptionsCoTanks.lua
 # growing a second one, so BuildSpellPane has to exist by the time this loads.
 Core\OptionsReminders.lua
 Core\OptionsExternals.lua
+Core\OptionsAnswers.lua
 Core\OptionsDeaths.lua
 Core\OptionsProfiles.lua
 Core\OptionsSettings.lua

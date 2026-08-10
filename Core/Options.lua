@@ -346,6 +346,15 @@ local PAGES = {
       subtitle = "What the group can cast on you, and one click to ask.",
       build = function(page, width) return ns.OptionsExternals:BuildPage(page, width) end },
 
+    -- THE MIRROR OF THE PAGE ABOVE. That one asks; this one is asked. Two
+    -- pages rather than two halves of one, because they belong to different
+    -- people on different evenings - a tank sets the first up, a healer the
+    -- second - and they are separate modules for the same reason.
+    { key = "answers", title = "Answering", glyph = "tanks",
+      module = "answers",
+      subtitle = "When somebody asks for one of yours, a button lights up.",
+      build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },
+
     -- The death log, and with it the DEFENSIVES LIST that used to live on a
     -- Timeline page of its own. That page is gone: what it drew live was the
     -- fight's next scheduled hit, and the replay answers the same question
@@ -856,6 +865,7 @@ function Options:Create()
         { page = "cotanks" },
         { page = "reminders" },
         { page = "externals" },
+        { page = "answers" },
         { page = "deaths" },
         { eyebrow = "System" },
         { page = "settings" },

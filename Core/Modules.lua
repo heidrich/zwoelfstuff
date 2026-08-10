@@ -52,7 +52,10 @@ ns.Modules = Modules
 -- 2: the externals panel. The first module added AFTER the welcome window
 --    existed, which is what it was built for: everybody who already answered
 --    gets asked once more, about this one entry and nothing else.
-Modules.GENERATION = 2
+-- 3: answering. The other end of the externals panel - somebody asks, and
+--    this is the button that answers. It talks to other people's clients, so
+--    being ASKED about it rather than having it appear is the whole point.
+Modules.GENERATION = 3
 
 local LIST = {
     {
@@ -102,6 +105,16 @@ local LIST = {
         detail = "Off, the panel never appears.",
         Boot = function() ns.Externals:Create() end,
         Apply = function() ns.Externals.Refresh() end,
+    },
+    {
+        key = "answers", title = "Answering", glyph = "tanks", since = 3,
+        blurb = "When a tank asks for one of YOUR cooldowns, a button lights up. You press it.",
+        detail = "Off, nothing lights up and nobody's request reaches you.",
+        Boot = function()
+            ns.Answers:Create()
+            ns.Answers:Start()
+        end,
+        Apply = function() ns.Answers.Refresh() end,
     },
     {
         key = "deaths", title = "Death-log", glyph = "skull", since = 1,

@@ -431,6 +431,13 @@ function Externals.Ask(spellID)
     local ok, note = ns.Chat.Post(text, going, target and target.name)
     if not ok then return false, note end
 
+    -- AND THE SAME THING ON THE ADDON CHANNEL. Invisible, structured, and it
+    -- does not depend on the wording of a sentence the player is allowed to
+    -- edit - anybody in the group running this addon gets a button that
+    -- answers instead of a line to read. The chat line above still goes out
+    -- for everybody who does not.
+    ns.Comm.Send(ns.Comm.REQUEST, ns.Comm.EXTERNAL, spellID)
+
     return true, target and target.name or going[1].channel, note or why
 end
 
@@ -500,6 +507,20 @@ function Externals:ApplyLayout()
             slot:SetPoint("TOPLEFT", panel, "TOPLEFT",
                 column * (size + gap), -(line * (size + gap)))
             slot.icon:SetTexture(ns.SpellTexture(spellID))
+
+            -- THE PERSON THIS SLOT WOULD ASK, and what they still have. Only
+            -- if they have said - somebody without the addon leaves the swipe
+            -- off entirely rather than being drawn as ready.
+            local target = Externals.Whom(byID[spellID], Externals.Roster(),
+                cfg.assigned[spellID])
+            local now = GetTime and GetTime() or 0
+            local left = target and Externals.RemoteLeft(spellID, target.name, now)
+            if left and left > 0 and slot.cooldown then
+                slot.cooldown:SetCooldown(now - 0.001, left)
+                slot.cooldown:Show()
+            elseif slot.cooldown then
+                slot.cooldown:Hide()
+            end
 
             -- Painted every pass rather than only when a setting changes:
             -- the pass is a walk over at most two dozen icons, and "the
@@ -615,6 +636,22 @@ function Externals.BuildSlot()
         ns.UI.C.accent[3], 1)
     slot.hover:Hide()
 
+    -- SOMEBODY IS DOING IT. Its own ring rather than recolouring the hover
+    -- one: they are two different facts and you can be hovering a slot while
+    -- the answer arrives.
+    slot.answer = ns.CreateBorder(slot, 3, "OVERLAY")
+    slot.answer:SetColor(0.25, 1, 0.35, 1)
+    slot.answer:Hide()
+
+    -- THE OTHER PERSON'S COOLDOWN, drawn by the game's own swipe so it looks
+    -- like every other cooldown on the screen. Only ever fed a number
+    -- somebody REPORTED - see NoteCooldown.
+    slot.cooldown = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
+    slot.cooldown:SetAllPoints(slot)
+    slot.cooldown:SetDrawEdge(false)
+    slot.cooldown:SetHideCountdownNumbers(false)
+    slot.cooldown:Hide()
+
     return slot
 end
 
@@ -645,6 +682,94 @@ function Externals:SetTestMode(on)
     Externals.testing = on and true or false
     Externals.Refresh()
 end
+
+---------------------------------------------------------------------------
+-- SOMEBODY IS DOING IT
+--
+-- The other half of the addon channel: you asked, and their button says they
+-- pressed it. Worth having on screen rather than only in chat - the whole
+-- reason you asked is that you are busy, and "did anybody see that" is the
+-- question a green ring answers without being read.
+--
+-- The ACK is sent when the spell ACTUALLY GOES OUT on their side, not when
+-- they click - so this is "it is happening", not "somebody noticed".
+---------------------------------------------------------------------------
+function Externals.MarkAnswered(spellID, who)
+    if not panel then return end
+    for _, slot in ipairs(panel.slots) do
+        if slot.spellID == spellID and slot:IsShown() then
+            slot.answer:SetShown(true)
+            if C_Timer and C_Timer.After then
+                C_Timer.After(3, function() slot.answer:Hide() end)
+            end
+        end
+    end
+    if who then
+        ns.Print(string.format("|cff40ff40%s|r is casting %s.", who,
+            ns.SpellName(spellID) or "it"))
+    end
+end
+
+---------------------------------------------------------------------------
+-- WHAT THE OTHER PEOPLE STILL HAVE
+--
+-- The owner's idea, 2026-08-10, and it is the way past a wall this file has
+-- had a paragraph about since 4.58.0: a foreign cooldown cannot be READ on
+-- this patch, but the person who owns it can SAY it, and their own client
+-- knows it exactly.
+--
+-- So this is not a guess and not a table of assumed durations - it is the
+-- number from the machine that holds it. What is NOT known stays not known:
+-- somebody without the addon reports nothing, and their slot shows nothing
+-- rather than a hopeful clock.
+---------------------------------------------------------------------------
+-- [spellID][name] = when it is back, in GetTime terms. 0 means ready.
+Externals.remote = {}
+
+function Externals.NoteCooldown(spellID, who, secondsLeft, now)
+    if not (spellID and who) then return end
+    local store = Externals.remote[spellID]
+    if not store then
+        store = {}
+        Externals.remote[spellID] = store
+    end
+    store[who] = (secondsLeft or 0) > 0 and (now + secondsLeft) or 0
+end
+
+-- Seconds left for that person, 0 when ready, nil when they have never said -
+-- and nil is the important one: it is what somebody without the addon looks
+-- like, and drawing them as ready would be inventing a fact.
+function Externals.RemoteLeft(spellID, who, now)
+    local store = Externals.remote[spellID]
+    local at = store and who and store[who]
+    if at == nil then return nil end
+    if at == 0 then return 0 end
+    local left = at - now
+    return left > 0 and left or 0
+end
+
+ns.Comm.Listen(function(packet)
+    local C = ns.Comm
+    local now = GetTime and GetTime() or 0
+
+    if packet.what == C.ACK and packet.kind == C.EXTERNAL then
+        Externals.MarkAnswered(packet.spellID, packet.fromShort)
+        return
+    end
+
+    if packet.kind ~= C.EXTERNAL then return end
+
+    if packet.what == C.USED then
+        Externals.NoteCooldown(packet.spellID, packet.fromShort, packet.value, now)
+    elseif packet.what == C.READY or packet.what == C.HELLO then
+        Externals.NoteCooldown(packet.spellID, packet.fromShort,
+            packet.what == C.HELLO and packet.value or 0, now)
+    else
+        return
+    end
+
+    Externals.Refresh()
+end)
 
 ---------------------------------------------------------------------------
 -- Wiring

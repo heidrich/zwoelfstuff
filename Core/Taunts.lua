@@ -252,6 +252,12 @@ function Taunts.Ask()
     local text = Taunts.Message(cfg.ask or Taunts.DEFAULT_ASK,
         nil, nil, person and person.name)
     local sent, note = ns.Chat.Post(text, going, person and person.name)
+
+    -- The addon channel too, so a co-tank running this gets a button rather
+    -- than a line. A taunt request names no spell: whoever answers presses
+    -- their OWN taunt, whatever their class calls it.
+    if sent then ns.Comm.Send(ns.Comm.REQUEST, ns.Comm.TAUNT) end
+
     return sent, note or why
 end
 

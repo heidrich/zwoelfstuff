@@ -4,6 +4,44 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.65.0] - 2026-08-10
+
+### Added
+
+- **Answering** - a sixth module, and the other end of the External cooldowns
+  panel. A tank asks for one of your cooldowns; the cell for that spell **on
+  that tank** lights up, and clicking it casts. Your own taunt answers a
+  tank-swap request the same way.
+- **The addon channel** (`Core/Comm.lua`). Invisible, versioned and
+  structured, so a request is a button rather than a line to read. The chat
+  sentence still goes out for everybody who does not run the addon.
+- **Somebody else's cooldown, finally.** The owner's idea, and it gets past a
+  wall this addon has had since 4.58.0: a foreign cooldown cannot be *read* on
+  this patch, but the person who owns it can *say* it - and their own client
+  knows it exactly. So an externals slot now shows a real cooldown swipe for
+  the person it would ask. The **duration travels with the message** rather
+  than being assumed from a table, because talents move it: Lay on Hands is
+  ten minutes, or eight with Unbreakable Spirit.
+- Somebody who does not run the addon reports nothing, and their slot shows
+  **nothing** - not a hopeful clock.
+- A green ring on your slot when somebody is actually casting what you asked
+  for. It is sent when the spell goes out, not when they click, so it means
+  "it is happening".
+
+### Known limits, on the page itself
+
+- **Only people who also run ZwoelfStuff** can light up. That is the trade for
+  everything above.
+- **The addon never casts.** You press the cell and the game casts. That is
+  also why the bar stands there permanently and only brightens: which spell a
+  cell casts, and on whom, is written while you are out of combat, and the
+  game does not allow it to be rewritten during a fight. The cells are named
+  when the group changes - which is exactly when the owner asked whether they
+  could be.
+- The bar is **off until you switch it on**. Until then a request is printed
+  once, naming the switch, so a feature that would silently do nothing says
+  what it is instead.
+
 ## [4.64.0] - 2026-08-10
 
 ### Added

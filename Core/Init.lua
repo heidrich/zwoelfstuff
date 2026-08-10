@@ -131,6 +131,7 @@ ns.DEFAULTS = {
         cotanks   = true,
         reminders = true,
         externals = true,
+        answers   = true,
         deaths    = true,
     },
 
