@@ -78,8 +78,21 @@ function Answers.Offering(spellID)
     return Answers.Config().offers[spellID] ~= false
 end
 
+-- `x and nil or y` NEVER YIELDS nil, and that is not a subtlety - it is the
+-- shape of the bug. `true and nil` is nil, nil is false, so `or y` takes over
+-- and the answer is y whichever way x went. Written that way, switching a
+-- spell ON stored `false`, so it could be turned off exactly once and never
+-- back on. Owner, 2026-08-10: "wenn ich den button auf aus schalte [...] kann
+-- ich ihn nicht mehr anschalten."
+--
+-- An if. Every time. There is no clever form of this that works.
 function Answers.SetOffering(spellID, on)
-    Answers.Config().offers[spellID] = on and nil or false
+    local offers = Answers.Config().offers
+    if on then
+        offers[spellID] = nil     -- absent means yes, see Offering
+    else
+        offers[spellID] = false
+    end
     Answers.Rebuild()
 end
 
@@ -355,9 +368,19 @@ function Answers.Rebuild()
             -- A stand-in cell gets NO macro at all: there is nobody called
             -- "Tank" to cast on, and a cell that fires at your current target
             -- instead would be the addon doing something you did not ask for.
-            cell:SetAttribute("type", asker.preview and nil or "macro")
-            cell:SetAttribute("macrotext", asker.preview and nil
-                or string.format("/cast [@%s] %s", asker.name, cell.spellName))
+            -- THE SAME `and nil or` TRAP, and here it was worse than a
+            -- setting that would not switch: written that way, a stand-in
+            -- cell got type="macro" AND a macro aimed at a player called
+            -- "Tank" - the exact thing the paragraph above says must never
+            -- happen. Two lines, both of them plain ifs.
+            if asker.preview then
+                cell:SetAttribute("type", nil)
+                cell:SetAttribute("macrotext", nil)
+            else
+                cell:SetAttribute("type", "macro")
+                cell:SetAttribute("macrotext",
+                    string.format("/cast [@%s] %s", asker.name, cell.spellName))
+            end
 
             cell:SetSize(size, size)
             cell:ClearAllPoints()

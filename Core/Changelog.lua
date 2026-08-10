@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.65.2",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100A spell you switched off under \"What you can be asked for\" can be switched back on.|r It could be turned off exactly once and never back - one line of Lua that always stored the same answer whichever way you clicked.",
+        },
+    },
+    {
         version = "4.65.1",
         date = "2026-08-10",
         lines = {

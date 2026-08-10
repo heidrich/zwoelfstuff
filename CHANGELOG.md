@@ -4,6 +4,21 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.65.2] - 2026-08-10
+
+### Fixed
+
+- **A spell you switched off under "What you can be asked for" could not be
+  switched back on.** Written `on and nil or false`, which never yields nil in
+  Lua - `true and nil` is nil, nil is false, so `or false` takes over
+  whichever way the switch went. It stored `false` either way: off exactly
+  once, and never back.
+- **The same line, twice.** The stand-in cell drawn while placing the bar was
+  given a macro aimed at a player called "Tank" for the same reason - the
+  exact thing the comment beside it says must never happen. Both are plain
+  `if`s now, and the self test switches a spell off and on again through the
+  real setter.
+
 ## [4.65.1] - 2026-08-10
 
 ### Fixed

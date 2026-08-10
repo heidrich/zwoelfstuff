@@ -4546,6 +4546,25 @@ local function TestAnswers()
     local fewer = A.Offers("PALADIN", { [6940] = false })
     Check("Switching one off takes it off the bar", #fewer == #paladin - 1)
 
+    -- OFF AND BACK ON, through the real setter.
+    --
+    -- Owner, 2026-08-10: "wenn ich den button auf aus schalte [...] kann ich
+    -- ihn nicht mehr anschalten." It was written `on and nil or false`, and
+    -- that NEVER yields nil - `true and nil` is nil, nil is false, so `or
+    -- false` takes over whichever way the switch went. Stored false either
+    -- way; off exactly once and never back.
+    --
+    -- Through SetOffering rather than by writing the table, because the table
+    -- was never the part that was broken.
+    local keptOffers = A.Config().offers
+    A.Config().offers = {}
+    Check("A spell nobody has touched is offered", A.Offering(6940))
+    A.SetOffering(6940, false)
+    Check("Switching it off sticks", A.Offering(6940) == false)
+    A.SetOffering(6940, true)
+    Check("AND IT CAN BE SWITCHED BACK ON", A.Offering(6940) == true)
+    A.Config().offers = keptOffers
+
     ---------------------------------------------------------------------
     -- Who might ask
     ---------------------------------------------------------------------
