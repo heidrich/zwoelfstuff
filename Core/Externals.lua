@@ -22,10 +22,18 @@
 -- group roster is readable, and a whisper on a click is the player's own
 -- action, not automation.
 --
--- THE LIST. Fourteen spells, cross-checked against MRT's own DEFTAR set
--- ("defensive on a target"), which is the same idea under another name.
--- Cooldowns are carried for the TOOLTIP only - so the panel can say how long
--- what you are asking for lasts - and never as a clock, for the reason above.
+-- THE LIST. The defensives were cross-checked against MRT's own DEFTAR set
+-- ("defensive on a target"), which is the same idea under another name; lust
+-- and the battle res came later and from their own sources, named at the
+-- entries. Cooldowns are carried for the TOOLTIP only - so the panel can say
+-- how long what you are asking for lasts - and never as a clock, for the
+-- reason above.
+--
+-- A SLOT IS A QUESTION, NOT ALWAYS A SPELL. Most entries are one spell that
+-- one class has. Two - Lust and Bres - stand for several, because "who can
+-- lust" is one question with five spellings and nobody wants five slots for
+-- it. Those carry `covers`, and see Mine/SlotFor below for the only two
+-- places that difference is allowed to matter.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -39,6 +47,13 @@ ns.Externals = Externals
 --           the retribution paladin for a Blessing of Sacrifice is asking
 --           the wrong paladin - even though he does have it.
 -- cooldown: for the tooltip. Never counted down. See the header.
+-- covers:   the spellings this one slot stands for, each with the class that
+--           has it. Absent on an ordinary spell, and absence is the normal
+--           case every other function is written for.
+-- label:    what to call the slot when its own spell name would be a lie -
+--           "Lust", not "Bloodlust". See Externals.Label.
+-- heading:  which group it is filed under in the picker, when its class
+--           would be misleading.
 Externals.SPELLS = {
     { spellID = 3411,   class = "WARRIOR", cooldown = 30 },   -- Intervene
     { spellID = 1044,   class = "PALADIN", cooldown = 25 },   -- Blessing of Freedom
@@ -75,31 +90,114 @@ Externals.SPELLS = {
     -- REZ_BY_CLASS. Both are installed here and both are maintained.
     ---------------------------------------------------------------------
 
-    -- One shaman has one of these, never both - which faction decides. Both
-    -- are listed because the SHAMAN in your group is the one who has one, and
-    -- the answer side drops whichever they cannot cast (ns.KnowsSpell).
-    { spellID = 2825,   class = "SHAMAN",  cooldown = 300 },  -- Bloodlust
-    { spellID = 32182,  class = "SHAMAN",  cooldown = 300 },  -- Heroism
-    { spellID = 80353,  class = "MAGE",    cooldown = 300 },  -- Time Warp
-    -- Six minutes, not five: the hunter's is the odd one out.
-    { spellID = 264667, class = "HUNTER",  cooldown = 360 },  -- Primal Rage
-    { spellID = 390386, class = "EVOKER",  cooldown = 300 },  -- Fury of the Aspects
-
-    { spellID = 20484,  class = "DRUID",   cooldown = 600 },  -- Rebirth
-    { spellID = 61999,  class = "DEATHKNIGHT", cooldown = 600 },  -- Raise Ally
-    { spellID = 391054, class = "PALADIN", cooldown = 600 },  -- Intercession
-    -- NO COOLDOWN FIGURE ON PURPOSE. Every source disagrees about this one:
-    -- the spell itself carries none, the stone does, and the numbers quoted
-    -- range from ten minutes to fifteen. A blank says "we do not know",
-    -- which is true; a number would be a guess wearing a fact's clothes. The
-    -- side list draws nothing when this is nil.
-    { spellID = 20707,  class = "WARLOCK" },                  -- Soulstone
+    -- ONE SLOT, NOT FIVE. Owner, on seeing them listed one per class: "ich
+    -- denke du kannst alle battle ress und lust zauber zusammenfassen!
+    -- zumindest beim request. sonst muesste man alle reinziehen" - "sprich
+    -- das waere ein Lust command und Bres".
+    --
+    -- He is right, and the reason is what the panel IS: a slot is a QUESTION,
+    -- not a spell. "Who can lust" is one question with five spellings, and
+    -- dragging all five in to cover every group you might walk into is five
+    -- slots that can never be pressed at the same time.
+    --
+    -- So `covers` holds the spellings, and the entry's own spellID is the one
+    -- the slot is stored, keyed and drawn under. Everything that crosses
+    -- between two clients translates at the door - see Mine and SlotFor.
+    {
+        spellID = 2825, class = "SHAMAN", cooldown = 300, label = "Lust",
+        heading = "ANY CLASS",
+        covers = {
+            -- A shaman has one of these and never both; faction decides.
+            { spellID = 2825,   class = "SHAMAN" },       -- Bloodlust
+            { spellID = 32182,  class = "SHAMAN" },       -- Heroism
+            { spellID = 80353,  class = "MAGE" },         -- Time Warp
+            { spellID = 264667, class = "HUNTER" },       -- Primal Rage
+            { spellID = 390386, class = "EVOKER" },       -- Fury of the Aspects
+        },
+    },
+    {
+        -- NO COOLDOWN FIGURE. Rebirth, Raise Ally and Intercession are ten
+        -- minutes; Soulstone is the one every source disagrees about - the
+        -- spell carries none, the stone does, and the numbers quoted run from
+        -- ten to fifteen. One figure over four spells would be right for
+        -- three of them and a guess for the fourth, so the slot says nothing
+        -- rather than something almost true.
+        spellID = 20484, class = "DRUID", label = "Bres",
+        heading = "ANY CLASS",
+        covers = {
+            { spellID = 20484,  class = "DRUID" },        -- Rebirth
+            { spellID = 61999,  class = "DEATHKNIGHT" },  -- Raise Ally
+            { spellID = 391054, class = "PALADIN" },      -- Intercession
+            { spellID = 20707,  class = "WARLOCK" },      -- Soulstone
+        },
+    },
 }
 
 local byID = {}
 for _, entry in ipairs(Externals.SPELLS) do byID[entry.spellID] = entry end
 
 function Externals.Get(spellID) return byID[spellID] end
+
+---------------------------------------------------------------------------
+-- A SLOT THAT STANDS FOR SEVERAL SPELLS
+--
+-- Two clients never agree about which spell "lust" is: the asker's slot is
+-- one id, the mage who answers it has another, and the whisper has to name a
+-- third if a hunter is the one being asked. Rather than teach every caller
+-- about that, there are exactly two translations and they happen at the
+-- doors:
+--
+--   SlotFor  any spell -> the slot it belongs to
+--
+-- ONE translation, in one direction, and it is the identity for every
+-- ordinary spell - which is why nothing else in the file had to change.
+--
+-- There WAS a second one, "the spell this class casts for that slot", and it
+-- was wrong in a way a test caught: a shaman has two spellings and which one
+-- he owns is his faction's business, so a function that has to return exactly
+-- one would light up nothing at all for half the shamans in the game. The
+-- answer side does not need it either - it already knows which spells the
+-- player really has, and asks whether any of THEM belongs to this slot.
+---------------------------------------------------------------------------
+local coveredBy = {}
+for _, entry in ipairs(Externals.SPELLS) do
+    for _, sub in ipairs(entry.covers or {}) do
+        coveredBy[sub.spellID] = entry.spellID
+    end
+end
+
+-- The slot a spell belongs to. An ACK, a READY or a USED arrives naming the
+-- spell the OTHER player actually has; the panel knows it by the slot.
+function Externals.SlotFor(spellID)
+    return coveredBy[spellID] or spellID
+end
+
+-- Do these two spells answer the same question? The test the answer bar runs
+-- on every request it hears: not "is it my spell" but "is it my slot".
+function Externals.SameSlot(a, b)
+    return Externals.SlotFor(a) == Externals.SlotFor(b)
+end
+
+-- Every class that could answer this slot.
+function Externals.ClassesFor(spell)
+    local out = {}
+    if not spell then return out end
+    if not spell.covers then
+        out[spell.class] = true
+        return out
+    end
+    for _, sub in ipairs(spell.covers) do out[sub.class] = true end
+    return out
+end
+
+-- WHAT TO CALL IT. A grouped slot is not "Bloodlust" - that is one of the
+-- five things it might turn into, and naming it after one of them is how
+-- somebody concludes it only asks the shaman.
+function Externals.Label(spellID)
+    local entry = byID[spellID]
+    if entry and entry.label then return entry.label end
+    return ns.SpellName(spellID) or ("Spell " .. tostring(spellID))
+end
 
 ---------------------------------------------------------------------------
 -- Configuration
@@ -328,8 +426,12 @@ end
 function Externals.Candidates(spell, roster)
     local out = {}
     if not spell then return out end
+    -- A SET OF CLASSES, not one. An ordinary spell yields a set of one and
+    -- behaves exactly as it did; a grouped slot accepts anybody who has a
+    -- version of it.
+    local classes = Externals.ClassesFor(spell)
     for _, member in ipairs(roster or {}) do
-        if member.class == spell.class and not member.isPlayer then
+        if classes[member.class] and not member.isPlayer then
             out[#out + 1] = member
         end
     end
@@ -474,7 +576,12 @@ function Externals.Ask(spellID)
         return false, "there is nowhere to send it - you are not in a group"
     end
 
-    local name = ns.SpellName(spellID) or ("Spell " .. spellID)
+    -- THE SLOT'S NAME, NOT A SPELLING OF IT. For an ordinary spell those are
+    -- the same word. For a grouped one they are not, and picking a spelling
+    -- would mean deciding which lust the shaman has - which is his faction's
+    -- business and none of ours. "Lust bitte!" is what people type anyway,
+    -- and it is never the wrong spell.
+    local name = Externals.Label(spellID)
     local text = Externals.Message(name, target and target.name)
     local ok, note = ns.Chat.Post(text, going, target and target.name)
     if not ok then return false, note end
@@ -734,7 +841,7 @@ function Externals.BuildSlot()
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.spellID) then
             GameTooltip:ClearLines()
-            GameTooltip:AddLine(ns.SpellName(self.spellID) or "")
+            GameTooltip:AddLine(Externals.Label(self.spellID))
         end
         local spell = byID[self.spellID]
         local target, why = Externals.Whom(spell, Externals.Roster(),
@@ -841,7 +948,7 @@ function Externals.MarkAnswered(spellID, who)
     end
     if who then
         ns.Print(string.format("|cff40ff40%s|r is casting %s.", who,
-            ns.SpellName(spellID) or "it"))
+            Externals.Label(spellID)))
     end
 end
 
@@ -887,17 +994,25 @@ ns.Comm.Listen(function(packet)
     local C = ns.Comm
     local now = GetTime and GetTime() or 0
 
+    -- TRANSLATED AT THE DOOR, once. Everything below this line - the answered
+    -- mark, the remote cooldown store, the panel - is keyed by SLOT, and what
+    -- arrives is whatever spell the other player actually owns. A mage's Time
+    -- Warp becomes the Lust slot here and nowhere else. The packet is left
+    -- alone: the answer bar listens to the same packets and wants the id it
+    -- was sent.
+    local slotID = Externals.SlotFor(packet.spellID)
+
     if packet.what == C.ACK and packet.kind == C.EXTERNAL then
-        Externals.MarkAnswered(packet.spellID, packet.fromShort)
+        Externals.MarkAnswered(slotID, packet.fromShort)
         return
     end
 
     if packet.kind ~= C.EXTERNAL then return end
 
     if packet.what == C.USED then
-        Externals.NoteCooldown(packet.spellID, packet.fromShort, packet.value, now)
+        Externals.NoteCooldown(slotID, packet.fromShort, packet.value, now)
     elseif packet.what == C.READY or packet.what == C.HELLO then
-        Externals.NoteCooldown(packet.spellID, packet.fromShort,
+        Externals.NoteCooldown(slotID, packet.fromShort,
             packet.what == C.HELLO and packet.value or 0, now)
     else
         return
@@ -961,7 +1076,7 @@ function Externals:Dump()
 
     for _, spellID in ipairs(Externals.Picked()) do
         local spell = byID[spellID]
-        local name = ns.SpellName(spellID) or ("Spell " .. spellID)
+        local name = Externals.Label(spellID)
         local target, why = Externals.Whom(spell, roster,
             Externals.Config().assigned[spellID])
         if target then

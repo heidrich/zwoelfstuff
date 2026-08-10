@@ -292,7 +292,7 @@ function Page:BuildPage(page, width)
             row:SetRelevant(spellID ~= nil)
             if spellID then
                 UI.MakeRowASpell(row, spellID)
-                row.label:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
+                row.label:SetText(ns.Externals.Label(spellID))
             end
         end
     end
@@ -545,9 +545,13 @@ function Page:BuildSide(sideHost, pad)
     local y, lastClass = 0, nil
 
     for _, entry in ipairs(ns.Externals.SPELLS) do
-        if entry.class ~= lastClass then
-            lastClass = entry.class
-            local heading = UI.Eyebrow(content, entry.class)
+        -- A GROUPED SLOT IS NOT FILED UNDER A CLASS. Lust under SHAMAN would
+        -- say the shaman is the one it asks, which is the whole thing the
+        -- grouping exists to stop being true.
+        local group = entry.heading or entry.class
+        if group ~= lastClass then
+            lastClass = group
+            local heading = UI.Eyebrow(content, group)
             heading:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(y + 8))
             y = y + 26
         end
@@ -599,7 +603,7 @@ function Page:BuildSide(sideHost, pad)
             local spell = ns.Externals.Get(spellID)
 
             row.icon:SetTexture(ns.SpellTexture(spellID) or ns.WHITE)
-            row.name:SetText(ns.SpellName(spellID) or ("Spell " .. spellID))
+            row.name:SetText(ns.Externals.Label(spellID))
             row:SetUsed(picked and "on panel" or nil, true)
 
             if picked then

@@ -140,7 +140,21 @@ function Answers.Offers(class, chosen, known)
     if not class then return out end
 
     for _, entry in ipairs(ns.Externals.SPELLS) do
-        if entry.class == class
+        if entry.covers then
+            -- A GROUPED SLOT IS ONE QUESTION WITH SEVERAL ANSWERS, and which
+            -- one is yours depends on your class. The asker's slot says
+            -- "lust"; what goes on YOUR bar is the lust you have. A shaman
+            -- gets both spellings offered here and `known` drops the one his
+            -- faction does not have, which is the same filter that already
+            -- keeps a holy priest from being offered Pain Suppression.
+            for _, sub in ipairs(entry.covers) do
+                if sub.class == class
+                    and (not chosen or chosen[sub.spellID] ~= false) then
+                    out[#out + 1] = { spellID = sub.spellID,
+                        kind = Comm.EXTERNAL }
+                end
+            end
+        elseif entry.class == class
             and (not chosen or chosen[entry.spellID] ~= false) then
             out[#out + 1] = { spellID = entry.spellID, kind = Comm.EXTERNAL }
         end
@@ -900,23 +914,50 @@ function Answers:Start()
         -- sentence one step further in, and why the spellbook is asked here
         -- as well as on the bar.
         local _, class = UnitClass("player")
-        local mine = false
+
+        -- MATCHED ON THE SLOT, ANSWERED WITH MY OWN SPELL.
+        --
+        -- The asker's slot can stand for several spells - "lust" is one
+        -- question with five spellings - so the test is not "is that my
+        -- spell" but "does one of MY spells answer that question". Asking it
+        -- this way round is what makes it right for the shaman: which lust he
+        -- owns is his faction's business, and this list has already been
+        -- through the spellbook, so whichever one is really his is the one
+        -- that matches. Deciding it the other way - working out the spell
+        -- from the class - would light up nothing for half of them.
+        --
+        -- `wanted` is that spell, and every line below uses it: the cell that
+        -- brightens, the macro it runs, the ACK that goes back.
+        local wanted, mine = packet.spellID, false
         for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers,
             ns.KnowsSpell)) do
             if offer.kind == packet.kind
                 and (packet.kind == Comm.TAUNT
-                    or offer.spellID == packet.spellID) then
+                    or ns.Externals.SameSlot(offer.spellID, packet.spellID)) then
                 mine = true
+                if packet.kind ~= Comm.TAUNT then wanted = offer.spellID end
             end
         end
         if not mine then return end
 
+        -- A COPY, NOT A WRITE. The externals panel listens to these same
+        -- packets and keys its own state by what it was actually sent;
+        -- rewriting the object under it would move somebody else's furniture.
+        -- Copied field by field rather than rebuilt from a list of names, so
+        -- a field added to a packet later cannot be dropped here silently.
+        local ask = packet
+        if wanted ~= packet.spellID then
+            ask = {}
+            for key, value in pairs(packet) do ask[key] = value end
+            ask.spellID = wanted
+        end
+
         if not Answers.Config().enabled then
-            Answers.Announce(packet.fromShort, packet.spellID)
+            Answers.Announce(ask.fromShort, ask.spellID)
             return
         end
 
-        Answers.Remember(Answers.pending, packet,
+        Answers.Remember(Answers.pending, ask,
             GetTime and GetTime() or 0)
         Answers.Repaint()
 

@@ -3893,12 +3893,95 @@ local function TestExternals()
         { 391054, "PALADIN"     },   -- Intercession
         { 20707,  "WARLOCK"     },   -- Soulstone
     }
+    -- Asked of the TRANSLATION and of the offer list rather than of the
+    -- table: what matters is that a player of that class ends up with that
+    -- spell on their bar, and that it answers the slot the asker pressed. A
+    -- test that walked `covers` itself would be the table written twice and
+    -- would go on passing while the feature was broken.
     for _, want in ipairs(researched) do
-        local entry = X.Get(want[1])
-        Check("Spell " .. want[1] .. " is listed for the " .. want[2],
-            entry ~= nil and entry.class == want[2],
-            entry and entry.class or "missing")
+        local offered = false
+        for _, offer in ipairs(ns.Answers.Offers(want[2])) do
+            if offer.spellID == want[1] then offered = true end
+        end
+        Check("A " .. want[2] .. " is offered " .. want[1], offered)
     end
+
+    -- The five lusts are ONE question and the four battle resses are another,
+    -- and the two are not the same question. Stated as the relationship
+    -- rather than as "spell X sits in slot Y", which would only be the table
+    -- copied out a second time.
+    Check("Every lust answers the same slot", (function()
+        for _, id in ipairs({ 32182, 80353, 264667, 390386 }) do
+            if not X.SameSlot(id, 2825) then return false end
+        end
+        return true
+    end)())
+    Check("Every battle res answers the same slot", (function()
+        for _, id in ipairs({ 61999, 391054, 20707 }) do
+            if not X.SameSlot(id, 20484) then return false end
+        end
+        return true
+    end)())
+    Check("And lust is not a battle res", not X.SameSlot(2825, 20484))
+    Check("Nor is an ordinary external either of them",
+        not X.SameSlot(6940, 2825) and not X.SameSlot(6940, 20484))
+
+    ---------------------------------------------------------------------
+    -- ONE SLOT, SEVERAL SPELLS
+    --
+    -- Owner: "sprich das waere ein Lust command und Bres". The whole feature
+    -- is a round trip between two clients that never agree about which spell
+    -- "lust" is, so the round trip is what is checked.
+    ---------------------------------------------------------------------
+    local lust = X.Get(2825)
+    Check("Lust is one slot, not five", lust ~= nil and lust.covers ~= nil)
+    Check("It is called Lust rather than Bloodlust",
+        X.Label(2825) == "Lust", tostring(X.Label(2825)))
+    Check("Bres is one slot too", (X.Get(20484) or {}).covers ~= nil)
+    Check("It is called Bres", X.Label(20484) == "Bres")
+
+    -- An ordinary spell is untouched by either translation - that is what
+    -- lets every other caller in the file stay as it was.
+    Check("An ordinary spell is its own slot", X.SlotFor(6940) == 6940)
+
+    -- THE ROUND TRIP. The asker's panel holds the slot; the mage answers with
+    -- his own spell; the ACK coming back has to land on the slot again, or
+    -- the asker's cell never goes quiet.
+    Check("A mage's Time Warp lands back on the Lust slot",
+        X.SlotFor(80353) == 2825)
+    Check("A warlock's Soulstone lands back on the Bres slot",
+        X.SlotFor(20707) == 20484)
+
+    -- Two groups claiming one spell would make SlotFor answer at random,
+    -- depending on which entry was written last.
+    Check("No spell is covered by two slots", (function()
+        local seen = {}
+        for _, entry in ipairs(X.SPELLS) do
+            for _, sub in ipairs(entry.covers or {}) do
+                if seen[sub.spellID] then return false end
+                seen[sub.spellID] = true
+            end
+        end
+        return true
+    end)())
+
+    -- WHO A GROUPED SLOT WOULD ASK: anybody holding a version of it, not the
+    -- class the slot happens to be stored under.
+    Check("The Lust slot would ask the mage in the group", (function()
+        local roster = {
+            { name = "Me",   class = "WARRIOR", isPlayer = true },
+            { name = "Mage", class = "MAGE" },
+        }
+        local target = X.Whom(lust, roster, nil)
+        return target ~= nil and target.name == "Mage"
+    end)())
+    Check("A group with nobody who can lust has nobody to ask", (function()
+        local roster = {
+            { name = "Me",     class = "WARRIOR", isPlayer = true },
+            { name = "Sneaky", class = "ROGUE" },
+        }
+        return X.Whom(lust, roster, nil) == nil
+    end)())
 
     -- A CLASS TOKEN, not a class name. "Death Knight" and "DEATHKNIGHT" look
     -- equally right in a table and only one of them ever matches a roster
@@ -4648,6 +4731,43 @@ local function TestAnswers()
     -- A spell switched off is not built, so nobody can ask for it.
     local fewer = A.Offers("PALADIN", { [6940] = false })
     Check("Switching one off takes it off the bar", #fewer == #paladin - 1)
+
+    ---------------------------------------------------------------------
+    -- A GROUPED SLOT REACHES EVERY CLASS THAT HAS A VERSION OF IT
+    --
+    -- Owner: "und answering muesste das dann fuer jede klasse entsprechend
+    -- anders wiedergeben". The request side collapses five spells into one
+    -- slot; this side has to expand it again, per class. A mage had NOTHING
+    -- on his answer bar before lust existed, so this is also the check that
+    -- the expansion happens at all.
+    ---------------------------------------------------------------------
+    local function Offered(class, spellID, chosen, known)
+        for _, offer in ipairs(A.Offers(class, chosen, known)) do
+            if offer.spellID == spellID then return true end
+        end
+        return false
+    end
+
+    Check("A mage is offered Time Warp", Offered("MAGE", 80353))
+    Check("A hunter is offered Primal Rage", Offered("HUNTER", 264667))
+    Check("An evoker is offered Fury of the Aspects", Offered("EVOKER", 390386))
+    Check("A warlock is offered Soulstone", Offered("WARLOCK", 20707))
+    Check("A death knight is offered Raise Ally", Offered("DEATHKNIGHT", 61999))
+
+    -- Both spellings reach the shaman, and the spellbook decides which one
+    -- survives - the same filter that keeps a holy priest from being offered
+    -- Pain Suppression. Faction is not something this addon should guess at.
+    Check("A shaman is offered both lusts",
+        Offered("SHAMAN", 2825) and Offered("SHAMAN", 32182))
+    Check("And the spellbook drops the one he has not got",
+        Offered("SHAMAN", 2825, nil, function(id) return id ~= 32182 end)
+        and not Offered("SHAMAN", 32182, nil,
+            function(id) return id ~= 32182 end))
+
+    -- A mage is not handed the shaman's spelling, which is what a careless
+    -- expansion - offering every covered spell to everybody - would do.
+    Check("A mage is not offered Bloodlust", not Offered("MAGE", 2825))
+    Check("A rogue is still offered nothing", #A.Offers("ROGUE") == 0)
 
     -- OFF AND BACK ON, through the real setter.
     --

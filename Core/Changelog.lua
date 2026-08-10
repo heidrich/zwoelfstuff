@@ -16,7 +16,8 @@ ns.CHANGELOG = {
         version = "4.71.0",
         date = "2026-08-10",
         lines = {
-            "|cffffd100You can ask for lust, and for a battle res.|r Bloodlust, Heroism, Time Warp, Primal Rage and Fury of the Aspects; Rebirth, Raise Ally, Intercession and Soulstone. Put one on the panel like any other, and the click whispers whoever in your group can actually press it.",
+            "|cffffd100You can ask for lust, and for a battle res|r - |cffffd100one slot each|r, not one per class. |cffffd100Lust|r asks whoever in the group has one: Bloodlust, Heroism, Time Warp, Primal Rage or Fury of the Aspects. |cffffd100Bres|r covers Rebirth, Raise Ally, Intercession and Soulstone.",
+            "|cffffd100On the answering side you get your own.|r A mage's cell is Time Warp, a warlock's is Soulstone, and a shaman gets whichever lust his faction gave him - one press on the other side lights the right cell on everybody's bar.",
             "|cffffd100The co-tanks page matches the other two.|r The preview and the two buttons that act on it stay at the top while the settings scroll - they used to be at the very bottom - and the settings stand in two columns instead of one per line.",
         },
     },

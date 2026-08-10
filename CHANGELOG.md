@@ -8,14 +8,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
-- **Lust and a battle resurrection can be asked for.** Bloodlust, Heroism,
-  Time Warp, Primal Rage and Fury of the Aspects; Rebirth, Raise Ally,
-  Intercession and Soulstone. They go on the panel like any other external,
-  and the click whispers whoever in your group can actually press it.
-  Everything above is cast *on* you - lust is cast on the room and a battle
-  res on your corpse - but the reason they belong here is the same: it is
-  somebody else's cooldown, and asking out loud mid-pull is the part that
-  does not happen.
+- **Lust and a battle resurrection can be asked for - one slot each.** Drag
+  **Lust** onto the panel and the click asks whoever in your group has one:
+  Bloodlust, Heroism, Time Warp, Primal Rage or Fury of the Aspects. **Bres**
+  is the same for Rebirth, Raise Ally, Intercession and Soulstone. One slot
+  rather than one per class, because "who can lust" is one question and you
+  should not have to fill five places to cover the groups you might walk
+  into.
+  Everything else on the panel is cast *on* you - lust is cast on the room
+  and a battle res on your corpse - but the reason they belong here is the
+  same: it is somebody else's cooldown, and asking out loud mid-pull is the
+  part that does not happen.
+- **On the answering side each class gets its own.** A mage's cell is Time
+  Warp, a warlock's is Soulstone, and a shaman gets whichever lust his
+  faction gave him. One press on the asker's side lights the right cell on
+  everybody's.
 
 ### Changed
 
