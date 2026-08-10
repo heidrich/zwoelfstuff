@@ -46,6 +46,7 @@
     "GameFontNormal",
     "GameMenuFrame",
     "GameTooltip",
+    "GetBindingKey",
     "GetBuildInfo",
     "GetCVarBool",
     "GetCursorInfo",

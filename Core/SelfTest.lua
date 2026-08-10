@@ -4607,7 +4607,8 @@ local function TestAnswers()
         { name = "Zweit",   class = "WARRIOR", role = "TANK" },
         { name = "Schaden", class = "MAGE",    role = "DAMAGER" },
     }
-    local askers = A.Askers(ROSTER)
+    local TANKS = { who = A.WHO_TANKS, rows = 3, rowNames = {} }
+    local askers = A.Askers(ROSTER, TANKS)
     Check("Both tanks could ask", #askers == 2, tostring(#askers))
     Check("You are never one of them", (function()
         for _, member in ipairs(askers) do
@@ -4615,7 +4616,116 @@ local function TestAnswers()
         end
         return true
     end)())
-    Check("Nobody tanking means no cells at all", #A.Askers({}) == 0)
+    Check("Nobody tanking means no cells at all", #A.Askers({}, TANKS) == 0)
+
+    -- THE OTHER TWO ANSWERS TO "WHO".
+    --
+    -- Owner, 2026-08-10: "man kann keine spieler auswaehlen". The automatic
+    -- one is right until the group never set its roles, and then it is an
+    -- empty bar that explains nothing.
+    Check("Everybody means everybody but you",
+        #A.Askers(ROSTER, { who = A.WHO_GROUP, rows = 6 }) == 3,
+        tostring(#A.Askers(ROSTER, { who = A.WHO_GROUP, rows = 6 })))
+
+    Check("The row count is a ceiling",
+        #A.Askers(ROSTER, { who = A.WHO_GROUP, rows = 2 }) == 2)
+
+    local picked = A.Askers(ROSTER, { who = A.WHO_CHOSEN, rows = 3,
+        rowNames = { "Schaden", "Zwoelf" } })
+    Check("Picked people come in the order they were picked",
+        #picked == 2 and picked[1].name == "Schaden"
+            and picked[2].name == "Zwoelf",
+        #picked > 0 and picked[1].name or "none")
+
+    Check("Naming somebody who left leaves no row",
+        #A.Askers(ROSTER, { who = A.WHO_CHOSEN, rows = 3,
+            rowNames = { "Weg" } }) == 0)
+
+    -- Two rows aimed at one person light up together and answer nothing
+    -- extra, so it is one row.
+    Check("Naming the same person twice is ONE row",
+        #A.Askers(ROSTER, { who = A.WHO_CHOSEN, rows = 3,
+            rowNames = { "Zwoelf", "Zwoelf" } }) == 1)
+
+    Check("You cannot pick yourself",
+        #A.Askers(ROSTER, { who = A.WHO_CHOSEN, rows = 3,
+            rowNames = { "Heiler" } }) == 0)
+
+    ---------------------------------------------------------------------
+    -- ONLY WHAT YOU ACTUALLY HAVE
+    --
+    -- A class list is not a spellbook: Pain Suppression is on the priest list
+    -- and a holy priest cannot cast it.
+    ---------------------------------------------------------------------
+    local full = A.Offers("PRIEST")
+    local half = A.Offers("PRIEST", nil, function(id) return id ~= 33206 end)
+    Check("A spell you do not have is not offered", #half == #full - 1,
+        #half .. " of " .. #full)
+    Check("And it says how many it took out", A.hidden == 1,
+        tostring(A.hidden))
+
+    -- THE FILTER MUST NOT BE ABLE TO EMPTY THE BAR. The spellbook is not
+    -- readable for a moment at every login and every talent swap, and an
+    -- empty bar for a paladin is a worse wrong answer than one extra cell.
+    local none = A.Offers("PALADIN", nil, function() return false end)
+    Check("A filter that removes EVERYTHING is refused", #none == #paladin,
+        tostring(#none))
+
+    ---------------------------------------------------------------------
+    -- THE MACRO - the one string the whole feature is
+    --
+    -- Three separate reasons for a click that cast nothing have now been
+    -- found by reading code, and every one of them is a wrong string here.
+    -- None of them said anything on screen.
+    ---------------------------------------------------------------------
+    local tank = { name = "Akui", fullName = "Akui-Gilneas" }
+
+    Check("An external is cast on whoever asked",
+        A.Macro(C.EXTERNAL, "Lay on Hands", tank)
+            == "/cast [@Akui-Gilneas] Lay on Hands",
+        tostring(A.Macro(C.EXTERNAL, "Lay on Hands", tank)))
+
+    -- A TAUNT IS NOT CAST ON THE TANK. It means take the boss, so it goes on
+    -- your own target - aimed at the tank who asked it is a taunt on a
+    -- friendly player, which does nothing and says nothing.
+    Check("A taunt is cast on YOUR target, not on the tank",
+        A.Macro(C.TAUNT, "Dark Command", tank) == "/cast Dark Command",
+        tostring(A.Macro(C.TAUNT, "Dark Command", tank)))
+
+    Check("The realm travels with the name",
+        A.Macro(C.EXTERNAL, "Ironbark", tank):find("Akui-Gilneas", 1, true)
+            ~= nil)
+
+    Check("Taking the target as well is a second line",
+        A.Macro(C.EXTERNAL, "Ironbark", tank, true)
+            == "/target Akui-Gilneas\n/cast [@Akui-Gilneas] Ironbark")
+
+    Check("A taunt takes no target however the switch is set",
+        A.Macro(C.TAUNT, "Taunt", tank, true) == "/cast Taunt")
+
+    -- A stand-in cell must cast NOTHING: there is nobody called "Tank".
+    Check("The stand-in cell gets no macro at all",
+        A.Macro(C.EXTERNAL, "Taunt", { name = "Tank", preview = true })
+            == nil)
+
+    -- "Spell 633" is a fine thing to draw and a catastrophic thing to cast.
+    Check("A spell the client cannot name gets no macro",
+        A.Macro(C.EXTERNAL, nil, tank) == nil)
+    Check("Nor an empty one", A.Macro(C.EXTERNAL, "", tank) == nil)
+
+    ---------------------------------------------------------------------
+    -- THE KEY IN THE CORNER
+    ---------------------------------------------------------------------
+    Check("Each cell has its own binding",
+        A.BindingName(2) == "CLICK ZwoelfStuffAnswer2:LeftButton",
+        A.BindingName(2))
+    Check("And the game knows what to call it",
+        _G["BINDING_NAME_" .. A.BindingName(2)] ~= nil)
+    Check("SHIFT-F1 fits in a corner", A.ShortKey("SHIFT-F1") == "sF1",
+        tostring(A.ShortKey("SHIFT-F1")))
+    Check("So does a mouse button", A.ShortKey("BUTTON4") == "M4",
+        tostring(A.ShortKey("BUTTON4")))
+    Check("No key is no text", A.ShortKey(nil) == nil)
 
     ---------------------------------------------------------------------
     -- Which cell answers which request

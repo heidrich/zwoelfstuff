@@ -13,6 +13,19 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.66.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Clicking an answer cell casts.|r It lit up, it took the press, and then nothing happened - no cast and no error either. The button was listening for the wrong half of the click, and with the game set to cast on key down, which is how it comes, the press was thrown away in silence.",
+            "|cffffd100A taunt cell taunts your target|r instead of trying to taunt the tank who asked, which could never have worked.",
+            "|cffffd100You choose who gets a row:|r the tanks, everybody in the group, or people you name yourself - with a row count. Groups that never assigned roles used to get an empty bar and no explanation.",
+            "|cffffd100Six cells can have a key|r, in the game's own Key Bindings under |cffffd100ZwoelfStuff|r. The key shows in the corner of the cell.",
+            "|cffffd100Only what you can actually cast is offered.|r A holy priest was given a Pain Suppression cell that could not work - and was telling the group it was ready.",
+            "Optionally take the person as your target as well. Off: the cast does not need it, and you keep whoever you were healing.",
+            "|cffffd100/zs answers|r now prints exactly what each cell would cast, straight off the button. If one of them ever goes quiet again, that line says why.",
+        },
+    },
+    {
         version = "4.65.3",
         date = "2026-08-10",
         lines = {

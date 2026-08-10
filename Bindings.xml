@@ -6,8 +6,32 @@
 
         The body is a plain line of Lua run by the game, so it can only reach
         a GLOBAL. Everything else in this addon lives in its private table.
+
+        THIS FILE MUST NOT BE LISTED IN THE TOC. The game loads it from the
+        addon root by itself; in the TOC the UI XML parser reads it instead
+        and says "Unrecognized XML: Binding" while the key never appears.
     -->
     <Binding name="ZWOELFSTUFF_TAUNT_ASK" category="ZwoelfStuff" header="ZWOELFSTUFF">
         ZwoelfStuff_TauntAsk()
     </Binding>
+
+    <!--
+        THE ANSWER CELLS, and these carry no body on purpose.
+
+        A binding cannot cast: a line of Lua that reaches a spell is exactly
+        what the game forbids. "CLICK <frame>:<button>" is different in kind -
+        the game presses the button for you, inside itself, and the cast is
+        then as legitimate as a mouse click. It is the only door from a
+        keyboard to a spell an addon is allowed to open, and MRT and Fitter
+        both walk through it the same way.
+
+        Their names are set in Core/Answers.lua, which also draws the bound
+        key in the corner of each cell.
+    -->
+    <Binding name="CLICK ZwoelfStuffAnswer1:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffAnswer2:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffAnswer3:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffAnswer4:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffAnswer5:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffAnswer6:LeftButton" category="ZwoelfStuff" />
 </Bindings>

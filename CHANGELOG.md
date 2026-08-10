@@ -4,6 +4,49 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.66.0] - 2026-08-10
+
+### Fixed
+
+- **A cell lit up, took the press, and cast nothing - in silence.** The button
+  listened for the mouse coming back UP only. Blizzard's own click handler
+  compares the press it received against the game's "cast on key down"
+  setting and RETURNS when they disagree: no cast, no error, no message of
+  any kind. That setting is on by default, so the feature was never once
+  going to work. Both directions are registered now, exactly as MRT and
+  EllesmereUI do on every casting button they own, and it works whichever way
+  the setting is set. The click is also written into the numbered attributes
+  the game looks at first.
+- **A taunt cell cast your taunt ON THE TANK WHO ASKED.** A taunt request
+  means take the boss, so the spell belongs on your own target - aimed at a
+  friendly player it does nothing, and says nothing. The two kinds of request
+  are two different lines now, and the tooltip says which.
+- **Spells your spec cannot cast were offered.** A holy priest was given a
+  Pain Suppression cell that could only ever fail quietly, and worse, told the
+  group that his Pain Suppression was ready - a spell with no cooldown running
+  reads as available. The bar and every report now ask the spellbook. A filter
+  that would remove EVERYTHING is refused instead: at a login or a talent
+  swap the book is briefly unreadable, and one cell too many beats an empty
+  bar.
+
+### Added
+
+- **Who gets a row is yours to decide.** The tanks, as before - or everybody
+  in the group, which is the answer when nobody assigned roles, or people you
+  name yourself in the order you want them. With a row count to go with it.
+- **Keys.** Six cells can carry a binding, in the game's own key list under
+  ZwoelfStuff, and the key shows in the corner of the cell. A binding cannot
+  cast - that is the same wall this feature is built around - so these press
+  the button for you, which is the one door from a keyboard to a spell an
+  addon is allowed to open.
+- **Taking the target as well**, off by default: the cast does not need it,
+  and a healer who clicks a cell keeps healing whoever they were healing.
+- **`/zs answers` is a report now.** It prints the switches, the game's
+  cast-on-key-down setting, who has a row and why, and for every cell the
+  macro line it would actually run - read off the button rather than from what
+  the addon believes it wrote. Three separate causes of a silent click have
+  been found by reading code; each one would have been a single line here.
+
 ## [4.65.3] - 2026-08-10
 
 ### Fixed

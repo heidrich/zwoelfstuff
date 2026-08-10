@@ -61,12 +61,91 @@ function Page:BuildPage(page, width)
         .. "after an update is worse than something you have not found yet.")
 
     ---------------------------------------------------------------------
+    -- WHO GETS A ROW
+    --
+    -- Owner, 2026-08-10: "man kann keine spieler auswaehlen, oder einstellen
+    -- also targets". There was no answer to that at all - the tanks were
+    -- picked for you and that was the whole of it, which is right until the
+    -- group has not set its roles, and then it is an empty bar with no
+    -- explanation. Directly under the switch, because "is it on" and "who is
+    -- it for" are the same minute's decision.
+    ---------------------------------------------------------------------
+    grid:Section("Who you answer")
+
+    local whoHost = CreateFrame("Frame", nil, grid.content)
+    local whoChips = UI.ChipRow(whoHost, width - 40, {
+        chips = {
+            { key = ns.Answers.WHO_TANKS,  text = "The tanks" },
+            { key = ns.Answers.WHO_GROUP,  text = "Everybody" },
+            { key = ns.Answers.WHO_CHOSEN, text = "People I pick" },
+        },
+        isOn = function(key)
+            return (Cfg().who or ns.Answers.WHO_TANKS) == key
+        end,
+        onSelect = function(key)
+            Cfg().who = key
+            Apply()
+            ns.Options:Refresh()
+        end,
+    })
+    whoChips:SetPoint("TOPLEFT", whoHost, "TOPLEFT", 0, 0)
+    whoHost:SetHeight(whoChips:GetHeight())
+    grid:Wide(whoHost, whoChips:GetHeight(), 4, 8)
+    whoHost.Refresh = function() whoChips.Refresh() end
+    grid.widgets[#grid.widgets + 1] = whoHost
+
+    grid:Note("One row of cells per person. |cffffd100The tanks|r is whoever "
+        .. "the group has marked as tanking - nothing to set up, and empty in "
+        .. "a group that never assigned roles. |cffffd100Everybody|r is the "
+        .. "answer to that. |cffffd100People I pick|r names them yourself, in "
+        .. "the order the rows should be.")
+
+    UI.Slider(grid:Row("Rows"), {
+        get = function() return ns.Answers.Rows(Cfg()) end,
+        set = function(value) Cfg().rows = value end,
+        min = 1, max = ns.Answers.MAX_ROWS, step = 1, apply = function()
+            Apply()
+            ns.Options:Refresh()
+        end,
+    })
+
+    -- ONE DROPDOWN PER ROW, the same shape the externals page uses for "who
+    -- to ask" - and out of the layout entirely while the mode does not use
+    -- them, rather than sitting there greyed out.
+    for index = 1, ns.Answers.MAX_ROWS do
+        local row = grid:FullRow("Row " .. index, { controlWidth = 220 })
+
+        UI.Dropdown(row, function()
+            local items = { { value = "", text = "Nobody" } }
+            for _, member in ipairs(ns.Roster()) do
+                if not member.isPlayer then
+                    items[#items + 1] = { value = member.name,
+                        text = member.name }
+                end
+            end
+            return items
+        end, function()
+            return Cfg().rowNames[index] or ""
+        end, function(value)
+            Cfg().rowNames[index] = (value ~= "" and value) or nil
+            Apply()
+        end, { emptyText = "Nobody" })
+
+        local paintControl = row.Refresh
+        row.Refresh = function()
+            if paintControl then paintControl() end
+            row:SetRelevant(Cfg().who == ns.Answers.WHO_CHOSEN
+                and index <= ns.Answers.Rows(Cfg()))
+        end
+    end
+
+    ---------------------------------------------------------------------
     -- What you offer
     ---------------------------------------------------------------------
     grid:Section("What you can be asked for")
 
     local _, class = UnitClass("player")
-    local mine = ns.Answers.Offers(class)
+    local mine = ns.Answers.Offers(class, nil, ns.KnowsSpell)
 
     if #mine == 0 then
         grid:Note("|cff888888Your class has nothing on the externals list and "
@@ -92,7 +171,34 @@ function Page:BuildPage(page, width)
     grid:Note("Switch one off and no cell is built for it - you will not be "
         .. "asked, and nothing lights up. A spell you have never touched is "
         .. "ON, because a bar that is empty until you find a settings page is "
-        .. "a bar that does not work.")
+        .. "a bar that does not work. Only what you can actually cast is "
+        .. "listed: your class's spells for another spec are not offered, "
+        .. "because a cell that casts nothing is worse than no cell.")
+
+    ---------------------------------------------------------------------
+    -- WHAT PRESSING ONE DOES
+    ---------------------------------------------------------------------
+    grid:Section("When you press one")
+
+    UI.Toggle(grid:FullRow("Take them as your target too", {
+        controlWidth = 124,
+        sublabel = "The cast does not need it",
+    }), function() return Cfg().target and true or false end,
+        function(value) Cfg().target = value and true or false; Apply() end)
+
+    grid:Note("The cell casts |cffffd100on|r whoever asked without touching "
+        .. "your target - which is the point, a healer keeps healing whoever "
+        .. "they were healing. Switch this on and it takes the target as "
+        .. "well.\n\nA |cffffd100taunt|r cell is the exception either way: it "
+        .. "casts your taunt on |cffffd100your own target|r, because a taunt "
+        .. "request means take the boss, and a taunt aimed at the tank who "
+        .. "asked would do nothing at all.")
+
+    grid:Note("|cffffd100Keys.|r Six cells can carry one. They are in the "
+        .. "game's own key bindings - Escape, Key Bindings, ZwoelfStuff - as "
+        .. "|cffffd100Answer cell 1|r to |cffffd1006|r, and the key you bind "
+        .. "shows in the corner of the cell. Counted the way the bar is "
+        .. "drawn: along the first row, then the next.")
 
     ---------------------------------------------------------------------
     -- The bar
@@ -204,7 +310,9 @@ function Page:BuildPage(page, width)
     grid:Buttons({
         { text = "Move the bar", width = 150, style = "primary",
           onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
-        { text = "What could be asked of me", width = 210,
+        -- The report, and it is worth finding: it prints the macro each cell
+        -- would run, which is the one thing that says whether this works.
+        { text = "What every cell would cast", width = 220,
           onClick = function() ns.Answers:Dump() end },
     }, 14)
 

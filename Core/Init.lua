@@ -604,6 +604,44 @@ function ns.SpellName(spellID)
 end
 
 ---------------------------------------------------------------------------
+-- DO YOU ACTUALLY HAVE IT
+--
+-- A class list is not a spellbook. Pain Suppression is on the priest list and
+-- a holy priest cannot cast it; putting a cell for it on his answer bar is a
+-- button that does nothing when pressed and gives no reason - which is the
+-- worst thing a button can do and the thing this whole wave is about.
+--
+-- Two questions rather than one, because they disagree on talents: one asks
+-- whether the spell is in your book, the other whether something you took
+-- REPLACED it and the replacement is. Either yes is a yes.
+--
+-- NEITHER ANSWERING IS ALSO A YES - a login, a talent load, a spec swap, and
+-- the book is briefly not there. The caller would rather draw one cell too
+-- many than an empty bar; see Answers.Offers, which counts what this removes
+-- and refuses to remove everything.
+--
+-- C_SpellBook only. The old global IsPlayerSpell still works and is marked
+-- deprecated, which would put a warning in a build that has none.
+---------------------------------------------------------------------------
+function ns.KnowsSpell(spellID)
+    if type(spellID) ~= "number" then return false end
+    local book = C_SpellBook
+    if not book then return true end
+
+    local asked = false
+    for _, name in ipairs({ "IsSpellKnownOrOverridesKnown", "IsSpellKnown" }) do
+        local query = book[name]
+        if query then
+            asked = true
+            local ok, known = pcall(query, spellID)
+            if ok and ns.Truth(known, false) then return true end
+        end
+    end
+
+    return not asked
+end
+
+---------------------------------------------------------------------------
 -- HOW LONG A SPELL LASTS, off its own tooltip
 --
 -- The owner, looking at a replay where two defensives drew as marks: "viele

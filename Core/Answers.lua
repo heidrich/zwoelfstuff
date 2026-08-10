@@ -47,6 +47,23 @@ Answers.DEFAULTS = {
     size      = 40,
     gap       = 4,
     linger    = 8,       -- how long a request keeps shouting
+
+    -- WHO GETS A ROW. Owner, 2026-08-10: "man kann keine spieler auswaehlen,
+    -- oder einstellen also targets" - and he was right that there was no
+    -- answer to that at all: the tanks were picked for you and that was the
+    -- whole of it. Three modes and a row count, which is the same shape the
+    -- externals panel has for the other direction.
+    who       = "tanks",
+    rows      = 3,
+
+    -- TAKING THE TARGET IS A SEPARATE QUESTION FROM CASTING, and it is off.
+    -- `/cast [@somebody]` needs no target and takes none, which is the whole
+    -- reason it is written that way: a healer who clicks a cell mid-pull
+    -- keeps whoever they were healing. Owner asked for the target too, so it
+    -- is a switch - but a switch, not the default, because losing your target
+    -- to a button you pressed for something else is the kind of help nobody
+    -- asked for.
+    target    = false,
     scale     = 1.0,
     alpha     = 1.0,
     idleAlpha = 0.35,    -- what a cell looks like with nothing to answer
@@ -71,6 +88,10 @@ function Answers.Config()
     -- "not answered yet", and Offers reads that as yes - a spell you have
     -- never seen a switch for should be on the bar, not silently missing.
     cfg.offers = cfg.offers or {}
+    -- Row one is this person, row two is that one. Only read while "who" is
+    -- set to the picked mode; kept either way, so switching to tanks and back
+    -- does not throw the list away.
+    cfg.rowNames = cfg.rowNames or {}
     return cfg
 end
 
@@ -105,8 +126,16 @@ end
 -- Your class's externals, plus your taunt if you have one - a taunt request
 -- is answered by pressing your OWN taunt, which is why it carries no target
 -- spell of its own.
+--
+-- AND ONLY THE ONES YOU ACTUALLY HAVE. A holy priest is not a discipline
+-- priest: a Pain Suppression cell on his bar is a button that does nothing
+-- when it is pressed and says nothing about why, which is the exact failure
+-- this whole wave is about. `known` is a predicate rather than a call so this
+-- stays pure and a test can ask what a priest of either spec would see.
 ---------------------------------------------------------------------------
-function Answers.Offers(class, chosen)
+Answers.hidden = 0
+
+function Answers.Offers(class, chosen, known)
     local out = {}
     if not class then return out end
 
@@ -124,7 +153,30 @@ function Answers.Offers(class, chosen)
         end
     end
 
-    return out
+    if not known then return out end
+
+    local kept, dropped = {}, 0
+    for _, offer in ipairs(out) do
+        if known(offer.spellID) then
+            kept[#kept + 1] = offer
+        else
+            dropped = dropped + 1
+        end
+    end
+
+    -- A FILTER THAT THROWS EVERYTHING AWAY IS NOT AN ANSWER, IT IS A REFUSAL.
+    -- The spellbook is not always readable the moment this runs - a login, a
+    -- spec change, a talent load - and an empty bar for a paladin is a worse
+    -- wrong answer than one extra cell. Count what it removed either way, so
+    -- /zs answers can say so out loud instead of leaving a short list to be
+    -- discovered.
+    if #kept == 0 and #out > 0 then
+        Answers.hidden = 0
+        return out
+    end
+
+    Answers.hidden = dropped
+    return kept
 end
 
 -- Blood's Death Grip is the one taunt with a spec on it, and Offers leaves
@@ -134,19 +186,68 @@ end
 ---------------------------------------------------------------------------
 -- WHO MIGHT ASK
 --
--- The tanks, and only the tanks. The request side of this addon is the
--- externals panel and the taunt button, and both belong to a tank - so a
--- cell per group member would be thirty-eight buttons for a question nobody
--- is going to ask from them.
+-- The tanks by default, because the request side of this addon is the
+-- externals panel and the taunt button and both belong to a tank - a cell per
+-- group member would be thirty-eight buttons for a question nobody is going
+-- to ask from them.
+--
+-- BUT NOT ONLY THE TANKS, AND NOT ONLY BY THEMSELVES. Owner, 2026-08-10:
+-- "man kann keine spieler auswaehlen". Three answers to "who", because the
+-- automatic one is right until it is not:
+--
+--   tanks    whoever the group has marked as tanking. Nothing to set up, and
+--            wrong the moment roles are not assigned - a world boss, a
+--            premade that never set them, two people messing about.
+--   group    everybody but you. Small groups, and the answer to "roles are
+--            not set and I want this to work anyway".
+--   chosen   you name them, in the order you want the rows.
+--
+-- Pure: it takes the settings rather than reading them, so a test can ask
+-- what each mode does without a database.
 ---------------------------------------------------------------------------
-Answers.MAX_ASKERS = 3
+Answers.WHO_TANKS  = "tanks"
+Answers.WHO_GROUP  = "group"
+Answers.WHO_CHOSEN = "chosen"
 
-function Answers.Askers(roster)
-    local out = {}
+Answers.MAX_ASKERS = 3     -- the default row count
+Answers.MAX_ROWS   = 6     -- the ceiling on the slider
+
+function Answers.Rows(cfg)
+    local rows = (cfg and cfg.rows) or Answers.MAX_ASKERS
+    if type(rows) ~= "number" then rows = Answers.MAX_ASKERS end
+    return math.max(1, math.min(Answers.MAX_ROWS, math.floor(rows)))
+end
+
+function Answers.Askers(roster, cfg)
+    cfg = cfg or Answers.Config()
+    local who = cfg.who or Answers.WHO_TANKS
+    local rows = Answers.Rows(cfg)
+    local out, taken = {}, {}
+
+    if who == Answers.WHO_CHOSEN then
+        local byName = {}
+        for _, member in ipairs(roster or {}) do
+            if not member.isPlayer then byName[member.name] = member end
+        end
+        for index = 1, rows do
+            local name = cfg.rowNames and cfg.rowNames[index]
+            local member = name and byName[name]
+            -- Naming the same person twice is one row, not two identical
+            -- ones: two rows aimed at one player answer nothing extra and
+            -- both light up together.
+            if member and not taken[member.name] then
+                taken[member.name] = true
+                out[#out + 1] = member
+            end
+        end
+        return out
+    end
+
     for _, member in ipairs(roster or {}) do
-        if not member.isPlayer and member.role == "TANK" then
+        if not member.isPlayer
+            and (who == Answers.WHO_GROUP or member.role == "TANK") then
             out[#out + 1] = member
-            if #out >= Answers.MAX_ASKERS then break end
+            if #out >= rows then break end
         end
     end
     return out
@@ -209,12 +310,128 @@ function Answers.Waiting(list, cell, now, linger)
 end
 
 ---------------------------------------------------------------------------
+-- THE LINE THE GAME RUNS WHEN YOU PRESS A CELL
+--
+-- Pure, and it is pure on purpose: this one string is the entire feature.
+-- Everything else - the message, the ring, the name under the icon - is
+-- decoration around a click that either casts or does not, and a click that
+-- does not cast says NOTHING. No error, no red text, no combat log line. It
+-- is the quietest failure this addon has, and the only defence against it is
+-- being able to read the string in a test and print it in a report.
+--
+-- A TAUNT IS NOT CAST ON THE TANK, and this is what the first version got
+-- wrong. A taunt request means "take the boss" - so the spell goes on YOUR
+-- target, the enemy, and a `[@Akui-Gilneas]` in front of it aims a taunt at a
+-- friendly player, which does exactly nothing and does it silently. The two
+-- kinds are answered with two different lines because they are two different
+-- actions that happen to share a bar.
+---------------------------------------------------------------------------
+function Answers.Macro(kind, spellName, asker, alsoTarget)
+    if not asker or asker.preview then return nil end
+    if type(spellName) ~= "string" or spellName == "" then return nil end
+
+    -- Your own taunt, on whatever you are looking at.
+    if kind == Comm.TAUNT then
+        return "/cast " .. spellName
+    end
+
+    -- THE FULL NAME, WITH THE REALM ON IT WHEN THERE IS ONE. `/cast [@Akui]`
+    -- addresses nobody when Akui is on another realm - no target, no cast, no
+    -- error - which is what the first live test of this looked like across
+    -- Destromath and Gilneas.
+    local who = asker.fullName or asker.name
+    if type(who) ~= "string" or who == "" then return nil end
+
+    if alsoTarget then
+        return "/target " .. who .. "\n/cast [@" .. who .. "] " .. spellName
+    end
+    return "/cast [@" .. who .. "] " .. spellName
+end
+
+-- WRITING THE CLICK ONTO THE BUTTON, in both places the game looks.
+--
+-- `RegisterForClicks("AnyUp")` alone is why a cell lit up, took a press, and
+-- cast nothing. Blizzard's own handler compares the press it got against the
+-- "cast on key down" setting and RETURNS if they disagree - so with that
+-- setting on, an up-only button is skipped in silence. EllesmereUI writes the
+-- same finding into its kick proxy; MRT and EllesmereUIActionBars register
+-- both directions on every casting button they own. Both arrive, the gate
+-- lets exactly one through, and it works whichever way the setting is set.
+--
+-- The numbered attributes go with the bare ones because the resolver looks up
+-- `type` by button suffix first, and EllesmereUI's proxies found the bare
+-- fallback unreliable on this patch. Two extra writes, no downside.
+function Answers.Arm(cell, macro)
+    if not cell then return false end
+    if macro then
+        cell:SetAttribute("type", "macro")
+        cell:SetAttribute("type1", "macro")
+        cell:SetAttribute("macrotext", macro)
+        cell:SetAttribute("macrotext1", macro)
+        return true
+    end
+    cell:SetAttribute("type", nil)
+    cell:SetAttribute("type1", nil)
+    cell:SetAttribute("macrotext", nil)
+    cell:SetAttribute("macrotext1", nil)
+    return false
+end
+
+---------------------------------------------------------------------------
+-- KEYS
+--
+-- Owner, 2026-08-10, in the same breath as the cast: "keine keybinds".
+--
+-- A binding CANNOT run a function of ours and then cast - that is the same
+-- wall the whole file is built around. What it can do is press the button for
+-- you: a binding named "CLICK <frame>:LeftButton" is the game's own, handled
+-- entirely inside it, and the cast is then as legitimate as a mouse click.
+-- Declared in Bindings.xml, named here, and set by the player in Blizzard's
+-- key bindings under ZwoelfStuff. MRT and Fitter both do exactly this.
+---------------------------------------------------------------------------
+Answers.KEYS = 6     -- how many cells can carry a key
+
+function Answers.BindingName(index)
+    return "CLICK ZwoelfStuffAnswer" .. index .. ":LeftButton"
+end
+
+for index = 1, Answers.KEYS do
+    _G["BINDING_NAME_" .. Answers.BindingName(index)] =
+        "Answer cell " .. index
+end
+
+-- "SHIFT-CTRL-F1" in the corner of a forty-pixel square is a smear. Pure, so
+-- every shape can be checked without a keyboard.
+function Answers.ShortKey(key)
+    if type(key) ~= "string" or key == "" then return nil end
+    local short = key:upper()
+    short = short:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
+    short = short:gsub("BUTTON(%d+)", "M%1")
+    short = short:gsub("MOUSEWHEELUP", "MwU"):gsub("MOUSEWHEELDOWN", "MwD")
+    short = short:gsub("NUMPAD", "N")
+    short = short:gsub("SPACE", "Sp")
+    return short
+end
+
+function Answers.Key(index)
+    if not GetBindingKey then return nil end
+    local ok, key = pcall(GetBindingKey, Answers.BindingName(index))
+    if not ok then return nil end
+    return Answers.ShortKey(key)
+end
+
+---------------------------------------------------------------------------
 -- The bar
 ---------------------------------------------------------------------------
 local panel, cells = nil, {}
 local pendingRebuild = false
 
 function Answers.Frame() return panel end
+
+-- The built cells, for the report and for a test that has to press one. Not
+-- a copy: /zs answers reads the attributes off the real buttons, because the
+-- day this file and the button disagree is the day worth catching.
+function Answers.Cells() return cells end
 
 function Answers.Style()
     local cfg = Answers.Config()
@@ -271,7 +488,10 @@ local function BuildCell(index)
     -- takes a TOKEN, and a token is exactly the thing that changes under you.
     local cell = CreateFrame("Button", "ZwoelfStuffAnswer" .. index, panel,
         "SecureActionButtonTemplate")
-    cell:RegisterForClicks("AnyUp")
+    -- BOTH DIRECTIONS. See Answers.Arm: up-only is skipped in silence when
+    -- the game is set to cast on key down, which is the default and which is
+    -- why this lit up, took the click and cast nothing.
+    cell:RegisterForClicks("AnyUp", "AnyDown")
 
     cell.bg = cell:CreateTexture(nil, "BACKGROUND")
     cell.bg:SetAllPoints(cell)
@@ -293,18 +513,37 @@ local function BuildCell(index)
     cell.name:SetPoint("BOTTOM", cell, "BOTTOM", 0, 2)
     cell.name:SetWordWrap(false)
 
+    -- The key, where every action bar in the game puts it. A cell with no key
+    -- shows nothing rather than an empty box.
+    cell.key = ns.UI.Label(cell, "", 10, ns.UI.C.textDim)
+    cell.key:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -2, -2)
+    cell.key:SetWordWrap(false)
+
     cell:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine(self.spellName or "")
-        GameTooltip:AddLine(self.who and ("On |cffffd100" .. self.who .. "|r")
-            or "|cff888888Nobody to cast it on|r", 1, 1, 1)
+        -- A taunt goes on the boss, not on the tank who asked - so the line
+        -- that says what pressing this does has to say which.
+        if self.kind == Comm.TAUNT then
+            GameTooltip:AddLine("On |cffffd100your target|r, for "
+                .. (self.who or "the other tank"), 1, 1, 1)
+        else
+            GameTooltip:AddLine(self.who
+                and ("On |cffffd100" .. self.who .. "|r")
+                or "|cff888888Nobody to cast it on|r", 1, 1, 1)
+        end
+        local key = Answers.Key(self.index or 0)
+        if key then
+            GameTooltip:AddLine("Key: |cffffd100" .. key .. "|r", 1, 1, 1)
+        end
         GameTooltip:Show()
     end)
     cell:SetScript("OnLeave", function()
         if GameTooltip then GameTooltip:Hide() end
     end)
 
+    cell.index = index
     cells[index] = cell
     return cell
 end
@@ -325,8 +564,8 @@ function Answers.Rebuild()
 
     local cfg = Answers.Config()
     local _, class = UnitClass("player")
-    local offers = Answers.Offers(class, cfg.offers)
-    local askers = Answers.Askers(ns.Roster())
+    local offers = Answers.Offers(class, cfg.offers, ns.KnowsSpell)
+    local askers = Answers.Askers(ns.Roster(), cfg)
     local size, gap = cfg.size or 40, cfg.gap or 4
     local style = Answers.Style()
 
@@ -359,34 +598,22 @@ function Answers.Rebuild()
             cell.kind = offer.kind
             cell.spellID = offer.spellID
             cell.preview = asker.preview and true or false
-            cell.spellName = ns.SpellName(offer.spellID)
-                or ("Spell " .. offer.spellID)
 
-            -- The macro the GAME runs when you click. Written here, out of
-            -- combat, exactly once per roster change.
-            --
-            -- A stand-in cell gets NO macro at all: there is nobody called
-            -- "Tank" to cast on, and a cell that fires at your current target
-            -- instead would be the addon doing something you did not ask for.
-            -- THE SAME `and nil or` TRAP, and here it was worse than a
-            -- setting that would not switch: written that way, a stand-in
-            -- cell got type="macro" AND a macro aimed at a player called
-            -- "Tank" - the exact thing the paragraph above says must never
-            -- happen. Two lines, both of them plain ifs.
-            if asker.preview then
-                cell:SetAttribute("type", nil)
-                cell:SetAttribute("macrotext", nil)
-            else
-                -- THE FULL NAME, WITH THE REALM ON IT WHEN THERE IS ONE.
-                -- `/cast [@Akui]` addresses nobody when Akui is on another
-                -- realm, and the click does exactly nothing - no target, no
-                -- cast, no error. Which is precisely what the first test of
-                -- this feature looked like, across Destromath and Gilneas.
-                cell:SetAttribute("type", "macro")
-                cell:SetAttribute("macrotext", string.format(
-                    "/cast [@%s] %s", asker.fullName or asker.name,
-                    cell.spellName))
-            end
+            -- TWO NAMES, AND ONLY ONE OF THEM MAY REACH A MACRO. The client
+            -- knows what to call a spell; when it does not, "Spell 633" is a
+            -- fine thing to draw and a catastrophic thing to cast - it is not
+            -- a spell, so the line runs and nothing happens, quietly. So the
+            -- macro is built from the real name or not at all.
+            local real = ns.SpellName(offer.spellID)
+            cell.spellName = real or ("Spell " .. offer.spellID)
+
+            -- The macro the GAME runs when you click, written here, out of
+            -- combat, exactly once per roster change. A stand-in cell gets
+            -- none: there is nobody called "Tank" to cast on, and a cell that
+            -- fired at your current target instead would be the addon doing
+            -- something you did not ask for.
+            cell.macro = Answers.Macro(offer.kind, real, asker, cfg.target)
+            Answers.Arm(cell, cell.macro)
 
             cell:SetSize(size, size)
             cell:ClearAllPoints()
@@ -399,6 +626,7 @@ function Answers.Rebuild()
             local zoom = style.iconZoom
             cell.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
             cell.name:SetText(asker.name)
+            cell.key:SetText(Answers.Key(index) or "")
 
             cell:Show()
         end
@@ -435,6 +663,9 @@ function Answers.Repaint()
 
     for _, cell in ipairs(cells) do
         if cell.who then
+            -- A key can be bound mid-fight, and a piece of text is one of the
+            -- few things a protected button will still accept then.
+            cell.key:SetText(Answers.Key(cell.index or 0) or "")
             -- A stand-in cell is drawn at full strength with its name on it:
             -- while you are placing the bar, "which of these is it" is the
             -- only question, and a dimmed square answers it badly.
@@ -495,10 +726,13 @@ function Answers:Start()
 
         -- Only what you could actually answer. A druid being told that
         -- somebody wants Pain Suppression is noise: there is no button of
-        -- his that answers it.
+        -- his that answers it. Neither has a holy priest - which is the same
+        -- sentence one step further in, and why the spellbook is asked here
+        -- as well as on the bar.
         local _, class = UnitClass("player")
         local mine = false
-        for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers)) do
+        for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers,
+            ns.KnowsSpell)) do
             if offer.kind == packet.kind
                 and (packet.kind == Comm.TAUNT
                     or offer.spellID == packet.spellID) then
@@ -525,12 +759,24 @@ function Answers:Start()
     watcher:RegisterEvent("GROUP_ROSTER_UPDATE")
     watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
     watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+    watcher:RegisterEvent("UPDATE_BINDINGS")
+    -- A spec change changes what you have, and what you have is what the bar
+    -- offers - a holy priest who goes discipline gains a cell.
+    watcher:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     watcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     watcher:SetScript("OnEvent", function(_, event, _, _, spellID)
         if not ns.db then return end
 
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
             Answers.OnCast(spellID)
+            return
+        end
+
+        -- Only the letters in the corner change, and they are allowed to
+        -- change in combat - which is exactly when somebody binds a key they
+        -- suddenly need.
+        if event == "UPDATE_BINDINGS" then
+            Answers.Repaint()
             return
         end
 
@@ -606,10 +852,16 @@ function Answers.Report(spellID, kind)
     return Comm.Send(Comm.USED, kind or Comm.EXTERNAL, spellID, left)
 end
 
+-- ONLY WHAT YOU HAVE, and here it is not tidiness. A spell that is not in
+-- your book has no cooldown running, so the client answers "ready" for it -
+-- and this would tell the whole group that a holy priest's Pain Suppression
+-- is up. A number that is confidently wrong is worse than no number, which is
+-- the rule the whole reporting side was built on.
 function Answers.ReportAll()
     if not ns.Modules:IsOn("answers") then return end
     local _, class = UnitClass("player")
-    for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers)) do
+    for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers,
+        ns.KnowsSpell)) do
         Answers.Report(offer.spellID, offer.kind)
     end
 end
@@ -638,7 +890,8 @@ function Answers.OnCast(spellID)
     -- One frame later: the cooldown does not exist yet in the moment the cast
     -- succeeds, so asking now would answer "ready" and undo itself.
     local _, class = UnitClass("player")
-    for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers)) do
+    for _, offer in ipairs(Answers.Offers(class, Answers.Config().offers,
+        ns.KnowsSpell)) do
         if offer.spellID == spellID then
             if C_Timer and C_Timer.After then
                 C_Timer.After(0.1, function()
@@ -665,17 +918,39 @@ function Answers.OnCast(spellID)
 end
 
 ---------------------------------------------------------------------------
--- What is waiting, printed
+-- WHAT IS ACTUALLY ON THE BAR, PRINTED
+--
+-- This is a diagnostic, not a summary, and it exists because a cell that
+-- casts nothing looks exactly like a cell that casts: it lights up, it takes
+-- the press, and then there is silence. Three separate reasons for that
+-- silence have now been found by reading code - a name without a realm, a
+-- taunt aimed at a friend, a click the game skipped - and each one would have
+-- been a single line here.
+--
+-- SO IT REPORTS THE SWITCHES FIRST, then the macro text itself, verbatim,
+-- because the macro IS the feature and every other line is about it.
 ---------------------------------------------------------------------------
 function Answers:Dump()
+    local cfg = Answers.Config()
     ns.Print("|cffffd100answers|r - what you could be asked for, and by whom.")
 
+    -- The switches, before anything that depends on them.
     if not ns.Modules:IsOn("answers") then
         ns.Print("  |cffff4040The Answering module is switched off.|r")
     end
+    if not cfg.enabled then
+        ns.Print("  |cffff4040The bar is switched off|r - a request is printed "
+            .. "instead of lighting anything up.")
+    end
+
+    -- The game's own setting, because it is the one that silently ate every
+    -- click before 4.66.0 and the one nobody would think to look at.
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    ns.Print(string.format("  cast on key down: |cffffd100%s|r  (both "
+        .. "directions are registered either way)", keyDown and "on" or "off"))
 
     local _, class = UnitClass("player")
-    local offers = Answers.Offers(class, Answers.Config().offers)
+    local offers = Answers.Offers(class, cfg.offers, ns.KnowsSpell)
     local names = {}
     for _, offer in ipairs(offers) do
         names[#names + 1] = ns.SpellName(offer.spellID)
@@ -683,20 +958,59 @@ function Answers:Dump()
     end
     ns.Print("  you offer: " .. (#names > 0 and table.concat(names, ", ")
         or "|cff888888nothing your class has|r"))
+    if (Answers.hidden or 0) > 0 then
+        ns.Print(string.format("    |cff888888%d more your class has but you "
+            .. "do not - wrong spec, or not talented.|r", Answers.hidden))
+    end
 
-    local askers = Answers.Askers(ns.Roster())
+    local askers = Answers.Askers(ns.Roster(), cfg)
     local who = {}
-    for _, member in ipairs(askers) do who[#who + 1] = member.name end
-    ns.Print("  tanks who could ask: " .. (#who > 0 and table.concat(who, ", ")
-        or "|cff888888nobody else is tanking|r"))
+    for _, member in ipairs(askers) do
+        who[#who + 1] = member.name
+            .. (member.fullName ~= member.name and " |cff888888("
+                .. member.fullName .. ")|r" or "")
+    end
+    ns.Print(string.format("  rows go to |cffffd100%s|r, up to %d: %s",
+        cfg.who or Answers.WHO_TANKS, Answers.Rows(cfg),
+        #who > 0 and table.concat(who, ", ")
+            or "|cffff4040nobody - so there is no bar|r"))
 
-    ns.Print(string.format("  %d cell%s on the bar, %d waiting.",
+    ns.Print(string.format("  %d cell%s built, %d waiting.",
         #cells, #cells == 1 and "" or "s", #Answers.pending))
+
+    -- EVERY CELL, AND WHAT IT WOULD DO. Read off the button itself rather
+    -- than from what this file believes it wrote: the point is to catch the
+    -- day those two disagree.
+    for index, cell in ipairs(cells) do
+        if cell.who then
+            local macro = cell:GetAttribute("macrotext")
+            local kind = cell:GetAttribute("type")
+            local key = Answers.Key(index)
+            ns.Print(string.format("    |cffffd100#%d|r %s / %s%s%s",
+                index, cell.who, cell.spellName or "?",
+                cell:IsShown() and "" or " |cff888888(hidden)|r",
+                key and ("  |cff40ff40[" .. key .. "]|r") or ""))
+            if kind == "macro" and macro then
+                ns.Print("        " .. macro:gsub("\n", " | "))
+            elseif cell.preview then
+                ns.Print("        |cff888888stand-in while you place the bar "
+                    .. "- casts nothing, on purpose|r")
+            else
+                ns.Print("        |cffff4040no macro: this cell casts "
+                    .. "nothing|r")
+            end
+        end
+    end
 
     for _, entry in ipairs(Answers.pending) do
         ns.Print(string.format("    |cff40ff40%s|r asked for %s",
             entry.from, entry.spellID
                 and (ns.SpellName(entry.spellID) or entry.spellID)
                 or "a taunt"))
+    end
+
+    if #cells == 0 then
+        ns.Print("  |cff888888Nothing is built yet. The bar builds itself out "
+            .. "of combat, from who is in the group.|r")
     end
 end
