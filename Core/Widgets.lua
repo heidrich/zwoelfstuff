@@ -125,7 +125,16 @@ UI.C = C
 -- What replaced it: rows are FLAT, separated by a hairline instead of a gap,
 -- and only the row under the cursor gets a surface. The eye follows a list
 -- rather than counting boxes, and the same page shows a third more of itself.
-UI.ROW_H      = 28
+UI.ROW_H      = 32
+
+-- THE AIR INSIDE A ROW'S OWN GROUND.
+--
+-- Nought until the grounds arrived, and nought was right while the separator
+-- was a hairline running edge to edge: text on a page, with nothing behind it
+-- to be inside of. Now every row sits on a filled band, and a label flush
+-- against its left edge reads as text that has fallen out of the box.
+-- Owner: "bei uns passen einfach die abstaende nicht."
+UI.ROW_PAD    = 14
 UI.ROW_GAP    = 1
 UI.SECTION_H  = 36
 UI.COL_GAP    = 18
@@ -444,7 +453,7 @@ function UI.Row(parent, text, opts)
     -- things shouting; the value on the right is what the eye is looking for,
     -- and it is the only thing on the row in `text`.
     row.label = UI.Label(row, text, UI.FS.row, C.textBody)
-    row.label:SetPoint("LEFT", row, "LEFT", 0, opts.sublabel and 8 or 0)
+    row.label:SetPoint("LEFT", row, "LEFT", UI.ROW_PAD, opts.sublabel and 8 or 0)
     row.label:SetWordWrap(false)
 
     -- A mark in front of the label, for the runs of rows that are one KIND of
@@ -470,7 +479,7 @@ function UI.Row(parent, text, opts)
     -- rule above it, which is the one misalignment that is visible from
     -- across the room.
     row.slot = CreateFrame("Frame", nil, row)
-    row.slot:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.slot:SetPoint("RIGHT", row, "RIGHT", -UI.ROW_PAD, 0)
     row.slot:SetSize(opts.controlWidth or CONTROL_W, row:GetHeight() - 6)
 
     -- The label must never run under the control.
@@ -717,7 +726,7 @@ function UI.SectionHeader(parent, text, onToggle, isOpen)
     -- this is the heading of a block of settings, and it has to win against
     -- the rows it introduces rather than hide under them.
     local caption = text:upper()
-    local label = UI.Label(header, caption, UI.FS.section, C.text)
+    local label = UI.Label(header, caption, UI.FS.section, C.textBody)
     label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 13 or 0, 7)
 
     -- The rule runs from the caption to the right EDGE of the column, on the
@@ -3510,7 +3519,7 @@ function Grid:Wide(region, height, padTop, padBottom, indent)
     -- section headings were laid out correctly and invisible, and their rule
     -- line could not draw at all. Notes set their own, which is exactly why
     -- they showed and the headings did not.
-    if region.SetWidth then region:SetWidth(self.width - indent) end
+    if region.SetWidth then region:SetWidth(self.width - indent * 2) end
 
     self.items[#self.items + 1] = {
         region = region, height = height, wide = true, group = self.group,
@@ -3534,8 +3543,11 @@ end
 --
 -- The very first heading on a page gets none of it - there is nothing above
 -- it to be separated from, and a page that starts with a hole looks unloaded.
-local SECTION_PAD_TOP = 16
-local SECTION_PAD_BOTTOM = 3
+-- The air above a heading separates two GROUPS; the air below it is the gap
+-- between a heading and the thing it names, and 3 was not a gap - the ground
+-- of the first block started almost on the caption's baseline.
+local SECTION_PAD_TOP = 22
+local SECTION_PAD_BOTTOM = 9
 
 -- Whether an item belongs on the tab currently showing.
 --
@@ -3644,11 +3656,11 @@ end
 -- exactly the second left edge it said it was preventing. Owner: "nicht alle
 -- texte linksbuendig, oft ist viel platz vorn. das macht es super schwer zu
 -- lesen."
-local NOTE_INDENT = 0
+local NOTE_INDENT = UI.ROW_PAD
 
 function Grid:Note(text, height)
     local note = UI.Hint(self.content, text)
-    note:SetWidth(self.width - NOTE_INDENT)
+    note:SetWidth(self.width - NOTE_INDENT * 2)   -- Wide agrees; see above
     note:SetJustifyV("TOP")
 
     -- ON A PAGE WITH A THIRD COLUMN, a note is not laid out at all: it becomes
@@ -3695,7 +3707,9 @@ function Grid:Note(text, height)
     -- gets no ground and floats on the page, which is what it is.
     note.dkClosesGroup = true
 
-    return self:Wide(note, height or note:GetStringHeight(), 9, 15, NOTE_INDENT)
+    -- Inside the ground it shares with the rows above, so these are the top
+    -- and bottom padding of that band rather than margins between blocks.
+    return self:Wide(note, height or note:GetStringHeight(), 6, 12, NOTE_INDENT)
 end
 
 -- On a page with a third column, every row publishes itself when pointed at,
@@ -3933,7 +3947,7 @@ function Grid:Layout()
             -- under it: it is asked again here, every pass.
             local height = item.height
             if region and region.dkMeasure then
-                region:SetWidth(self.width - (item.indent or 0))
+                region:SetWidth(self.width - (item.indent or 0) * 2)
                 height = math.max(region:GetStringHeight() or 0, height)
             elseif region and region.dkHeight then
                 height = region.dkHeight
