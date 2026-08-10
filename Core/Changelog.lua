@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.74.0",
+        date = "2026-08-11",
+        lines = {
+            "|cffffd100Room around the words.|r Now that every setting sits on a ground of its own, it gets padding inside it instead of starting on the edge - taller rows, and a real gap under a heading rather than three pixels.",
+            "|cffffd100Headings are not painted in the brightest white any more.|r The panel font is a bold face; full white on top of it was three emphases for one thing.",
+        },
+    },
+    {
         version = "4.73.0",
         date = "2026-08-11",
         lines = {

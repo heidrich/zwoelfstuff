@@ -4,6 +4,21 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.74.0] - 2026-08-11
+
+### Changed
+
+- **Room around the words.** Every setting sits on a ground of its own now, so
+  it gets padding inside that ground instead of starting on its edge: 14 either
+  side, taller rows, and a real gap under a heading instead of three pixels. A
+  note lined up with the labels above it also used to run the same distance off
+  the right-hand edge — an indent is padding on both sides now.
+- **Headings are no longer painted in the brightest white in the palette.** The
+  panel font is a bold face, and full white on top of it was three emphases for
+  one thing.
+
+> Still being worked on: the spacing is closer but not right yet.
+
 ## [4.73.0] - 2026-08-11
 
 ### Changed
