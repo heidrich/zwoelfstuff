@@ -4438,6 +4438,39 @@ local function TestTaunts()
     Check("An empty list is still one page",
         select(4, ns.UI.IconPage(0, 1, 80)) == 1)
 
+    ---------------------------------------------------------------------
+    -- A YES OR NO THAT CANNOT THROW
+    --
+    -- 12.0 hands back SECRET booleans from some unit queries, and testing one
+    -- RAISES. It took the co-tank panel and Edit Mode down on somebody else's
+    -- machine while working perfectly here, because WHICH values are withheld
+    -- depends on where you are standing.
+    ---------------------------------------------------------------------
+    Check("A plain true is true", ns.Truth(true, false) == true)
+    Check("A plain false is false", ns.Truth(false, true) == false)
+    Check("Nothing at all takes the fallback", ns.Truth(nil, true) == true)
+    Check("And the fallback is used as given",
+        ns.Truth(nil, false) == false)
+
+    ---------------------------------------------------------------------
+    -- THE NAME A MACRO CAN ADDRESS
+    --
+    -- `/cast [@Akui]` reaches nobody when Akui is on another realm, and the
+    -- click does nothing at all - no target, no cast, no error. Which is
+    -- exactly what the first live test of this looked like.
+    ---------------------------------------------------------------------
+    local mate
+    for _, member in ipairs(ns.Roster()) do
+        if not member.isPlayer then mate = member end
+    end
+    if mate then
+        Check("Everybody in the roster has a name a macro can address",
+            type(mate.fullName) == "string" and #mate.fullName > 0,
+            tostring(mate.fullName))
+    else
+        Skip("Whether a group-mate keeps its realm", "you are on your own")
+    end
+
     Check("There is one set of channel rules", ns.Chat ~= nil)
     if ns.Chat then
         Check("And the externals panel uses it",

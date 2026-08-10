@@ -466,6 +466,25 @@ function ns.ApplyDefaults(target, defaults)
     return target
 end
 
+-- A YES OR NO THAT CANNOT THROW.
+--
+-- On 12.0 some unit queries answer a SECRET boolean, and a secret cannot be
+-- TESTED: `UnitInRange(unit) and true or false` raises "attempt to perform
+-- boolean test on a secret boolean value" and takes everything above it with
+-- it. That is how the co-tank panel took Edit Mode down on somebody else's
+-- machine while working perfectly on ours - WHICH values are withheld depends
+-- on where you are standing and who is beside you, which is why this belongs
+-- in one place rather than at each call.
+--
+-- The fallback is the NEUTRAL answer, never a guess: unknown range is IN
+-- range, because greying somebody out on a value the client refused to give
+-- is the display lying with confidence.
+function ns.Truth(value, fallback)
+    if not ns.CanCompute(value) then return fallback end
+    if value then return true end
+    return false
+end
+
 function ns.Print(...)
     print("|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r:", ...)
 end
@@ -509,11 +528,27 @@ function ns.Roster()
             -- name that came back secret must not become a table key.
             if ns.CanCompute(name) and ns.CanCompute(class)
                 and type(name) == "string" and type(class) == "string" then
+                -- NAME-REALM, not the short name, and this is what stopped a
+                -- click from casting anything at all: the owner is on
+                -- Destromath and the group-mate testing it was on Gilneas, so
+                -- `/cast [@Akui]` addressed somebody who, as far as that macro
+                -- is concerned, is not there.
+                --
+                -- GetUnitName(unit, true) is the pair everybody uses: it adds
+                -- the realm ONLY when it is a different one, so a same-realm
+                -- group keeps its plain names and nothing else has to change.
+                local full = GetUnitName and GetUnitName(unit, true) or nil
+                if not (ns.CanCompute(full) and type(full) == "string") then
+                    full = name
+                end
+
                 rosterScratch[#rosterScratch + 1] = {
+                    unit = unit,
                     name = name,
+                    fullName = full,
                     class = class,
                     role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil,
-                    isPlayer = UnitIsUnit(unit, "player") and true or false,
+                    isPlayer = ns.Truth(UnitIsUnit(unit, "player"), false),
                 }
             end
         end

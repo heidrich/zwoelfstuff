@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.65.3",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Answer cells work across realms now.|r The click cast nothing at all if the tank was from another realm - the macro was addressing a name that, as far as the game was concerned, was not there.",
+            "|cffffd100The co-tank panel no longer crashes on some machines and not others|r, and no longer takes Edit Mode down with it. One of the game's own answers about a group member is withheld on 12.0, and reading it threw.",
+            "|cffffd100The keybinding shows up in the game's key list.|r It was being read by the wrong parser and never registered at all.",
+        },
+    },
+    {
         version = "4.65.2",
         date = "2026-08-10",
         lines = {

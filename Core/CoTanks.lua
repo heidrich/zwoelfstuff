@@ -155,6 +155,29 @@ local function BlankSnapshot(snap)
     return snap
 end
 
+-- A YES OR NO THAT CANNOT THROW.
+--
+-- On 12.0 some unit queries answer a SECRET boolean, and a secret cannot be
+-- TESTED - `UnitInRange(unit) and true or false` raises "attempt to perform
+-- boolean test on a secret boolean value" and takes the whole panel with it.
+-- It took Edit Mode with it too, because the mover asks the panel whether it
+-- is shown.
+--
+-- Reported by the owner's group-mate on 2026-08-10, from CoTanks.lua:174 -
+-- and it never happened on the owner's own machine, which is the shape of
+-- every secret-value bug so far: WHICH values are withheld depends on where
+-- you are standing and who is beside you.
+--
+-- So every one of these goes through here, not only the one that was caught.
+-- A withheld answer becomes the neutral one rather than a guess: unknown
+-- range is IN range, because greying somebody out on a value the client
+-- refused to give is the display lying with confidence.
+local function Truth(value, fallback)
+    if not ns.CanCompute(value) then return fallback end
+    if value then return true end
+    return false
+end
+
 local function LiveSnapshot(unit, snap)
     BlankSnapshot(snap)
 
@@ -164,20 +187,20 @@ local function LiveSnapshot(unit, snap)
     snap.healthMax = UnitHealthMax(unit)
     snap.absorb = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or nil
     snap.healAbsorb = UnitGetTotalHealAbsorbs and UnitGetTotalHealAbsorbs(unit) or nil
-    snap.dead = UnitIsDeadOrGhost(unit) and true or false
-    snap.offline = not UnitIsConnected(unit)
+    snap.dead = Truth(UnitIsDeadOrGhost(unit), false)
+    snap.offline = not Truth(UnitIsConnected(unit), true)
     -- UnitInRange answers false for the player's own unit on some paths, so
     -- "is it me" wins: you are never out of range of yourself.
-    if UnitIsUnit(unit, "player") then
+    if Truth(UnitIsUnit(unit, "player"), false) then
         snap.inRange = true
     else
-        snap.inRange = UnitInRange(unit) and true or false
+        snap.inRange = Truth(UnitInRange(unit), true)
     end
-    snap.leader = UnitIsGroupLeader(unit) and true or false
+    snap.leader = Truth(UnitIsGroupLeader(unit), false)
     snap.marker = GetRaidTargetIndex and GetRaidTargetIndex(unit) or nil
     snap.role = UnitGroupRolesAssigned(unit)
-    snap.targeted = UnitIsUnit(unit, "target") and true or false
-    snap.inCombat = UnitAffectingCombat(unit) and true or false
+    snap.targeted = Truth(UnitIsUnit(unit, "target"), false)
+    snap.inCombat = Truth(UnitAffectingCombat(unit), false)
 
     return snap
 end

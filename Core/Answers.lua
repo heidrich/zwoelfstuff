@@ -377,9 +377,15 @@ function Answers.Rebuild()
                 cell:SetAttribute("type", nil)
                 cell:SetAttribute("macrotext", nil)
             else
+                -- THE FULL NAME, WITH THE REALM ON IT WHEN THERE IS ONE.
+                -- `/cast [@Akui]` addresses nobody when Akui is on another
+                -- realm, and the click does exactly nothing - no target, no
+                -- cast, no error. Which is precisely what the first test of
+                -- this feature looked like, across Destromath and Gilneas.
                 cell:SetAttribute("type", "macro")
-                cell:SetAttribute("macrotext",
-                    string.format("/cast [@%s] %s", asker.name, cell.spellName))
+                cell:SetAttribute("macrotext", string.format(
+                    "/cast [@%s] %s", asker.fullName or asker.name,
+                    cell.spellName))
             end
 
             cell:SetSize(size, size)

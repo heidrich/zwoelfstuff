@@ -4,6 +4,29 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.65.3] - 2026-08-10
+
+### Fixed
+
+- **Clicking an answer cell did nothing across a realm boundary.** The macro
+  addressed the short name, and `/cast [@Akui]` reaches nobody when Akui is on
+  another realm - no target, no cast, no error. Every group member now carries
+  the name a macro can actually address, with the realm on it only when it is
+  a different one.
+- **The co-tank panel crashed on 12.0 secret values, and took Edit Mode with
+  it.** `UnitInRange` answers a SECRET boolean for a group member, and testing
+  a secret raises. It never happened on one machine and happened every login
+  on another, which is the shape of every secret-value bug so far: what is
+  withheld depends on where you are standing. Every unit query in that
+  snapshot goes through one guard now, and a withheld answer becomes the
+  NEUTRAL one - unknown range is in range, because greying somebody out on a
+  value the client refused to give is the display lying with confidence.
+- **The keybinding never appeared in the game's key list.** `Bindings.xml` was
+  listed in the TOC, so the UI XML parser read it instead of the bindings
+  parser, and every line came back as "Unrecognized XML: Binding". The game
+  loads a file of that name from the addon root by itself. Checked against
+  five installed addons; not one of them lists it.
+
 ## [4.65.2] - 2026-08-10
 
 ### Fixed

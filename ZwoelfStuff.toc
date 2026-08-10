@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.65.2
+## Version: 4.65.3
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -148,11 +148,13 @@ Core\Options.lua
 # be run inside the game, which is every check this addon has.
 Core\SelfTest.lua
 
-# The game's own key list. Not Lua: the game reads this file itself and runs
-# the line inside it, which is why what it calls is a GLOBAL - Bindings.xml
-# cannot see this addon's private table. The two strings the key list shows
-# are set in Core/Taunts.lua.
-Bindings.xml
+# BINDINGS.XML IS DELIBERATELY NOT LISTED HERE. The game loads a file of that
+# name from the addon's root by itself, with the parser that knows what a
+# <Binding> is. Listed in the TOC it is read by the UI XML parser instead,
+# which does not - and every line of it comes back as "Unrecognized XML:
+# Binding" while the key never appears in the key list. Checked against MRT,
+# GatherMate2, Fitter, MDTHelper and EllesmereUIActionBars: not one of them
+# lists it, and the last leaves a comment saying why.
 
 # Deleted in 4.9.0: Core\Glow.lua, the expanding proc ring. It went with the
 # single-aura window in 4.4.0 and nothing has called it since - it was still

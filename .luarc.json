@@ -66,6 +66,7 @@
     "GetSpecialization",
     "GetSpecializationInfo",
     "GetTime",
+    "GetUnitName",
     "GetZoneText",
     "HideUIPanel",
     "InCombatLockdown",
