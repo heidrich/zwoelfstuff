@@ -4,6 +4,29 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.71.0] - 2026-08-10
+
+### Added
+
+- **Lust and a battle resurrection can be asked for.** Bloodlust, Heroism,
+  Time Warp, Primal Rage and Fury of the Aspects; Rebirth, Raise Ally,
+  Intercession and Soulstone. They go on the panel like any other external,
+  and the click whispers whoever in your group can actually press it.
+  Everything above is cast *on* you - lust is cast on the room and a battle
+  res on your corpse - but the reason they belong here is the same: it is
+  somebody else's cooldown, and asking out loud mid-pull is the part that
+  does not happen.
+
+### Changed
+
+- **The co-tanks page is built like the other two.** The preview and the two
+  buttons that act on it - **Make the macro** and **What a taunt would say** -
+  sit in a band at the top that stays put while the settings scroll. The
+  buttons were at the very bottom of the page.
+- **Its settings stand in two columns** instead of one per line. Every row on
+  that page was full width, which is what made it feel like a form rather
+  than a settings page.
+
 ## [4.70.0] - 2026-08-10
 
 ### Changed

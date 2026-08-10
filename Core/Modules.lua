@@ -101,7 +101,7 @@ local LIST = {
     },
     {
         key = "externals", title = "External CD request", glyph = "tanks", since = 2,
-        blurb = "The cooldowns other people can cast on YOU, and one click to ask for one.",
+        blurb = "Somebody else's cooldown - an external, lust, a battle res - and one click to ask.",
         detail = "Off, the panel never appears.",
         Boot = function() ns.Externals:Create() end,
         Apply = function() ns.Externals.Refresh() end,

@@ -9,7 +9,7 @@
 --
 -- WHAT THE THIRD COLUMN IS NOT: the Cooldown Manager's catalogue. That list
 -- is YOUR spells, and every spell on this page belongs to somebody else. So
--- it is our own fourteen, grouped by class, and it is short enough to read
+-- it is our own list, grouped by class, and it is short enough to read
 -- rather than search.
 ---------------------------------------------------------------------------
 local _, ns = ...
@@ -245,13 +245,13 @@ function Page:BuildPage(page, width)
     --
     -- One row per PICKED spell, and the control lists whoever in the group
     -- can actually cast it. Not every player and not every spell: a dropdown
-    -- of forty names against fourteen spells is a wall, and thirty-nine of
+    -- of forty names against this list is a wall, and thirty-nine of
     -- those names cannot cast the thing anyway.
     ---------------------------------------------------------------------
     grid:Section("Who to ask")
 
     -- ONE ROW PER SPELL THERE IS, not per slot there could be. A spell lives
-    -- in exactly one slot, so fourteen is the real ceiling however large the
+    -- in exactly one slot, so #SPELLS is the real ceiling however large the
     -- lattice gets - and building a row per possible slot would be seventy-two
     -- dropdowns for a list that can never be longer than the list on the right.
     for index = 1, #ns.Externals.SPELLS do
@@ -540,7 +540,7 @@ function Page:BuildSide(sideHost, pad)
 
     -- Grouped by class, in the order the list is written: a run of five
     -- paladin blessings reads as one thing to decide about, and a flat
-    -- alphabetical list of fourteen makes it five separate decisions.
+    -- one alphabetical list makes it five separate decisions.
     local rows = {}
     local y, lastClass = 0, nil
 

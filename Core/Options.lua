@@ -365,12 +365,12 @@ local PAGES = {
       build = function(page, width) return ns.OptionsReminders:BuildPage(page, width) end },
 
     -- The cooldowns SOMEBODY ELSE presses on you. Its third column is our own
-    -- fourteen spells rather than the Cooldown Manager's catalogue - that
+    -- own short list rather than the Cooldown Manager's catalogue - that
     -- list is YOUR spells, and every spell on this page belongs to another
     -- player.
     { key = "externals", title = "External CD request", glyph = "tanks",
       externals = true, module = "externals",
-      subtitle = "What the group can cast on you, and one click to ask.",
+      subtitle = "Somebody else's cooldown, and one click to ask for it.",
       build = function(page, width) return ns.OptionsExternals:BuildPage(page, width) end },
 
     -- THE MIRROR OF THE PAGE ABOVE. That one asks; this one is asked. Two

@@ -176,15 +176,66 @@ end
 -- The middle column
 ---------------------------------------------------------------------------
 function OptionsCoTanks:BuildPage(page, width)
-    local grid = UI.Page(page, width)
+    ---------------------------------------------------------------------
+    -- THE PREVIEW IS STICKY, AND THE ACTIONS ARE BESIDE IT
+    --
+    -- Owner, 2026-08-10, about this page: "ggf koennen wir das noch etwas
+    -- aufraeumen" and then "ja und oben sticky machen?" - the same shape the
+    -- request and answer pages already have. It is the right one here for the
+    -- reason it is right there: the thing at the top is what you are editing,
+    -- and forty rows of settings for it should not scroll it off the screen.
+    --
+    -- The two buttons came up from the very bottom of the page with it. They
+    -- act on the button in the preview, so they belong next to the preview.
+    ---------------------------------------------------------------------
+    local grid = UI.Page(page, width, { sticky = true })
 
-    self.stage = BuildStage(grid.content, grid.width)
-    grid:Wide(self.stage, STAGE_H, 0, 14)
+    local band = grid.sticky
+    UI.Fill(band, "BACKGROUND", C.windowBg)
+
+    local bandRule = band:CreateTexture(nil, "ARTWORK")
+    bandRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    bandRule:SetHeight(1)
+    bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
+    bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
+
+    local BAND_ACTIONS = {
+        { text = "Make the macro",
+          onClick = function()
+              local ok, why = ns.Taunts.MakeMacro()
+              ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
+                  or ("|cffff8040Not made:|r " .. tostring(why)))
+          end },
+        { text = "What a taunt would say",
+          onClick = function() ns.Taunts:Dump() end },
+    }
+
+    -- Measured, widest wins, no number typed at the call site.
+    local ACTION_W = 0
+    for _, spec in ipairs(BAND_ACTIONS) do
+        ACTION_W = math.max(ACTION_W, UI.ButtonWidth(spec.text))
+    end
+
+    local ACTION_GAP = 6
+    local ACTIONS_H = #BAND_ACTIONS * (UI.BUTTON_H + ACTION_GAP) - ACTION_GAP
+
+    local y = -6
+    for _, spec in ipairs(BAND_ACTIONS) do
+        local button = UI.Button(band, spec.text, ACTION_W, spec.onClick)
+        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, y)
+        y = y - UI.BUTTON_H - ACTION_GAP
+    end
+
+    -- The preview keeps the left and gets what the action column leaves it.
+    -- It BORROWS the real panel rather than drawing a second one, so this
+    -- width is also the width that panel is scaled into - see Restage below.
+    self.stage = BuildStage(band, grid.width - ACTION_W - 14)
+    self.stage:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -6)
+    band:SetHeight(math.max(STAGE_H + 6, ACTIONS_H + 12) + 10)
 
     grid:Section("Switch it on")
 
-    UI.Toggle(grid:FullRow("Show co-tanks", {
-        controlWidth = 124,
+    UI.Toggle(grid:Row("Show co-tanks", {
         sublabel = "A row for every tank in your group",
     }), function() return DB().enabled end,
         function(value) DB().enabled = value; Apply() end)
@@ -193,8 +244,7 @@ function OptionsCoTanks:BuildPage(page, width)
     -- a raid to adjust a panel, and every other setting here is unjudgeable
     -- without one - so this is not a debugging aid tucked away at the bottom,
     -- it is the second control on the page.
-    UI.Toggle(grid:FullRow("Test mode", {
-        controlWidth = 124,
+    UI.Toggle(grid:Row("Test mode", {
         sublabel = "Invented tanks, so it can be set up without a raid",
     }), function() return DB().testMode end,
         function(value) ns.CoTanks:SetTestMode(value) end)
@@ -213,22 +263,22 @@ function OptionsCoTanks:BuildPage(page, width)
 
     grid:Section("The basics")
 
-    UI.Slider(grid:FullRow("Width", { controlWidth = 124 }), {
+    UI.Slider(grid:Row("Width"), {
         get = function() return DB().width end,
         set = function(value) DB().width = value end,
         min = 100, max = 480, step = 5, apply = Apply,
     })
-    UI.Slider(grid:FullRow("Row height", { controlWidth = 124 }), {
+    UI.Slider(grid:Row("Row height"), {
         get = function() return DB().rowHeight end,
         set = function(value) DB().rowHeight = value end,
         min = 12, max = 60, step = 1, apply = Apply,
     })
-    UI.Slider(grid:FullRow("Gap", { controlWidth = 124 }), {
+    UI.Slider(grid:Row("Gap"), {
         get = function() return DB().spacing end,
         set = function(value) DB().spacing = value end,
         min = 0, max = 30, step = 1, apply = Apply,
     })
-    UI.Slider(grid:FullRow("Scale", { controlWidth = 124 }), {
+    UI.Slider(grid:Row("Scale"), {
         get = function() return DB().scale end,
         set = function(value) DB().scale = value end,
         min = 0.5, max = 2.0, step = 0.05, apply = Apply,
@@ -255,8 +305,7 @@ function OptionsCoTanks:BuildPage(page, width)
 
     grid:Section("Taunts")
 
-    UI.Toggle(grid:FullRow("Say when you taunt", {
-        controlWidth = 124,
+    UI.Toggle(grid:Row("Say when you taunt", {
         sublabel = "One line in chat, so the other tank knows you took it",
     }), function() return TCfg().announce and true or false end,
         function(value) TCfg().announce = value and true or false end)
@@ -303,11 +352,11 @@ function OptionsCoTanks:BuildPage(page, width)
     grid:Note("|cffffd100%t|r is what you taunted, |cffffd100%s|r the taunt "
         .. "you pressed, |cffffd100%n|r the other tank.")
 
-    UI.Toggle(grid:FullRow("Only in a group", { controlWidth = 124 }),
+    UI.Toggle(grid:Row("Only in a group"),
         function() return TCfg().onlyInGroup ~= false end,
         function(value) TCfg().onlyInGroup = value and true or false end)
 
-    UI.Toggle(grid:FullRow("Only in dungeons and raids", { controlWidth = 124 }),
+    UI.Toggle(grid:Row("Only in dungeons and raids"),
         function() return TCfg().onlyInInstance and true or false end,
         function(value) TCfg().onlyInInstance = value and true or false end)
 
@@ -319,8 +368,7 @@ function OptionsCoTanks:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Asking for a taunt")
 
-    UI.Toggle(grid:FullRow("A button on your screen", {
-        controlWidth = 124,
+    UI.Toggle(grid:Row("A button on your screen", {
         sublabel = "Click it to tell the other tank to take it",
     }), function() return TCfg().button and true or false end,
         function(value)
@@ -328,7 +376,7 @@ function OptionsCoTanks:BuildPage(page, width)
             ns.Taunts.Refresh()
         end)
 
-    UI.Toggle(grid:FullRow("Only in a group", { controlWidth = 124 }),
+    UI.Toggle(grid:Row("Only in a group"),
         function() return TCfg().buttonOnlyInGroup ~= false end,
         function(value)
             TCfg().buttonOnlyInGroup = value and true or false
@@ -337,7 +385,7 @@ function OptionsCoTanks:BuildPage(page, width)
 
     -- THE ICON, with the class taunts as the likely answers. Yours is the
     -- default and it is the right one: it is the picture you already press.
-    local iconRow = grid:FullRow("Icon", { controlWidth = 124 })
+    local iconRow = grid:Row("Icon")
     local iconButton = UI.MenuButton(iconRow.slot, 124, UI.BUTTON_H)
     iconButton:SetPoint("RIGHT", iconRow.slot, "RIGHT", 0, 0)
 
@@ -378,7 +426,7 @@ function OptionsCoTanks:BuildPage(page, width)
         iconButton:SetText(TCfg().icon and "Chosen" or "Your taunt")
     end
 
-    UI.Slider(grid:FullRow("Button size", { controlWidth = 124 }), {
+    UI.Slider(grid:Row("Button size"), {
         get = function() return TCfg().size or 44 end,
         set = function(value) TCfg().size = value end,
         min = 20, max = 80, step = 2,
@@ -388,6 +436,12 @@ function OptionsCoTanks:BuildPage(page, width)
     grid:Note("The button is placed in |cffffd100Edit mode|r like everything "
         .. "else this addon draws, and it has the same cog and padlock the "
         .. "panels do.")
+
+    -- Beside the icon it names, now that the button itself sits at the top of
+    -- the page. A note about a control belongs where the control's SUBJECT is,
+    -- not where the control happens to be drawn.
+    grid:Note("|cffffd100Make the macro|r, above, writes a macro called "
+        .. "|cffffd100ZS Taunt|r with this icon. Drag it onto a bar once.")
 
     ---------------------------------------------------------------------
     -- THE BUTTON'S OWN LOOK
@@ -401,7 +455,7 @@ function OptionsCoTanks:BuildPage(page, width)
     -- Same key names a bar uses, painted by the bar's own painters.
     ---------------------------------------------------------------------
     local function TauntSlide(label, key, min, max, step, format, scale)
-        UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
+        UI.Slider(grid:Row(label), {
             get = function() return TCfg()[key] end,
             set = function(value) TCfg()[key] = value end,
             min = min, max = max, step = step,
@@ -418,7 +472,7 @@ function OptionsCoTanks:BuildPage(page, width)
     TauntSlide("Icon zoom", "iconZoom", 0, 0.2, 0.01, TauntPercent, 100)
     TauntSlide("Border thickness", "borderSize", 0, 4, 1)
 
-    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
+    UI.Swatch(grid:Row("Border colour"),
         function()
             local colour = TCfg().borderColor or { 0, 0, 0 }
             return colour[1], colour[2], colour[3]
@@ -432,14 +486,14 @@ function OptionsCoTanks:BuildPage(page, width)
         function(value) TCfg().borderTexture = value end,
         function() ns.Taunts.Refresh() end)
 
-    UI.Toggle(grid:FullRow("Backdrop", { controlWidth = 124 }),
+    UI.Toggle(grid:Row("Backdrop"),
         function() return TCfg().backdrop ~= false end,
         function(value)
             TCfg().backdrop = value and true or false
             ns.Taunts.Refresh()
         end)
 
-    UI.Swatch(grid:FullRow("Backdrop colour", { controlWidth = 124 }),
+    UI.Swatch(grid:Row("Backdrop colour"),
         function()
             local colour = TCfg().backdropColor or { 0, 0, 0 }
             return colour[1], colour[2], colour[3]
@@ -453,20 +507,6 @@ function OptionsCoTanks:BuildPage(page, width)
     grid:Note("A black border on a black backdrop is invisible, which is what "
         .. "the defaults are - pick a colour before deciding the thickness "
         .. "does nothing.")
-
-    grid:Buttons({
-        { text = "Make the macro",
-          onClick = function()
-              local ok, why = ns.Taunts.MakeMacro()
-              ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
-                  or ("|cffff8040Not made:|r " .. tostring(why)))
-          end },
-        { text = "What a taunt would say",
-          onClick = function() ns.Taunts:Dump() end },
-    }, 10)
-
-    grid:Note("|cffffd100Make the macro|r writes a macro called |cffffd100ZS "
-        .. "Taunt|r with the icon above. Drag it onto a bar once.")
 
     grid:Layout()
     page.Refresh = function() grid:Refresh() end
@@ -595,7 +635,7 @@ local function Switch(grid, label, key, sublabel)
 end
 
 local function Colour(grid, label, key)
-    return UI.Swatch(grid:FullRow(label, { controlWidth = 124 }),
+    return UI.Swatch(grid:Row(label),
         function()
             local colour = DB()[key] or { 0, 0, 0 }
             return colour[1], colour[2], colour[3]
@@ -941,7 +981,7 @@ local function StripSection(grid, key, label, note)
         get = ElGet("borderSize", 1), set = function(v) El().borderSize = v end,
         min = 0, max = 4, step = 1, apply = Apply,
     })
-    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
+    UI.Swatch(grid:Row("Border colour"),
         function()
             local colour = El().borderColor or { 0, 0, 0 }
             return colour[1], colour[2], colour[3]

@@ -54,6 +54,46 @@ Externals.SPELLS = {
     { spellID = 102342, class = "DRUID",   cooldown = 90,  healer = true },  -- Ironbark
     { spellID = 363534, class = "EVOKER",  cooldown = 240, healer = true },  -- Rewind
     { spellID = 357170, class = "EVOKER",  cooldown = 60 },   -- Time Dilation
+
+    ---------------------------------------------------------------------
+    -- LUST, AND A BATTLE RESURRECTION
+    --
+    -- Owner, 2026-08-10: "dann muesste bei external cds kampfrausch / hero
+    -- der klassen mit rein und was cool waere battle ress? wichtig!"
+    --
+    -- These are a different KIND of ask from everything above. The rest are
+    -- cast ON you; lust is cast on the room, and a battle res is cast on your
+    -- corpse. What they share is the only thing this panel is about: it is
+    -- somebody ELSE's cooldown, you cannot press it, and asking out loud in
+    -- the middle of a pull is the part that does not happen.
+    --
+    -- Every id below was READ, not remembered - the rule from the last two
+    -- times a spell number was wrong. Lust: LibOpenRaid's
+    -- LIB_OPEN_RAID_BLOODLUST in ThingsToMantain_Midnight.lua, which is the
+    -- current expansion's file. Battle res: BigWigs_Plugins/BattleRes.lua's
+    -- castableBattleResSpells, cross-checked against EllesmereUI's
+    -- REZ_BY_CLASS. Both are installed here and both are maintained.
+    ---------------------------------------------------------------------
+
+    -- One shaman has one of these, never both - which faction decides. Both
+    -- are listed because the SHAMAN in your group is the one who has one, and
+    -- the answer side drops whichever they cannot cast (ns.KnowsSpell).
+    { spellID = 2825,   class = "SHAMAN",  cooldown = 300 },  -- Bloodlust
+    { spellID = 32182,  class = "SHAMAN",  cooldown = 300 },  -- Heroism
+    { spellID = 80353,  class = "MAGE",    cooldown = 300 },  -- Time Warp
+    -- Six minutes, not five: the hunter's is the odd one out.
+    { spellID = 264667, class = "HUNTER",  cooldown = 360 },  -- Primal Rage
+    { spellID = 390386, class = "EVOKER",  cooldown = 300 },  -- Fury of the Aspects
+
+    { spellID = 20484,  class = "DRUID",   cooldown = 600 },  -- Rebirth
+    { spellID = 61999,  class = "DEATHKNIGHT", cooldown = 600 },  -- Raise Ally
+    { spellID = 391054, class = "PALADIN", cooldown = 600 },  -- Intercession
+    -- NO COOLDOWN FIGURE ON PURPOSE. Every source disagrees about this one:
+    -- the spell itself carries none, the stone does, and the numbers quoted
+    -- range from ten minutes to fifteen. A blank says "we do not know",
+    -- which is true; a number would be a guess wearing a fact's clothes. The
+    -- side list draws nothing when this is nil.
+    { spellID = 20707,  class = "WARLOCK" },                  -- Soulstone
 }
 
 local byID = {}

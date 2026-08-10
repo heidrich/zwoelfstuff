@@ -3871,6 +3871,51 @@ local function TestExternals()
     Check("It belongs to the paladin",
         sacrifice and sacrifice.class == "PALADIN")
 
+    -- THE NUMBERS THAT WERE LOOKED UP, GUARDED.
+    --
+    -- Owner asked for lust and a battle res; every id was read out of an
+    -- installed, maintained addon rather than remembered, because a spell
+    -- number recalled from memory has been wrong here twice. A test is the
+    -- only thing that keeps a later edit from quietly putting a wrong one
+    -- back - nothing else in this addon would notice: a bad id draws a
+    -- question-mark icon and whispers somebody about a spell they do not have.
+    --
+    -- The CLASS is checked with the id, because that is what decides who gets
+    -- whispered. A right id under the wrong class asks the wrong person.
+    local researched = {
+        { 2825,   "SHAMAN"      },   -- Bloodlust
+        { 32182,  "SHAMAN"      },   -- Heroism
+        { 80353,  "MAGE"        },   -- Time Warp
+        { 264667, "HUNTER"      },   -- Primal Rage
+        { 390386, "EVOKER"      },   -- Fury of the Aspects
+        { 20484,  "DRUID"       },   -- Rebirth
+        { 61999,  "DEATHKNIGHT" },   -- Raise Ally
+        { 391054, "PALADIN"     },   -- Intercession
+        { 20707,  "WARLOCK"     },   -- Soulstone
+    }
+    for _, want in ipairs(researched) do
+        local entry = X.Get(want[1])
+        Check("Spell " .. want[1] .. " is listed for the " .. want[2],
+            entry ~= nil and entry.class == want[2],
+            entry and entry.class or "missing")
+    end
+
+    -- A CLASS TOKEN, not a class name. "Death Knight" and "DEATHKNIGHT" look
+    -- equally right in a table and only one of them ever matches a roster
+    -- entry, which compares against UnitClass's second return.
+    Check("Every external names a real class token", (function()
+        local tokens = {}
+        for _, token in ipairs({ "WARRIOR", "PALADIN", "HUNTER", "ROGUE",
+            "PRIEST", "DEATHKNIGHT", "SHAMAN", "MAGE", "WARLOCK", "MONK",
+            "DRUID", "DEMONHUNTER", "EVOKER" }) do
+            tokens[token] = true
+        end
+        for _, entry in ipairs(X.SPELLS) do
+            if not tokens[entry.class] then return false end
+        end
+        return true
+    end)())
+
     ---------------------------------------------------------------------
     -- Who gets asked
     ---------------------------------------------------------------------

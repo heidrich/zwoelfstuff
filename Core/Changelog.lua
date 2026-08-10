@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.71.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100You can ask for lust, and for a battle res.|r Bloodlust, Heroism, Time Warp, Primal Rage and Fury of the Aspects; Rebirth, Raise Ally, Intercession and Soulstone. Put one on the panel like any other, and the click whispers whoever in your group can actually press it.",
+            "|cffffd100The co-tanks page matches the other two.|r The preview and the two buttons that act on it stay at the top while the settings scroll - they used to be at the very bottom - and the settings stand in two columns instead of one per line.",
+        },
+    },
+    {
         version = "4.70.0",
         date = "2026-08-10",
         lines = {
