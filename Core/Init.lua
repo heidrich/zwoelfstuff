@@ -470,6 +470,57 @@ function ns.Print(...)
 end
 
 ---------------------------------------------------------------------------
+-- WHO IS IN THE GROUP
+--
+-- Written for the externals panel - "who here can cast Ironbark" - and here
+-- because the taunt announce asks the same list a different question: "who
+-- is the other tank". Two walks over one party would be two chances to
+-- disagree about who is in it.
+--
+-- One scratch table, refilled. This is called on a click and on a roster
+-- change, never in a render pass, but the entries are small tables and
+-- handing out fresh ones per call would be garbage for nothing.
+---------------------------------------------------------------------------
+local function GroupUnits(out)
+    wipe(out)
+    if IsInRaid() then
+        for index = 1, GetNumGroupMembers() do out[#out + 1] = "raid" .. index end
+    elseif IsInGroup() then
+        out[#out + 1] = "player"
+        for index = 1, GetNumGroupMembers() - 1 do
+            out[#out + 1] = "party" .. index
+        end
+    else
+        out[#out + 1] = "player"
+    end
+    return out
+end
+
+local unitScratch, rosterScratch = {}, {}
+
+function ns.Roster()
+    wipe(rosterScratch)
+    for _, unit in ipairs(GroupUnits(unitScratch)) do
+        if UnitExists(unit) then
+            local name = UnitName(unit)
+            local _, class = UnitClass(unit)
+            -- Readable on this patch, both of them, and checked anyway: a
+            -- name that came back secret must not become a table key.
+            if ns.CanCompute(name) and ns.CanCompute(class)
+                and type(name) == "string" and type(class) == "string" then
+                rosterScratch[#rosterScratch + 1] = {
+                    name = name,
+                    class = class,
+                    role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil,
+                    isPlayer = UnitIsUnit(unit, "player") and true or false,
+                }
+            end
+        end
+    end
+    return rosterScratch
+end
+
+---------------------------------------------------------------------------
 -- Which class and spec is playing
 --
 -- "DEATHKNIGHT:250". The key everything per-character is filed under: the
@@ -1214,6 +1265,7 @@ local usage = {
     "  |cffffd100/zs tanks|r - the co-tank panel (|cffffd100test|r fakes a raid)",
     "  |cffffd100/zs reminders|r - every reminder, and why each one is or is not up",
     "  |cffffd100/zs externals|r - who each external slot would whisper (|cffffd100test|r shows the panel)",
+    "  |cffffd100/zs taunt|r - what your next taunt would say (|cffffd100ask|r tells the other tank to take it)",
     -- /zs route was listed here after Routes was parked, so the help printed a
     -- command that had no handler at all. A menu naming something that does
     -- nothing is worse than one that is short.
@@ -1335,6 +1387,19 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
                 ns.Externals.testing and "|cff40ff40on|r" or "|cff888888off|r")
         else
             ns.Externals:Dump()
+        end
+
+    -- The taunt announce. `ask` is the one meant for a macro key - it is the
+    -- half of a tank swap an addon can actually do something about.
+    elseif cmd == "taunt" or cmd == "taunts" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "ask" then
+            local sent, why = ns.Taunts.Ask()
+            if not sent then
+                ns.Print("|cffff8040Nothing sent.|r " .. tostring(why))
+            end
+        else
+            ns.Taunts:Dump()
         end
 
     -- Reminders. One command, and it is the diagnostic rather than a toggle:

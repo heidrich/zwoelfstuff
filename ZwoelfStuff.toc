@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwoelf - EU Destromath
-## Version: 4.62.0
+## Version: 4.63.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -55,6 +55,13 @@ Core\Profiles.lua
 # ns.Screen and friends only when a switch is actually flipped.
 Core\Modules.lua
 
+# Which channel a message actually goes on, and how a sentence is written.
+# Above everything that says anything: the externals panel, the taunt
+# announce and whatever asks the group something next. One answer to "am I in
+# a party or an instance group", because getting that wrong sends a message
+# nowhere at all and says nothing about it.
+Core\Chat.lua
+
 Core\Media.lua
 # The bar textures this addon ships, registered into the SHARED registry -
 # so they sit next to everything the user's other addons put there, and are
@@ -85,6 +92,11 @@ Core\CoTanks.lua
 # whose evaluator it borrows for "only in combat", and below CDM, which is the
 # only thing on this patch that can answer whether a buff is up at all.
 Core\Reminders.lua
+# Saying you took it, and asking the other tank to. Below CoTanks, whose page
+# it puts its settings on, and below Chat, whose channel rules it shares with
+# the externals panel rather than growing a second answer to "which channel
+# am I in".
+Core\Taunts.lua
 # Own casts recorded, readiness estimated - History feeds the Timeline
 # panel's strip and the death window's "was it still ready".
 # The cooldowns somebody ELSE presses on you. Below Reminders because it is

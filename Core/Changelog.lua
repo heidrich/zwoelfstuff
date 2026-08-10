@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.63.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Say it when you taunt.|r One line in chat the moment you press your taunt, so the other tank knows you took it - with what you taunted in it. On the Co-Tanks page under |cffffd100Taunts|r, and switched off until you ask for it.",
+            "|cffffd100/zs taunt ask|r tells the other tank to take it. Put it in a macro and give it a key: that is the half of a tank swap an addon can actually help with.",
+            "Write the sentence yourself: |cffffd100%t|r is what you taunted, |cffffd100%s|r the taunt you pressed, |cffffd100%n|r the other tank.",
+            "|cffff8040What it cannot do, and says so on the page:|r tell you when the OTHER tank taunts. This patch does not announce another player's instant casts to addons at all, and every taunt is instant. Yours is readable, so it says yours.",
+        },
+    },
+    {
         version = "4.62.0",
         date = "2026-08-10",
         lines = {

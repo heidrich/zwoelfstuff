@@ -70,8 +70,16 @@ local LIST = {
     {
         key = "cotanks", title = "Co-Tanks", glyph = "tanks", since = 1,
         blurb = "Every other tank in the group, with their health and their cooldowns.",
-        detail = "Off, the panel never appears.",
-        Boot = function() ns.CoTanks:Create() end,
+        detail = "Off, the panel never appears and no taunt is announced.",
+        -- The taunt announce belongs to this module: it is about the OTHER
+        -- tank, its settings are on this page, and switching the module off
+        -- has to switch off the thing that TALKS as well as the thing that
+        -- draws. Its own watcher checks the switch too, because Boot runs
+        -- once and a switch can be flipped afterwards.
+        Boot = function()
+            ns.CoTanks:Create()
+            ns.Taunts:Start()
+        end,
         Apply = function() ns.CoTanks:Refresh() end,
     },
     {

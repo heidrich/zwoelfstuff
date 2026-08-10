@@ -319,47 +319,10 @@ function Externals.Whom(spell, roster, assignedName)
     return candidates[1], "only one"
 end
 
----------------------------------------------------------------------------
--- The live roster
----------------------------------------------------------------------------
-local function GroupUnits(out)
-    wipe(out)
-    if IsInRaid() then
-        for index = 1, GetNumGroupMembers() do out[#out + 1] = "raid" .. index end
-    elseif IsInGroup() then
-        out[#out + 1] = "player"
-        for index = 1, GetNumGroupMembers() - 1 do
-            out[#out + 1] = "party" .. index
-        end
-    else
-        out[#out + 1] = "player"
-    end
-    return out
-end
-
-local unitScratch, rosterScratch = {}, {}
-
-function Externals.Roster()
-    wipe(rosterScratch)
-    for _, unit in ipairs(GroupUnits(unitScratch)) do
-        if UnitExists(unit) then
-            local name = UnitName(unit)
-            local _, class = UnitClass(unit)
-            -- Readable on this patch, both of them, and checked anyway: a
-            -- name that came back secret must not become a table key.
-            if ns.CanCompute(name) and ns.CanCompute(class)
-                and type(name) == "string" and type(class) == "string" then
-                rosterScratch[#rosterScratch + 1] = {
-                    name = name,
-                    class = class,
-                    role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil,
-                    isPlayer = UnitIsUnit(unit, "player") and true or false,
-                }
-            end
-        end
-    end
-    return rosterScratch
-end
+-- WHO IS IN THE GROUP lives in Init.lua now: the taunt announce needs the
+-- same list to find the other tank, and two walks over the same party would
+-- be two chances to disagree about who is in it.
+Externals.Roster = ns.Roster
 
 ---------------------------------------------------------------------------
 -- Asking
@@ -381,13 +344,7 @@ Externals.DEFAULT_MESSAGE = "%s bitte!"
 -- mehrfachauswahl, sorry, das hab ich falsch kommuniziert." A whisper to the
 -- one person who can cast it AND a line in party chat is a reasonable thing
 -- to want - the first is aimed, the second is insurance.
-Externals.CHANNELS = {
-    { value = "WHISPER",      text = "Whisper", long = "Whisper the one who can cast it" },
-    { value = "GROUP",        text = "Party or raid", long = "Whichever group you are actually in" },
-    { value = "RAID_WARNING", text = "Raid warning", long = "Needs lead or assist" },
-    { value = "SAY",          text = "Say" },
-    { value = "YELL",         text = "Yell" },
-}
+Externals.CHANNELS = ns.Chat.CHANNELS
 
 function Externals.ChannelOn(value)
     local cfg = Externals.Config()
@@ -405,38 +362,11 @@ function Externals.ToggleChannel(value)
     cfg.channels.WHISPER = true
 end
 
--- The channel a message would actually be sent on, and why not, when not.
--- Its own function so the page can say "you are not in a group" before you
--- press anything rather than after.
-function Externals.ResolveChannel(choice, inGroup, inRaid, inInstanceGroup,
-    canWarn)
-    choice = choice or "WHISPER"
-    if choice == "WHISPER" then return "WHISPER" end
-
-    if choice == "SAY" or choice == "YELL" then return choice end
-
-    if not inGroup then
-        return nil, "you are not in a group"
-    end
-
-    if choice == "RAID_WARNING" then
-        if not inRaid then
-            -- Not an error worth refusing over: outside a raid the warning
-            -- channel does not exist, and the message still wants to arrive.
-            return inInstanceGroup and "INSTANCE_CHAT" or "PARTY",
-                "no raid, sent to the group instead"
-        end
-        if not canWarn then
-            return "RAID", "not lead or assist, sent to raid chat instead"
-        end
-        return "RAID_WARNING"
-    end
-
-    -- "GROUP"
-    if inInstanceGroup then return "INSTANCE_CHAT" end
-    if inRaid then return "RAID" end
-    return "PARTY"
-end
+-- Kept under this name because the page, the tooltip and a hundred lines of
+-- self test call it here. The rules themselves live in Core/Chat.lua now,
+-- with the taunt announce as their second caller.
+Externals.ResolveChannel = ns.Chat.ResolveChannel
+Externals.SendingTo = ns.Chat.SendingTo
 
 -- %s is the spell, %n is the person being asked. Two placeholders because a
 -- whisper does not need a name in it and a message to the whole group does -
@@ -455,56 +385,7 @@ function Externals.Message(spellName, targetName)
         text = text .. " (" .. (spellName or "?") .. ")"
     end
 
-    -- ONE VALUE, NOT TWO. gsub answers the string AND the number of
-    -- replacements, and handing that pair straight to another gsub makes the
-    -- count its LIMIT argument - "replace at most 0 times". The message then
-    -- goes out with a literal %s in it and nothing looks wrong in the code.
-    -- Assigned to a single local first, which truncates it.
-    local safeSpell = (spellName or "?"):gsub("%%", "%%%%")
-    text = text:gsub("%%s", safeSpell)
-
-    -- No target resolved and a name asked for: the placeholder comes OUT
-    -- rather than being read as "%n" by somebody mid-pull. The surrounding
-    -- space goes with it, or the sentence keeps a hole where the name was.
-    if targetName then
-        local safeName = targetName:gsub("%%", "%%%%")
-        text = text:gsub("%%n", safeName)
-    else
-        text = text:gsub("%s*%%n%s*", " ")
-    end
-
-    text = text:gsub("^%s+", "")
-    return (text:gsub("%s+$", ""))
-end
-
--- LE_PARTY_CATEGORY_INSTANCE. The constant is not guaranteed to exist under
--- that name on every client, and BigWigs writes the literal 2 for the same
--- reason - so the name is used when it is there and the number when it is not.
-local function InInstanceGroup()
-    local category = LE_PARTY_CATEGORY_INSTANCE or 2
-    return IsInGroup(category) and true or false
-end
-
--- Every channel this press would actually go out on, in the order they are
--- listed, with duplicates removed.
---
--- The de-duplication is not tidiness: "Raid warning" and "Party or raid" both
--- resolve to RAID for somebody without assist, and sending the same sentence
--- to the same channel twice is a person spamming their own group because of
--- a setting they thought was two different things.
-function Externals.SendingTo(chosen, inGroup, inRaid, inInstanceGroup, canWarn)
-    local out, seen = {}, {}
-    for _, entry in ipairs(Externals.CHANNELS) do
-        if chosen[entry.value] then
-            local channel, note = Externals.ResolveChannel(entry.value,
-                inGroup, inRaid, inInstanceGroup, canWarn)
-            if channel and not seen[channel] then
-                seen[channel] = true
-                out[#out + 1] = { channel = channel, note = note }
-            end
-        end
-    end
-    return out
+    return ns.Chat.Fill(text, { s = spellName or "?", n = targetName })
 end
 
 function Externals.Ask(spellID)
@@ -531,10 +412,7 @@ function Externals.Ask(spellID)
         end
     end
 
-    local going = Externals.SendingTo(cfg.channels, IsInGroup(), IsInRaid(),
-        InInstanceGroup(),
-        (UnitIsGroupLeader and UnitIsGroupLeader("player"))
-            or (UnitIsGroupAssistant and UnitIsGroupAssistant("player")))
+    local going = ns.Chat.Where(cfg.channels)
 
     -- A whisper with no recipient is dropped here rather than refused above:
     -- the other channels still carry the message.
@@ -549,28 +427,9 @@ function Externals.Ask(spellID)
     end
 
     local name = ns.SpellName(spellID) or ("Spell " .. spellID)
-    -- C_ChatInfo first, the global as the fallback. The bare one is
-    -- deprecated on this patch - BigWigs' loader takes the namespaced version
-    -- outright, ChatThrottleLib takes it with exactly this fallback - and the
-    -- death window's share already goes through the same pair.
-    ---@diagnostic disable-next-line: deprecated
-    local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
-    if type(send) ~= "function" then
-        return false, "this client has no way to send a chat message"
-    end
-
     local text = Externals.Message(name, target and target.name)
-    local note
-    for _, where in ipairs(going) do
-        -- The whisper is the only channel with a recipient, and the loop
-        -- above has already dropped it if there is nobody to name. Asked
-        -- again anyway: an invariant established twenty lines earlier is one
-        -- somebody edits out later, and this costs a comparison.
-        local whisperTo = (where.channel == "WHISPER") and target
-            and target.name or nil
-        send(text, where.channel, nil, whisperTo)
-        note = note or where.note
-    end
+    local ok, note = ns.Chat.Post(text, going, target and target.name)
+    if not ok then return false, note end
 
     return true, target and target.name or going[1].channel, note or why
 end

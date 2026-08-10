@@ -4,6 +4,54 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.63.0] - 2026-08-10
+
+### Added
+
+- **The taunt announce** (roadmap item 6, the owner's own order: 10, then 6,
+  then 1). Press your taunt and one line goes out in chat, so the other tank
+  knows you took it. Settings are on the Co-Tanks page, under **Taunts**.
+- The message is yours to write: `%t` is what you taunted, `%s` is the taunt
+  you pressed, `%n` is the other tank. A placeholder nothing filled comes out
+  of the sentence rather than being read out as "%t" by somebody mid-pull.
+- **`/zs taunt ask`** tells the other tank to take it - the other half of a
+  swap, and the half an addon can actually do something about. Put it in a
+  macro and give it a key.
+- `/zs taunt` prints what your next taunt would say, who it thinks the other
+  tank is, and which channels it would go out on.
+- **It is off until you ask for it.** An addon that starts writing in party
+  chat after an update is the worst surprise it could hand somebody, and the
+  self test checks that promise rather than trusting it.
+- Two presses inside two seconds are one announce. A taunt that misses is
+  pressed again immediately, and a tank who spams his own group over it
+  switches the feature off and never comes back.
+
+### Changed
+
+- **`Core/Chat.lua`** - which channel a message actually goes on, in one
+  place. It was written inside the externals panel and now has a second
+  caller; a second copy of those rules would be a second chance to get the
+  one that matters wrong. (`/p` is NOT party chat in a dungeon from the
+  finder - that group talks on INSTANCE_CHAT and a message to PARTY arrives
+  nowhere, silently.) The externals panel keeps every name it had.
+- Writing a sentence is one pass with a function replacement now, so a mob
+  called "%n the Devourer" cannot be read as a placeholder by a substitution
+  that comes after it - because none does.
+- **Who is in your group** moved to `ns.Roster` in Init.lua. The taunt
+  announce asks the same list a different question - "who is the other tank" -
+  and two walks over one party would be two chances to disagree about who is
+  in it.
+
+### Known limits, stated on the page itself
+
+- **It cannot tell you when the OTHER tank taunts.** Since 12.0.5 another
+  player's instant cast is not announced to addons at all, the combat log is
+  closed, and every taunt in the game is instant. Anything claiming to show
+  you the co-tank's taunt on this patch is guessing. Yours is readable, which
+  is why this says yours out loud instead.
+- **"Swap at X stacks" is not possible**, and will not be in 12.1 either: a
+  foreign aura's value cannot be read, only displayed.
+
 ## [4.62.0] - 2026-08-10
 
 ### Added

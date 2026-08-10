@@ -241,6 +241,99 @@ function OptionsCoTanks:BuildPage(page, width)
     grid:Note("Everything else - colours, texts, indicators and the aura "
         .. "strips - is in the column on the right.")
 
+    ---------------------------------------------------------------------
+    -- Taunts
+    --
+    -- On the co-tank page because a taunt announce is about the OTHER tank,
+    -- and this is the page about the other tank. Roadmap item 6.
+    --
+    -- WHAT IT CANNOT DO IS ON THE PAGE, not buried in a comment. An addon
+    -- cannot see the co-tank's taunt on this patch - another player's instant
+    -- cast has not been announced since 12.0.5 - and a settings page that
+    -- quietly leaves that out is how somebody ends up trusting a panel that
+    -- is not watching anything.
+    ---------------------------------------------------------------------
+    local T = ns.Taunts
+    local function TCfg() return T.Config() end
+
+    grid:Section("Taunts")
+
+    UI.Toggle(grid:FullRow("Say when you taunt", {
+        controlWidth = 124,
+        sublabel = "One line in chat, so the other tank knows you took it",
+    }), function() return TCfg().announce and true or false end,
+        function(value) TCfg().announce = value and true or false end)
+
+    local channelHost = CreateFrame("Frame", nil, grid.content)
+    local chips = UI.ChipRow(channelHost, grid.width - 8, {
+        chips = {
+            { key = "WHISPER",      text = "Whisper the tank" },
+            { key = "GROUP",        text = "Party or raid" },
+            { key = "RAID_WARNING", text = "Raid warning" },
+            { key = "SAY",          text = "Say" },
+            { key = "YELL",         text = "Yell" },
+        },
+        isOn = function(key) return T.ChannelOn(key) end,
+        onSelect = function(key)
+            T.ToggleChannel(key)
+            ns.Options:Refresh()
+        end,
+    })
+    chips:SetPoint("TOPLEFT", channelHost, "TOPLEFT", 0, 0)
+    channelHost:SetHeight(chips:GetHeight())
+    grid:Wide(channelHost, chips:GetHeight(), 4, 8)
+    channelHost.Refresh = function() chips.Refresh() end
+
+    grid:Note("|cffffd100Party or raid|r picks the channel for the group you "
+        .. "are actually in - in a dungeon from the finder that is NOT party "
+        .. "chat, which is why it is one button and not three. "
+        .. "|cffffd100Whisper the tank|r goes to the other tank alone, and is "
+        .. "dropped when there is nobody else tanking.")
+
+    local messageRow = grid:FullRow("Message", { controlWidth = 260 })
+    local messageInput = UI.Input(messageRow.slot, 260, function(text)
+        TCfg().message = (text ~= "" and text) or nil
+    end, false, T.DEFAULT_MESSAGE)
+    messageInput:SetPoint("RIGHT", messageRow.slot, "RIGHT", 0, 0)
+    messageRow.Refresh = function()
+        messageInput:SetText(TCfg().message or "")
+    end
+
+    local askRow = grid:FullRow("Asking for a swap", { controlWidth = 260 })
+    local askInput = UI.Input(askRow.slot, 260, function(text)
+        TCfg().ask = (text ~= "" and text) or nil
+    end, false, T.DEFAULT_ASK)
+    askInput:SetPoint("RIGHT", askRow.slot, "RIGHT", 0, 0)
+    askRow.Refresh = function() askInput:SetText(TCfg().ask or "") end
+
+    grid:Note("|cffffd100%t|r is what you taunted, |cffffd100%s|r is the "
+        .. "taunt you pressed and |cffffd100%n|r is the other tank. A "
+        .. "placeholder nothing filled comes out of the sentence rather than "
+        .. "being read out as \"%t\" by somebody mid-pull.\n\n"
+        .. "The second line is what |cffffd100/zs taunt ask|r says - put that "
+        .. "in a macro and give it a key, and it is one press to tell the "
+        .. "other tank to take it.")
+
+    UI.Toggle(grid:FullRow("Only in a group", { controlWidth = 124 }),
+        function() return TCfg().onlyInGroup ~= false end,
+        function(value) TCfg().onlyInGroup = value and true or false end)
+
+    UI.Toggle(grid:FullRow("Only in dungeons and raids", { controlWidth = 124 }),
+        function() return TCfg().onlyInInstance and true or false end,
+        function(value) TCfg().onlyInInstance = value and true or false end)
+
+    grid:Buttons({
+        { text = "What a taunt would say", width = 190,
+          onClick = function() ns.Taunts:Dump() end },
+    }, 10)
+
+    grid:Note("|cffff8040What this cannot do:|r tell you when the OTHER tank "
+        .. "taunts. Since 12.0.5 another player's instant cast is not "
+        .. "announced to addons at all, the combat log is closed, and every "
+        .. "taunt in the game is instant - so anything claiming to show you "
+        .. "the co-tank's taunt is guessing. Yours is readable, which is why "
+        .. "this says yours out loud instead.")
+
     grid:Layout()
     page.Refresh = function() grid:Refresh() end
     self.pageGrid = grid

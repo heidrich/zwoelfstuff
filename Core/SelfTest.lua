@@ -4238,6 +4238,148 @@ local function TestExternals()
 end
 
 ---------------------------------------------------------------------------
+-- THE TAUNT ANNOUNCE (roadmap 6)
+--
+-- Every rule that decides anything here is pure and takes the world as an
+-- argument, because none of these states can be arranged in game: a raid with
+-- two other tanks, a party where you have no assist, a second press half a
+-- second after the first.
+---------------------------------------------------------------------------
+local function TestTaunts()
+    local T = ns.Taunts
+    Check("The taunt list exists", T ~= nil)
+    if not T then return end
+
+    Check("Every taunt names a spell and a class", (function()
+        for _, entry in ipairs(T.SPELLS) do
+            if type(entry.spellID) ~= "number" or type(entry.class) ~= "string" then
+                return false
+            end
+        end
+        return #T.SPELLS > 0
+    end)())
+
+    -- The six classes that have one. Read out of NorthernSkyRaidTools rather
+    -- than remembered - if this ever goes red, check THAT list first.
+    Check("A warrior's Taunt is one", T.IsTaunt(355))
+    Check("Dark Command is one", T.IsTaunt(56222))
+    Check("Hand of Reckoning is one", T.IsTaunt(62124))
+    Check("Provoke is one", T.IsTaunt(115546))
+    Check("Growl is one", T.IsTaunt(6795))
+    Check("Torment is one", T.IsTaunt(185245))
+    Check("A Death Strike is not", T.IsTaunt(49998) == false)
+
+    -- DEATH GRIP TAUNTS IN BLOOD AND ONLY IN BLOOD. A frost death knight
+    -- pressing it is pulling something, not taking it, and announcing a swap
+    -- there tells the other tank something untrue.
+    Check("Death Grip counts for Blood", T.IsTaunt(49576, 250))
+    Check("But not for Frost", T.IsTaunt(49576, 251) == false)
+    Check("With no spec known it still counts", T.IsTaunt(49576, nil))
+
+    ---------------------------------------------------------------------
+    -- Who the other tank is
+    ---------------------------------------------------------------------
+    local ROSTER = {
+        { name = "Zwoelf", class = "DEATHKNIGHT", role = "TANK", isPlayer = true },
+        { name = "Krieger", class = "WARRIOR",    role = "TANK" },
+        { name = "Heiler",  class = "PRIEST",     role = "HEALER" },
+        { name = "Zweit",   class = "DRUID",      role = "TANK" },
+    }
+
+    local other = T.CoTank(ROSTER)
+    Check("The other tank is the one who is not you",
+        other and other.name == "Krieger", other and other.name or "nobody")
+
+    local named, why = T.CoTank(ROSTER, "Zweit")
+    Check("A tank you named wins over the rule",
+        named and named.name == "Zweit", named and named.name or "nobody")
+    Check("And it says it was an assignment", why == "assigned", tostring(why))
+
+    local gone = T.CoTank(ROSTER, "Somebody Else")
+    Check("Naming somebody who left falls back to the rule",
+        gone and gone.name == "Krieger", gone and gone.name or "nobody")
+
+    Check("Tanking alone, there is nobody to tell",
+        T.CoTank({ { name = "Zwoelf", role = "TANK", isPlayer = true } }) == nil)
+    Check("YOU are never the other tank",
+        T.CoTank({ { name = "Zwoelf", role = "TANK", isPlayer = true } },
+            "Zwoelf") == nil)
+
+    ---------------------------------------------------------------------
+    -- What it says
+    ---------------------------------------------------------------------
+    Check("The default names what you taunted",
+        T.Message(nil, "Dark Command", "Golem"):find("Golem", 1, true) ~= nil,
+        T.Message(nil, "Dark Command", "Golem"))
+    Check("The taunt itself can be in it too",
+        T.Message("%s -> %t", "Dark Command", "Golem")
+            == "Dark Command -> Golem",
+        T.Message("%s -> %t", "Dark Command", "Golem"))
+    Check("And the other tank",
+        T.Message("%n, ich hab ihn", nil, nil, "Krieger") == "Krieger, ich hab ihn",
+        T.Message("%n, ich hab ihn", nil, nil, "Krieger"))
+
+    -- Nothing to fill it with: the placeholder comes OUT rather than being
+    -- read out as "%t" by somebody mid-pull.
+    Check("An unfilled placeholder is removed",
+        T.Message("Taunt: %t", "Dark Command", nil):find("%%t") == nil,
+        T.Message("Taunt: %t", "Dark Command", nil))
+    Check("And no hole is left where it was",
+        T.Message("Taunt: %t", "Dark Command", nil) == "Taunt:",
+        T.Message("Taunt: %t", "Dark Command", nil))
+
+    -- ONE PASS. A mob called "%n the Devourer" must not be read as a
+    -- placeholder by a second substitution, because there is no second one.
+    Check("A placeholder inside a NAME is left alone",
+        T.Message("Taunt: %t", nil, "%n the Devourer", "Krieger")
+            == "Taunt: %n the Devourer",
+        T.Message("Taunt: %t", nil, "%n the Devourer", "Krieger"))
+
+    ---------------------------------------------------------------------
+    -- Whether it speaks at all
+    --
+    -- OFF UNTIL ASKED FOR is the load-bearing one: an addon that starts
+    -- writing in party chat after an update is the worst surprise it could
+    -- hand somebody, and this is the check that keeps that promise.
+    ---------------------------------------------------------------------
+    local S = T.ShouldAnnounce
+    Check("Switched off, it says nothing", S({}, true, true) == false)
+    Check("Switched on in a group, it speaks",
+        S({ announce = true }, true, true) == true)
+    Check("Alone, it stays quiet",
+        S({ announce = true }, false, false) == false)
+    Check("Alone is allowed when you asked for it",
+        S({ announce = true, onlyInGroup = false }, false, false) == true)
+    Check("Set to instances only, the open world is quiet",
+        S({ announce = true, onlyInInstance = true }, true, false) == false)
+    Check("And a dungeon is not",
+        S({ announce = true, onlyInInstance = true }, true, true) == true)
+
+    -- TWO PRESSES IN A SECOND ARE ONE ANNOUNCE. A taunt that misses is
+    -- pressed again straight away, and a tank who spams his own group over it
+    -- switches the feature off and never comes back.
+    Check("The first press always speaks", T.MaySpeak(100, nil))
+    Check("A second one straight after does not",
+        T.MaySpeak(100.5, 100) == false)
+    Check("Two seconds later it does again", T.MaySpeak(102.5, 100))
+
+    ---------------------------------------------------------------------
+    -- The channels are the SAME rules the externals panel uses
+    --
+    -- Not a copy of them. This is the check that catches somebody growing a
+    -- second answer to "which channel am I in" - the one thing the handoff
+    -- said not to do before this feature was written.
+    ---------------------------------------------------------------------
+    Check("There is one set of channel rules", ns.Chat ~= nil)
+    if ns.Chat then
+        Check("And the externals panel uses it",
+            ns.Externals.ResolveChannel == ns.Chat.ResolveChannel)
+        Check("And so does everything that sends",
+            ns.Externals.SendingTo == ns.Chat.SendingTo)
+    end
+end
+
+---------------------------------------------------------------------------
 -- THE PANEL MOVERS
 --
 -- Owner, 2026-08-09, with a screenshot of the externals mover: "hier fehlt
@@ -4356,6 +4498,7 @@ function Test:Run()
         { "Death analysis", TestDeath },
         { "Your bars",     TestLiveBars },
         { "Panel movers",  TestPanelMovers },
+        { "Taunts",        TestTaunts },
     }
 
     for _, suite in ipairs(suites) do
