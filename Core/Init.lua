@@ -1475,7 +1475,7 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         local sub = (rest or ""):match("^(%S*)"):lower()
         if sub == "test" then
             ns.Externals:SetTestMode(not ns.Externals.testing)
-            ns.Print("External cooldowns test mode",
+            ns.Print("External CD request test mode",
                 ns.Externals.testing and "|cff40ff40on|r" or "|cff888888off|r")
         else
             ns.Externals:Dump()

@@ -1236,7 +1236,7 @@ local function RefreshExternalMover()
     end
     if not externalMover then
         externalMover = CreatePanelMover({
-            label = "External cooldowns",
+            label = "External CD request",
             page = "externals",
             module = "externals",
             config = function() return ns.Externals.Config() end,
@@ -1316,7 +1316,7 @@ local function RefreshAnswerMover()
     end
     if not answerMover then
         answerMover = CreatePanelMover({
-            label = "Answering",
+            label = "External CD answer",
             page = "answers",
             module = "answers",
             config = function() return ns.Answers.Config() end,

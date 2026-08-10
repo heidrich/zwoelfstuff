@@ -4318,6 +4318,28 @@ function UI.NavItem(parent, text, glyphKind, onClick)
     item.label:SetPoint("LEFT", item.glyph, "RIGHT", 10, 0)
     item.label:SetWordWrap(false)
 
+    -- A RIGHT EDGE, so the label has a width to obey.
+    --
+    -- With only a left anchor a FontString draws at whatever width its text
+    -- happens to be and simply keeps going: a title one word longer than the
+    -- rail runs under the OFF badge and off the column. Bounded, the client
+    -- truncates it instead, which is the failure you can read.
+    --
+    -- Which right edge depends on whether the badge is there, so it moves in
+    -- SetDimmed. A single anchor that always left room for OFF would spend
+    -- twenty pixels on a badge that is hidden on every switched-on row - and
+    -- these titles need those pixels.
+    item.LABEL_INSET = 12
+    item.AnchorLabel = function(self)
+        self.label:ClearAllPoints()
+        self.label:SetPoint("LEFT", self.glyph, "RIGHT", 10, 0)
+        if self.dimmed then
+            self.label:SetPoint("RIGHT", self.offMark, "LEFT", -6, 0)
+        else
+            self.label:SetPoint("RIGHT", self, "RIGHT", -self.LABEL_INSET, 0)
+        end
+    end
+
     -- A ROW WHOSE FEATURE IS NOT RUNNING. It stays in the column and it stays
     -- clickable - the page behind it is where you switch the thing back on,
     -- so a row you cannot reach would be a dead end. What changes is that it
@@ -4347,6 +4369,9 @@ function UI.NavItem(parent, text, glyphKind, onClick)
     item.SetDimmed = function(self, dimmed)
         self.dimmed = dimmed and true or false
         self.offMark:SetShown(self.dimmed)
+        -- The badge appears and disappears, so the room left for the label
+        -- changes with it.
+        self:AnchorLabel()
         -- Through SetActive rather than setting the colours here: two places
         -- deciding one row's colour is how the active row ends up bright and
         -- switched-off at the same time.
@@ -4365,6 +4390,7 @@ function UI.NavItem(parent, text, glyphKind, onClick)
     end)
     if onClick then item:SetScript("OnClick", onClick) end
 
+    item:AnchorLabel()
     item:SetActive(false)
     return item
 end

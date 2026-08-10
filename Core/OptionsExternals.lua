@@ -1,5 +1,5 @@
 ﻿---------------------------------------------------------------------------
--- OptionsExternals.lua - the External cooldowns page
+-- OptionsExternals.lua - the External CD request page
 --
 -- The same shape as the Death-log page, deliberately: the SLOTS at the top
 -- where the work is, the settings under them with their paragraphs on the

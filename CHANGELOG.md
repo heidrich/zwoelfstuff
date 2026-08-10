@@ -4,6 +4,27 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.70.0] - 2026-08-10
+
+### Changed
+
+- **The two pages say what they are: External CD request and External CD
+  answer.** One asks for a cooldown, the other answers somebody asking - they
+  are two ends of one thing and used to be called "External cooldowns" and
+  "Answering", which named neither end. Older entries in this file keep the
+  names they shipped under.
+- **The answer page is built like the request page.** The spells you offer
+  sit in a band at the top that does not scroll, with the three things you do
+  to the bar - **Move the bar**, **Set keys**, **What every cell would cast** -
+  stacked beside them. They were at the very bottom, past every setting on the
+  page.
+- **Which spells you offer is a row of icons now**, not a stack of full-width
+  toggles. Click one to stop offering it; it goes grey and stays where it is.
+- **The settings stand in two columns** instead of one per line, which is what
+  the rest of the window does.
+- **A long page name cannot run off the sidebar** any more. It has a right
+  edge now, so it is shortened rather than drawn over the OFF badge beside it.
+
 ## [4.69.0] - 2026-08-10
 
 ### Changed

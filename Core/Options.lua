@@ -368,7 +368,7 @@ local PAGES = {
     -- fourteen spells rather than the Cooldown Manager's catalogue - that
     -- list is YOUR spells, and every spell on this page belongs to another
     -- player.
-    { key = "externals", title = "External cooldowns", glyph = "tanks",
+    { key = "externals", title = "External CD request", glyph = "tanks",
       externals = true, module = "externals",
       subtitle = "What the group can cast on you, and one click to ask.",
       build = function(page, width) return ns.OptionsExternals:BuildPage(page, width) end },
@@ -377,7 +377,7 @@ local PAGES = {
     -- pages rather than two halves of one, because they belong to different
     -- people on different evenings - a tank sets the first up, a healer the
     -- second - and they are separate modules for the same reason.
-    { key = "answers", title = "Answering", glyph = "tanks",
+    { key = "answers", title = "External CD answer", glyph = "tanks",
       module = "answers",
       subtitle = "When somebody asks for one of yours, a button lights up.",
       build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },

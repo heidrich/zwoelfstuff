@@ -5031,7 +5031,7 @@ function Test:Run()
 
     local suites = {
         { "Modules",       TestModules },
-        { "Externals",     TestExternals },
+        { "CD request",    TestExternals },
         { "Arrangements",  TestLayout },
         { "Coordinates",   TestOffsets },
         { "Pattern switch", TestPatternRoundTrip },
@@ -5067,7 +5067,7 @@ function Test:Run()
         { "Panel movers",  TestPanelMovers },
         { "Taunts",        TestTaunts },
         { "Addon channel", TestComm },
-        { "Answering",     TestAnswers },
+        { "CD answer",     TestAnswers },
     }
 
     for _, suite in ipairs(suites) do

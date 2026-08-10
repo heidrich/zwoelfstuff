@@ -100,14 +100,14 @@ local LIST = {
         Apply = function() ns.Reminders:Refresh() end,
     },
     {
-        key = "externals", title = "External cooldowns", glyph = "tanks", since = 2,
+        key = "externals", title = "External CD request", glyph = "tanks", since = 2,
         blurb = "The cooldowns other people can cast on YOU, and one click to ask for one.",
         detail = "Off, the panel never appears.",
         Boot = function() ns.Externals:Create() end,
         Apply = function() ns.Externals.Refresh() end,
     },
     {
-        key = "answers", title = "Answering", glyph = "tanks", since = 3,
+        key = "answers", title = "External CD answer", glyph = "tanks", since = 3,
         blurb = "When a tank asks for one of YOUR cooldowns, a button lights up. You press it.",
         detail = "Off, nothing lights up and nobody's request reaches you.",
         Boot = function()

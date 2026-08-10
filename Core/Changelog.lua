@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.70.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100The two pages are called External CD request and External CD answer.|r One asks for a cooldown, the other answers somebody asking. They were |cffffd100External cooldowns|r and |cffffd100Answering|r, which named neither end.",
+            "|cffffd100The answer page is built like the request page.|r The spells you offer sit at the top and stay there while you scroll, with |cffffd100Move the bar|r, |cffffd100Set keys|r and |cffffd100What every cell would cast|r beside them - they used to be at the very bottom, past every setting.",
+            "|cffffd100What you offer is a row of icons|r instead of a stack of switches. Click one to stop offering it; it goes grey and stays where it was.",
+            "|cffffd100The settings stand in two columns|r, the way the rest of the window does.",
+        },
+    },
+    {
         version = "4.69.0",
         date = "2026-08-10",
         lines = {

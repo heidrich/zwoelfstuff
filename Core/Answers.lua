@@ -499,7 +499,7 @@ function Answers.Announce(who, spellID)
     told = true
     ns.Print(string.format("|cffffd100%s asked you for %s.|r", who or "Somebody",
         spellID and (ns.SpellName(spellID) or "a cooldown") or "a taunt"))
-    ns.Print("  Switch on |cffffd100Answering|r (/zs, under M+ and raid stuff) and "
+    ns.Print("  Switch on |cffffd100External CD answer|r (/zs, under M+ and raid stuff) and "
         .. "a button lights up for it instead of this line.")
     return true
 end
@@ -824,7 +824,7 @@ function Answers.TogglePicked(name)
     end
 
     ns.Print(string.format("|cffffd100%d rows, all taken.|r Raise the row "
-        .. "count under Answering, or take somebody off first.", rows))
+        .. "count under External CD answer, or take somebody off first.", rows))
     return false
 end
 
@@ -860,7 +860,7 @@ function Answers:Create()
             items = items,
             current = current,
             actions = {
-                { text = "Answering options", onClick = function()
+                { text = "Answer options", onClick = function()
                     ns.Options:Open("answers")
                 end },
             },
@@ -1106,7 +1106,7 @@ function Answers:Dump()
 
     -- The switches, before anything that depends on them.
     if not ns.Modules:IsOn("answers") then
-        ns.Print("  |cffff4040The Answering module is switched off.|r")
+        ns.Print("  |cffff4040The External CD answer module is switched off.|r")
     end
     if not cfg.enabled then
         ns.Print("  |cffff4040The bar is switched off|r - a request is printed "
