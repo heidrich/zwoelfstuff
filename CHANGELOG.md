@@ -4,6 +4,37 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.67.0] - 2026-08-10
+
+### Added
+
+- **A release can announce itself in a Discord channel.** A webhook rather
+  than a bot - no account to host and no permissions to hand out, just a URL
+  a channel gives you. Set `DISCORD_WEBHOOK` in the repository's secrets and
+  a tag posts its own release notes; leave it unset and nothing happens at
+  all, which is what a fork gets. It never fails the release: the addon is on
+  CurseForge by the time it speaks.
+
+- **The keys are set in the addon now**, beside the slots they press: a Keys
+  section on the External cooldowns page and on the Answering page, eight rows
+  each. Click one, press the key, done - right-click clears it, and it says
+  what the key was taken from if it was on something else. These write the
+  game's own bindings with the same two calls its key panel makes, so they
+  show up there too and survive a reload without this addon keeping a copy of
+  anything. Out of combat only, because the game does not allow a key to be
+  re-bound during a fight - and it says so rather than doing nothing.
+
+### Changed
+
+- **"Let's go" on the welcome window opens the addon.** It asks which
+  features you want; closing onto an empty screen leaves you exactly where you
+  were, with a settings window you have not found yet. Escape still just
+  closes - one is "yes, show me", the other is "not now".
+- **Edit Mode hands the window back.** Going in from the addon and coming out
+  again reopens it. Going in from the minimap or from `/zs unlock` opens
+  nothing, because there was nothing to hide. One rule rather than two: Edit
+  Mode gives back what it took.
+
 ## [4.66.2] - 2026-08-10
 
 ### Changed

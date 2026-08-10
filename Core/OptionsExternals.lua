@@ -270,14 +270,34 @@ function Page:BuildPage(page, width)
         end
     end
 
-    grid:Note("|cffffd100Keys.|r The first eight places on the panel can carry "
-        .. "one, in the game's own key bindings - Escape, Key Bindings, "
-        .. "ZwoelfStuff - as |cffffd100Ask for cooldown 1|r to |cffffd1008|r. "
-        .. "The key shows in the corner of the slot.\n\nIt is bound to the "
-        .. "PLACE, not to the spell: what sits in the third slot changes as "
-        .. "people come and go, and a slot nobody present can fill is not "
-        .. "drawn at all - the ones after it move up. Press one with nothing "
-        .. "in it and it says so rather than going quiet.")
+    ---------------------------------------------------------------------
+    -- Keys
+    --
+    -- HERE, not in the game's menu. Owner, 2026-08-10: "die sollten schon
+    -- direkt mit bei den bars mit drin sein, nicht erst im blizzard menü."
+    -- These write the game's own bindings - the same two calls its key panel
+    -- makes - so they show up there as well and survive a reload without
+    -- this addon keeping a copy.
+    ---------------------------------------------------------------------
+    grid:Section("Keys")
+
+    grid:Note("Bound to the |cffffd100place|r, not to the spell: what sits in "
+        .. "the third slot changes as people come and go, and a slot nobody "
+        .. "present can fill is not drawn at all - the ones after it move up. "
+        .. "The key shows in the corner of the slot. Press one with nothing in "
+        .. "it and it says so rather than going quiet.")
+
+    for index = 1, ns.Externals.KEYS do
+        local row = grid:FullRow("Slot " .. index, { controlWidth = 130 })
+        UI.KeyBind(row, {
+            binding = ns.Externals.BindingName(index),
+            label = "Ask for cooldown " .. index,
+        })
+    end
+
+    grid:Note("Click one, press the key. Right-click clears it. They are the "
+        .. "game's own bindings, so they are also under Escape, Key Bindings, "
+        .. "|cffffd100ZwoelfStuff|r if you would rather set them there.")
 
     grid:Note("Left alone, a click asks the healer of that class - which in a "
         .. "five-man is the only person who has it. In a raid, name somebody. "

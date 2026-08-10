@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.67.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100Set your keys here|r, next to the slots they press - a |cffffd100Keys|r section on the External cooldowns page and on the Answering page. Click a row, press the key. Right-click clears it, and it tells you if the key was on something else. No trip to the game's key list needed; these ARE the game's keys, so they show up there as well.",
+            "|cffffd100\"Let's go\" opens the addon.|r It asks you which features you want and then left you looking at nothing.",
+            "|cffffd100Edit Mode hands the window back.|r Going in from the addon and coming out again reopens it - going in from the minimap opens nothing, because there was nothing to hide.",
+        },
+    },
+    {
         version = "4.66.2",
         date = "2026-08-10",
         lines = {

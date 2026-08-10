@@ -195,11 +195,28 @@ function Page:BuildPage(page, width)
         .. "With the switch on you end up on the creature, which after a swap "
         .. "is where you want to be.")
 
-    grid:Note("|cffffd100Keys.|r Eight cells can carry one. They are in the "
-        .. "game's own key bindings - Escape, Key Bindings, ZwoelfStuff - as "
-        .. "|cffffd100Answer cell 1|r to |cffffd1008|r, and the key you bind "
-        .. "shows in the corner of the cell. Counted the way the bar is "
-        .. "drawn: along the first row, then the next.")
+    ---------------------------------------------------------------------
+    -- Keys, beside the thing they press rather than in the game's menu.
+    ---------------------------------------------------------------------
+    grid:Section("Keys")
+
+    grid:Note("Counted the way the bar is drawn: along the first row, then "
+        .. "the next. The key shows in the corner of the cell.\n\nA key here "
+        .. "does not cast by itself - it presses the cell, and the cell casts. "
+        .. "That is the only way a key can reach a spell at all, and it is why "
+        .. "these are the game's own bindings rather than something this addon "
+        .. "invented.")
+
+    for index = 1, ns.Answers.KEYS do
+        local row = grid:FullRow("Cell " .. index, { controlWidth = 130 })
+        UI.KeyBind(row, {
+            binding = ns.Answers.BindingName(index),
+            label = "Answer cell " .. index,
+        })
+    end
+
+    grid:Note("Click one, press the key. Right-click clears it. They are also "
+        .. "under Escape, Key Bindings, |cffffd100ZwoelfStuff|r.")
 
     UI.Toggle(grid:FullRow("A quick menu on the bar", {
         controlWidth = 124,

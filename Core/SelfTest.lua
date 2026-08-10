@@ -4774,6 +4774,14 @@ local function TestAnswers()
         A.ShortKey == ns.ShortKey and ns.Externals.Key ~= nil)
     Check("Eight cells can carry one", A.KEYS == 8, tostring(A.KEYS))
 
+    -- THE KEY YOU PRESS, AS THE GAME NAMES IT. A modifier held down is a
+    -- prefix; a modifier pressed ALONE is half a binding, and taking it as a
+    -- whole one would make every combination impossible to enter - the shift
+    -- always lands first.
+    Check("A plain key is itself", ns.UI.Chord("F9") == "F9")
+    Check("A modifier on its own is not a key", ns.UI.Chord("LSHIFT") == nil)
+    Check("Nor is nothing at all", ns.UI.Chord(nil) == nil)
+
     ---------------------------------------------------------------------
     -- THE QUICK MENU ON THE BAR
     --
@@ -4871,6 +4879,28 @@ end
 -- are made on the first refresh, and "not built yet" is not "built wrong".
 ---------------------------------------------------------------------------
 local function TestPanelMovers()
+    ---------------------------------------------------------------------
+    -- EDIT MODE GIVES BACK WHAT IT TOOK
+    --
+    -- Owner, 2026-08-10, in one breath: "wenn ich aus dem addon in den edit
+    -- mode gehe und den edit mode verlasse, sollte das addon wieder aufgehen"
+    -- and "wenn ich nur rechtsklick auf dem minimap icon mache [...] kein
+    -- addon öffnen". Two sentences, one rule - a window it hid, it puts back;
+    -- a window that was never open stays shut. Which makes the minimap and
+    -- /zs unlock need no case of their own, and that is the point.
+    ---------------------------------------------------------------------
+    local wasOpen = ns.Options.frame and ns.Options.frame:IsShown()
+    if ns.Options.frame then ns.Options.frame:Hide() end
+
+    ns.EditMode:SetUnlocked(true)
+    Check("Coming in from the minimap, there is nothing to hand back",
+        ns.EditMode.cameFromWindow == false)
+    ns.EditMode:SetUnlocked(false)
+    Check("And leaving opens nothing",
+        not (ns.Options.frame and ns.Options.frame:IsShown()))
+
+    if wasOpen and ns.Options.frame then ns.Options.frame:Show() end
+
     if not ns.EditMode.PanelMovers then
         Check("Edit mode can name its panel movers", false)
         return

@@ -119,8 +119,18 @@ local function BuildFrame()
     footer:SetWidth(WIDTH - PAD * 2 - 150)
     footer:SetJustifyH("LEFT")
 
+    -- AND THEN THE ADDON IS OPEN. Owner, 2026-08-10: "beim welcome screen,
+    -- wenn ich da auf lets go klicke, sollte das addon auf gehen" - and he is
+    -- right about what the sentence promises: this window asks which features
+    -- you want, and "let's go" is an answer that expects to arrive SOMEWHERE.
+    -- Closing onto an empty screen leaves the newcomer exactly where they
+    -- were, with a settings window they have not found yet.
+    --
+    -- Escape still just closes, which is the difference between the two ways
+    -- out: one is "yes, show me" and the other is "not now".
     local go = UI.Button(frame, "Let's go", 130, function()
         Welcome:Close()
+        if ns.Options then ns.Options:Open() end
     end, "primary")
     go:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -PAD)
 

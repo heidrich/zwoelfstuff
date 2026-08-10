@@ -42,3 +42,28 @@ jobs:
           # GITHUB_TOKEN is provided by Actions itself.
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+      # THE RELEASE ANNOUNCES ITSELF, if a channel has been set up for it.
+      #
+      # A Discord WEBHOOK, not a bot: a bot is an account to host, to keep
+      # alive and to give permissions to, for the sake of one message every
+      # few days. A webhook is a URL that a channel hands out and that posts
+      # into that one channel and nowhere else.
+      #
+      # TO TURN IT ON: in Discord, right-click the channel, Edit Channel,
+      # Integrations, Webhooks, New Webhook, Copy Webhook URL. Then here:
+      # Settings, Secrets and variables, Actions, New repository secret,
+      # named DISCORD_WEBHOOK. Nothing is posted until that exists - the step
+      # runs and says so - so this is inert for anybody who forks the repo.
+      #
+      # It runs AFTER the packager and never fails the job: the addon is
+      # already on CurseForge by the time this speaks, and losing a release
+      # over an announcement would be the tail wagging the dog.
+      - name: Announce on Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          python3 .github/scripts/discord_release.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --link "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"

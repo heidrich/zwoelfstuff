@@ -2692,6 +2692,20 @@ function EditMode:SetUnlocked(state, wanted)
         -- The window would sit behind the overlay, catching clicks that were
         -- meant for a bar. Unlocking is a full-screen mode, so it gets the
         -- full screen.
+        --
+        -- AND IT COMES BACK IF IT WAS THE WAY IN. Owner, 2026-08-10: "wenn
+        -- ich aus dem addon in den edit mode gehe und den edit mode verlasse,
+        -- sollte das addon wieder aufgehen" - and in the same breath the
+        -- other half, which is what makes this a rule rather than a
+        -- convenience: "wenn ich nur rechtsklick auf dem minimap icon mache
+        -- [...] kein addon öffnen".
+        --
+        -- So it is not "always reopen". Edit mode gives back what it took: a
+        -- window it hid, it puts back, and a window that was never open stays
+        -- shut. The minimap and /zs unlock are the second case and need no
+        -- special handling at all - there was nothing to hide.
+        self.cameFromWindow = ns.Options.frame
+            and ns.Options.frame:IsShown() and true or false
         if ns.Options.frame then ns.Options.frame:Hide() end
 
         overlay:Show()
@@ -2709,6 +2723,13 @@ function EditMode:SetUnlocked(state, wanted)
         if gridLines then gridLines:Hide() end
         if palette then palette:Hide() end
         if tools then tools:Hide() end
+
+        -- Handed back, and only once: a second lock does not conjure a
+        -- window nobody opened.
+        if self.cameFromWindow then
+            self.cameFromWindow = false
+            if ns.Options then ns.Options:Open() end
+        end
     end
 end
 
