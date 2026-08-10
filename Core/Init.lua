@@ -850,6 +850,27 @@ function ns.StyleUIFont(fontString, size, flags)
     if ns.db and ns.db.panelFont and ns.Media then
         path = ns.Media.Font(ns.db.panelFont)
     end
+
+    -- WITH NO CHOICE MADE, ASK MEDIA RATHER THAN JUMPING TO THE FLOOR.
+    --
+    -- Media.PanelFont already knows the order the design wants - Expressway
+    -- first, Arial Narrow under it - and the settings page has been SHOWING
+    -- its answer as the default for as long as it has existed. It was never
+    -- the font that got used: with nothing picked, this went straight past it
+    -- to the fallback, so the picker said "Expressway" while the window was
+    -- drawn in Arial Narrow.
+    --
+    -- Owner: "nimm seine schriftart, die passt." This is the whole of taking
+    -- it. The file itself says "(c) 2005 Typodermic. Do not distribute", so it
+    -- is not ours to ship and never will be - but it arrives with ElvUI and
+    -- half a dozen other UIs, it registers itself with LibSharedMedia when it
+    -- does, and USING what is already installed on the machine is what every
+    -- font dropdown in the game does. Nothing is copied. On a client that has
+    -- none of them the line below finds Arial Narrow and behaves as before.
+    if not path and ns.Media and ns.Media.PanelFont then
+        path = ns.Media.Font(ns.Media.PanelFont())
+    end
+
     path = path or ns.PANEL_FONT
 
     -- SetFont reports whether the file loaded. It will not on a client whose

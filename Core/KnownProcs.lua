@@ -50,7 +50,7 @@ local _, ns = ...
 
 ns.KNOWN_PROCS = {
     -- Blood Death Knight. Boiling Point empowers Blood Boil; observed on
-    -- Zwoelf, EU Destromath, 2026-08-05. The aura and the icon are the same
+    -- Zwölf, EU Destromath, 2026-08-05. The aura and the icon are the same
     -- spell here, which is common but not guaranteed.
     ["DEATHKNIGHT:250"] = {
         [50842] = { display = 1265968, auraID = 1265968, duration = 15 },

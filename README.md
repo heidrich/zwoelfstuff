@@ -1,12 +1,16 @@
 # ZwoelfStuff
 
-**A tank and group-play focused addon, from Zwoelf — EU-Destromath.**
+**A tank and group-play focused addon, from Zwölf — EU-Destromath.**
 
 After many years I have built a new addon again, one that serves my own needs
 as a tank first, and those of my M+ groups and friends. You will find a lot of
 these features in other addons too — but like everybody, I have my own ideas
 about what I want in the game. Hence this addon. I hope it is as useful to you
 as it is to me.
+
+**This addon is no replacement for EllesmereUI or ElvUI.** I love both of them
+and use them for my own UI. This is a collection of the features I like, done
+my way. And of course — feature requests and feedback are welcome!
 
 1. **Bars** — your own bars, as many as you like. A bar is a grid of cells; you
    set the rows and columns and put a spell in each cell. Grid, staggered, or a

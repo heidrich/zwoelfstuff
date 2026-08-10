@@ -44,6 +44,19 @@ local C = {
     control    = { 0.129, 0.145, 0.169 },  -- #21252B  stepper, select, chip
     controlHi  = { 0.200, 0.224, 0.255 },  -- #333941  control under the cursor
     separator  = { 0.122, 0.137, 0.165 },  -- #1F232A  hairline
+
+    -- THE TWO GROUNDS A LIST OF SETTINGS ALTERNATES BETWEEN.
+    --
+    -- Owner, with another UI open beside ours: "der kommt so viel besser ohne
+    -- linien aus, alles sehr gut lesbar, gut sortiert." What that UI actually
+    -- does is separate by SURFACE: every row sits on its own tone, and there
+    -- is not one hairline between settings anywhere in it.
+    --
+    -- A line is a thing you have to look at. A change of ground is one you do
+    -- not - the eye reads the stripes and never resolves an edge. Two tones a
+    -- step apart, both above the page, so neither reads as a box.
+    band       = { 0.098, 0.110, 0.129 },  -- #191C21  a block's ground
+    bandAlt    = { 0.082, 0.090, 0.110 },  -- #15171C  the next one down
     edge       = { 0.165, 0.184, 0.216 },  -- #2A2F37  card outline, window edge
 
     accent     = { 1.000, 0.478, 0.239 },  -- #FF7A3D  ZwoelfStuff orange
@@ -410,7 +423,9 @@ function UI.Row(parent, text, opts)
     -- which is what turns forty boxes into one list. Hidden rather than
     -- coloured-to-match: a fill drawn every frame at the background colour is
     -- still a fill.
-    row.bg = Fill(row, "BACKGROUND", C.surface)
+    -- Brighter than either ground, or a row on the lighter one would have
+    -- nothing to show for being pointed at.
+    row.bg = Fill(row, "BACKGROUND", C.control)
     row.bg:Hide()
 
     -- The hairline that does the separating instead. One pixel, one step off
@@ -421,6 +436,9 @@ function UI.Row(parent, text, opts)
     row.rule:SetHeight(1)
     row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
     row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+    -- NOT DRAWN. Grid:Layout puts each block on a ground of its own instead.
+    -- Still built, because Death.lua and Replay.lua reach for it by name.
+    row.rule:Hide()
 
     -- textBody, not text. A column of forty labels at full white is forty
     -- things shouting; the value on the right is what the eye is looking for,
