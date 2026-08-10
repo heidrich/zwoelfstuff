@@ -1331,6 +1331,26 @@ local function RefreshAnswerMover()
     RefreshPanelMover(answerMover, AnswerBar, cfg.x, cfg.y)
 end
 
+-- EVERY PANEL MOVER IN ONE LIST.
+--
+-- There are four of them now, and each one needs three things done to it: a
+-- refresh, a drag, and a placing call. Keeping the list in one place is what
+-- stops a fifth panel arriving with two of the three - which is exactly what
+-- happened to the taunt button, built and shown and never dragged, because
+-- OnUpdate had a hand-written pair of lines that nobody added to.
+-- The movers themselves are made on the first refresh, so the list holds a
+-- GETTER for each rather than the frame - a value here would be nil forever.
+local PANEL_MOVERS = {
+    { key = "tanks", panel = TankPanel, apply = ApplyTankMove,
+      Mover = function() return tankMover end },
+    { key = "taunt", panel = TauntButton, apply = ApplyTauntMove,
+      Mover = function() return tauntMover end },
+    { key = "externals", panel = ExternalPanel, apply = ApplyExternalMove,
+      Mover = function() return externalMover end },
+    { key = "answers", panel = AnswerBar, apply = ApplyAnswerMove,
+      Mover = function() return answerMover end },
+}
+
 local function RefreshTankMover()
     -- A module that is not running has nothing on screen to place. Its frames
     -- still EXIST once it has run at all, so "is there a panel" is not the
@@ -1492,8 +1512,14 @@ end
 
 local function OnUpdate()
     if cellDrag then DragCell() end
-    DragPanel(tankMover, TankPanel, ApplyTankMove)
-    DragPanel(externalMover, ExternalPanel, ApplyExternalMove)
+    -- EVERY PANEL MOVER, and the list is why the taunt button could not be
+    -- moved at all in 4.64.0: it was created, shown, and given a cog and a
+    -- padlock, and then nothing dragged it. A mover is TWO halves - the frame
+    -- and this line - and the second one is easy to forget because the first
+    -- one looks finished. That is what PanelMovers() is for below.
+    for _, entry in ipairs(PANEL_MOVERS) do
+        DragPanel(entry.Mover(), entry.panel, entry.apply)
+    end
     DragReminders()
     if not dragging then return end
 
@@ -2567,8 +2593,16 @@ end
 -- adds a third panel and builds it by hand. Nil until edit mode has been
 -- opened once - they are made on first refresh.
 function EditMode:PanelMovers()
-    return { tanks = tankMover, externals = externalMover,
-        taunt = tauntMover, answers = answerMover }
+    -- BUILT FROM THE SAME LIST THAT DRAGS THEM. It used to be written out by
+    -- hand, which is how the taunt button ended up with a mover, a cog and a
+    -- padlock and no way to move it: OnUpdate had its own hand-written pair
+    -- of lines and nobody added the third. Two lists is the bug; one list is
+    -- the fix, and the self test walks this one.
+    local out = {}
+    for _, entry in ipairs(PANEL_MOVERS) do
+        out[entry.key] = entry.Mover()
+    end
+    return out
 end
 
 function EditMode:SetGridShown(shown)

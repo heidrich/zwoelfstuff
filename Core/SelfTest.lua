@@ -4172,6 +4172,22 @@ local function TestExternals()
         tostring(cfg.rows) .. "x" .. tostring(cfg.columns))
     Check("And the two old keys are gone rather than kept in step",
         cfg.count == nil and cfg.perLine == nil)
+    -- THE OLDEST PROFILE OF ALL: an ordered `picked` list AND a count. Both
+    -- migrations run in one call, and reading them in the wrong order threw
+    -- on login - the lattice one deletes cfg.count, and the list one was
+    -- doing arithmetic on it afterwards.
+    cfg.rows, cfg.columns = nil, nil
+    cfg.count, cfg.perLine = 6, 6
+    cfg.cells = {}
+    cfg.picked = { 6940, 102342 }
+    local ok = pcall(X.Config)
+    Check("A profile from before the slots still opens", ok)
+    Check("And its spells are in the first two slots",
+        cfg.cells[1] == 6940 and cfg.cells[2] == 102342)
+    Check("And it has a lattice big enough to hold them",
+        (cfg.rows or 0) * (cfg.columns or 0) >= 2)
+    cfg.picked = nil
+
     cfg.rows, cfg.columns = savedRows, savedColumns
 
     ---------------------------------------------------------------------
@@ -4613,6 +4629,16 @@ local function TestPanelMovers()
 
     local movers = ns.EditMode:PanelMovers()
     local any = false
+
+    -- FOUR PANELS ARE PLACED IN EDIT MODE, and every one of them has to be in
+    -- the list that OnUpdate drags. The taunt button shipped in 4.64.0 with a
+    -- mover, a cog and a padlock and no way to move it, because the drag was
+    -- a hand-written pair of lines beside a hand-written list. They are one
+    -- list now, and this is the check that says so out loud.
+    local named = 0
+    for _ in pairs(movers) do named = named + 1 end
+    Check("Every placed panel is in the mover list", named >= 4,
+        tostring(named))
 
     for name, mover in pairs(movers) do
         any = true

@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Answers - the other end of a request. Somebody asks; this is the button.
 --
 -- Owner, 2026-08-10: "wenn man selbst heiler ist" - so this is the mirror of
@@ -317,6 +317,25 @@ function Answers.Rebuild()
     local size, gap = cfg.size or 40, cfg.gap or 4
     local style = Answers.Style()
 
+    -- WHILE PLACING, THERE IS SOMETHING TO PLACE. Owner, 2026-08-10: "awnser
+    -- button sehe ich im edit mode nicht" - and he was right: standing alone,
+    -- there are no tanks to build cells FOR, so the bar had nothing in it and
+    -- correctly drew nothing. Which is useless when the whole point of edit
+    -- mode is to decide where it goes.
+    --
+    -- A stand-in row, and it carries NO macro: a cell aimed at nobody must do
+    -- nothing when it is clicked rather than cast at whoever you happen to
+    -- have targeted. The same rule the externals panel follows when it draws
+    -- every picked slot while being placed.
+    local preview = false
+    if #askers == 0 and (Answers.placing or cfg.preview) then
+        askers = { { name = "Tank", preview = true } }
+        preview = true
+    end
+    if #offers == 0 and preview then
+        offers = { { spellID = 355, kind = Comm.TAUNT, preview = true } }
+    end
+
     local index = 0
     for row, asker in ipairs(askers) do
         for column, offer in ipairs(offers) do
@@ -326,14 +345,19 @@ function Answers.Rebuild()
             cell.who = asker.name
             cell.kind = offer.kind
             cell.spellID = offer.spellID
+            cell.preview = asker.preview and true or false
             cell.spellName = ns.SpellName(offer.spellID)
                 or ("Spell " .. offer.spellID)
 
             -- The macro the GAME runs when you click. Written here, out of
             -- combat, exactly once per roster change.
-            cell:SetAttribute("type", "macro")
-            cell:SetAttribute("macrotext",
-                string.format("/cast [@%s] %s", asker.name, cell.spellName))
+            --
+            -- A stand-in cell gets NO macro at all: there is nobody called
+            -- "Tank" to cast on, and a cell that fires at your current target
+            -- instead would be the addon doing something you did not ask for.
+            cell:SetAttribute("type", asker.preview and nil or "macro")
+            cell:SetAttribute("macrotext", asker.preview and nil
+                or string.format("/cast [@%s] %s", asker.name, cell.spellName))
 
             cell:SetSize(size, size)
             cell:ClearAllPoints()
@@ -382,24 +406,30 @@ function Answers.Repaint()
 
     for _, cell in ipairs(cells) do
         if cell.who then
-            local waiting = Answers.Waiting(Answers.pending, cell, now,
-                cfg.linger)
-            cell:SetAlpha(waiting and lit or idle)
-            cell.call:SetShown(waiting ~= nil)
-            cell.name:SetShown(waiting ~= nil)
+            -- A stand-in cell is drawn at full strength with its name on it:
+            -- while you are placing the bar, "which of these is it" is the
+            -- only question, and a dimmed square answers it badly.
+            if cell.preview then
+                cell:SetAlpha(lit)
+                cell.call:Hide()
+                cell.name:Show()
+            else
+                local waiting = Answers.Waiting(Answers.pending, cell, now,
+                    cfg.linger)
+                cell:SetAlpha(waiting and lit or idle)
+                cell.call:SetShown(waiting ~= nil)
+                cell.name:SetShown(waiting ~= nil)
+            end
         end
     end
 end
 
 function Answers:SavePosition()
-    if not panel then return end
-    local cfg = Answers.Config()
-    local x, y = panel:GetCenter()
-    local px, py = UIParent:GetCenter()
-    if x and y and px and py then
-        cfg.x = math.floor(x - px + 0.5)
-        cfg.y = math.floor(y - py + 0.5)
-    end
+    -- NOTHING, on purpose. Working the position out again from GetCenter
+    -- minus UIParent:GetCenter() mixes two coordinate spaces the moment this
+    -- carries a scale of its own, and the frame jumps every time edit mode
+    -- closes. The mover writes cfg.x and cfg.y exactly; nothing else moves
+    -- this. See the long note in Externals.lua.
 end
 
 function Answers:SetPlacing(on)

@@ -398,8 +398,72 @@ function OptionsCoTanks:BuildPage(page, width)
 
     grid:Note("The button is placed in |cffffd100Edit mode|r like everything "
         .. "else this addon draws, and it has the same cog and padlock the "
-        .. "panels do. Its border and backdrop are the bar settings, under "
-        .. "|cffffd100Look|r on the right.")
+        .. "panels do.")
+
+    ---------------------------------------------------------------------
+    -- THE BUTTON'S OWN LOOK
+    --
+    -- These were promised by a note and never built - the note said they
+    -- were "under Look on the right", which is the CO-TANK PANEL's look and
+    -- writes a different table entirely. So every one of them appeared to do
+    -- nothing. A settings page that names a control that is not there is
+    -- worse than one that is short.
+    --
+    -- Same key names a bar uses, painted by the bar's own painters.
+    ---------------------------------------------------------------------
+    local function TauntSlide(label, key, min, max, step, format, scale)
+        UI.Slider(grid:FullRow(label, { controlWidth = 124 }), {
+            get = function() return TCfg()[key] end,
+            set = function(value) TCfg()[key] = value end,
+            min = min, max = max, step = step,
+            format = format, scale = scale,
+            apply = function() ns.Taunts.Refresh() end,
+        })
+    end
+
+    local function TauntPercent(v)
+        return string.format("%d%%", math.floor((v or 0) * 100 + 0.5))
+    end
+
+    TauntSlide("Opacity", "alpha", 0, 1, 0.05, TauntPercent, 100)
+    TauntSlide("Icon zoom", "iconZoom", 0, 0.2, 0.01, TauntPercent, 100)
+    TauntSlide("Border thickness", "borderSize", 0, 4, 1)
+
+    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
+        function()
+            local colour = TCfg().borderColor or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) TCfg().borderColor = { r, g, b } end,
+        function() ns.Taunts.Refresh() end)
+
+    UI.MediaPicker(grid:FullRow("Border texture",
+        { controlWidth = 190, icon = "media-border" }), "border",
+        function() return TCfg().borderTexture end,
+        function(value) TCfg().borderTexture = value end,
+        function() ns.Taunts.Refresh() end)
+
+    UI.Toggle(grid:FullRow("Backdrop", { controlWidth = 124 }),
+        function() return TCfg().backdrop ~= false end,
+        function(value)
+            TCfg().backdrop = value and true or false
+            ns.Taunts.Refresh()
+        end)
+
+    UI.Swatch(grid:FullRow("Backdrop colour", { controlWidth = 124 }),
+        function()
+            local colour = TCfg().backdropColor or { 0, 0, 0 }
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) TCfg().backdropColor = { r, g, b } end,
+        function() ns.Taunts.Refresh() end)
+
+    TauntSlide("Backdrop opacity", "backdropAlpha", 0, 1, 0.05,
+        TauntPercent, 100)
+
+    grid:Note("A black border on a black backdrop is invisible, which is what "
+        .. "the defaults are - pick a colour before deciding the thickness "
+        .. "does nothing.")
 
     grid:Buttons({
         { text = "Make the macro", width = 150, style = "primary",

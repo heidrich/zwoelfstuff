@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- Taunts - saying that you took it, and asking the other tank to.
 --
 -- Roadmap item 6, the owner's own order: "10, dann 6, dann 1."
@@ -444,14 +444,11 @@ function Taunts.Refresh()
 end
 
 function Taunts:SavePosition()
-    if not button then return end
-    local cfg = Taunts.Config()
-    local x, y = button:GetCenter()
-    local px, py = UIParent:GetCenter()
-    if x and y and px and py then
-        cfg.x = math.floor(x - px + 0.5)
-        cfg.y = math.floor(y - py + 0.5)
-    end
+    -- NOTHING, on purpose. Working the position out again from GetCenter
+    -- minus UIParent:GetCenter() mixes two coordinate spaces the moment this
+    -- carries a scale of its own, and the frame jumps every time edit mode
+    -- closes. The mover writes cfg.x and cfg.y exactly; nothing else moves
+    -- this. See the long note in Externals.lua.
 end
 
 -- Edit Mode is open and this button is one of the things being placed. Same
@@ -532,6 +529,20 @@ end
 ---------------------------------------------------------------------------
 -- What it would do, printed
 ---------------------------------------------------------------------------
+-- WHAT IT IS ACTUALLY PAINTED WITH. "the colour does nothing" has two very
+-- different causes - a setting that never reached the painter, and a black
+-- line on a black plate - and this tells them apart in one line.
+local function StyleLine(style)
+    local colour = style.borderColor or { 0, 0, 0 }
+    return string.format(
+        "border %d px, |cff%02x%02x%02x#%02x%02x%02x|r, texture %s; backdrop %s",
+        style.borderSize or 0,
+        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
+        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
+        tostring(style.borderTexture),
+        style.backdrop == false and "off" or "on")
+end
+
 function Taunts:Dump()
     ns.Print("|cffffd100taunts|r - what a taunt of yours would do.")
 
@@ -553,6 +564,9 @@ function Taunts:Dump()
     ns.Print("  it would say: |cffffd100"
         .. Taunts.Message(cfg.message, "Dark Command", "Heavyweight Golem",
             person and person.name) .. "|r")
+
+    ns.Print("  the button: " .. (Taunts.Config().button and "on" or "off")
+        .. ", " .. StyleLine(Taunts.Style()))
 
     local _, class = UnitClass("player")
     local mine = {}

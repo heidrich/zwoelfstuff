@@ -4,6 +4,40 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.65.1] - 2026-08-10
+
+### Fixed
+
+- **The taunt button could not be moved in Edit Mode.** It had a mover, a cog
+  and a padlock, and nothing dragged it: the drag was a hand-written pair of
+  lines beside a hand-written list of movers, and the third panel was only
+  added to one of them. Both now come off **one list**, so a panel that can be
+  placed is a panel that can be dragged, by construction rather than by
+  remembering.
+- **The externals panel jumped back every time Edit Mode closed.** The
+  position was worked out again from `GetCenter()` minus `UIParent:GetCenter()`
+  - and those are in different units the moment the panel carries a scale of
+  its own. Nothing else moves that frame, so it is simply not re-measured any
+  more. Same fix on the taunt button and the answer bar.
+- **The answer bar was invisible in Edit Mode.** Standing alone there are no
+  tanks to build cells for, so it correctly drew nothing - which is useless
+  when the point of Edit Mode is to decide where it goes. A stand-in cell is
+  drawn while placing, and it deliberately carries **no macro**: a cell aimed
+  at nobody must do nothing when clicked rather than fire at whatever you have
+  targeted.
+- **The taunt button had no look settings at all**, while a note on the page
+  said they were "under Look on the right" - which is the co-tank panel's look
+  and writes a different table. Opacity, icon zoom, border thickness, colour
+  and texture, backdrop and its colour and opacity are on the page now.
+- **A profile from before the slots existed threw on login.** Two migrations
+  live in one function, and they were read newest-first: the lattice one
+  deletes `count`, and the older list one then did arithmetic on it. Oldest
+  first now, with a check that opens exactly that profile.
+- `/zs externals` and `/zs taunt` print what the thing is actually painted
+  with. "The colour does nothing" has two very different causes - a setting
+  that never reached the painter, and a black line on a black plate - and one
+  line now tells them apart.
+
 ## [4.65.0] - 2026-08-10
 
 ### Added

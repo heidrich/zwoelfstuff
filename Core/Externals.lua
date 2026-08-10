@@ -98,6 +98,25 @@ function Externals.Config()
     cfg.assigned = cfg.assigned or {}   -- [spellID] = "Name-Realm"
     cfg.channels = cfg.channels or {}
 
+    -- THE OLDEST SHAPE FIRST, and the order is the whole point.
+    --
+    -- A profile written before the slots existed carries an ordered LIST.
+    -- Poured into the cells in the order it had, once, and then dropped - a
+    -- migration that runs twice would refill slots somebody has emptied.
+    --
+    -- This used to sit at the BOTTOM of this function, below the migration
+    -- that deletes cfg.count - so `math.max(cfg.count, ...)` was reading a
+    -- number that had just been removed and threw on login for anybody whose
+    -- profile still had a `picked` list. Two migrations in one function are
+    -- read oldest-first or they read each other's leftovers.
+    if cfg.picked then
+        for index, spellID in ipairs(cfg.picked) do
+            if cfg.cells[index] == nil then cfg.cells[index] = spellID end
+        end
+        cfg.count = math.max(cfg.count or 6, #cfg.picked)
+        cfg.picked = nil
+    end
+
     -- A profile written before the lattice carries a count and a line width.
     -- Read once into rows and columns and then dropped - and it is dropped
     -- rather than kept in step, because two numbers for one shape is exactly
@@ -123,17 +142,6 @@ function Externals.Config()
     -- A profile that has never been asked sends a whisper, which is what the
     -- feature was built around.
     if next(cfg.channels) == nil then cfg.channels.WHISPER = true end
-
-    -- A profile written before the slots existed carries an ordered list.
-    -- Poured into the cells in the order it had, once, and then dropped: a
-    -- migration that runs twice would refill slots somebody has emptied.
-    if cfg.picked then
-        for index, spellID in ipairs(cfg.picked) do
-            if cfg.cells[index] == nil then cfg.cells[index] = spellID end
-        end
-        cfg.count = math.max(cfg.count, #cfg.picked)
-        cfg.picked = nil
-    end
 
     return cfg
 end
@@ -660,15 +668,22 @@ function Externals.Refresh()
     Externals:ApplyLayout()
 end
 
+-- THE POSITION IS NOT RE-MEASURED WHEN EDIT MODE CLOSES, and that is a fix
+-- rather than a shortcut. Owner, 2026-08-10: "im edit mode wird die position
+-- der leiste von external cd immer zurückgesetzt."
+--
+-- It used to work the position out again from panel:GetCenter() minus
+-- UIParent:GetCenter() - and those two are in DIFFERENT UNITS the moment the
+-- panel carries a scale of its own, because GetCenter answers in the frame's
+-- own coordinate space. So closing edit mode wrote a number that was the
+-- dragged one divided by the scale, and the panel jumped. Every time.
+--
+-- Nothing else moves this frame: the mover writes cfg.x and cfg.y exactly,
+-- ApplyLayout puts it there, and there is no StartMoving anywhere on it. The
+-- co-tank panel DOES have one, which is why it keeps its own SavePosition -
+-- and that one reads GetPoint, which needs no arithmetic at all.
 function Externals:SavePosition()
-    if not panel then return end
-    local cfg = Externals.Config()
-    local x, y = panel:GetCenter()
-    local px, py = UIParent:GetCenter()
-    if x and y and px and py then
-        cfg.x = math.floor(x - px + 0.5)
-        cfg.y = math.floor(y - py + 0.5)
-    end
+    -- Deliberately nothing. See above.
 end
 
 -- Edit Mode is open and this panel is one of the things being placed.
@@ -786,6 +801,20 @@ end)
 -- What the panel would do right now, printed. The one question anybody has
 -- about this feature is "who does this button whisper", and it has an answer
 -- that can be read out of the group without pressing anything.
+-- WHAT IT IS ACTUALLY PAINTED WITH. "the colour does nothing" has two very
+-- different causes - a setting that never reached the painter, and a black
+-- line on a black plate - and this tells them apart in one line.
+local function StyleLine(style)
+    local colour = style.borderColor or { 0, 0, 0 }
+    return string.format(
+        "border %d px, |cff%02x%02x%02x#%02x%02x%02x|r, texture %s; backdrop %s",
+        style.borderSize or 0,
+        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
+        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
+        tostring(style.borderTexture),
+        style.backdrop == false and "off" or "on")
+end
+
 function Externals:Dump()
     ns.Print("|cffffd100externals|r - who each slot would ask.")
 
@@ -808,6 +837,7 @@ function Externals:Dump()
         table.concat(slots, " ")))
     ns.Print(string.format("  %d in the group, %d picked.",
         #roster, #Externals.Picked()))
+    ns.Print("  " .. StyleLine(Externals.Style()))
 
     for _, spellID in ipairs(Externals.Picked()) do
         local spell = byID[spellID]

@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.65.1",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100The taunt button can be moved now|r - it had a mover and a padlock and nothing that actually dragged it.",
+            "|cffffd100The externals panel stops jumping back|r when you leave Edit Mode. Its position was being re-measured in the wrong units every time.",
+            "|cffffd100The answer bar shows up in Edit Mode|r even when you are standing alone, so it can be placed before the group exists.",
+            "|cffffd100The taunt button has its own look settings|r - border, colour, backdrop, opacity. The page said they existed; now they do.",
+            "A panel set up before version 4.59 no longer throws on login.",
+        },
+    },
+    {
         version = "4.65.0",
         date = "2026-08-10",
         lines = {
