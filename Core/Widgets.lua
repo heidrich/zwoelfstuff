@@ -62,7 +62,11 @@ local C = {
     textBody   = { 0.788, 0.812, 0.847 },  -- #C9CFD8  row labels in the inspector
     textDim    = { 0.608, 0.639, 0.686 },  -- #9BA3AF  secondary, inactive nav
     textFaint  = { 0.384, 0.416, 0.463 },  -- #626A76  meta, sublines
-    textGhost  = { 0.306, 0.337, 0.380 },  -- #4E5661  eyebrows, disabled
+    -- DISABLED ONLY, not headings. Against the window ground this is a
+    -- contrast ratio of 2.5:1, and normal-sized text needs 4.5:1 to be read.
+    -- It said "eyebrows" here and that is what every section heading in the
+    -- app was painted with. Owner: "zu klein, kaum lesbar".
+    textGhost  = { 0.306, 0.337, 0.380 },  -- #4E5661  disabled, switched off
 }
 
 -- Two more the design names in prose rather than in the token list, and both
@@ -110,15 +114,15 @@ UI.C = C
 -- rather than counting boxes, and the same page shows a third more of itself.
 UI.ROW_H      = 28
 UI.ROW_GAP    = 1
-UI.SECTION_H  = 32
+UI.SECTION_H  = 36
 UI.COL_GAP    = 18
 
 -- The window, and the three columns it is made of. Stated here rather than in
 -- Options.lua because the inspector needs to know how wide it is in order to
 -- decide what fits on a row, and it is not the thing that creates itself.
-UI.WINDOW_W    = 1360
+UI.WINDOW_W    = 1382
 UI.WINDOW_H    = 760
-UI.RAIL_W      = 168
+UI.RAIL_W      = 190
 UI.INSPECTOR_W = 400
 UI.CONTENT_W   = UI.WINDOW_W - UI.RAIL_W - UI.INSPECTOR_W  -- 792
 
@@ -156,7 +160,12 @@ UI.FS = {
     card    = 15,   -- bar name, inspector title
     row     = 13,   -- row labels, nav, lists
     meta    = 12,   -- sublines, hints
-    eyebrow = 10,   -- section heads, badges - ALWAYS upper case
+    -- A SECTION HEADING, and it has to be bigger than the rows under it.
+    -- Owner: "ueberschriften sind genauso gross wie der rest des textes oder
+    -- funktionen" - and they were smaller: 10 against a 13 row label, so the
+    -- one word that says what a block IS was the faintest thing in it.
+    section = 15,
+    eyebrow = 11,   -- captions and badges - ALWAYS upper case
 }
 
 local function Tex(parent, layer, r, g, b, a)
@@ -205,9 +214,12 @@ end
 -- a caption into a string that can no longer be measured or compared.
 --
 -- Upper case at 10px against a body of 13px carries the same signal on its own.
+-- A HEADING, AND IT HAS TO READ AS ONE. textDim rather than textGhost: 7.2:1
+-- against the window instead of 2.5:1, which is the difference between a
+-- caption you can read at a glance and one you have to lean in for.
 function UI.Eyebrow(parent, text, colour)
     return UI.Label(parent, (text or ""):upper(), UI.FS.eyebrow,
-        colour or C.textGhost)
+        colour or C.textDim)
 end
 
 -- Badge - upper-case caption on its own bed. Three meanings, and they are the
@@ -680,8 +692,11 @@ function UI.SectionHeader(parent, text, onToggle, isOpen)
     -- The air goes ABOVE the heading, not below it. A heading belongs to what
     -- follows it, and spacing it evenly is what makes a long page read as one
     -- undifferentiated column.
+    -- NOT UI.Eyebrow. That is the small caption over a nav group or a band;
+    -- this is the heading of a block of settings, and it has to win against
+    -- the rows it introduces rather than hide under them.
     local caption = text:upper()
-    local label = UI.Eyebrow(header, caption)
+    local label = UI.Label(header, caption, UI.FS.section, C.text)
     label:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", onToggle and 13 or 0, 7)
 
     -- The rule runs from the caption to the right EDGE of the column, on the
@@ -3560,6 +3575,16 @@ end
 function Grid:Section(title, key)
     self.group = key
     self.sectionName = title
+
+    -- NOTHING IS ABOVE THE FIRST ROW OF A NEW SECTION.
+    --
+    -- `lastRow` is what a note attaches itself to on a page that shows notes
+    -- as tooltips, and it used to survive a heading. So a section that opens
+    -- with a note handed its sentences to the LAST ROW OF THE SECTION BEFORE
+    -- it and then drew nothing: owner, with a picture of it, "bei request ist
+    -- noch ein leeres keys, das wurde vergessen zu entfernen" - it was not
+    -- left behind, its contents had been swallowed one section up.
+    self.lastRow = nil
     local padTop = (#self.items == 0) and 0 or SECTION_PAD_TOP
 
     if not key then
@@ -3591,9 +3616,14 @@ end
 -- height would be the empty string's, and the rows below would overlap it.
 --
 -- A note explains the row ABOVE it, so it sits close to that one and keeps
--- its distance from whatever comes next - and it is indented to the same
--- place a row's label starts, or the page has two left edges.
-local NOTE_INDENT = 8
+-- its distance from whatever comes next.
+--
+-- FLUSH, NOT INDENTED. This was 8, with a comment claiming it lined up with
+-- where a row's label starts - and a row's label starts at 0. So it created
+-- exactly the second left edge it said it was preventing. Owner: "nicht alle
+-- texte linksbuendig, oft ist viel platz vorn. das macht es super schwer zu
+-- lesen."
+local NOTE_INDENT = 0
 
 function Grid:Note(text, height)
     local note = UI.Hint(self.content, text)
@@ -3626,8 +3656,35 @@ function Grid:Note(text, height)
     --
     -- Width is set first either way: the unwrapped height is one line, and
     -- measuring before the width has always been the same bug in miniature.
+    -- ROOM TO BREATHE ON BOTH SIDES. It had 3 above, which put the sentence
+    -- against the hairline of the block it explains. Owner: "die kleben mir
+    -- alle viel zu nah an den trennlinien ... mehr space oben und unten."
     note.dkMeasure = height == nil
-    return self:Wide(note, height or note:GetStringHeight(), 3, 11, NOTE_INDENT)
+
+    -- THE LINE BELONGS UNDER THE PAIR, NOT THROUGH IT.
+    --
+    -- A row draws its hairline along its own bottom edge. With a sentence
+    -- underneath, that line falls BETWEEN a setting and its own explanation,
+    -- so the sentence reads as an introduction to whatever comes next. Owner:
+    -- "auch sind die immer unter der linie, obwohl die eigentlich zu der
+    -- funktion darueber sind."
+    --
+    -- So the rows above give their line up and the note carries one instead.
+    -- The page keeps the same number of hairlines; they now fall between
+    -- groups rather than through one.
+    --
+    -- WHICH rows give it up is decided in Layout, because that is the only
+    -- place that knows which of them share a line: a row can be dropped from
+    -- the page at refresh time, and that changes who its neighbour is.
+    note.dkClosesGroup = true
+    note.dkRule = Tex(self.content, "BACKGROUND",
+        C.separator[1], C.separator[2], C.separator[3], 1)
+    note.dkRule:SetHeight(1)
+    note.dkRule:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -9)
+    note.dkRule:SetPoint("TOPRIGHT", note, "BOTTOMRIGHT", 0, -9)
+    note.dkRule:Hide()
+
+    return self:Wide(note, height or note:GetStringHeight(), 9, 15, NOTE_INDENT)
 end
 
 -- On a page with a third column, every row publishes itself when pointed at,
@@ -3768,11 +3825,29 @@ function Grid:Layout()
     local y, column, lineHeight = 0, 0, 0
     local pending = 0        -- the bottom pad the previous block asked for
 
+    -- The rows sharing the line being filled, and the last line that closed.
+    -- A note takes the hairlines off the line above it; only this loop knows
+    -- which rows those are.
+    local line, lastLine = {}, {}
+
+    -- EVERY HAIRLINE BACK ON FIRST. Layout runs again on every refresh, and a
+    -- line hidden under the last pass's conditions would stay hidden under
+    -- this one's - a rule that disappears when a row above it is switched off
+    -- and never comes back.
+    for _, item in ipairs(self.items) do
+        local region = item.region
+        if region then
+            if region.rule then region.rule:Show() end
+            if region.dkRule then region.dkRule:Hide() end
+        end
+    end
+
     local function EndLine()
         if column > 0 then
             y = y - lineHeight
             pending = math.max(pending, UI.ROW_GAP)
             column, lineHeight = 0, 0
+            lastLine, line = line, {}
         end
     end
 
@@ -3801,6 +3876,22 @@ function Grid:Layout()
                 region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
                     item.indent or 0, y)
                 region:Show()
+
+                if region.dkClosesGroup then
+                    -- Nothing above to group with - an opening sentence under
+                    -- a heading, or a second note in a run - so it neither
+                    -- takes a line away nor draws one.
+                    for _, above in ipairs(lastLine) do
+                        if above.rule then above.rule:Hide() end
+                    end
+                    if region.dkRule and #lastLine > 0 then
+                        region.dkRule:Show()
+                    end
+                end
+
+                -- A full-width ROW is a line of its own; anything else - a
+                -- heading, a note, a card - closes the group above it.
+                lastLine = region.rule and { region } or {}
             end
             -- dkHeight lets a block that grows with its content - a grid
             -- gaining a row - report its real height instead of the one it
@@ -3822,6 +3913,7 @@ function Grid:Layout()
             region:SetPoint("TOPLEFT", self.content, "TOPLEFT",
                 (item.indent or 0) + column * (self.colWidth + UI.COL_GAP), y)
             region:Show()
+            line[#line + 1] = region
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
             if column >= 2 then EndLine() end
@@ -4335,6 +4427,8 @@ function UI.NavItem(parent, text, glyphKind, onClick)
         self.label:SetPoint("LEFT", self.glyph, "RIGHT", 10, 0)
         if self.dimmed then
             self.label:SetPoint("RIGHT", self.offMark, "LEFT", -6, 0)
+        elseif self.lamp:IsShown() then
+            self.label:SetPoint("RIGHT", self.lamp, "LEFT", -8, 0)
         else
             self.label:SetPoint("RIGHT", self, "RIGHT", -self.LABEL_INSET, 0)
         end
@@ -4342,15 +4436,29 @@ function UI.NavItem(parent, text, glyphKind, onClick)
 
     -- A ROW WHOSE FEATURE IS NOT RUNNING. It stays in the column and it stays
     -- clickable - the page behind it is where you switch the thing back on,
-    -- so a row you cannot reach would be a dead end. What changes is that it
-    -- reads as off: the whole row drops a level, and the word says so.
+    -- so a row you cannot reach would be a dead end.
     --
-    -- The word rather than a dot: a faint dot beside a faint label is two
-    -- things to decode, and this column already spends its one accent on
-    -- "you are here".
-    item.offMark = UI.Label(item, "OFF", UI.FS.eyebrow, C.textGhost)
+    -- ON IS GREEN, OFF IS RED, and that is the owner's call over an earlier
+    -- one of mine: "feature oder funktion an, schoenes gruen, aus rot! das
+    -- erkennt jeder sofort. denk dran, wow spielen menschen von 12-80."
+    --
+    -- He is right, and the reason is worth writing down: the old marker was
+    -- the word OFF in the faintest grey in the palette, which is a 2.5:1
+    -- contrast ratio - readable if you go looking, invisible if you are not.
+    -- Colour is read before text is, and everybody already knows this pair.
+    --
+    -- The two states say it two ways rather than one. A green lamp reads as
+    -- "running" with nothing to learn; a red LAMP alone would need a legend
+    -- the first time, so off keeps the word and paints it red. Same place in
+    -- the row either way, so the column still scans as one edge.
+    item.offMark = UI.Label(item, "OFF", UI.FS.eyebrow, C.danger)
     item.offMark:SetPoint("RIGHT", item, "RIGHT", -12, 0)
     item.offMark:Hide()
+
+    item.lamp = Tex(item, "ARTWORK", C.inUse[1], C.inUse[2], C.inUse[3], 1)
+    item.lamp:SetSize(6, 6)
+    item.lamp:SetPoint("RIGHT", item, "RIGHT", -14, 0)
+    item.lamp:Hide()
 
     item.SetActive = function(self, active)
         self.active = active and true or false
@@ -4364,6 +4472,14 @@ function UI.NavItem(parent, text, glyphKind, onClick)
         -- could be. The icon brightens with the label instead.
         local g = self.dimmed and C.textGhost or (active and C.text or C.textFaint)
         self.glyph:SetColor(g[1], g[2], g[3])
+    end
+
+    -- A row that is not a feature has no state to show - Settings, Profiles,
+    -- About. Passing "is it a module" separately is what keeps those three
+    -- from growing a green light that means nothing.
+    item.SetModuleState = function(self, isModule, on)
+        self.lamp:SetShown((isModule and on) and true or false)
+        self:SetDimmed(isModule and not on)
     end
 
     item.SetDimmed = function(self, dimmed)

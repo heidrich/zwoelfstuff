@@ -30,9 +30,19 @@ local C = UI.C
 -- AND its control on the same line, and it was clipping labels to "T..." to
 -- fit. So: take the width from the one that has nothing to say and give it to
 -- the one that ran out.
-local WINDOW_W, WINDOW_H = 1360, 760
-local SIDEBAR_W = 168
-local SIDE_W    = 400
+-- TAKEN FROM THE DESIGN SYSTEM, NOT TYPED AGAIN.
+--
+-- These were four literals here and four more in Widgets, for the same four
+-- measurements - and the inspector reads its own copy in order to decide what
+-- fits on a row. Two numbers for one distance is a number that will disagree
+-- with itself, and it did the moment the rail was widened.
+--
+-- The rail carries a state light per feature now, so it needed the room for
+-- one; the window grew by the same amount rather than taking it out of the
+-- work area, which is the column that was short in the first place.
+local WINDOW_W, WINDOW_H = UI.WINDOW_W, UI.WINDOW_H
+local SIDEBAR_W = UI.RAIL_W
+local SIDE_W    = UI.INSPECTOR_W
 local PAD       = 20
 
 -- Shared with Widgets, so the rule under the brand, the rule under the page
@@ -1018,7 +1028,8 @@ function Options:Create()
         for index, item in ipairs(navItems) do
             local rowEntry = PAGES[index]
             local rowModule = rowEntry and rowEntry.module
-            item:SetDimmed(rowModule and not ns.Modules:IsOn(rowModule))
+            item:SetModuleState(rowModule ~= nil,
+                rowModule ~= nil and ns.Modules:IsOn(rowModule))
             item:SetActive(index == self.pageIndex)
         end
 

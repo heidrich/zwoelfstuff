@@ -2331,7 +2331,7 @@ local function BuildToolbar()
     -- the right edge, started at 276 - so in BUILD mode the primary button sat
     -- on top of Spells and the two shared 56 pixels. It only showed up in build
     -- mode, because Spells is the button that is hidden the rest of the time.
-    toolbar:SetSize(460, 168)
+    toolbar:SetSize(544, 168)
     toolbar:SetPoint("TOP", UIParent, "TOP", 0, -120)
     toolbar:SetFrameLevel(overlay:GetFrameLevel() + 40)
     toolbar:EnableMouse(true)
@@ -2408,6 +2408,33 @@ local function BuildToolbar()
     end)
     toolsBtn:SetPoint("LEFT", overlayBtn, "RIGHT", 6, 0)
 
+    -- SET KEYS, IN THE BOX WITH THE REST. Owner: "set keys, die funktion,
+    -- gehoert noch als button in den edit modus! in die grosse box." It is
+    -- the same kind of thing as everything else here - something you do to
+    -- the panels while they are out - and it was reachable only from two
+    -- settings pages.
+    --
+    -- IT HANDS OVER RATHER THAN LAYERING. Both modes put squares over the
+    -- same panels; up at once, Edit Mode's movers sit on top and swallow the
+    -- click that was meant to bind a key. So Edit Mode closes first - and the
+    -- "who do I hand the window back to" token goes with it, so that leaving
+    -- the key mode reopens the window if that is where you came from.
+    --
+    -- Asked BEFORE closing anything, because a mode that refuses after Edit
+    -- Mode has already packed up leaves you nowhere you asked to be.
+    local keysBtn = UI.Button(toolbar, "Set keys",
+        UI.ButtonWidth("Set keys"), function()
+            local why = ns.Keys:Blocked()
+            if why then ns.Print(why) return end
+
+            local fromWindow = EditMode.cameFromWindow
+            EditMode.cameFromWindow = false
+            EditMode:SetUnlocked(false)
+            ns.Keys:SetActive(true)
+            ns.Keys.cameFromWindow = fromWindow
+        end)
+    keysBtn:SetPoint("LEFT", toolsBtn, "RIGHT", 6, 0)
+
     local spellsBtn = UI.Button(toolbar, "Spells", 72, function()
         if not palette then return end
         if palette:IsShown() then
@@ -2418,7 +2445,10 @@ local function BuildToolbar()
             palette:Show()
         end
     end)
-    spellsBtn:SetPoint("LEFT", toolsBtn, "RIGHT", 6, 0)
+    -- Anchored past Set keys rather than to it: Spells comes and goes with
+    -- build mode, and a button that moves when its neighbour disappears is a
+    -- button you have to look for twice.
+    spellsBtn:SetPoint("LEFT", keysBtn, "RIGHT", 6, 0)
 
     -- The padlock, because that is what Done DOES: it locks the bars again.
     local doneBtn = UI.Button(toolbar, "Done", 92, function()

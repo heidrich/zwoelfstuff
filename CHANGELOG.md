@@ -4,6 +4,35 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.72.0] - 2026-08-10
+
+### Changed
+
+- **You can see at a glance which features are running.** A green light next
+  to a feature in the list on the left means it is on; **OFF** in red means it
+  is not. It used to be the word OFF in the faintest grey there is.
+- **Section headings are bigger than the settings under them.** They were
+  smaller - the one word that says what a block of settings *is* was the
+  faintest thing in it.
+- **The explanations line up with everything else.** They were indented by
+  eight pixels and nothing else on the page was, so every paragraph started in
+  a different place from the rows around it.
+- **A line no longer runs between a setting and its own explanation.** The
+  hairline that closes a block now sits under the pair, where it separates one
+  group from the next instead of cutting one in half. And there is room to
+  breathe above and below every paragraph.
+- **Set keys is a button in Edit Mode**, in the box with the rest. It was only
+  reachable from two settings pages. Edit Mode closes as it opens, because
+  both put squares over the same panels and only one of them can have your
+  clicks.
+
+### Fixed
+
+- **The empty Keys section on the External CD request page.** Its two
+  sentences were being handed to the last row of the section above it and
+  shown in that row's tooltip instead - so the heading was left standing over
+  nothing. Every section that opens with a paragraph was affected.
+
 ## [4.71.0] - 2026-08-10
 
 ### Added

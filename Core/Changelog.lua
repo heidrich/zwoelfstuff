@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.72.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100You can see which features are running at a glance.|r A green light beside one in the list on the left means it is on, |cffff4040OFF|r in red means it is not.",
+            "|cffffd100Headings are bigger than the settings under them|r - they used to be smaller, so the one word saying what a block IS was the faintest thing in it.",
+            "|cffffd100The explanations line up with everything else|r, and a line no longer runs between a setting and its own explanation. The hairline sits under the pair now, with room to breathe on both sides.",
+            "|cffffd100Set keys is a button in Edit Mode|r, in the box with the rest.",
+            "|cffffd100The empty Keys section is fixed.|r Its two sentences were being handed to the row above it and hidden in that row's tooltip - which happened to every section that opens with a paragraph.",
+        },
+    },
+    {
         version = "4.71.0",
         date = "2026-08-10",
         lines = {

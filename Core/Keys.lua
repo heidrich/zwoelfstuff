@@ -324,17 +324,32 @@ end
 ---------------------------------------------------------------------------
 -- The mode
 ---------------------------------------------------------------------------
+-- WHY IT CANNOT OPEN, in one place and answerable BEFORE anything is taken
+-- apart. SetBinding is protected in combat, so the mode that exists to call
+-- it does not open there.
+--
+-- A caller that has to tidy up first needs to ask in advance: Edit Mode hands
+-- over to this mode and has to close itself to do it, and closing itself for
+-- a mode that then refuses would leave the player somewhere they did not ask
+-- to be. A second copy of the rule in that caller is a rule that drifts.
+function Keys:Blocked()
+    if InCombatLockdown and InCombatLockdown() then
+        return "|cffff8040Not in combat.|r Keys are set out of combat - the "
+            .. "game does not allow one to be re-bound during a fight."
+    end
+    return nil
+end
+
 function Keys:SetActive(on)
     on = on and true or false
     if on == Keys.active then return Keys.active end
 
-    -- SetBinding is protected in combat, so the mode that exists to call it
-    -- does not open there - and says why rather than opening and refusing
-    -- every square silently.
-    if on and InCombatLockdown and InCombatLockdown() then
-        ns.Print("|cffff8040Not in combat.|r Keys are set out of combat - the "
-            .. "game does not allow one to be re-bound during a fight.")
-        return false
+    if on then
+        local why = Keys:Blocked()
+        if why then
+            ns.Print(why)
+            return false
+        end
     end
 
     Keys.active = on
