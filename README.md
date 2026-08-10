@@ -4,6 +4,29 @@ A cooldown manager for a Death Knight, built on the one thing that actually
 works on this patch: **Blizzard's own Cooldown Manager does the hard part, and
 this addon arranges it.**
 
+## Standing on other people's shoulders
+
+This addon was written by reading other addons — **EllesmereUI**, **ElvUI**,
+**BigWigs**, **Method Raid Tools**, **Mythic Dungeon Tools**, **Details!**,
+**WeakAuras**, **Plater**, **LibOpenRaid** and a few more. Their authors have
+our thanks.
+
+**No code was copied from any of them.** What we took is a different thing:
+*facts about the game's API.* Which field a table actually carries, which event
+fires first, which call answers on a fresh login and which one returns nothing
+until a frame later, which values the client withholds in a dungeon. None of
+that is documented anywhere, and on a patch that keeps closing doors it is
+often not discoverable at all except by reading code that already works.
+
+So the comments in `Core/` cite those addons by name and by line, and they say
+"read off working code on this machine" rather than pretending we knew. That is
+deliberate. A number nobody can re-check is a number that quietly goes wrong
+two patches later — see [`Core/CDM.lua`](Core/CDM.lua), which is mostly a
+record of where each fact came from.
+
+If you are one of those authors and you would rather not be named here, say so
+and we will take the citation out.
+
 1. **Bars** — your own bars, as many as you like. A bar is a grid of cells; you
    set the rows and columns and put a spell in each cell. Grid, staggered, or a
    puzzle where every cell sits exactly where you dragged it.
@@ -23,7 +46,7 @@ Auras the Cooldown Manager does not carry are handled on the bars like anything
 else. The separate single-aura window that used to be point 2 here was removed
 in 4.4.0 — a second window showing one buff was two answers to one question.
 
-> **Status:** published on CurseForge and in use. `/zs test` runs 694 checks on
+> **Status:** published on CurseForge and in use. `/zs test` runs 1264 checks on
 > the model and the rules; what it cannot check is how it *looks*.
 > `/zs report` hands back the procs it has recorded on your class and spec —
 > that is the thing worth sending back.
