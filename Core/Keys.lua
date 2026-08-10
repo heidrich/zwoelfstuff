@@ -146,15 +146,24 @@ local function Paint(overlay)
     overlay.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 end
 
+-- SetPropagateKeyboardInput IS PROTECTED IN COMBAT and raises
+-- ADDON_ACTION_BLOCKED if it is called there. The same guard Edit Mode uses,
+-- for the same reason: a fight can start while you are standing in a mode
+-- that was legal to open.
+local function Propagate(frame, state)
+    if InCombatLockdown and InCombatLockdown() then return false end
+    if not frame.SetPropagateKeyboardInput then return false end
+    frame:SetPropagateKeyboardInput(state)
+    return true
+end
+
 local function Stop()
     if not capturing then return end
     local overlay = capturing
     capturing = nil
     overlay:EnableKeyboard(false)
     overlay:EnableMouseWheel(false)
-    if overlay.SetPropagateKeyboardInput then
-        overlay:SetPropagateKeyboardInput(true)
-    end
+    Propagate(overlay, true)
     Paint(overlay)
 end
 
@@ -197,9 +206,7 @@ local function Build(index)
         capturing = self
         self:EnableKeyboard(true)
         self:EnableMouseWheel(true)
-        if self.SetPropagateKeyboardInput then
-            self:SetPropagateKeyboardInput(false)
-        end
+        Propagate(self, false)
         Paint(self)
     end)
 
@@ -254,12 +261,29 @@ end
 ---------------------------------------------------------------------------
 -- The banner - what this mode is, while you are in it
 ---------------------------------------------------------------------------
+-- THERE HAS TO BE A WAY OUT THAT YOU CAN SEE.
+--
+-- Owner, 2026-08-10: "man kommt nicht mehr aus dem modus. ein speichern
+-- button oder done wäre cool" - and he was stuck for a reason worth writing
+-- down: Escape was handled on the SQUARE, and a square only listens while it
+-- is waiting for a key. Standing in the mode without having clicked one,
+-- nothing on screen was listening at all.
+--
+-- So now there are three ways out and none of them needs to be discovered: a
+-- button that says Done, Escape from anywhere in the mode, and Escape while a
+-- square is capturing. A mode with one exit that is a keyboard shortcut is a
+-- trap however well it works.
+--
+-- NOTHING IS "SAVED" HERE, and the button does not pretend otherwise. Each
+-- key is written the moment it is pressed - SaveBindings, the game's own -
+-- so Done means done, not committed. Calling it Save would promise that
+-- leaving another way loses something, which would be a lie.
 local function Banner()
     if banner then return banner end
 
-    banner = CreateFrame("Frame", nil, UIParent)
+    banner = CreateFrame("Frame", "ZwoelfStuffKeysBanner", UIParent)
     banner:SetFrameStrata("DIALOG")
-    banner:SetSize(420, 62)
+    banner:SetSize(460, 74)
     banner:SetPoint("TOP", UIParent, "TOP", 0, -140)
 
     local bed = banner:CreateTexture(nil, "BACKGROUND")
@@ -274,9 +298,25 @@ local function Banner()
 
     local hint = UI.Label(banner,
         "Click a square, press the key. Right-click clears it. "
-        .. "|cffffd100Escape|r when you are done.", 12, C.textDim)
+        .. "Every key is set the moment you press it.", 12, C.textDim)
     hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    hint:SetWidth(392)
+    hint:SetWidth(320)
+
+    local done = UI.Button(banner, "Done", 96, function()
+        Keys:SetActive(false)
+    end, "primary")
+    done:SetPoint("BOTTOMRIGHT", banner, "BOTTOMRIGHT", -14, 14)
+
+    -- ESCAPE, FROM ANYWHERE IN THE MODE. The game's own list closes a shown
+    -- frame on Escape; hiding this one is what leaving looks like, so the
+    -- reflex works without a key handler of ours competing for the keyboard.
+    if UISpecialFrames then
+        table.insert(UISpecialFrames, "ZwoelfStuffKeysBanner")
+    end
+    -- Whatever hid it - the button, Escape, a reload - the mode ends with it.
+    -- SetActive returns early when the state already matches, so the button
+    -- hiding the banner and the banner ending the mode is one exit, not two.
+    banner:SetScript("OnHide", function() Keys:SetActive(false) end)
 
     return banner
 end
@@ -336,6 +376,19 @@ function Keys:SetActive(on)
 end
 
 function Keys:Toggle() return self:SetActive(not Keys.active) end
+
+-- A FIGHT ENDS IT. The mode exists to call SetBinding, which the game does
+-- not allow in combat - so staying in it would mean a screen full of squares
+-- that all refuse. Out, with a reason, rather than a mode that has quietly
+-- stopped working.
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+watcher:SetScript("OnEvent", function()
+    if not Keys.active then return end
+    ns.Print("|cffff8040Combat.|r Keys are set out of combat - back to it "
+        .. "afterwards.")
+    Keys:SetActive(false)
+end)
 
 -- Placed over whatever is on screen at this moment. Called again whenever
 -- the panels rebuild, because a slot that moved would leave its badge behind.

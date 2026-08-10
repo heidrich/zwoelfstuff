@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsCoTanks - the Co-Tanks page and its inspector.
 --
 -- The middle column is the PREVIEW and the handful of settings you change
@@ -208,11 +208,8 @@ function OptionsCoTanks:BuildPage(page, width)
     -- this addon draws is placed - the owner's call, and the right one: a
     -- display moved from a button on a settings page is moved blind, because
     -- the window is sitting over the place you are trying to put it.
-    grid:Note("To move it, open |cffffd100Edit mode|r at the top of the list "
-        .. "on the left. The panel comes out while you are in there even if "
-        .. "it is switched off, it drags like a bar, and it snaps to your "
-        .. "bars and to the middle of the screen - hold |cffffd100Alt|r to "
-        .. "put it exactly where you want it instead.")
+    grid:Note("To move it, open |cffffd100Edit mode|r in the list on the "
+        .. "left.")
 
     grid:Section("The basics")
 
@@ -285,10 +282,7 @@ function OptionsCoTanks:BuildPage(page, width)
     channelHost.Refresh = function() chips.Refresh() end
 
     grid:Note("|cffffd100Party or raid|r picks the channel for the group you "
-        .. "are actually in - in a dungeon from the finder that is NOT party "
-        .. "chat, which is why it is one button and not three. "
-        .. "|cffffd100Whisper the tank|r goes to the other tank alone, and is "
-        .. "dropped when there is nobody else tanking.")
+        .. "are in.")
 
     local messageRow = grid:FullRow("Message", { controlWidth = 260 })
     local messageInput = UI.Input(messageRow.slot, 260, function(text)
@@ -306,13 +300,8 @@ function OptionsCoTanks:BuildPage(page, width)
     askInput:SetPoint("RIGHT", askRow.slot, "RIGHT", 0, 0)
     askRow.Refresh = function() askInput:SetText(TCfg().ask or "") end
 
-    grid:Note("|cffffd100%t|r is what you taunted, |cffffd100%s|r is the "
-        .. "taunt you pressed and |cffffd100%n|r is the other tank. A "
-        .. "placeholder nothing filled comes out of the sentence rather than "
-        .. "being read out as \"%t\" by somebody mid-pull.\n\n"
-        .. "The second line is what |cffffd100/zs taunt ask|r says - put that "
-        .. "in a macro and give it a key, and it is one press to tell the "
-        .. "other tank to take it.")
+    grid:Note("|cffffd100%t|r is what you taunted, |cffffd100%s|r the taunt "
+        .. "you pressed, |cffffd100%n|r the other tank.")
 
     UI.Toggle(grid:FullRow("Only in a group", { controlWidth = 124 }),
         function() return TCfg().onlyInGroup ~= false end,
@@ -466,29 +455,18 @@ function OptionsCoTanks:BuildPage(page, width)
         .. "does nothing.")
 
     grid:Buttons({
-        { text = "Make the macro", width = 150, style = "primary",
+        { text = "Make the macro",
           onClick = function()
               local ok, why = ns.Taunts.MakeMacro()
               ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
                   or ("|cffff8040Not made:|r " .. tostring(why)))
           end },
-        { text = "What a taunt would say", width = 190,
+        { text = "What a taunt would say",
           onClick = function() ns.Taunts:Dump() end },
     }, 10)
 
-    grid:Note("|cffffd100Make the macro|r writes a macro called "
-        .. "|cffffd100ZS Taunt|r with the icon above and keeps it in step - "
-        .. "drag it onto a bar from the macro window. Or skip the macro "
-        .. "entirely: the game's own |cffffd100Key Bindings|r has a "
-        .. "|cffffd100ZwoelfStuff|r section with |cffffd100Ask the other tank "
-        .. "to taunt|r in it. All three do the same thing.")
-
-    grid:Note("|cffff8040What this cannot do:|r tell you when the OTHER tank "
-        .. "taunts. Since 12.0.5 another player's instant cast is not "
-        .. "announced to addons at all, the combat log is closed, and every "
-        .. "taunt in the game is instant - so anything claiming to show you "
-        .. "the co-tank's taunt is guessing. Yours is readable, which is why "
-        .. "this says yours out loud instead.")
+    grid:Note("|cffffd100Make the macro|r writes a macro called |cffffd100ZS "
+        .. "Taunt|r with the icon above. Drag it onto a bar once.")
 
     grid:Layout()
     page.Refresh = function() grid:Refresh() end
@@ -733,13 +711,6 @@ function OptionsCoTanks:BuildLook(grid)
             DB().healthReverse = entry.reverse
         end, { apply = Apply })
 
-    grid:Note("\"By remaining health\" needs numbers this client will let an "
-        .. "addon read. On this patch another player's health can arrive "
-        .. "protected mid-fight, and then it falls back to the class colour "
-        .. "rather than freezing on the last one it could work out. The BAR is "
-        .. "always right either way - it is handed the number without reading "
-        .. "it, which is the whole trick.")
-
     -- Same for the three-colour ramp: it is the whole of one mode and nothing
     -- at all in the other two, so it goes away rather than sitting folded
     -- shut and inert.
@@ -772,13 +743,7 @@ function OptionsCoTanks:BuildLook(grid)
         Apply)
 
     grid:Section("Shields", "ct-absorb")
-    grid:Note("Two different things, both drawn over the health bar rather "
-        .. "than beside it. A SHIELD is damage they can take before they lose "
-        .. "any health, so it sits past the end of the fill. HEALING BLOCKED "
-        .. "is the opposite - a debuff that eats incoming heals until it is "
-        .. "used up, so it sits inside the fill, at the end that would be "
-        .. "healed first. Necrotic Wound and Mortal Wounds are the ones you "
-        .. "will see it from.")
+    grid:Note("A shield and a heal absorb, both drawn over the health bar.")
 
     Switch(grid, "Shield", "absorbShow", "Damage they can take for free")
     Colour(grid, "Shield colour", "absorbColor")
@@ -798,10 +763,7 @@ function OptionsCoTanks:BuildLook(grid)
         Get("healAbsorbTexture"),
         function(v) DB().healAbsorbTexture = v end, Apply)
 
-    grid:Note("Leave a texture empty and it wears the health bar's. Picking a "
-        .. "different one is the point though: a shield drawn in the same "
-        .. "material as the health under it reads as more health, which is "
-        .. "the one thing it must not do.")
+    grid:Note("Leave a texture empty and it wears the health bar's.")
 
     self.lookGradients = gradients
     grid.widgets[#grid.widgets + 1] = {
@@ -913,11 +875,6 @@ function OptionsCoTanks:BuildText(grid)
     }, function() return DB().health.format end,
         function(value) DB().health.format = value end, { apply = Apply })
 
-    grid:Note("On this patch another player's health can arrive as a protected "
-        .. "number that no addon may do arithmetic on. When that happens the "
-        .. "text goes BLANK rather than printing a zero - a row that reads 0% "
-        .. "because the number could not be read is worse than one that says "
-        .. "nothing. The bar itself keeps working throughout.")
 end
 
 ---------------------------------------------------------------------------
@@ -1087,11 +1044,6 @@ function OptionsCoTanks:BuildRules(grid)
         ns.GROW_Y, Get("growth"), function(value) DB().growth = value end,
         { apply = Apply })
 
-    grid:Note("\"Lowest first\" needs health numbers this client will let an "
-        .. "addon compare. When it will not, the raid order stands - which is "
-        .. "the order it was in a moment ago, so the rows do not shuffle under "
-        .. "your eye mid-pull.")
-
     grid:Section("When it appears")
     Switch(grid, "Only in a group", "onlyInGroup")
     Switch(grid, "Only in a dungeon or raid", "onlyInInstance")
@@ -1166,8 +1118,6 @@ function OptionsCoTanks:BuildRules(grid)
     Slide(grid, "Disconnected", "offlineFade", 0.1, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
 
-    grid:Note("One alpha for the whole row, decided by the worst thing true "
-        .. "about it. Multiplying the three together made a dead, disconnected "
-        .. "tank who is out of range invisible - which is precisely the moment "
-        .. "you want to see that there is one.")
+    grid:Note("One opacity for the whole row, from the worst thing true about "
+        .. "it.")
 end

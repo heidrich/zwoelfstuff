@@ -13,6 +13,23 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.69.0",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100A button looks like a button everywhere.|r Actions were drawn three different ways - solid, outlined, or bare text with no surface at all.",
+            "|cffffd100The orange is rare again.|r Fourteen buttons wore it, including |cffffd100Delete this profile|r and |cffffd100Reset all settings|r - the loudest things in the window were the two destructive ones.",
+            "|cffffd100Buttons are as wide as their words|r instead of fifteen hand-typed widths.",
+            "|cffffd100Half the explanation text is gone.|r What a setting does, in a sentence or two - not what the game will not allow.",
+        },
+    },
+    {
+        version = "4.68.1",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100A Done button|r in the key mode, and Escape works from anywhere in it - not only while a square is waiting for a key. Every key is set the moment you press it, so leaving loses nothing.",
+        },
+    },
+    {
         version = "4.68.0",
         date = "2026-08-10",
         lines = {

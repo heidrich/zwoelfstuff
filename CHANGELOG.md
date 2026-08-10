@@ -4,6 +4,36 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.69.0] - 2026-08-10
+
+### Changed
+
+- **A button is a button everywhere now.** Actions were drawn three different
+  ways - a solid one, an outlined one, and bare text with no surface at all -
+  so the same kind of thing looked like three kinds of thing. They all have a
+  surface now.
+- **The orange is rare again.** Fourteen buttons were painted in the accent,
+  including "Delete this profile" and "Reset all settings" - the two loudest
+  things in the window were the two destructive ones. Three are left, each
+  one finishing something you started.
+- **Buttons are as wide as their words.** Fifteen different widths were typed
+  by hand at the call sites and none of them was measured, so a label that
+  grew got clipped and a short one sat in a slab. One rule: the words plus
+  their padding.
+- **Half the prose is gone.** Forty-eight notes said what the game will not
+  allow and why; they now say what the setting does, in a sentence or two.
+
+## [4.68.1] - 2026-08-10
+
+### Fixed
+
+- **There is a way out of the key mode that you can see.** A **Done** button
+  in the banner, and Escape now works from anywhere in the mode rather than
+  only while a square is waiting for a key. Nothing is "saved" on the way out
+  - every key is written the moment you press it - which is why it says Done
+  and not Save. A fight ends the mode by itself, because keys cannot be bound
+  in combat.
+
 ## [4.68.0] - 2026-08-10
 
 ### Changed

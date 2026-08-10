@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsProfiles.lua - the Profiles page
 --
 -- Four things happen here and they are kept apart on purpose, because three
@@ -85,12 +85,7 @@ function Page:BuildPage(page, width)
         end)
 
     grid:Note("A profile is a set of settings with a name. Your character "
-        .. "points at one, and it starts out pointing at a profile named "
-        .. "after itself - which is exactly how this worked before profiles "
-        .. "had names, so nothing moved when you updated.\n\n"
-        .. "Point a second character at the same one and they really are the "
-        .. "same settings, not two copies drifting apart. Change a colour on "
-        .. "either and both have it.")
+        .. "points at one.")
 
     ---------------------------------------------------------------------
     -- Making another
@@ -152,7 +147,7 @@ function Page:BuildPage(page, width)
     local armed, deleteButton = false, nil
     local _, firstDeleteButton = grid:Buttons({
         {
-            text = "Delete this profile", width = 170, style = "primary",
+            text = "Delete this profile",
             onClick = function()
                 local button = deleteButton
                 if not button then return end
@@ -186,10 +181,7 @@ function Page:BuildPage(page, width)
     })
     deleteButton = firstDeleteButton
 
-    grid:Note("Deletes the profile you are using, for every character using "
-        .. "it - they each get a fresh one named after themselves on their "
-        .. "next login. The last remaining profile cannot be deleted: "
-        .. "something has to be in use. There is no undo.")
+    grid:Note("Deletes the profile you are using, for every character on it.")
 
     ---------------------------------------------------------------------
     -- Out
@@ -222,7 +214,7 @@ function Page:BuildPage(page, width)
 
     grid:Buttons({
         {
-            text = "Copy a string", width = 150, style = "primary",
+            text = "Copy a string",
             onClick = function()
                 local parts = Share.Gather(ns.db, pick)
                 if not next(parts) then
@@ -248,9 +240,7 @@ function Page:BuildPage(page, width)
     })
 
     grid:Note("The string remembers which class and specialisation it was "
-        .. "made on, and says so when somebody opens it. Your character's "
-        .. "name is NOT in it: a string is made to be pasted somewhere "
-        .. "public, and a layout is no reason to publish who built it.")
+        .. "made on.")
 
     ---------------------------------------------------------------------
     -- In
@@ -268,7 +258,7 @@ function Page:BuildPage(page, width)
 
     grid:Buttons({
         {
-            text = "Read it", width = 110,
+            text = "Read it",
             onClick = function()
                 pending, pendingWhy = Share.Decode(paste.input:GetText())
                 if not pending then
@@ -300,7 +290,7 @@ function Page:BuildPage(page, width)
             end,
         },
         {
-            text = "Add it", width = 110, style = "primary",
+            text = "Add it", style = "primary",
             onClick = function()
                 if not pending then
                     ns.Print("Press |cffffd100Read it|r first.")
@@ -332,10 +322,7 @@ function Page:BuildPage(page, width)
 
     preview = grid:Note(" ")
 
-    grid:Note("Nothing is written until you press Add it, and nothing you "
-        .. "already have is thrown away: bars and reminders from a string are "
-        .. "ADDED to yours. The co-tank panel and the settings are single "
-        .. "things, so those do get replaced.")
+    grid:Note("Nothing is written until you press |cffffd100Add it|r.")
 
     ---------------------------------------------------------------------
     -- From your own characters. No string: their layout is already in this
@@ -378,13 +365,8 @@ function Page:BuildPage(page, width)
             end
         end, { emptyText = "Pick a character" })
 
-    grid:Note("Everything they built comes across - the bars, their "
-        .. "arrangements, sizes, looks, rules and positions - and every cell "
-        .. "arrives EMPTY. The spells stay behind on purpose: a Death Knight's "
-        .. "cooldowns are not castable on a Paladin, and copying them is the "
-        .. "bug this whole split exists to prevent. This replaces the bars you "
-        .. "have here. A character already sharing this very profile is not "
-        .. "offered - there is nothing to copy that you do not already have.")
+    grid:Note("Everything comes across: the bars, their arrangements, looks "
+        .. "and rules.")
 
     ---------------------------------------------------------------------
     -- Start over. Beside the delete button in spirit: the two things on
@@ -396,7 +378,7 @@ function Page:BuildPage(page, width)
     local resetArmed, resetButton = false, nil
     local _, firstResetButton = grid:Buttons({
         {
-            text = "Reset all settings", width = 160, style = "primary",
+            text = "Reset all settings",
             onClick = function()
                 local button = resetButton
                 if not button then return end
@@ -421,11 +403,7 @@ function Page:BuildPage(page, width)
     })
     resetButton = firstResetButton
 
-    grid:Note("Resets the profile you are using to the defaults - bars, "
-        .. "presets, positions, the minimap button - and every character "
-        .. "pointing at it follows. Recorded procs are kept: those are "
-        .. "measurements, and they cannot be typed back in. No other profile "
-        .. "is touched. There is no undo.")
+    grid:Note("Resets the profile you are using to the defaults.")
 
     grid:Layout()
 

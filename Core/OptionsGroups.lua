@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsGroups - the Groups page and the spell browser.
 --
 -- Kept out of Options.lua because it is the largest page by a wide margin: a

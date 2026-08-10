@@ -28,21 +28,11 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("What this is")
 
-    grid:Note("A tank in your group presses \"ask\" on one of your cooldowns. "
-        .. "Here, the cell for that spell |cffffd100on that tank|r lights up, "
-        .. "and clicking it casts. Your own taunt works the same way when the "
-        .. "other tank asks for a swap.")
+    grid:Note("A tank asks for one of your cooldowns; the cell for that spell "
+        .. "on that tank lights up, and clicking it casts.")
 
-    grid:Note("|cffff8040Two things this cannot do, and both are the game "
-        .. "rather than the addon:|r\n\n"
-        .. "|cffffd100Only people who also run ZwoelfStuff|r can light up "
-        .. "your bar. The chat line still reaches everybody else, so nothing "
-        .. "is lost - they just have to read it.\n\n"
-        .. "|cffffd100The addon never casts.|r You press the cell and the "
-        .. "GAME casts. That is also why the bar stands there permanently and "
-        .. "only brightens: which spell a cell casts, and on whom, is written "
-        .. "while you are out of combat, and the game does not allow it to be "
-        .. "rewritten during a fight.")
+    grid:Note("Only players who also run ZwoelfStuff can light up your bar - "
+        .. "everybody else still gets the chat line.")
 
     ---------------------------------------------------------------------
     -- The switch
@@ -55,10 +45,7 @@ function Page:BuildPage(page, width)
     }), function() return Cfg().enabled and true or false end,
         function(value) Cfg().enabled = value and true or false; Apply() end)
 
-    grid:Note("Off, a request still reaches you - it is printed once, with "
-        .. "this switch named - but there is no button to press. The bar is "
-        .. "off to begin with because something appearing on your screen "
-        .. "after an update is worse than something you have not found yet.")
+    grid:Note("Off, a request is printed in chat instead.")
 
     ---------------------------------------------------------------------
     -- WHO GETS A ROW
@@ -94,11 +81,8 @@ function Page:BuildPage(page, width)
     whoHost.Refresh = function() whoChips.Refresh() end
     grid.widgets[#grid.widgets + 1] = whoHost
 
-    grid:Note("One row of cells per person. |cffffd100The tanks|r is whoever "
-        .. "the group has marked as tanking - nothing to set up, and empty in "
-        .. "a group that never assigned roles. |cffffd100Everybody|r is the "
-        .. "answer to that. |cffffd100People I pick|r names them yourself, in "
-        .. "the order the rows should be.")
+    grid:Note("One row of cells per person. |cffffd100The tanks|r needs "
+        .. "assigned roles; |cffffd100People I pick|r names them yourself.")
 
     UI.Slider(grid:Row("Rows"), {
         get = function() return ns.Answers.Rows(Cfg()) end,
@@ -148,9 +132,7 @@ function Page:BuildPage(page, width)
     local mine = ns.Answers.Offers(class, nil, ns.KnowsSpell)
 
     if #mine == 0 then
-        grid:Note("|cff888888Your class has nothing on the externals list and "
-            .. "no taunt, so there is nothing here to offer. The bar stays "
-            .. "away.|r")
+        grid:Note("|cff888888Your class has nothing to offer here.|r")
     end
 
     for _, offer in ipairs(mine) do
@@ -168,12 +150,8 @@ function Page:BuildPage(page, width)
         end
     end
 
-    grid:Note("Switch one off and no cell is built for it - you will not be "
-        .. "asked, and nothing lights up. A spell you have never touched is "
-        .. "ON, because a bar that is empty until you find a settings page is "
-        .. "a bar that does not work. Only what you can actually cast is "
-        .. "listed: your class's spells for another spec are not offered, "
-        .. "because a cell that casts nothing is worse than no cell.")
+    grid:Note("Switch one off and no cell is built for it. Only spells your "
+        .. "spec can actually cast are listed.")
 
     ---------------------------------------------------------------------
     -- WHAT PRESSING ONE DOES
@@ -186,28 +164,17 @@ function Page:BuildPage(page, width)
     }), function() return Cfg().target and true or false end,
         function(value) Cfg().target = value and true or false; Apply() end)
 
-    grid:Note("The cell casts |cffffd100on|r whoever asked without touching "
-        .. "your target - which is the point, a healer keeps healing whoever "
-        .. "they were healing. Switch this on and it takes the target as "
-        .. "well.\n\nA |cffffd100taunt|r cell is different, because a taunt "
-        .. "request means take the boss: it casts on |cffffd100what that tank "
-        .. "is fighting|r, and if that cannot be taunted, on your own target. "
-        .. "With the switch on you end up on the creature, which after a swap "
-        .. "is where you want to be.")
+    grid:Note("A cell casts on whoever asked and leaves your target alone. A "
+        .. "|cffffd100taunt|r cell casts on what that tank is fighting.")
 
     ---------------------------------------------------------------------
     -- Keys - on the bar itself, not in a list of eight rows.
     ---------------------------------------------------------------------
     grid:Section("Keys")
 
-    grid:Note("|cffffd100Set keys|r at the bottom of this page puts the bar on "
-        .. "screen with a square over every cell. Click one, press the key, "
-        .. "Escape when you are done - and the key then shows in the corner of "
-        .. "the cell while you play.\n\nA key does not cast by itself: it "
-        .. "presses the cell, and the cell casts. That is the only way a key "
-        .. "can reach a spell at all, and it is why these are the game's own "
-        .. "bindings rather than something this addon invented - they are "
-        .. "under Escape, Key Bindings, |cffffd100ZwoelfStuff|r too.")
+    grid:Note("|cffffd100Set keys|r puts the bar on screen with a square over "
+        .. "every cell: click one, press the key. The key then shows in the "
+        .. "corner of the cell.")
 
     UI.Toggle(grid:FullRow("A quick menu on the bar", {
         controlWidth = 124,
@@ -215,10 +182,8 @@ function Page:BuildPage(page, width)
     }), function() return Cfg().quickMenu ~= false end,
         function(value) Cfg().quickMenu = value and true or false; Apply() end)
 
-    grid:Note("A small button above the bar that opens |cffffd100who you "
-        .. "answer|r where you are already looking - the group forms, somebody "
-        .. "picks up a second tank, and this settings window is on the other "
-        .. "side of the screen.")
+    grid:Note("A small button above the bar for |cffffd100who you answer|r, "
+        .. "without opening this window.")
 
     ---------------------------------------------------------------------
     -- The bar
@@ -247,11 +212,8 @@ function Page:BuildPage(page, width)
         min = 0.1, max = 1, step = 0.05, format = Percent, scale = 100,
         apply = function() ns.Answers.Repaint() end,
     })
-    grid:Note("How the bar looks with nobody asking. It cannot be hidden "
-        .. "outright - a cell that appears mid-fight is exactly what the game "
-        .. "forbids - but it can sit quietly until it is wanted. It still "
-        .. "casts when you click it, which makes it a quick-cast bar for your "
-        .. "tank's cooldowns whether anybody asked or not.")
+    grid:Note("How the bar looks with nobody asking. A cell still casts when "
+        .. "you click it.")
 
     UI.Slider(grid:Row("How long it shouts"), {
         get = function() return Cfg().linger end,
@@ -328,13 +290,13 @@ function Page:BuildPage(page, width)
         function(value) Cfg().backdropTexture = value end, Apply)
 
     grid:Buttons({
-        { text = "Move the bar", width = 220, style = "primary",
+        { text = "Move the bar",
           onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
-        { text = "Set keys", width = 220,
+        { text = "Set keys",
           onClick = function() ns.Keys:SetActive(true) end },
         -- The report, and it is worth finding: it prints the macro each cell
         -- would run, which is the one thing that says whether this works.
-        { text = "What every cell would cast", width = 220,
+        { text = "What every cell would cast",
           onClick = function() ns.Answers:Dump() end },
     }, 14)
 

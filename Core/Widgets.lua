@@ -248,9 +248,38 @@ local function Lift(colour, amount)
     }
 end
 
+-- HOW WIDE A BUTTON IS, IS NOT A DECISION ANYBODY SHOULD BE MAKING.
+--
+-- Owner, 2026-08-10: "auch die button größen sind wahnsinn." He is right and
+-- the count says so: 54, 84, 96, 106, 110, 120, 130, 132, 140, 150, 156, 170,
+-- 190, 200, 220 - fifteen widths, every one of them typed by hand at a call
+-- site and none of them measured. A label that grew by a word got clipped; a
+-- short one sat in a slab.
+--
+-- The design gives the answer and it is not a number: "Innenabstand 12-14".
+-- So the button is as wide as its words plus its padding, with a floor so
+-- that "Done" is still a target and a ceiling so a long label wraps the
+-- thinking rather than the layout.
+UI.BUTTON_PAD = 14
+UI.BUTTON_MIN = 84
+UI.BUTTON_MAX = 260
+
+function UI.ButtonWidth(text)
+    local ruler = UI.ruler
+    if not ruler then
+        ruler = UIParent:CreateFontString(nil, "ARTWORK")
+        UI.ruler = ruler
+    end
+    ns.StyleUIFont(ruler, UI.FS.meta)
+    ruler:SetText(text or "")
+
+    local wide = (ruler:GetStringWidth() or 0) + UI.BUTTON_PAD * 2
+    return math.max(UI.BUTTON_MIN, math.min(UI.BUTTON_MAX, math.ceil(wide)))
+end
+
 function UI.Button(parent, text, width, onClick, style)
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(width or 100, UI.BUTTON_H)
+    btn:SetSize(width or UI.ButtonWidth(text), UI.BUTTON_H)
 
     -- Four weights, and they are not interchangeable:
     --   nil        an ordinary action - a surface with an outline
@@ -3708,7 +3737,9 @@ function Grid:Buttons(buttons, padTop)
     local GAP = 6
     local width = 0
     for _, spec in ipairs(buttons) do
-        width = math.max(width, spec.width or 120)
+        -- MEASURED, not typed. A width at the call site is a number somebody
+        -- guessed once and nobody re-guessed when the words changed.
+        width = math.max(width, UI.ButtonWidth(spec.text))
     end
 
     local y, first = 0, nil

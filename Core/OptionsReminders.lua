@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsReminders - the Reminders page and its spell list.
 --
 -- THE SHAPE, AND WHY IT IS THIS SHAPE.
@@ -303,10 +303,7 @@ function OptionsReminders:BuildPage(page, width)
         ns.REMINDER_TRIGGERS, Get("trigger", "missing"), Set("trigger"),
         { apply = Apply }))
 
-    grid:Note("What counts as active is Blizzard's own answer for that spell: "
-        .. "a tracked buff is active while it is on you, a cooldown while it "
-        .. "is still running. The line under the preview says which it is "
-        .. "doing right now, so you can check it rather than guess.")
+    grid:Note("Active is the game's own answer for that spell.")
 
     Body(UI.Toggle(grid:FullRow("Switched on", { controlWidth = 124 }),
         Get("enabled", true), function(value)

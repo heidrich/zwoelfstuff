@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsSettings.lua - the Settings page
 --
 -- The last page to get its own file, and the delay is what made it a mess:
@@ -37,10 +37,7 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Modules")
 
-    grid:Note("Four features in one addon, and you are not obliged to want all "
-        .. "four. A module that is off boots nothing, registers nothing and "
-        .. "draws nothing - its page stays in the list on the left so you can "
-        .. "find it again, greyed, with the switch on it.")
+    grid:Note("Four features in one addon. Switch off what you do not want.")
 
     for _, entry in ipairs(ns.Modules:All()) do
         UI.Toggle(grid:Row(entry.title, { sublabel = entry.blurb }),
@@ -53,7 +50,7 @@ function Page:BuildPage(page, width)
     end
 
     grid:Buttons({
-        { text = "Show the welcome screen", width = 200, onClick = function()
+        { text = "Show the welcome screen", onClick = function()
             ns.Welcome:Show()
         end },
     }, 14)
@@ -72,21 +69,15 @@ function Page:BuildPage(page, width)
             ns.Screen:Render()
         end)
 
-    grid:Note("Every icon on your bars IS one of Blizzard's - it owns the timing, "
-        .. "the charges and the stacks, and on this patch no addon may read those "
-        .. "for itself. Moving one onto your bar leaves a hole in Blizzard's own "
-        .. "row, because its layout does not know the icon left. With this off you "
-        .. "get that row back, holes included.")
+    grid:Note("Every icon on your bars, and how they look.")
 
     UI.MediaPicker(grid:FullRow("Bar text", { controlWidth = 220 }), "font",
         function() return ns.db.font end,
         function(value) ns.db.font = value end,
         function() ns.Screen:Render() end)
 
-    grid:Note("Every piece of text on every bar, unless that one piece has "
-        .. "been given its own font in the bar's own settings. The list is "
-        .. "whatever your other addons have registered - so a font you "
-        .. "installed for ElvUI or WeakAuras is already in it.")
+    grid:Note("Every piece of text on every bar, unless a bar has its own "
+        .. "font.")
 
     ---------------------------------------------------------------------
     -- This window
@@ -126,11 +117,8 @@ function Page:BuildPage(page, width)
         function(value) ns.db.panelFont = value end,
         function() ns.Print("Panel font set. |cffffd100/reload|r to redraw the window in it.") end)
 
-    grid:Note("The window you are looking at - its labels, values and headings. "
-        .. "It is a separate setting from the bars on purpose: a face that is "
-        .. "right over a moving 3D scene is rarely the one that is right for "
-        .. "forty rows of settings. The list is whatever your other addons have "
-        .. "registered.")
+    grid:Note("The window you are looking at - its labels, values and "
+        .. "headings.")
 
     ---------------------------------------------------------------------
     -- Ways in
@@ -155,10 +143,7 @@ function Page:BuildPage(page, width)
         function() return ns.db.gameMenu ~= false end,
         function(value) ns.GameMenu:SetShown(value) end)
 
-    grid:Note("An entry under the last of Blizzard's own, where you look for "
-        .. "an addon when you have forgotten what its slash command was. It "
-        .. "stands down while you are in combat: pressing it closes the pause "
-        .. "menu, and the game does not let an addon do that mid-fight.")
+    grid:Note("An entry in the game's own addon list.")
 
     grid:Layout()
     page.Refresh = function() grid:Refresh() end

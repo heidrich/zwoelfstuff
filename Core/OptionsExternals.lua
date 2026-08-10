@@ -96,7 +96,7 @@ function Page:BuildPage(page, width)
     -- stacked and all one width they read as what they are - the short list
     -- of things you can do to the thing beside them.
     local BAND_ACTIONS = {
-        { text = "Move the panel", style = "primary",
+        { text = "Move the panel",
           onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
         { text = "Set keys",
           onClick = function() ns.Keys:SetActive(true) end },
@@ -108,15 +108,26 @@ function Page:BuildPage(page, width)
           onClick = function() ns.Externals:Dump() end },
     }
 
-    local ACTION_W = 156
+    -- Measured, and the widest one sets the column. "Test mode" grows to
+    -- "Test mode: on" while it is running, so the width it needs is asked
+    -- for rather than typed - it was the one that got clipped.
+    local ACTION_W = 0
+    for _, spec in ipairs(BAND_ACTIONS) do
+        ACTION_W = math.max(ACTION_W, UI.ButtonWidth(spec.text))
+    end
+    ACTION_W = math.max(ACTION_W, UI.ButtonWidth("Test mode: on"))
+
     local ACTION_GAP = 6
     local ACTIONS_H = #BAND_ACTIONS * (UI.BUTTON_H + ACTION_GAP) - ACTION_GAP
 
     local testButton
     local y = -6
     for _, spec in ipairs(BAND_ACTIONS) do
+        -- No ghost. Owner: "manchmal button, manchmal checkmarks, manchmal
+        -- nur text keine buttons" - a ghost is an action with no surface,
+        -- which is exactly the one that does not read as a button at all.
         local button = UI.Button(band, spec.text, ACTION_W, spec.onClick,
-            spec.style or "ghost")
+            spec.style)
         button:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, y)
         y = y - UI.BUTTON_H - ACTION_GAP
         if spec.text == "Test mode" then testButton = button end
@@ -217,11 +228,8 @@ function Page:BuildPage(page, width)
     end
     band.Fit()
 
-    grid:Note("Pick from the list on the right - any of them, at any time, "
-        .. "whoever happens to be in your group. On your screen, clicking one "
-        .. "of these whispers whoever can cast it; right-click a slot above "
-        .. "to drop it. A slot nobody present can fill is not drawn while you "
-        .. "play, and every one of them is drawn while you place the panel.")
+    grid:Note("Pick from the list on the right. Clicking a slot whispers "
+        .. "whoever can cast it; right-click drops it.")
 
     ---------------------------------------------------------------------
     -- Assignment
@@ -301,22 +309,13 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Keys")
 
-    grid:Note("|cffffd100Set keys|r at the bottom of this page puts the panel "
-        .. "on screen with a square over every place. Click one, press the "
-        .. "key, Escape when you are done.\n\nBound to the |cffffd100place|r, "
-        .. "not to the spell: what sits in the third slot changes as people "
-        .. "come and go, and a slot nobody present can fill is not drawn at "
-        .. "all - the ones after it move up. The key then shows in the corner "
-        .. "of the slot while you play. Press one with nothing in it and it "
-        .. "says so rather than going quiet.\n\nThese are the game's own "
-        .. "bindings, so they are under Escape, Key Bindings, "
-        .. "|cffffd100ZwoelfStuff|r as well.")
+    grid:Note("|cffffd100Set keys|r puts the panel on screen with a square "
+        .. "over every place: click one, press the key. Bound to the "
+        .. "place, not to the spell - what sits in it changes as people "
+        .. "come and go.")
 
-    grid:Note("Left alone, a click asks the healer of that class - which in a "
-        .. "five-man is the only person who has it. In a raid, name somebody. "
-        .. "The names offered are whoever is in the group right now, so this "
-        .. "is a thing to set once the raid has formed - picking the spells "
-        .. "themselves works anywhere, alone included.")
+    grid:Note("Left alone, a click asks the healer of that class. In a raid, "
+        .. "name somebody.")
 
     ---------------------------------------------------------------------
     -- The message
@@ -347,14 +346,8 @@ function Page:BuildPage(page, width)
     channelHost.Refresh = function() chips.Refresh() end
     grid.widgets[#grid.widgets + 1] = channelHost
 
-    grid:Note("Pick as many as you like. A whisper reaches the one person who "
-        .. "can cast it; party or raid reaches everybody, which is what you "
-        .. "want when you do not care who answers as long as somebody does. "
-        .. "|cffffd100Party or raid|r picks the right channel for the group "
-        .. "you are actually in - in a dungeon from the finder that is NOT "
-        .. "party chat. Two that come out the same are sent once. The last "
-        .. "one cannot be switched off: a button that sends nowhere is not a "
-        .. "setting.")
+    grid:Note("Pick as many as you like. |cffffd100Party or raid|r picks the "
+        .. "right channel for the group you are in.")
 
     local messageRow = grid:FullRow("Message", { controlWidth = 300 })
     local input = UI.Input(messageRow.slot, 300, function(text)
@@ -366,12 +359,8 @@ function Page:BuildPage(page, width)
     -- this twice on every repaint.
     messageRow.Refresh = function() input:SetText(Cfg().message or "") end
 
-    grid:Note("One sentence for every slot. |cffffd100%s|r is the spell's "
-        .. "name and |cffffd100%n|r is the person being asked - worth having "
-        .. "in party or raid chat, where \"Ironbark bitte!\" asks nobody in "
-        .. "particular. Leave |cffffd100%s|r out and the name is put in "
-        .. "brackets anyway: a message that does not say WHAT you want is one "
-        .. "nobody can act on.")
+    grid:Note("One sentence for every slot. |cffffd100%s|r is the spell, "
+        .. "|cffffd100%n|r the person being asked.")
 
     ---------------------------------------------------------------------
     -- The panel
@@ -396,11 +385,7 @@ function Page:BuildPage(page, width)
         min = 1, max = ns.Externals.MAX_COLUMNS, step = 1, apply = Relayout,
     })
     grid:Note("Rows times columns is how many places there are to put a "
-        .. "spell, the same as a cooldown bar. Taking either one down and back "
-        .. "up gives you what you had - a slot outside the lattice keeps what "
-        .. "is in it, the way a shrunk bar keeps its cells. What nobody in "
-        .. "your group can cast is not drawn at all, so a row with one usable "
-        .. "spell in it is one icon wide on your screen.")
+        .. "spell.")
 
     UI.Dropdown(grid:Row("Runs"), {
         { value = "right", text = "Across", icon = "dir-left-right" },

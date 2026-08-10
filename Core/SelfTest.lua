@@ -4811,6 +4811,21 @@ local function TestAnswers()
         Check("And it can be taken off again",
             ns.Keys.Current(binding) == nil)
 
+        -- THERE IS A WAY OUT THAT YOU CAN SEE. Owner, 2026-08-10: "man kommt
+        -- nicht mehr aus dem modus." Escape was handled on the SQUARE, and a
+        -- square only listens while it is waiting for a key - so standing in
+        -- the mode without having clicked one, nothing was listening at all.
+        ns.Keys:SetActive(true)
+        Check("The key mode opens", ns.Keys.active)
+        Check("And its window is one the game closes on Escape", (function()
+            for _, name in ipairs(UISpecialFrames or {}) do
+                if name == "ZwoelfStuffKeysBanner" then return true end
+            end
+            return false
+        end)())
+        ns.Keys:SetActive(false)
+        Check("And it closes again", ns.Keys.active == false)
+
         if kept then ns.Keys.Bind(binding, kept) end
     end
 

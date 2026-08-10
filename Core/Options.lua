@@ -51,7 +51,7 @@ local function BuildDiagnosticsPage(page, width)
         .. "which an addon can do for itself on this patch.")
 
     grid:Buttons({
-        { text = "What it holds", width = 150, style = "primary", onClick = function()
+        { text = "What it holds", onClick = function()
             ns.CDM:Dump()
         end },
     })
@@ -61,10 +61,10 @@ local function BuildDiagnosticsPage(page, width)
         .. "duration is measured rather than assumed. Output goes to your chat frame.")
 
     grid:Buttons({
-        { text = "What was seen", width = 150, style = "primary", onClick = function()
+        { text = "What was seen", onClick = function()
             ns.Auras:Dump()
         end },
-        { text = "Export this spec", width = 150, onClick = function()
+        { text = "Export this spec", onClick = function()
             ns.Auras:Export()
         end },
     })
@@ -75,11 +75,9 @@ local function BuildDiagnosticsPage(page, width)
     -- set where declaring a window changes anything you can see. A list of
     -- every spell in the game would be a longer list and a worse one.
     grid:Section("Active for")
-    grid:Note("Some things the Cooldown Manager only shows as a cooldown - a "
-        .. "trinket's use effect, a potion, a racial. It knows when they come "
-        .. "back, and nothing about how long they LAST, so the one number that "
-        .. "matters is on screen nowhere. Say how long it lasts and the cell "
-        .. "runs that window every time you press it.")
+    grid:Note("Some cooldowns have no duration the game reports - a trinket, "
+        .. "a potion, a racial. Say how long it lasts and the cell runs "
+        .. "that window.")
 
     local activeSpell
 
@@ -124,10 +122,7 @@ local function BuildDiagnosticsPage(page, width)
         apply = function() ns.Options:Refresh() end,
     })
 
-    grid:Note("Zero switches it off. This is remembered for the whole account, "
-        .. "not this character: how long a trinket lasts is a fact about the "
-        .. "trinket. A spell the Cooldown Manager already tracks as a buff is "
-        .. "left alone - its own clock is better than a number you typed.")
+    grid:Note("Zero switches it off. Remembered for the whole account.")
 
     grid:Section("This client")
 
@@ -161,16 +156,11 @@ local function BuildDiagnosticsPage(page, width)
     engineState:SetPoint("RIGHT", engineRow.slot, "RIGHT", 0, 0)
     engineState:SetJustifyH("RIGHT")
 
-    grid:Note("There is ONE set of Cooldown Manager item frames, and every addon that "
-        .. "does cooldowns on this patch works by adopting them. Two addons adopting "
-        .. "the same frame both re-assert their own anchor, so the icons end up split "
-        .. "between two layouts - which looks like a bug in whichever one you are "
-        .. "looking at. Run one or the other.")
+    grid:Note("Run one cooldown addon at a time: two of them fight over the "
+        .. "same frames.")
 
-    grid:Note("Patch 12.0 made aura data secret, so an addon cannot identify a buff by "
-        .. "ID, name or icon. The sanctioned replacement, Blizzard_AuraContainer, only "
-        .. "arrives in 12.1 - until then the Cooldown Manager is the one usable source, "
-        .. "which is what this addon is built on.")
+    grid:Note("Procs are recognised by their spell overlay, and their length "
+        .. "is measured while you play.")
 
     grid:Layout()
 

@@ -560,12 +560,15 @@ function Workspace:BuildList(parent, width)
     addStud:SetPoint("CENTER", addRow, "CENTER", 0, 0)
     addStud:SetHeight(14)
 
-    local addIcons = UI.Button(addRow, "+   Icon bar", 120,
-        function() Add("icon") end, "ghost")
+    -- REAL BUTTONS, not ghosts. These two ADD something, which is the most
+    -- consequential thing on the page; drawn as bare text they read as a
+    -- caption. Owner: "manchmal button, manchmal nur text keine buttons".
+    local addIcons = UI.Button(addRow, "+   Icon bar", nil,
+        function() Add("icon") end)
     addIcons:SetPoint("RIGHT", addStud, "LEFT", -UI.PAD, 0)
 
-    local addBars = UI.Button(addRow, "+   Tracking bar", 140,
-        function() Add("bar") end, "ghost")
+    local addBars = UI.Button(addRow, "+   Tracking bar", nil,
+        function() Add("bar") end)
     addBars:SetPoint("LEFT", addStud, "RIGHT", UI.PAD, 0)
 
     local empty = UI.Label(content, "", 12, C.textDim)
@@ -1460,10 +1463,8 @@ function Workspace:BuildOptionsPane(parent, width)
     -- Said out loud, because "I picked a texture and nothing happened" is
     -- otherwise an unanswerable question. The plate is BEHIND the art, and
     -- spell art is opaque and fills its cell.
-    grid:Note("This sits behind the icon, so on a square icon you will not see "
-        .. "it - spell art is opaque. It shows on a tracking bar, beside and "
-        .. "under the fill, and through an aura this addon dims while it is "
-        .. "down. For the coloured part of a bar, use Bar fill.")
+    grid:Note("Sits behind the icon, so it shows only where the art does not "
+        .. "cover it.")
 
     -- The fill of a tracking bar this addon draws itself ---------------------
     --
@@ -1508,10 +1509,7 @@ function Workspace:BuildOptionsPane(parent, width)
     fillRows[#fillRows + 1] = UI.Dropdown(
         grid:FullRow("Over time", { controlWidth = 190 }),
         ns.FILL_CLOCKS, Get("fillGrow"), Set("fillGrow"), { apply = Apply })
-    fillRows[#fillRows + 1] = grid:Note("Direction is which way the bar "
-        .. "runs; this is whether it is filling or emptying while it runs. "
-        .. "A bar can drain downwards, or fill downwards - the two settings "
-        .. "are space and time, and neither implies the other.")
+    fillRows[#fillRows + 1] = grid:Note("Whether the bar fills or empties while the cooldown runs.")
     -- Stack colours ----------------------------------------------------------
     --
     -- Three bands rather than a list editor with add and remove buttons. A
@@ -1566,11 +1564,8 @@ function Workspace:BuildOptionsPane(parent, width)
         .. "whole bar without marking everything on it.")
 
     fillRows[#fillRows + 1] = grid:Section("Stack colours", "look-stacks")
-    fillRows[#fillRows + 1] = grid:Note("The bar changes colour once the stack "
-        .. "count reaches a number you pick. Below the lowest one it wears the "
-        .. "Bar fill colour above - so the way to say \"warn me under five\" is "
-        .. "a red fill with a band at 5 in your normal colour. Set a count to 0 "
-        .. "to switch that band off.")
+    fillRows[#fillRows + 1] = grid:Note("The bar changes colour once the stack count reaches a number "
+     .. "you pick.")
 
     for index = 1, 3 do
         fillRows[#fillRows + 1] = UI.Slider(
@@ -1613,16 +1608,8 @@ function Workspace:BuildOptionsPane(parent, width)
         }, nil, fillRows)
     end
 
-    fillRows[#fillRows + 1] = grid:Note("Blizzard reports the count, and on this "
-        .. "patch it may arrive as a protected value that no addon may read. "
-        .. "This addon never reads it: each band is a bar whose range is set to "
-        .. "the number you chose, and the game itself decides whether the count "
-        .. "has crossed it. That is why it works at all.")
-
-    fillRows[#fillRows + 1] = grid:Note("Leave the texture empty and the fill "
-        .. "wears the backdrop's, so the bar reads as one object. This reaches "
-        .. "buff bars adopted from Blizzard's Cooldown Manager as well, so the "
-        .. "two kinds of bar on one row look like one design.")
+    fillRows[#fillRows + 1] = grid:Note(
+        "Leave the texture empty and the fill wears the backdrop's.")
 
     grid:Section("Cooldown sweep", "look-sweep")
 
@@ -1782,11 +1769,7 @@ function Workspace:BuildOptionsPane(parent, width)
     FxColour("Refresh colour", "pandemicColor")
     -- The dependency is stated rather than discovered. "I switched it on and
     -- nothing happens" is otherwise a question with no answer on this screen.
-    grid:Note("The tail of an aura where recasting it wastes nothing. This "
-        .. "addon does not work the window out - it cannot, the numbers are "
-        .. "protected on this patch - it asks Blizzard, which already knows. "
-        .. "So it only lights for the spells you have switched pandemic alerts "
-        .. "on for in Blizzard's own Cooldown Manager settings.")
+    grid:Note("The tail of an aura where recasting it wastes nothing.")
     FxSwitch("Grey out on cooldown", "dimOnCooldown")
     FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent, 100)
     FxSlide("Pulse speed", "pulseSpeed", 0.4, 2.5, 0.1,

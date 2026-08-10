@@ -91,12 +91,7 @@ function Page:BuildPage(page, width)
     grid:Wide(slotHost, slotHost:GetHeight(), 2, 10)
 
     grid:Note("Drag one out of the list on the right, or click it there. "
-        .. "Right-click a slot to clear it. These are the spells judged as "
-        .. "defensives: the verdict says which were still ready when you "
-        .. "fell, and the replay draws a bar for each one you pressed. "
-        .. "Readiness is our own estimate - your last cast plus the base "
-        .. "cooldown - because the client will not let an addon read a live "
-        .. "cooldown on this patch.")
+        .. "Right-click a slot to clear it.")
 
     ---------------------------------------------------------------------
     -- Consumables
@@ -180,13 +175,7 @@ function Page:BuildPage(page, width)
 
     grid:Wide(itemHost, SLOT, 2, 10)
 
-    grid:Note("Drag anything out of your bags onto a slot, or click an empty "
-        .. "one to pick from what you are carrying; "
-        .. "right-click a filled one to drop it from the list. A healthstone "
-        .. "that stayed in the bag is the same verdict as a defensive that "
-        .. "stayed off cooldown, so they are judged together - and drinking "
-        .. "one is a cast like any other on this patch, so the replay draws "
-        .. "it on the timeline with everything else.")
+    grid:Note("Drag anything out of your bags onto a slot.")
 
     ---------------------------------------------------------------------
     -- When you die
@@ -197,13 +186,8 @@ function Page:BuildPage(page, width)
         function() return Config().record ~= false end,
         function(value) Config().record = value and true or false end)
 
-    grid:Note("Reads Blizzard's own death recap and damage meter the moment "
-        .. "you fall - what hit you, how hard, the health you had left after "
-        .. "each blow - plus which of your defensives were still ready by "
-        .. "our own clock, and whether a potion was in the bags. They are "
-        .. "kept for this character and survive logging out; anything past "
-        .. "the number beside this falls off the end, and |cffffd100Clear "
-        .. "list|r in the window empties them.")
+    grid:Note("Reads the game's own death recap the moment you fall: what hit "
+        .. "you, and what you still had.")
 
     UI.Slider(grid:Row("How many to keep"), {
         get = function() return ns.Death.KeepCount() end,
@@ -226,11 +210,7 @@ function Page:BuildPage(page, width)
         function() return Config().openOnDeath ~= false end,
         function(value) Config().openOnDeath = value and true or false end)
 
-    grid:Note("The window with the quick analysis, up before you release. "
-        .. "Switched off, the death is still recorded and "
-        .. "|cffffd100/zs death|r opens it when you want it. Its size is the "
-        .. "|cffffd100Size|r button in the window itself - the moment you "
-        .. "want it smaller is the moment it is in front of you.")
+    grid:Note("The window with the quick analysis, up before you release.")
 
     ---------------------------------------------------------------------
     -- The skull on the screen
@@ -286,19 +266,14 @@ function Page:BuildPage(page, width)
     }, function() return Config().channel or "AUTO" end,
         function(value) Config().channel = value end)
 
-    grid:Note("|cffffd100The group I am in|r picks for itself: the instance "
-        .. "group first, then the raid, then the party. Any other choice is "
-        .. "taken literally, and when it is not available - Raid while you "
-        .. "are in a party of three - the analysis is printed in your own "
-        .. "chat frame and the reason is said out loud. A share that quietly "
-        .. "goes nowhere is the one thing this must never do. Words the "
-        .. "client marks secret never go into chat.")
+    grid:Note("|cffffd100The group I am in|r picks the instance group, then "
+        .. "the raid, then the party.")
 
     grid:Buttons({
-        { text = "Open it", width = 120, style = "primary", onClick = function()
+        { text = "Open it", onClick = function()
             ns.Death:Show()
         end },
-        { text = "Share in chat", width = 130, onClick = function()
+        { text = "Share in chat", onClick = function()
             ns.Death:Share()
         end },
     }, 14)

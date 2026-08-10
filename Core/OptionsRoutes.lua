@@ -1,4 +1,4 @@
----------------------------------------------------------------------------
+﻿---------------------------------------------------------------------------
 -- OptionsRoutes - the M+ routes page.
 --
 -- No preview card, and that is deliberate. What this feature draws is a badge
@@ -166,20 +166,11 @@ function OptionsRoutes:BuildPage(page, width)
     -- MDT plans per clone and the game only tells us what KIND a mob is.
     ---------------------------------------------------------------------
     grid:Section("What it can and cannot know")
-    grid:Note("A badge marks a mob TYPE, not one particular mob. MDT plans "
-        .. "per pack - \"these two of the four over there\" - and the game "
-        .. "only tells an addon what kind a mob is, never where it stands. So "
-        .. "if a pull takes two of four identical mobs, all four wear the "
-        .. "badge and the count tells you how many to take.")
+    grid:Note("A badge marks a mob type, not one particular mob.")
     grid:Note("Nothing here writes to a nameplate. The badge is our own frame "
         .. "hung above it, so other nameplate addons have nothing to fight "
         .. "with.")
-    grid:Note("A mob is identified by the id inside its GUID. In a dungeon "
-        .. "this client often will not let an addon look at that, so the "
-        .. "mob's NAME is used instead - MDT stores one for every enemy. It "
-        .. "is the weaker of the two: where two different mobs share a name, "
-        .. "only one of them can win. Run /zs route to see which way each "
-        .. "nameplate was found.")
+    grid:Note("Mobs are identified by the id in their GUID.")
 
     local function Paint()
         test:SetText(Routes.testing and "Stop testing" or "Test the badges")
