@@ -262,34 +262,71 @@ end
 ---------------------------------------------------------------------------
 -- Changelog
 ---------------------------------------------------------------------------
+-- ONE RELEASE IS ONE THING TO READ, so it is drawn as one.
+--
+-- It was a version, a date and a column of hyphens, and forty-six of those
+-- run together into a wall you scroll past rather than read. What separates
+-- them now is the same thing that separates two sections anywhere else in
+-- this window: a rule across, air above it, and the eye's own idea of a
+-- block. No boxes - a card border around every release would be forty-six
+-- rectangles and louder than the words in them.
+--
+-- THE ONE YOU ARE RUNNING SAYS SO. Opening this page after an update, the
+-- first question is "is this the one I just got", and a date does not answer
+-- it - "installed" beside the number does.
 local function BuildChangelogPage(page, width)
     local textWidth = width - 20
     local scroll, content = UI.ScrollArea(page, textWidth)
 
     local y = 0
-    for _, entry in ipairs(ns.CHANGELOG) do
-        local heading = UI.Label(content, "v" .. entry.version, 14, C.accent)
+    for index, entry in ipairs(ns.CHANGELOG) do
+        -- A hairline over every release but the first: it belongs to the gap
+        -- BETWEEN two of them, so the top of the page does not get one.
+        if index > 1 then
+            y = y - 20
+            local rule = content:CreateTexture(nil, "ARTWORK")
+            rule:SetColorTexture(C.edge[1], C.edge[2], C.edge[3], 1)
+            rule:SetHeight(1)
+            rule:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+            rule:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, y)
+            y = y - 20
+        end
+
+        local heading = UI.Label(content, entry.version, 15, C.accent)
         heading:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
 
         local date = UI.Label(content, entry.date, 11, C.textFaint)
         date:SetPoint("LEFT", heading, "RIGHT", 10, -1)
-        y = y - 24
+
+        if entry.version == ns.version then
+            local mark = UI.Label(content, "INSTALLED", 10, C.textDim)
+            mark:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, y - 2)
+        end
+
+        y = y - 26
 
         for _, line in ipairs(entry.lines) do
-            local dot = UI.Label(content, "-", 12, C.textFaint)
-            dot:SetPoint("TOPLEFT", content, "TOPLEFT", 2, y)
+            -- A DOT, not a hyphen: a hyphen sits on the baseline of a line
+            -- whose first row is what it belongs to, and at three lines of
+            -- wrapped text it reads as punctuation. Four pixels, faint, on
+            -- the cap height of the first row.
+            local dot = content:CreateTexture(nil, "ARTWORK")
+            dot:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.55)
+            dot:SetSize(3, 3)
+            dot:SetPoint("TOPLEFT", content, "TOPLEFT", 3, y - 7)
 
             local bullet = UI.Label(content, line, 12, C.text)
             bullet:SetPoint("TOPLEFT", content, "TOPLEFT", 14, y)
             bullet:SetWidth(textWidth - 14)
             bullet:SetJustifyV("TOP")
             -- Width is set, so GetStringHeight reports the wrapped height.
-            y = y - (bullet:GetStringHeight() + 6)
+            -- Ten between two entries rather than six: these are sentences,
+            -- not a list of names, and they need to come apart.
+            y = y - (bullet:GetStringHeight() + 10)
         end
-        y = y - 14
     end
 
-    content:SetHeight(math.max(1, -y))
+    content:SetHeight(math.max(1, -y + 10))
     if scroll.Update then scroll.Update() end
 end
 

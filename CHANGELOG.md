@@ -4,6 +4,17 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.66.2] - 2026-08-10
+
+### Changed
+
+- **The changelog page reads as releases now, not as one long list.** A rule
+  between them, air around it, a dot instead of a hyphen in front of each
+  line - a hyphen sits on the baseline and at three lines of wrapped text it
+  reads as punctuation - and the version you are actually running is marked
+  **INSTALLED**, which is the first thing you look for after an update and the
+  one thing a date does not answer.
+
 ## [4.66.1] - 2026-08-10
 
 ### Fixed

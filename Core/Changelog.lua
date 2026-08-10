@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.66.2",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100This page reads as releases now|r - a line between them, room to breathe, and the version you are actually running marked |cffffd100INSTALLED|r.",
+        },
+    },
+    {
         version = "4.66.1",
         date = "2026-08-10",
         lines = {
