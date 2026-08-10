@@ -595,6 +595,24 @@ function ns.ForgetSpecKey()
     specKey, specKnown = nil, nil
 end
 
+---------------------------------------------------------------------------
+-- A KEY, SHORT ENOUGH FOR THE CORNER OF AN ICON
+--
+-- "SHIFT-CTRL-F1" in a forty-pixel square is a smear. Pure, and here rather
+-- than in either panel because both of them draw one now - the externals
+-- slots and the answer cells - and two shorteners would drift apart.
+---------------------------------------------------------------------------
+function ns.ShortKey(key)
+    if type(key) ~= "string" or key == "" then return nil end
+    local short = key:upper()
+    short = short:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
+    short = short:gsub("BUTTON(%d+)", "M%1")
+    short = short:gsub("MOUSEWHEELUP", "MwU"):gsub("MOUSEWHEELDOWN", "MwD")
+    short = short:gsub("NUMPAD", "N")
+    short = short:gsub("SPACE", "Sp")
+    return short
+end
+
 function ns.SpellName(spellID)
     if C_Spell and C_Spell.GetSpellName then
         return C_Spell.GetSpellName(spellID)
@@ -1335,7 +1353,7 @@ local usage = {
     "  |cffffd100/zs auras remember|r - put every forgotten one back",
     "",
     "",
-    "  Tank stuff",
+    "  M+ and raid stuff",
     "  |cffffd100/zs tanks|r - the co-tank panel (|cffffd100test|r fakes a raid)",
     "  |cffffd100/zs reminders|r - every reminder, and why each one is or is not up",
     "  |cffffd100/zs externals|r - who each external slot would whisper (|cffffd100test|r shows the panel)",

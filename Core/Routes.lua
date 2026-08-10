@@ -1091,7 +1091,7 @@ function Routes:Dump()
     ns.Print("Switched on: " .. Yes(db.enabled)
         .. (self.testing and "   |cffffd100TEST MODE|r" or ""))
     if not db.enabled and not self.testing then
-        ns.Print("|cffffd100That is the answer|r - |cffffd100/zs|r, Tank stuff, "
+        ns.Print("|cffffd100That is the answer|r - |cffffd100/zs|r, M+ and raid stuff, "
             .. "Routes, |cffffd100Show them|r.")
     end
 

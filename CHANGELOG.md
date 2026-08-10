@@ -4,6 +4,36 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.66.1] - 2026-08-10
+
+### Fixed
+
+- **A taunt cell now taunts what that tank is fighting.** It was cast on your
+  own target, which in a pull with adds is a different creature and a taunt
+  wasted. His target when it can be taunted, yours when it cannot, so there is
+  no press that does nothing. This is the one place in the addon that
+  addresses somebody by unit rather than by name - "his target" has no name
+  form - and the bar is rebuilt on every roster change because of it.
+
+### Added
+
+- **Keys for the external cooldown slots.** The first eight places on the
+  panel, in the game's own key bindings under ZwoelfStuff. Bound to the PLACE
+  rather than to the spell, because what sits in the third slot changes as
+  people come and go - and pressing one with nothing in it says so instead of
+  going quiet. Answer cells go from six keys to eight.
+- **A quick menu on the answer bar.** A small button that appears when the
+  mouse is over the bar and sets who you answer right there: the group forms,
+  somebody picks up a second tank, and the settings window is on the other
+  side of the screen. Clicking a name picks that person and switches to the
+  mode that reads the list, because doing one without the other is a click
+  that changes nothing.
+
+### Changed
+
+- **"Tank stuff" is now "M+ and raid stuff"** in the settings rail and in
+  `/zs`.
+
 ## [4.66.0] - 2026-08-10
 
 ### Fixed

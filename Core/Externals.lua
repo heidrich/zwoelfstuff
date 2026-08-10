@@ -460,6 +460,85 @@ local function SlotSize()
     return Externals.Config().size or 40
 end
 
+---------------------------------------------------------------------------
+-- WHAT IS ACTUALLY ON SCREEN, in the order it is drawn
+--
+-- One list with two readers, which is the point: the panel draws from it and
+-- a keybinding presses into it. Written out because they MUST agree - a key
+-- that hits the third slot while your eyes are on a different third slot is
+-- worse than no key at all.
+--
+-- A slot nobody can fill is not drawn. The owner's choice: "verschwindet
+-- ganz" - so the panel is as wide as the help actually available, and an
+-- empty group leaves nothing on screen. WHILE PLACING OR TESTING everything
+-- picked is drawn, because arranging a panel you cannot see is not arranging.
+---------------------------------------------------------------------------
+function Externals.Shown()
+    local out = {}
+    for _, spellID in ipairs(Externals.Picked()) do
+        if Externals.placing or Externals.testing
+            or #Externals.Candidates(Externals.Get(spellID),
+                Externals.Roster()) > 0 then
+            out[#out + 1] = spellID
+        end
+    end
+    return out
+end
+
+---------------------------------------------------------------------------
+-- KEYS
+--
+-- Owner, 2026-08-10: "dann brauchen wir die möglichkeit die external
+-- cooldowns slots und answer slots mit keybinds belegen zu können" - "das
+-- sollte standard sein, das haben fast alle addons". He is right, and asking
+-- for a cooldown is exactly the thing you do not have a spare hand for.
+--
+-- NOT a CLICK binding, unlike the answer cells. Asking is a message, not a
+-- spell, so a plain line of Lua may do it - and that route works even when
+-- the panel is not on screen, where a click on a hidden button would do
+-- nothing and say nothing. It says what it did instead.
+---------------------------------------------------------------------------
+Externals.KEYS = 8
+
+function Externals.BindingName(index)
+    return "ZWOELFSTUFF_EXTERNAL_" .. index
+end
+
+for index = 1, Externals.KEYS do
+    _G["BINDING_NAME_" .. Externals.BindingName(index)] =
+        "Ask for cooldown " .. index
+end
+
+function Externals.Key(index)
+    if not GetBindingKey then return nil end
+    local ok, key = pcall(GetBindingKey, Externals.BindingName(index))
+    if not ok then return nil end
+    return ns.ShortKey(key)
+end
+
+-- The place in the row, not the spell: what sits in the third slot changes
+-- with the group, and the key belongs to the place.
+function Externals.AskSlot(index)
+    local drawn = Externals.Shown()
+    local spellID = drawn[index]
+    if not spellID then
+        ns.Print(string.format("|cffffd100Nothing in slot %d.|r %d on the "
+            .. "panel right now.", index, #drawn))
+        return false
+    end
+
+    local ok, whoOrWhy = Externals.Ask(spellID)
+    if not ok then ns.Print("|cffff8040" .. tostring(whoOrWhy) .. ".|r") end
+    return ok
+end
+
+-- The game runs this from the key list, so it has to be a global and it can
+-- only be one line.
+function ZwoelfStuff_ExternalAsk(index)
+    if not ns.db then return end
+    Externals.AskSlot(tonumber(index) or 1)
+end
+
 function Externals:Create()
     if panel then return panel end
 
@@ -489,58 +568,53 @@ function Externals:ApplyLayout()
     panel:SetPoint("CENTER", UIParent, "CENTER", cfg.x or -260, cfg.y or -160)
 
     local shown = 0
-    for _, spellID in ipairs(Externals.Picked()) do
-        -- A SLOT NOBODY CAN FILL IS NOT DRAWN. The owner's choice: "verschwindet
-        -- ganz". So the panel is as wide as the help actually available, and
-        -- an empty group leaves nothing on screen at all.
-        -- WHILE PLACING OR TESTING, EVERY PICKED SLOT IS DRAWN. Otherwise a
-        -- slot is only there when somebody present can actually fill it -
-        -- the owner's choice, "verschwindet ganz" - which is right on a
-        -- screen mid-pull and useless while you are arranging the thing.
-        if Externals.placing or Externals.testing
-            or #Externals.Candidates(byID[spellID], Externals.Roster()) > 0 then
-            shown = shown + 1
-            local slot = panel.slots[shown] or Externals.BuildSlot()
-            panel.slots[shown] = slot
-            slot.spellID = spellID
+    for _, spellID in ipairs(Externals.Shown()) do
+        shown = shown + 1
+        local slot = panel.slots[shown] or Externals.BuildSlot()
+        panel.slots[shown] = slot
+        slot.spellID = spellID
 
-            -- The SAME lattice the settings page draws, from the same
-            -- function. What is placed here is the SHOWN sequence rather than
-            -- the slot number, so a spell nobody present can cast leaves no
-            -- hole on screen - it closes up.
-            local column, line = Externals.Cell(shown, rows, columns, vertical)
+        -- The SAME lattice the settings page draws, from the same function.
+        -- What is placed here is the SHOWN sequence rather than the slot
+        -- number, so a spell nobody present can cast leaves no hole on
+        -- screen - it closes up.
+        local column, line = Externals.Cell(shown, rows, columns, vertical)
 
-            slot:SetSize(size, size)
-            slot:ClearAllPoints()
-            slot:SetPoint("TOPLEFT", panel, "TOPLEFT",
-                column * (size + gap), -(line * (size + gap)))
-            slot.icon:SetTexture(ns.SpellTexture(spellID))
+        slot:SetSize(size, size)
+        slot:ClearAllPoints()
+        slot:SetPoint("TOPLEFT", panel, "TOPLEFT",
+            column * (size + gap), -(line * (size + gap)))
+        slot.icon:SetTexture(ns.SpellTexture(spellID))
 
-            -- THE PERSON THIS SLOT WOULD ASK, and what they still have. Only
-            -- if they have said - somebody without the addon leaves the swipe
-            -- off entirely rather than being drawn as ready.
-            local target = Externals.Whom(byID[spellID], Externals.Roster(),
-                cfg.assigned[spellID])
-            local now = GetTime and GetTime() or 0
-            local left = target and Externals.RemoteLeft(spellID, target.name, now)
-            if left and left > 0 and slot.cooldown then
-                slot.cooldown:SetCooldown(now - 0.001, left)
-                slot.cooldown:Show()
-            elseif slot.cooldown then
-                slot.cooldown:Hide()
-            end
+        -- THE KEY, if this place has one. Its own place in the ROW is what a
+        -- key is bound to, which is also the only thing about a slot that
+        -- stays put: the spell in it moves as people come and go.
+        slot.key:SetText(Externals.Key(shown) or "")
 
-            -- Painted every pass rather than only when a setting changes:
-            -- the pass is a walk over at most two dozen icons, and "the
-            -- border did not update" is a class of bug this buys off outright.
-            local style = Externals.Style()
-            ns.PaintSurface(slot.bg, style)
-            ns.PaintBorder(slot.chrome, style, false)
-            local zoom = style.iconZoom
-            slot.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
-
-            slot:Show()
+        -- THE PERSON THIS SLOT WOULD ASK, and what they still have. Only
+        -- if they have said - somebody without the addon leaves the swipe
+        -- off entirely rather than being drawn as ready.
+        local target = Externals.Whom(byID[spellID], Externals.Roster(),
+            cfg.assigned[spellID])
+        local now = GetTime and GetTime() or 0
+        local left = target and Externals.RemoteLeft(spellID, target.name, now)
+        if left and left > 0 and slot.cooldown then
+            slot.cooldown:SetCooldown(now - 0.001, left)
+            slot.cooldown:Show()
+        elseif slot.cooldown then
+            slot.cooldown:Hide()
         end
+
+        -- Painted every pass rather than only when a setting changes:
+        -- the pass is a walk over at most two dozen icons, and "the
+        -- border did not update" is a class of bug this buys off outright.
+        local style = Externals.Style()
+        ns.PaintSurface(slot.bg, style)
+        ns.PaintBorder(slot.chrome, style, false)
+        local zoom = style.iconZoom
+        slot.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+
+        slot:Show()
     end
 
     for index = shown + 1, #panel.slots do panel.slots[index]:Hide() end
@@ -604,6 +678,12 @@ function Externals.BuildSlot()
     slot.icon:SetAllPoints(slot)
 
     slot.chrome = ns.CreateChrome(slot)
+
+    -- The key, where every action bar in the game puts it. Empty when this
+    -- place has none, rather than a box with nothing in it.
+    slot.key = ns.UI.Label(slot, "", 10, ns.UI.C.textDim)
+    slot.key:SetPoint("TOPRIGHT", slot, "TOPRIGHT", -2, -2)
+    slot.key:SetWordWrap(false)
 
     slot:SetScript("OnEnter", function(self)
         -- The hover is the panel's own, not a style: it says "this is the one

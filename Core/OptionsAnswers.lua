@@ -189,16 +189,28 @@ function Page:BuildPage(page, width)
     grid:Note("The cell casts |cffffd100on|r whoever asked without touching "
         .. "your target - which is the point, a healer keeps healing whoever "
         .. "they were healing. Switch this on and it takes the target as "
-        .. "well.\n\nA |cffffd100taunt|r cell is the exception either way: it "
-        .. "casts your taunt on |cffffd100your own target|r, because a taunt "
-        .. "request means take the boss, and a taunt aimed at the tank who "
-        .. "asked would do nothing at all.")
+        .. "well.\n\nA |cffffd100taunt|r cell is different, because a taunt "
+        .. "request means take the boss: it casts on |cffffd100what that tank "
+        .. "is fighting|r, and if that cannot be taunted, on your own target. "
+        .. "With the switch on you end up on the creature, which after a swap "
+        .. "is where you want to be.")
 
-    grid:Note("|cffffd100Keys.|r Six cells can carry one. They are in the "
+    grid:Note("|cffffd100Keys.|r Eight cells can carry one. They are in the "
         .. "game's own key bindings - Escape, Key Bindings, ZwoelfStuff - as "
-        .. "|cffffd100Answer cell 1|r to |cffffd1006|r, and the key you bind "
+        .. "|cffffd100Answer cell 1|r to |cffffd1008|r, and the key you bind "
         .. "shows in the corner of the cell. Counted the way the bar is "
         .. "drawn: along the first row, then the next.")
+
+    UI.Toggle(grid:FullRow("A quick menu on the bar", {
+        controlWidth = 124,
+        sublabel = "Appears when the mouse is over it",
+    }), function() return Cfg().quickMenu ~= false end,
+        function(value) Cfg().quickMenu = value and true or false; Apply() end)
+
+    grid:Note("A small button above the bar that opens |cffffd100who you "
+        .. "answer|r where you are already looking - the group forms, somebody "
+        .. "picks up a second tank, and this settings window is on the other "
+        .. "side of the screen.")
 
     ---------------------------------------------------------------------
     -- The bar

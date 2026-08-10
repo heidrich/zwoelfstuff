@@ -270,6 +270,15 @@ function Page:BuildPage(page, width)
         end
     end
 
+    grid:Note("|cffffd100Keys.|r The first eight places on the panel can carry "
+        .. "one, in the game's own key bindings - Escape, Key Bindings, "
+        .. "ZwoelfStuff - as |cffffd100Ask for cooldown 1|r to |cffffd1008|r. "
+        .. "The key shows in the corner of the slot.\n\nIt is bound to the "
+        .. "PLACE, not to the spell: what sits in the third slot changes as "
+        .. "people come and go, and a slot nobody present can fill is not "
+        .. "drawn at all - the ones after it move up. Press one with nothing "
+        .. "in it and it says so rather than going quiet.")
+
     grid:Note("Left alone, a click asks the healer of that class - which in a "
         .. "five-man is the only person who has it. In a raid, name somebody. "
         .. "The names offered are whoever is in the group right now, so this "

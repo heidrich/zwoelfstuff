@@ -13,6 +13,16 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.66.1",
+        date = "2026-08-10",
+        lines = {
+            "|cffffd100A taunt cell taunts what that tank is fighting|r, not what you happen to be looking at - which in a pull with adds is a different creature and a wasted taunt. If his target cannot be taunted, yours is used, so there is no press that does nothing.",
+            "|cffffd100Keys for the external cooldown slots|r - the first eight places, under |cffffd100ZwoelfStuff|r in the game's own Key Bindings. The key shows in the corner of the slot. Answer cells now go up to eight as well.",
+            "|cffffd100A quick menu on the answer bar.|r Move the mouse over the bar and a small button appears: who you answer, set right there instead of in the settings window.",
+            "|cffffd100Tank stuff|r is now called |cffffd100M+ and raid stuff|r.",
+        },
+    },
+    {
         version = "4.66.0",
         date = "2026-08-10",
         lines = {

@@ -330,9 +330,33 @@ function Answers.Macro(kind, spellName, asker, alsoTarget)
     if not asker or asker.preview then return nil end
     if type(spellName) ~= "string" or spellName == "" then return nil end
 
-    -- Your own taunt, on whatever you are looking at.
+    -- A TAUNT GOES ON WHAT HE IS FIGHTING. Owner, 2026-08-10: "bei spott
+    -- müsste das target von akui anvisiert werden, nicht akui selbst" - and
+    -- that is the whole point of a swap: the boss he is holding, not the one
+    -- you happen to be looking at, which in a pull with adds is a different
+    -- creature and a taunt wasted.
+    --
+    -- THIS IS THE ONE PLACE A UNIT TOKEN IS UNAVOIDABLE. Everywhere else this
+    -- file addresses people by name, because names survive the shuffle that
+    -- turns party2 into party1 when somebody leaves. But "his target" has no
+    -- name form: `[@Akui-Gilneastarget]` is a player nobody is called. Only a
+    -- token takes the suffix, so a token it is - and the bar is rebuilt on
+    -- every roster change, which is when a token could go stale.
     if kind == Comm.TAUNT then
-        return "/cast " .. spellName
+        local unit = asker.unit
+        if type(unit) ~= "string" or unit == "" then
+            -- No token to reach him by. Your own target, which is what this
+            -- did before and is still better than nothing.
+            return "/cast " .. spellName
+        end
+
+        -- His target when it is something you can taunt, YOURS otherwise -
+        -- the empty clause. Between them there is no press that does nothing.
+        local line = "/cast [@" .. unit .. "target,harm][] " .. spellName
+        if alsoTarget then
+            return "/target " .. unit .. "target\n" .. line
+        end
+        return line
     end
 
     -- THE FULL NAME, WITH THE REALM ON IT WHEN THERE IS ONE. `/cast [@Akui]`
@@ -389,7 +413,7 @@ end
 -- Declared in Bindings.xml, named here, and set by the player in Blizzard's
 -- key bindings under ZwoelfStuff. MRT and Fitter both do exactly this.
 ---------------------------------------------------------------------------
-Answers.KEYS = 6     -- how many cells can carry a key
+Answers.KEYS = 8     -- how many cells can carry a key
 
 function Answers.BindingName(index)
     return "CLICK ZwoelfStuffAnswer" .. index .. ":LeftButton"
@@ -400,28 +424,29 @@ for index = 1, Answers.KEYS do
         "Answer cell " .. index
 end
 
--- "SHIFT-CTRL-F1" in the corner of a forty-pixel square is a smear. Pure, so
--- every shape can be checked without a keyboard.
-function Answers.ShortKey(key)
-    if type(key) ~= "string" or key == "" then return nil end
-    local short = key:upper()
-    short = short:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
-    short = short:gsub("BUTTON(%d+)", "M%1")
-    short = short:gsub("MOUSEWHEELUP", "MwU"):gsub("MOUSEWHEELDOWN", "MwD")
-    short = short:gsub("NUMPAD", "N")
-    short = short:gsub("SPACE", "Sp")
-    return short
-end
+-- Shortened in ns.ShortKey, which the externals slots use as well - two
+-- shorteners for the same corner of the same kind of icon would drift.
+Answers.ShortKey = ns.ShortKey
 
 function Answers.Key(index)
     if not GetBindingKey then return nil end
     local ok, key = pcall(GetBindingKey, Answers.BindingName(index))
     if not ok then return nil end
-    return Answers.ShortKey(key)
+    return ns.ShortKey(key)
 end
 
 ---------------------------------------------------------------------------
--- The bar
+-- THE QUICK MENU ON THE BAR ITSELF
+--
+-- Owner, 2026-08-10: "kann man das als button an die answer bar hauen, damit
+-- man das dort schnell einstellen kann?" - and the reason he is right is
+-- WHEN this decision happens: the group forms, somebody is on a second tank,
+-- and the options window is four clicks and a different part of the screen
+-- away from the bar you are looking at.
+--
+-- It appears when the mouse is over the bar and while the bar is being
+-- placed, and is otherwise not there - a permanent cog beside a bar that is
+-- deliberately dim when idle would be the brightest thing on it.
 ---------------------------------------------------------------------------
 local panel, cells = nil, {}
 local pendingRebuild = false
@@ -474,7 +499,7 @@ function Answers.Announce(who, spellID)
     told = true
     ns.Print(string.format("|cffffd100%s asked you for %s.|r", who or "Somebody",
         spellID and (ns.SpellName(spellID) or "a cooldown") or "a taunt"))
-    ns.Print("  Switch on |cffffd100Answering|r (/zs, under Tank stuff) and "
+    ns.Print("  Switch on |cffffd100Answering|r (/zs, under M+ and raid stuff) and "
         .. "a button lights up for it instead of this line.")
     return true
 end
@@ -526,8 +551,8 @@ local function BuildCell(index)
         -- A taunt goes on the boss, not on the tank who asked - so the line
         -- that says what pressing this does has to say which.
         if self.kind == Comm.TAUNT then
-            GameTooltip:AddLine("On |cffffd100your target|r, for "
-                .. (self.who or "the other tank"), 1, 1, 1)
+            GameTooltip:AddLine("On what |cffffd100"
+                .. (self.who or "the other tank") .. "|r is fighting", 1, 1, 1)
         else
             GameTooltip:AddLine(self.who
                 and ("On |cffffd100" .. self.who .. "|r")
@@ -661,6 +686,17 @@ function Answers.Repaint()
     local idle = math.max(0, math.min(1, cfg.idleAlpha or 0.35))
     local lit = math.max(0, math.min(1, cfg.alpha or 1))
 
+    -- THE QUICK MENU IS THERE WHEN YOUR HAND IS. The hit area is stretched 26
+    -- units upward so that the button, which stands above the bar, keeps it
+    -- open while you reach for it - otherwise it disappears out from under
+    -- the cursor on the way.
+    if Answers.menu then
+        local wanted = cfg.quickMenu ~= false
+            and (Answers.placing
+                or (panel.IsMouseOver and panel:IsMouseOver(26, 0, 0, 0)))
+        Answers.menu:SetShown(wanted and true or false)
+    end
+
     for _, cell in ipairs(cells) do
         if cell.who then
             -- A key can be bound mid-fight, and a piece of text is one of the
@@ -703,6 +739,95 @@ function Answers.Refresh() Answers.Rebuild() end
 ---------------------------------------------------------------------------
 -- Wiring
 ---------------------------------------------------------------------------
+-- WHAT THE LITTLE BUTTON OFFERS. Built fresh every time it opens, because
+-- the group is the whole subject and it changes while you are standing there.
+function Answers.MenuItems()
+    local cfg = Answers.Config()
+    local items = {
+        { heading = true, text = "Who you answer" },
+        { text = "The tanks", value = Answers.WHO_TANKS,
+          onClick = function() Answers.SetWho(Answers.WHO_TANKS) end },
+        { text = "Everybody in the group", value = Answers.WHO_GROUP,
+          onClick = function() Answers.SetWho(Answers.WHO_GROUP) end },
+    }
+
+    -- THE PEOPLE, WITH THEIR OWN STATE ON THEM. The menu marks one chosen
+    -- row, and "chosen" here is a list - so each name carries its own tick in
+    -- its text. Clicking one means "this person", which also means the picked
+    -- mode: choosing somebody and then not being in the mode that reads it is
+    -- a click that does nothing.
+    local names = {}
+    for _, member in ipairs(ns.Roster()) do
+        if not member.isPlayer then names[#names + 1] = member.name end
+    end
+
+    if #names > 0 then
+        items[#items + 1] = { heading = true, text = "Or pick them" }
+        for _, name in ipairs(names) do
+            local picked = Answers.Picked(name)
+            items[#items + 1] = {
+                text = (picked and "|cff40ff40+|r " or "|cff5a5f6a-|r ") .. name,
+                onClick = function() Answers.TogglePicked(name) end,
+            }
+        end
+    end
+
+    return items, cfg.who or Answers.WHO_TANKS
+end
+
+-- A CHANGE HERE MAY HAVE TO WAIT, and saying so is the difference between a
+-- setting and a mystery: which cell casts what is written out of combat, and
+-- the game will not have it rewritten during a fight.
+local function Applied()
+    Answers.Rebuild()
+    if InCombatLockdown and InCombatLockdown() then
+        ns.Print("|cffffd100The bar is rebuilt when you leave combat.|r The "
+            .. "game does not allow a cell to be re-aimed during a fight.")
+    end
+end
+
+function Answers.SetWho(who)
+    Answers.Config().who = who
+    Applied()
+end
+
+function Answers.Picked(name)
+    for _, chosen in pairs(Answers.Config().rowNames) do
+        if chosen == name then return true end
+    end
+    return false
+end
+
+-- Off the list if it is on it; otherwise into the first free row, and only
+-- while there is one - silently dropping the fourth name would read as a
+-- click that did not register.
+function Answers.TogglePicked(name)
+    local cfg = Answers.Config()
+    local rows = Answers.Rows(cfg)
+
+    for index, chosen in pairs(cfg.rowNames) do
+        if chosen == name then
+            cfg.rowNames[index] = nil
+            cfg.who = Answers.WHO_CHOSEN
+            Applied()
+            return false
+        end
+    end
+
+    for index = 1, rows do
+        if not cfg.rowNames[index] then
+            cfg.rowNames[index] = name
+            cfg.who = Answers.WHO_CHOSEN
+            Applied()
+            return true
+        end
+    end
+
+    ns.Print(string.format("|cffffd100%d rows, all taken.|r Raise the row "
+        .. "count under Answering, or take somebody off first.", rows))
+    return false
+end
+
 function Answers:Create()
     if panel then return panel end
 
@@ -711,6 +836,51 @@ function Answers:Create()
     panel:SetClampedToScreen(true)
     panel:Hide()
 
+    -- The button, above the top left corner - outside the lattice, so it
+    -- never sits on a cell however many rows there are. Two people rather
+    -- than a cog: the question it answers is "who", and the cog on every
+    -- mover in this addon already means "this panel's settings".
+    local C = ns.UI.C
+    local menu = CreateFrame("Button", nil, panel)
+    menu:SetSize(20, 20)
+    menu:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", 0, 3)
+
+    menu.bg = menu:CreateTexture(nil, "BACKGROUND")
+    menu.bg:SetAllPoints(menu)
+    menu.bg:SetColorTexture(0, 0, 0, 0.7)
+
+    local glyph = ns.UI.Glyph(menu, "cond-group", 12, C.textDim)
+    glyph:SetPoint("CENTER", menu, "CENTER", 0, 0)
+
+    menu:SetScript("OnClick", function(button)
+        local items, current = Answers.MenuItems()
+        ns.UI.ShowMenu(button, {
+            width = 200,
+            anchor = { "TOPLEFT", "BOTTOMLEFT", 0, -2 },
+            items = items,
+            current = current,
+            actions = {
+                { text = "Answering options", onClick = function()
+                    ns.Options:Open("answers")
+                end },
+            },
+        })
+    end)
+    menu:SetScript("OnEnter", function(button)
+        glyph:SetColor(C.accent[1], C.accent[2], C.accent[3])
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Who you answer")
+        GameTooltip:AddLine("One row of cells per person.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    menu:SetScript("OnLeave", function()
+        glyph:SetColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    menu:Hide()
+
+    Answers.menu = menu
     Answers.panel = panel
     self:Rebuild()
     return panel

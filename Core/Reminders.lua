@@ -540,7 +540,7 @@ function Reminders:Dump()
     ns.Print("|cffffd100----------------------------------------|r")
     local count = self:Count()
     if count == 0 then
-        ns.Print("No reminders. |cffffd100/zs|r, then Reminders under Tank stuff.")
+        ns.Print("No reminders. |cffffd100/zs|r, then Reminders under M+ and raid stuff.")
         return
     end
 

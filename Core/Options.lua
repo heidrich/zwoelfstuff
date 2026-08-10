@@ -861,7 +861,7 @@ function Options:Create()
         end },
         { eyebrow = "Bars" },
         { page = "cooldowns" },
-        { eyebrow = "Tank stuff" },
+        { eyebrow = "M+ and raid stuff" },
         { page = "cotanks" },
         { page = "reminders" },
         { page = "externals" },

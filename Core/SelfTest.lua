@@ -3823,6 +3823,31 @@ local function TestExternals()
     Check("The externals list exists", X ~= nil)
     if not X then return end
 
+    ---------------------------------------------------------------------
+    -- KEYS ON THE SLOTS
+    --
+    -- Owner, 2026-08-10: "das sollte standard sein, das haben fast alle
+    -- addons". The binding presses into the SHOWN list, which is the same
+    -- list the panel draws from - a key that hits the third slot while your
+    -- eyes are on a different third slot is worse than no key.
+    ---------------------------------------------------------------------
+    Check("Every slot key has a name the game can show",
+        X.BindingName(3) == "ZWOELFSTUFF_EXTERNAL_3", X.BindingName(3))
+    Check("And a label under it",
+        _G["BINDING_NAME_" .. X.BindingName(3)] ~= nil)
+    Check("Eight of them", X.KEYS == 8, tostring(X.KEYS))
+
+    -- The drawn list is never longer than what was picked, and it drops
+    -- exactly what nobody present can cast.
+    Check("What is shown is a subset of what is picked",
+        #X.Shown() <= #X.Picked(), #X.Shown() .. " of " .. #X.Picked())
+
+    -- A KEY PRESSED AT AN EMPTY PLACE MUST SAY SO, not throw and not go
+    -- quiet. Alone, with nobody to ask, every slot is empty - so this is the
+    -- press that happens most often while nothing is going on.
+    Check("A key at a place with nothing in it is harmless",
+        select(1, pcall(X.AskSlot, 99)) == true)
+
     Check("Every external names a spell and a class", (function()
         for _, entry in ipairs(X.SPELLS) do
             if type(entry.spellID) ~= "number" or type(entry.class) ~= "string" then
@@ -4678,19 +4703,34 @@ local function TestAnswers()
     -- found by reading code, and every one of them is a wrong string here.
     -- None of them said anything on screen.
     ---------------------------------------------------------------------
-    local tank = { name = "Akui", fullName = "Akui-Gilneas" }
+    local tank = { name = "Akui", fullName = "Akui-Gilneas", unit = "party2" }
 
     Check("An external is cast on whoever asked",
         A.Macro(C.EXTERNAL, "Lay on Hands", tank)
             == "/cast [@Akui-Gilneas] Lay on Hands",
         tostring(A.Macro(C.EXTERNAL, "Lay on Hands", tank)))
 
-    -- A TAUNT IS NOT CAST ON THE TANK. It means take the boss, so it goes on
-    -- your own target - aimed at the tank who asked it is a taunt on a
-    -- friendly player, which does nothing and says nothing.
-    Check("A taunt is cast on YOUR target, not on the tank",
-        A.Macro(C.TAUNT, "Dark Command", tank) == "/cast Dark Command",
+    -- A TAUNT GOES ON WHAT HE IS FIGHTING. Not on him - that is a taunt on a
+    -- friendly player, which does nothing and says nothing - and not on your
+    -- own target either, which in a pull with adds is a different creature.
+    -- Owner: "bei spott müsste das target von akui anvisiert werden".
+    Check("A taunt is cast on the ASKER'S target",
+        A.Macro(C.TAUNT, "Dark Command", tank)
+            == "/cast [@party2target,harm][] Dark Command",
         tostring(A.Macro(C.TAUNT, "Dark Command", tank)))
+
+    Check("And it never names the tank himself",
+        A.Macro(C.TAUNT, "Dark Command", tank):find("Akui") == nil)
+
+    -- The empty clause: if what he is on cannot be taunted, your own target
+    -- is used rather than the press doing nothing at all.
+    Check("A taunt falls back to your own target",
+        A.Macro(C.TAUNT, "Dark Command", tank):find("[]", 1, true) ~= nil)
+
+    -- Without a token there is no way to say "his target" at all.
+    Check("With no unit to reach him by, it is your own target",
+        A.Macro(C.TAUNT, "Dark Command", { name = "Akui" })
+            == "/cast Dark Command")
 
     Check("The realm travels with the name",
         A.Macro(C.EXTERNAL, "Ironbark", tank):find("Akui-Gilneas", 1, true)
@@ -4700,8 +4740,12 @@ local function TestAnswers()
         A.Macro(C.EXTERNAL, "Ironbark", tank, true)
             == "/target Akui-Gilneas\n/cast [@Akui-Gilneas] Ironbark")
 
-    Check("A taunt takes no target however the switch is set",
-        A.Macro(C.TAUNT, "Taunt", tank, true) == "/cast Taunt")
+    -- And with the switch on it takes HIS target, not him: after a swap you
+    -- are the one holding that creature, so being on it is the point.
+    Check("With the switch on, a taunt takes what he is fighting",
+        A.Macro(C.TAUNT, "Taunt", tank, true)
+            == "/target party2target\n/cast [@party2target,harm][] Taunt",
+        tostring(A.Macro(C.TAUNT, "Taunt", tank, true)))
 
     -- A stand-in cell must cast NOTHING: there is nobody called "Tank".
     Check("The stand-in cell gets no macro at all",
@@ -4726,6 +4770,49 @@ local function TestAnswers()
     Check("So does a mouse button", A.ShortKey("BUTTON4") == "M4",
         tostring(A.ShortKey("BUTTON4")))
     Check("No key is no text", A.ShortKey(nil) == nil)
+    Check("One shortener, read by both panels",
+        A.ShortKey == ns.ShortKey and ns.Externals.Key ~= nil)
+    Check("Eight cells can carry one", A.KEYS == 8, tostring(A.KEYS))
+
+    ---------------------------------------------------------------------
+    -- THE QUICK MENU ON THE BAR
+    --
+    -- Owner, 2026-08-10: "kann man das als button an die answer bar hauen,
+    -- damit man das dort schnell einstellen kann?" - and the reason is WHEN
+    -- this decision happens: the group forms, and the options window is on a
+    -- different part of the screen from the bar you are looking at.
+    ---------------------------------------------------------------------
+    local keptWho, keptRows = A.Config().who, A.Config().rowNames
+    local keptCount = A.Config().rows
+    A.Config().rowNames = {}
+
+    A.SetWho(A.WHO_GROUP)
+    Check("The menu switches the mode", A.Config().who == A.WHO_GROUP)
+
+    Check("Nobody is picked to begin with", A.Picked("Zwoelf") == false)
+    A.TogglePicked("Zwoelf")
+    Check("Picking somebody picks them", A.Picked("Zwoelf"))
+    -- Picking a person and then not being in the mode that reads the list
+    -- would be a click that did nothing.
+    Check("And puts you in the mode that reads it",
+        A.Config().who == A.WHO_CHOSEN)
+    A.TogglePicked("Zwoelf")
+    Check("Clicking again takes them off", A.Picked("Zwoelf") == false)
+
+    -- More names than rows: the extra one is REFUSED out loud rather than
+    -- dropped, which would read as a click that never registered.
+    A.Config().rows = 1
+    A.TogglePicked("Einer")
+    A.TogglePicked("Zweiter")
+    Check("A name with no row left is not silently swallowed",
+        A.Picked("Einer") and A.Picked("Zweiter") == false)
+
+    local items = A.MenuItems()
+    Check("The menu offers the modes and the people", #items >= 3,
+        tostring(#items))
+
+    A.Config().rowNames, A.Config().who = keptRows, keptWho
+    A.Config().rows = keptCount
 
     ---------------------------------------------------------------------
     -- Which cell answers which request
