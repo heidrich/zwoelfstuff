@@ -13,6 +13,21 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.76.0",
+        date = "2026-08-11",
+        lines = {
+            "|cffffd100Every number is a slider again|r - a track with the value beside it. Drag it, click anywhere on it, roll the wheel over it, or type into the box. There is one numeric control in the whole addon, so every page, every panel and Edit mode changed at once.",
+            "|cffffd100Each page's buttons are up in its header|r, beside the page name, instead of stacked in a column inside the page. On the pages that had that column it was taking a third of the width away from the preview it stood next to.",
+            "|cffffd100About is a page instead of a wall of text|r, and the command list on it is the same one |cffffd100/zs|r prints in chat - so it cannot go out of date again. It had: it still advertised a command that no longer exists and was missing seven that do.",
+            "|cffffd100Diagnostics opens with four readings|r - what the Cooldown Manager holds, how many cells on your bars are filled, how sharp the marks in this window are, and whether another cooldown addon is fighting for the same frames.",
+            "|cffffd100Settings lost its right-hand column|r, which stood empty until you pointed at something. The explanations are on the page now.",
+            "|cffffd100The window can be seen through|r - 94% by default, with a slider under |cffffd100Settings|r. It never goes below 70%: a window you cannot see is a window you cannot close.",
+            "|cffffd100Cards and menus have some depth|r, and a menu casts a shadow rather than announcing itself with the same bright outline that marks the row you picked inside it.",
+            "|cffffd100Fixed:|r a typed number could land outside its own slider - 1 became 1.2 on a range that only went to 1.",
+            "|cffffd100Fixed:|r dragging a slider redrew the bar sixty times a second even while the number was not moving.",
+        },
+    },
+    {
         version = "4.75.0",
         date = "2026-08-11",
         lines = {

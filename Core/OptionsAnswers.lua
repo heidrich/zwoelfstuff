@@ -124,47 +124,22 @@ function Page:BuildPage(page, width)
     bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
     bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
 
-    -- ONE UNDER THE OTHER, ALL ONE WIDTH, in a column of their own on the
-    -- right - the request page's arrangement, for the reason it has it: three
-    -- boxes shoulder to shoulder at three different widths read as a toolbar
-    -- somebody stopped styling.
-    local BAND_ACTIONS = {
-        { text = "Move the bar",
-          onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
-        { text = "Set keys",
-          onClick = function() ns.Keys:SetActive(true) end },
-        -- The report, and it is worth finding: it prints the macro each cell
-        -- would run, which is the one thing that says whether this works.
-        { text = "What every cell would cast",
-          onClick = function() ns.Answers:Dump() end },
-    }
-
-    -- Measured, and the widest one sets the column. No number typed here.
-    local ACTION_W = 0
-    for _, spec in ipairs(BAND_ACTIONS) do
-        ACTION_W = math.max(ACTION_W, UI.ButtonWidth(spec.text))
-    end
-
-    local ACTION_GAP = 6
-    local ACTIONS_H = #BAND_ACTIONS * (UI.BUTTON_H + ACTION_GAP) - ACTION_GAP
-
-    local y = -6
-    for _, spec in ipairs(BAND_ACTIONS) do
-        local button = UI.Button(band, spec.text, ACTION_W, spec.onClick)
-        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, y)
-        y = y - UI.BUTTON_H - ACTION_GAP
-    end
+    -- THE THINGS YOU DO TO THE BAR ARE IN THE WINDOW'S HEADER BAND, beside
+    -- the page title, with every other page's - see the PAGES table in
+    -- Options.lua. They were a column of three down the right of THIS band,
+    -- which is the arrangement the request page had and lost for the same
+    -- reason: it took a third of the width away from the cells.
+    --
+    -- "Move the bar" did not go with them. Edit mode is at the top of the
+    -- rail and is the same act; the paragraph under the cells says so.
 
     -- THE HOST NEEDS A RECTANGLE, NOT A HEIGHT: two points across for the
     -- width, and a height. A frame whose rect cannot be worked out is not
     -- drawn and neither are its children - the request page learned that the
     -- hard way, and this is the same band.
-    --
-    -- The cells keep the left, the actions have the right.
     local host = CreateFrame("Frame", nil, band)
     host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -BAND_HEAD)
-    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -(14 + ACTION_W + 14),
-        -BAND_HEAD)
+    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, -BAND_HEAD)
     host:SetHeight(SLOT)
 
     -- WHAT YOUR SPEC CAN ACTUALLY CAST, and nothing else. ns.KnowsSpell is
@@ -190,9 +165,9 @@ function Page:BuildPage(page, width)
         local count = #cells
         local size = SLOT
         if count > 0 then
-            -- The cells get what the action column leaves them, and shrink
-            -- rather than running off the edge.
-            local room = width - 28 - ACTION_W - 14
+            -- The cells get the whole band, less the scrollbar gutter, and
+            -- shrink rather than running off the edge.
+            local room = width - 28
             local byWidth = (room - (count - 1) * GAP) / count
             size = math.max(MIN_SLOT, math.floor(math.min(SLOT, byWidth)))
         end
@@ -204,14 +179,17 @@ function Page:BuildPage(page, width)
                 (index - 1) * (size + GAP), 0)
         end
 
+        -- The cells alone decide the height now. It used to be the taller of
+        -- the cells and the button column, so a class with two offers held a
+        -- band three buttons deep.
         host:SetHeight(count > 0 and size or 20)
-        band:SetHeight(math.max(BAND_HEAD + host:GetHeight(),
-            ACTIONS_H + 12) + 10)
+        band:SetHeight(BAND_HEAD + host:GetHeight() + 10)
     end
     band.Fit()
 
     grid:Note("Click one to stop offering it. Only spells your spec can cast "
-        .. "are here.")
+        .. "are here. To put the bar somewhere, open |cffffd100Edit mode|r at "
+        .. "the top of the list on the left.")
 
     ---------------------------------------------------------------------
     -- The switches

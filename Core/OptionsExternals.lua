@@ -83,55 +83,21 @@ function Page:BuildPage(page, width)
     bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
     bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
 
-    -- THE THREE THINGS YOU DO TO THE PANEL, in the band with it.
+    -- THE THINGS YOU DO TO THE PANEL ARE NOT IN THIS BAND ANY MORE.
     --
-    -- Owner: "auch sollte der test mode button etc da mit hoch". Right, and
-    -- for the same reason the slots are up here: they act on the thing the
-    -- band shows. At the bottom of a page this long they were forty rows of
-    -- scrolling away from what they switch.
-    -- ONE UNDER THE OTHER, IN A COLUMN OF THEIR OWN. Owner, 2026-08-10, with
-    -- a picture of them shoulder to shoulder: "kannste die 3 buttons alle
-    -- untereinander machen, das sieht nicht gut aus." Three boxes in a row,
-    -- each a different width, read as a toolbar somebody stopped styling;
-    -- stacked and all one width they read as what they are - the short list
-    -- of things you can do to the thing beside them.
-    local BAND_ACTIONS = {
-        { text = "Move the panel",
-          onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
-        { text = "Set keys",
-          onClick = function() ns.Keys:SetActive(true) end },
-        { text = "Test mode", onClick = function()
-            ns.Externals:SetTestMode(not ns.Externals.testing)
-            ns.Options:Refresh()
-        end },
-        { text = "Who would be asked",
-          onClick = function() ns.Externals:Dump() end },
-    }
-
-    -- Measured, and the widest one sets the column. "Test mode" grows to
-    -- "Test mode: on" while it is running, so the width it needs is asked
-    -- for rather than typed - it was the one that got clipped.
-    local ACTION_W = 0
-    for _, spec in ipairs(BAND_ACTIONS) do
-        ACTION_W = math.max(ACTION_W, UI.ButtonWidth(spec.text))
-    end
-    ACTION_W = math.max(ACTION_W, UI.ButtonWidth("Test mode: on"))
-
-    local ACTION_GAP = 6
-    local ACTIONS_H = #BAND_ACTIONS * (UI.BUTTON_H + ACTION_GAP) - ACTION_GAP
-
-    local testButton
-    local y = -6
-    for _, spec in ipairs(BAND_ACTIONS) do
-        -- No ghost. Owner: "manchmal button, manchmal checkmarks, manchmal
-        -- nur text keine buttons" - a ghost is an action with no surface,
-        -- which is exactly the one that does not read as a button at all.
-        local button = UI.Button(band, spec.text, ACTION_W, spec.onClick,
-            spec.style)
-        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, y)
-        y = y - UI.BUTTON_H - ACTION_GAP
-        if spec.text == "Test mode" then testButton = button end
-    end
+    -- They were a column of four buttons down its right-hand side, and that
+    -- column cost the preview a third of the page's width - on the page whose
+    -- whole job is arranging a lattice. "Set keys" and "Test mode" are in the
+    -- WINDOW's header band now, beside the page title, which is where every
+    -- other page's actions are; see the PAGES table in Options.lua.
+    --
+    -- The two that did not go with them:
+    --   Move the panel      Edit mode, at the top of the rail, is the same
+    --                       act and it is one click away. The paragraph at
+    --                       the end of the slots says so.
+    --   Who would be asked  it prints the resolved roster to chat, which is
+    --                       the "Who to ask" list read out loud - so it sits
+    --                       under that section, with the thing it explains.
 
     -- THE SLOT HOST NEEDS A RECTANGLE, NOT A HEIGHT.
     --
@@ -141,14 +107,12 @@ function Page:BuildPage(page, width)
     -- which is exactly what made this look like lost saved data: an empty
     -- band over a "Who to ask" list that still named two spells. Two points
     -- across, or SetWidth - never a lone corner.
-    -- The slots keep the left, the actions have the right. Two columns rather
-    -- than one thing above another: a stacked list of buttons over a row of
-    -- icons would push the preview - the thing this band exists to show - off
-    -- the bottom of a sticky area that has to stay small.
+    -- THE SLOTS HAVE THE WHOLE BAND. They used to share it with the column
+    -- of buttons above, which took a third of it away from the one thing this
+    -- band exists to show.
     local host = CreateFrame("Frame", nil, band)
     host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -BAND_HEAD)
-    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -(14 + ACTION_W + 14),
-        -BAND_HEAD)
+    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, -BAND_HEAD)
     host:SetHeight(SLOT)
 
     -- THE PREVIEW IS THE PANEL'S OWN LATTICE. Rows and columns, filled the
@@ -196,9 +160,9 @@ function Page:BuildPage(page, width)
         local cfg = Cfg()
         local count = ns.Externals.Count()
         local down = cfg.growth == "down"
-        -- The preview gets what the action column leaves it.
+        -- The preview gets the band, less the scrollbar gutter on its right.
         local size = Page.PreviewSize(cfg.rows, cfg.columns,
-            width - 28 - ACTION_W - 14, BAND_MAX_H)
+            width - 28, BAND_MAX_H)
 
         for index = 1, count do
             local slot = SlotAt(index)
@@ -210,26 +174,25 @@ function Page:BuildPage(page, width)
         end
         for index = count + 1, #slots do slots[index]:Hide() end
 
-        -- Test mode is a state, so the button says which one it is in. A
-        -- switch that looks the same on and off is one you have to press to
-        -- read.
-        if testButton then
-            testButton:SetText(ns.Externals.testing and "Test mode: on"
-                or "Test mode")
-        end
-
         -- Always exactly the lattice: rows times columns IS the count, so
         -- both fill orders end up filling the same rectangle.
-        -- Whichever column is taller decides. A lattice of one row is shorter
-        -- than four buttons; six rows is taller than they are.
+        --
+        -- The lattice alone decides the height now. It used to be the taller
+        -- of the lattice and the button column, so a one-row panel held a
+        -- band four buttons deep with nothing in three quarters of it.
         host:SetHeight(cfg.rows * size + (cfg.rows - 1) * GAP)
-        band:SetHeight(math.max(BAND_HEAD + host:GetHeight(),
-            ACTIONS_H + 12) + 10)
+        band:SetHeight(BAND_HEAD + host:GetHeight() + 10)
     end
     band.Fit()
 
+    -- The second sentence is where "Move the panel" went. A button that opens
+    -- edit mode, on a page whose rail already has Edit mode at the top of it,
+    -- is the same door drawn twice - and this one has to say where the door
+    -- is anyway, because nothing else on the page does.
     grid:Note("Pick from the list on the right. Clicking a slot whispers "
-        .. "whoever can cast it; right-click drops it.")
+        .. "whoever can cast it; right-click drops it. To put the panel "
+        .. "somewhere, open |cffffd100Edit mode|r at the top of the list on "
+        .. "the left.")
 
     ---------------------------------------------------------------------
     -- Assignment
@@ -296,6 +259,16 @@ function Page:BuildPage(page, width)
             end
         end
     end
+
+    -- WITH THE LIST IT READS OUT LOUD. It prints, for every slot, who the
+    -- click would actually reach - the rows above answered for the group you
+    -- are standing in, and this is the same answer in a form you can paste.
+    -- It was in the band's button column, four sections away from the thing
+    -- it is about.
+    grid:Buttons({
+        { text = "Who would be asked",
+          onClick = function() ns.Externals:Dump() end },
+    }, 10)
 
     ---------------------------------------------------------------------
     -- Keys

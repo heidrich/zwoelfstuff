@@ -269,14 +269,10 @@ function Page:BuildPage(page, width)
     grid:Note("|cffffd100The group I am in|r picks the instance group, then "
         .. "the raid, then the party.")
 
-    grid:Buttons({
-        { text = "Open it", onClick = function()
-            ns.Death:Show()
-        end },
-        { text = "Share in chat", onClick = function()
-            ns.Death:Share()
-        end },
-    }, 14)
+    -- THE PAGE'S TWO ACTIONS ARE IN THE WINDOW'S HEADER BAND, beside the page
+    -- title, with every other page's - see the PAGES table in Options.lua.
+    -- They were the last thing on the page, under every setting: "open the
+    -- log" is what you come to this page to do, and it was below the fold.
 
     grid:Layout()
 

@@ -25,7 +25,13 @@ local Page = {}
 ns.OptionsSettings = Page
 
 function Page:BuildPage(page, width)
-    local grid = UI.Page(page, width, { explain = true })
+    -- NOT `explain = true` ANY MORE, and the pair matters: the PAGES entry
+    -- dropped its third column, and `explain` here does not merely style the
+    -- notes - it takes each one OUT of the layout and hangs it on the row
+    -- above, to be shown in that column. With the column gone they would have
+    -- been hidden with nowhere to appear, and every sentence on this page
+    -- would have vanished silently.
+    local grid = UI.Page(page, width)
 
     ---------------------------------------------------------------------
     -- Modules
@@ -107,6 +113,28 @@ function Page:BuildPage(page, width)
     grid:Note("The size of this window on your screen, not of anything on "
         .. "the bars. 100% is the size it was designed at; on a laptop 80% "
         .. "keeps all three columns in view. Takes effect as you change it.")
+
+    -- HOW SOLID THE WINDOW IS. See Options:ApplyAlpha for why there is one
+    -- alpha and not one per layer.
+    --
+    -- The floor is 70 rather than 0. A window you cannot see is a window you
+    -- cannot close, and there is no second way back to this row once it is
+    -- gone - the minimap button opens the same invisible frame.
+    UI.Slider(grid:Row("Opacity"), {
+        get = function() return ns.db.windowAlpha or 0.94 end,
+        set = function(value) ns.db.windowAlpha = value end,
+        min = 0.7, max = 1, step = 0.02,
+        scale = 100,
+        format = function(v)
+            return string.format("%d%%", math.floor((v or 1) * 100 + 0.5))
+        end,
+        apply = function() ns.Options:ApplyAlpha() end,
+    })
+
+    grid:Note("Lets the scene behind the window through. It fades the whole "
+        .. "window at once, on purpose: fading each layer separately makes the "
+        .. "values multiply where they overlap and no surface keeps its "
+        .. "colour. Judge it in a bright zone, not a dark one.")
 
     -- Two fonts, two jobs, two sections. Panel text is read in rows in a
     -- window; bar text is read at a glance over a moving scene. The design

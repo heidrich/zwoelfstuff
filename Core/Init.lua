@@ -1355,43 +1355,88 @@ end
 
 -- Only commands that exist. A usage list that offers a command the addon no
 -- longer has is worse than no list: it sends people looking for a feature.
-local usage = {
-    "|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r - commands:",
-    "  |cffffd100/zs|r - open the window",
-    "  |cffffd100/zs unlock|r / |cffffd100lock|r - move the bars around the screen",
-    "  |cffffd100/zs build|r - take a bar apart slot by slot, on screen",
-    "  |cffffd100/zs modules|r - which features are running (|cffffd100/zs modules <name>|r switches one)",
-    "  |cffffd100/zs welcome|r - the window that asks which ones you want",
-    "",
-    "  Bars",
-    "  |cffffd100/zs bars|r - list them (|cffffd100add <name>|r / |cffffd100remove <n>|r)",
-    "  |cffffd100/zs cdm|r - what Blizzard's Cooldown Manager currently holds",
-    "  |cffffd100/zs skin|r - what is actually drawn on one adopted icon",
-    "",
-    "  Auras",
-    "  |cffffd100/zs auras|r - the procs seen on this spec, and what drives them",
-    "  |cffffd100/zs report|r - open the proc report in a box you can copy from",
-    "  |cffffd100/zs auras export|r - the same thing, under its older name",
-    "  |cffffd100/zs auras icon <glowID> <spellID>|r - which icon a proc shows",
-    "  |cffffd100/zs auras bind <glowID> <auraID>|r - name the buff (12.1 route)",
-    "  |cffffd100/zs auras forget <glowID>|r - drop one, shipped ones included",
-    "  |cffffd100/zs auras remember|r - put every forgotten one back",
-    "",
-    "",
-    "  M+ and raid stuff",
-    "  |cffffd100/zs tanks|r - the co-tank panel (|cffffd100test|r fakes a raid)",
-    "  |cffffd100/zs reminders|r - every reminder, and why each one is or is not up",
-    "  |cffffd100/zs externals|r - who each external slot would whisper (|cffffd100test|r shows the panel)",
-    "  |cffffd100/zs taunt|r - what your next taunt would say (|cffffd100ask|r tells the other tank to take it)",
-    -- /zs route was listed here after Routes was parked, so the help printed a
-    -- command that had no handler at all. A menu naming something that does
-    -- nothing is worse than one that is short.
-    "  |cffffd100/zs death|r - the last death's analysis (|cffffd100share|r posts it, |cffffd100clear|r empties the list, |cffffd100cds|r says why a press has no bar)",
-    "",
-    "  |cffffd100/zs test|r - run the addon's own checks and report failures",
-    "  |cffffd100/zs minimap|r - show or hide the minimap button",
-    "  |cffffd100/zs reset|r - reset the profile you are using, keeping procs",
+-- EVERY COMMAND, WRITTEN ONCE.
+--
+-- Chat prints this list and the About page draws it, so a command cannot be
+-- in one of them and missing from the other - which is exactly what had
+-- happened. The About page carried a SECOND list, typed by hand, that still
+-- advertised `/zs text` and had never heard of `/zs build`, `/zs modules`,
+-- `/zs report`, `/zs skin`, `/zs test`, `/zs taunt` or `/zs death`. Two lists
+-- of the same thing is one list and one lie.
+--
+-- An entry with `group` opens a heading; an entry with `cmd` is a command
+-- under whichever heading came last. Colour codes are allowed in `text`
+-- because both readers are FontStrings and both render them.
+--
+-- /zs route is deliberately absent: Routes is parked, and it was listed here
+-- with no handler behind it. A menu naming something that does nothing is
+-- worse than a short menu.
+ns.COMMANDS = {
+    { group = "Getting around" },
+    { cmd = "/zs", text = "open the window" },
+    { cmd = "/zs unlock / lock", text = "move the bars around the screen" },
+    { cmd = "/zs build", text = "take a bar apart slot by slot, on screen" },
+    { cmd = "/zs modules", text = "which features are running "
+        .. "(|cffffd100/zs modules <name>|r switches one)" },
+    { cmd = "/zs welcome", text = "the window that asks which ones you want" },
+
+    { group = "Bars" },
+    { cmd = "/zs bars", text = "list them (|cffffd100add <name>|r / "
+        .. "|cffffd100remove <n>|r)" },
+    { cmd = "/zs cdm",
+      text = "what Blizzard's Cooldown Manager currently holds" },
+    { cmd = "/zs skin", text = "what is actually drawn on one adopted icon" },
+
+    { group = "Auras" },
+    { cmd = "/zs auras",
+      text = "the procs seen on this spec, and what drives them" },
+    { cmd = "/zs report",
+      text = "open the proc report in a box you can copy from" },
+    { cmd = "/zs auras export", text = "the same thing, under its older name" },
+    { cmd = "/zs auras icon <glowID> <spellID>",
+      text = "which icon a proc shows" },
+    { cmd = "/zs auras bind <glowID> <auraID>",
+      text = "name the buff (12.1 route)" },
+    { cmd = "/zs auras forget <glowID>",
+      text = "drop one, shipped ones included" },
+    { cmd = "/zs auras remember", text = "put every forgotten one back" },
+
+    { group = "M+ and raid stuff" },
+    { cmd = "/zs tanks",
+      text = "the co-tank panel (|cffffd100test|r fakes a raid)" },
+    { cmd = "/zs reminders",
+      text = "every reminder, and why each one is or is not up" },
+    { cmd = "/zs externals", text = "who each external slot would whisper "
+        .. "(|cffffd100test|r shows the panel)" },
+    { cmd = "/zs taunt", text = "what your next taunt would say "
+        .. "(|cffffd100ask|r tells the other tank to take it)" },
+    { cmd = "/zs death", text = "the last death's analysis (|cffffd100share|r "
+        .. "posts it, |cffffd100clear|r empties the list, |cffffd100cds|r says "
+        .. "why a press has no bar)" },
+
+    { group = "Housekeeping" },
+    { cmd = "/zs test", text = "run the addon's own checks and report failures" },
+    { cmd = "/zs minimap", text = "show or hide the minimap button" },
+    { cmd = "/zs reset", text = "reset the profile you are using, keeping procs" },
 }
+
+-- The same list, laid out for a chat frame. Built rather than typed, for the
+-- reason above it.
+local function UsageLines()
+    local lines = { "|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r - commands:" }
+    for _, entry in ipairs(ns.COMMANDS) do
+        if entry.group then
+            lines[#lines + 1] = ""
+            lines[#lines + 1] = "  " .. entry.group
+        else
+            lines[#lines + 1] = string.format("  |cffffd100%s|r - %s",
+                entry.cmd, entry.text)
+        end
+    end
+    return lines
+end
+
+local usage = UsageLines()
 
 SLASH_ZWOELFSTUFF1 = "/zs"
 SLASH_ZWOELFSTUFF2 = "/zwoelfstuff"

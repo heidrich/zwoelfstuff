@@ -199,39 +199,17 @@ function OptionsCoTanks:BuildPage(page, width)
     bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
     bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
 
-    local BAND_ACTIONS = {
-        { text = "Make the macro",
-          onClick = function()
-              local ok, why = ns.Taunts.MakeMacro()
-              ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
-                  or ("|cffff8040Not made:|r " .. tostring(why)))
-          end },
-        { text = "What a taunt would say",
-          onClick = function() ns.Taunts:Dump() end },
-    }
+    -- THE TWO ACTIONS ARE IN THE WINDOW'S HEADER BAND now, beside the page
+    -- title, with every other page's - see the PAGES table in Options.lua.
+    -- They were a column down the right of this one, and the preview had to
+    -- be scaled into whatever they left it.
 
-    -- Measured, widest wins, no number typed at the call site.
-    local ACTION_W = 0
-    for _, spec in ipairs(BAND_ACTIONS) do
-        ACTION_W = math.max(ACTION_W, UI.ButtonWidth(spec.text))
-    end
-
-    local ACTION_GAP = 6
-    local ACTIONS_H = #BAND_ACTIONS * (UI.BUTTON_H + ACTION_GAP) - ACTION_GAP
-
-    local y = -6
-    for _, spec in ipairs(BAND_ACTIONS) do
-        local button = UI.Button(band, spec.text, ACTION_W, spec.onClick)
-        button:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, y)
-        y = y - UI.BUTTON_H - ACTION_GAP
-    end
-
-    -- The preview keeps the left and gets what the action column leaves it.
-    -- It BORROWS the real panel rather than drawing a second one, so this
-    -- width is also the width that panel is scaled into - see Restage below.
-    self.stage = BuildStage(band, grid.width - ACTION_W - 14)
+    -- The preview has the whole band. It BORROWS the real panel rather than
+    -- drawing a second one, so this width is also the width that panel is
+    -- scaled into - see Restage below.
+    self.stage = BuildStage(band, grid.width)
     self.stage:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -6)
-    band:SetHeight(math.max(STAGE_H + 6, ACTIONS_H + 12) + 10)
+    band:SetHeight(STAGE_H + 6 + 10)
 
     grid:Section("Switch it on")
 

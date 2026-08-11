@@ -41,7 +41,7 @@ local C = {
     sidebarBg  = { 0.055, 0.063, 0.075 },  -- #0E1013  rail AND inspector
     well       = { 0.043, 0.051, 0.063 },  -- #0B0D10  preview, input, overlay
     surface    = { 0.098, 0.110, 0.129 },  -- #191C21  a card, the active nav row
-    control    = { 0.129, 0.145, 0.169 },  -- #21252B  stepper, select, chip
+    control    = { 0.129, 0.145, 0.169 },  -- #21252B  slider rail, select, chip
     controlHi  = { 0.200, 0.224, 0.255 },  -- #333941  control under the cursor
     separator  = { 0.122, 0.137, 0.165 },  -- #1F232A  hairline
 
@@ -161,14 +161,32 @@ UI.CARD_HEAD_H = 40
 UI.NAV_ITEM_H  = 30
 UI.CONTROL_H   = 24   -- select
 UI.BUTTON_H    = 26   -- every screen in the design says 26, so 26 it is
-UI.STEPPER_H   = 22
+-- The slider's height, and every part of it: the rail is centred in this and
+-- the value box fills it. It was UI.STEPPER_H while the control had buttons.
+UI.SLIDER_H   = 22
 
 -- The one spacing rhythm: 4 · 8 · 12 · 16 · 20 · 24. Only these six for layout
 -- gaps and container padding. Padding INSIDE a control belongs to the control
--- and is not on the scale: button 12, chip 6-8, stepper 0.
+-- and is not on the scale: button 12, chip 6-8, slider 0.
 UI.PAD    = 16
 UI.GAP    = 8
 UI.RADIUS = 0
+
+-- WHERE A RAIL ENTRY'S WORD STARTS, and it is published because two different
+-- things in that column have to agree about it.
+--
+-- A nav row indents its label past its mark. The Discord row at the bottom has
+-- no mark and used a hand-typed 16 - which is where the GROUP HEADINGS sit. So
+-- it lined up with "INFO" instead of with "Changelog" directly above it, and
+-- read as a heading somebody had forgotten to put in capitals. Its own comment
+-- claimed it lined up with the nav; it never did. Owner, with a picture of it:
+-- "raum das menue wieder auf."
+--
+-- Below UI.PAD on purpose: it is built out of it, and Lua reads this file top
+-- to bottom.
+UI.NAV_GLYPH     = 14
+UI.NAV_GLYPH_GAP = 10
+UI.NAV_LABEL_X   = UI.PAD + UI.NAV_GLYPH + UI.NAV_GLYPH_GAP   -- 40
 
 -- Five sizes, and there is no sixth. Seven had crept in, which is how a panel
 -- stops having a hierarchy: if everything is nearly the same size, size stops
@@ -346,6 +364,13 @@ function UI.Button(parent, text, width, onClick, style)
         edge:SetColor(outline[1], outline[2], outline[3], 1)
     end
 
+    -- Depth on the two weights that HAVE a surface. A ghost and a link are
+    -- deliberately not buttons - putting a tray edge on something with no fill
+    -- draws a box around bare text, which is the "three weights for one kind
+    -- of action" problem 4.69.0 removed. Lighter on the primary: two pixels of
+    -- black inside orange is a dirty edge, not depth.
+    if base then UI.Plate(btn, style == "primary" and 0.16 or 0.28) end
+
     local label = UI.Label(btn, text, UI.FS.meta, fg)
     label:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.label = label
@@ -418,8 +443,8 @@ local CONTROL_W = 168
 
 -- A control narrower than the slot gives the label the difference back. The
 -- slot exists to align right edges, not to reserve space nobody uses: the
--- stepper is 96 of the 168, and without this a label would be cut off at 192
--- while 72 pixels sat empty next to it.
+-- slider is 156 of the 168, and without this a label would be cut off at 192
+-- while the rest sat empty next to it.
 local function ClaimRow(row, control)
     row.label:SetPoint("RIGHT", control, "LEFT", -UI.GAP, 0)
 end
@@ -870,73 +895,179 @@ function UI.Counter(row, cfg)
 end
 
 ---------------------------------------------------------------------------
--- Stepper - minus, value, plus. There is no slider in this window any more.
+-- Slider - a track, and the value beside it
 --
--- A slider is the wrong control for everything on these pages. It is a
--- fixed-width track standing in for a range, so its precision is whatever
--- pixels-per-step happens to fall out of the column width: on a 0-to-1 opacity
--- in a 150px slot, one pixel is .007 and no exact value is reachable by hand.
--- Every number here is either small and counted (rows, columns) or tuned in
--- known steps (scale .05, opacity 5%), and both of those are "give me one
--- more", which is a button.
+-- IT WAS A STEPPER, AND THE OWNER ASKED FOR THE TRACK BACK.
 --
---   [ - ] [  value  ] [ + ]
---     22      36|52     22        all 22 tall, gap 1
+-- The design handoff still says "Keine Slider mehr. Jeder Zahlenwert ist ein
+-- Stepper", and the reason it gave was PRECISION: a fixed-width track standing
+-- in for a range has whatever resolution the column leaves it, and across 96
+-- pixels a 0-to-1 opacity moves .01 per pixel. That objection is real, and it
+-- is already answered - the value is an EDIT BOX and has been since 4.19.0.
+-- Click it and type, or roll the wheel one step at a time.
 --
--- 52 wide in the inspector (96 total, leaving the label 264 of the 368), 36 in
--- the narrower card column (80 total).
+-- What the stepper could NOT do is say where in the range you are. "Icon size
+-- 44" is a number without a scale: 44 of 100, or of 48? A track answers that
+-- in the moment you look at it, and nobody has to click for it.
 --
--- The value stays an EDIT BOX. That is not in the design, and it is not
--- negotiable either: it was asked for directly, and a stepper without it is a
--- worse slider - reaching 250 from 24 is 226 clicks. Click it and type.
+--   [=====o--------]  [  value  ]
+--         96              52         both 22 tall, gap 8  -> 156 total
+--         60              36         compact, gap 6       -> 102 total
+--
+-- THE FILL IS NOT ACCENT, and that is a rule rather than a taste. The first
+-- colour rule of this design is "accent at most once per column"; twelve
+-- filled tracks down the inspector would be twelve orange bars, at which point
+-- the colour is wallpaper and the active nav row has nothing left to say with
+-- it. Neutral fill - accent only under the pointer, where it means "this one".
 ---------------------------------------------------------------------------
-local function StepperButton(parent, kind, onClick)
-    local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(UI.STEPPER_H, UI.STEPPER_H)
 
-    local bg = Fill(btn, "BACKGROUND", C.control)
-    -- The design's own marks, not the characters. A hyphen and a plus sign are
-    -- different weights on different baselines in every font, so the pair sat
-    -- crooked and never read as one control.
-    local mark = UI.Glyph(btn, kind, 12, C.text)
-    mark:SetPoint("CENTER", btn, "CENTER", 0, 0)
+-- The three sums a track is made of, pure and exported.
+--
+-- They are separate functions because the desktop harness CANNOT see a
+-- geometry bug: its frame stub answers GetWidth with a fixed number whatever
+-- was set, so a track built at the wrong width tests exactly like a right one.
+-- What CAN be tested is the arithmetic, so the arithmetic lives on its own.
+function UI.SliderSnap(min, max, step, value)
+    if type(value) ~= "number" then value = min end
+    if not step or step <= 0 then step = 1 end
+    if value < min then value = min end
+    if value > max then value = max end
 
-    btn:SetScript("OnClick", onClick)
-    btn:SetScript("OnEnter", function(self)
-        if self:IsEnabled() then
-            bg:SetColorTexture(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
-        end
-    end)
-    btn:SetScript("OnLeave", function()
-        bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
-    end)
+    value = min + math.floor((value - min) / step + 0.5) * step
+    -- Snapping accumulates float noise - .05 taken twenty times is not 1 - and
+    -- the box is showing this number to somebody.
+    value = math.floor(value * 1000 + 0.5) / 1000
 
-    -- At the end of the range the button says so by going quiet, rather than
-    -- staying lit and doing nothing when clicked.
-    local baseSetEnabled = btn.SetEnabled
-    btn.SetEnabled = function(self, enabled)
-        baseSetEnabled(self, enabled)
-        local c = enabled and C.text or C.textGhost
-        mark:SetColor(c[1], c[2], c[3])
-        if not enabled then
-            bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
-        end
+    -- AND CLAMP AGAIN. Rounding to the NEAREST step can land past the end when
+    -- the step does not divide the range: 0..1 by .4 rounds 1 up to 1.2. The
+    -- old code clamped only before snapping and could hand back a value its own
+    -- slider had no room to draw. Taking these two lines out turns the check
+    -- "A step that does not divide the range still ends at the maximum" red,
+    -- which is how they were proven to be doing something.
+    if value > max then value = max end
+    if value < min then value = min end
+    return value
+end
+
+function UI.SliderFraction(min, max, value)
+    local span = max - min
+    if span <= 0 then return 0 end
+    local fraction = (value - min) / span
+    if fraction < 0 then return 0 end
+    if fraction > 1 then return 1 end
+    return fraction
+end
+
+function UI.SliderValueAt(min, max, step, fraction)
+    if type(fraction) ~= "number" then return min end
+    if fraction < 0 then fraction = 0 end
+    if fraction > 1 then fraction = 1 end
+    return UI.SliderSnap(min, max, step, min + fraction * (max - min))
+end
+
+-- The track itself. It reports a FRACTION and knows nothing about the value,
+-- the step or the format - that is the builder's business, and keeping the two
+-- apart is what lets the sums above be tested without a frame.
+local function SliderTrack(parent, width, onFraction)
+    local track = CreateFrame("Frame", nil, parent)
+    track:SetSize(width, UI.SLIDER_H)
+    track:EnableMouse(true)
+
+    -- LEFT-to-LEFT centres a 4-tall rail inside the 22 without arithmetic: an
+    -- anchor's own edge is its middle on that axis.
+    local rail = Tex(track, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
+    rail:SetHeight(4)
+    rail:SetPoint("LEFT", track, "LEFT", 0, 0)
+    rail:SetPoint("RIGHT", track, "RIGHT", 0, 0)
+
+    local fill = Tex(track, "ARTWORK", C.textFaint[1], C.textFaint[2], C.textFaint[3], 1)
+    fill:SetHeight(4)
+    fill:SetPoint("LEFT", rail, "LEFT", 0, 0)
+
+    local knob = Tex(track, "OVERLAY", C.textBody[1], C.textBody[2], C.textBody[3], 1)
+    knob:SetSize(8, 14)
+    knob:SetPoint("CENTER", rail, "LEFT", 0, 0)
+
+    local function Paint(lit)
+        local c = lit and C.accent or C.textFaint
+        fill:SetColorTexture(c[1], c[2], c[3], 1)
+        local k = lit and C.accent or C.textBody
+        knob:SetColorTexture(k[1], k[2], k[3], 1)
     end
 
-    return btn
+    -- Where the cursor is, in this frame's units. GetCursorPosition answers in
+    -- SCREEN units, so it has to be divided by the effective scale before it
+    -- can be compared with GetLeft - the window carries a scale setting, and
+    -- without this the knob runs away from the pointer on any scale but 1.
+    local function FractionAtCursor()
+        local x = GetCursorPosition()
+        local scale = track:GetEffectiveScale()
+        if not scale or scale == 0 then return 0 end
+        local left, w = track:GetLeft(), track:GetWidth()
+        if not left or not w or w <= 0 then return 0 end
+        return (x / scale - left) / w
+    end
+
+    -- The button is released wherever the pointer happens to be, and that is
+    -- often not over the track - so OnMouseUp is not the thing to wait for.
+    -- Ask the mouse itself, once per frame, and stop the moment it is up.
+    local function Follow(self)
+        if not IsMouseButtonDown("LeftButton") then
+            self:SetScript("OnUpdate", nil)
+            Paint(self:IsMouseOver())
+            return
+        end
+        onFraction(FractionAtCursor())
+    end
+
+    track:SetScript("OnMouseDown", function(self)
+        Paint(true)
+        onFraction(FractionAtCursor())
+        self:SetScript("OnUpdate", Follow)
+    end)
+    track:SetScript("OnEnter", function(self) Paint(true) end)
+    track:SetScript("OnLeave", function(self)
+        if not self:GetScript("OnUpdate") then Paint(false) end
+    end)
+
+    track.SetFraction = function(fraction)
+        local w = track:GetWidth() or width
+        -- Never zero: a fill with no width is not drawn at all, and at the
+        -- bottom of the range that reads as a broken control rather than as a
+        -- minimum. One pixel says "the track starts here".
+        fill:SetWidth(math.max(1, w * fraction))
+        knob:ClearAllPoints()
+        knob:SetPoint("CENTER", rail, "LEFT", w * fraction, 0)
+    end
+
+    Paint(false)
+    return track
 end
 
 -- The control itself. Both public names below are three lines of anchoring
 -- around this one builder, so the big one and the small one cannot drift.
-local function BuildStepper(parent, cfg)
-    local BOX = cfg.compact and 36 or 52
+local function BuildSlider(parent, cfg)
+    local BOX   = cfg.compact and 36 or 52
+    local TRACK = cfg.compact and 60 or 96
+    local GAP   = cfg.compact and 6 or UI.GAP
+
     local slider = CreateFrame("Frame", nil, parent)
-    slider:SetSize(UI.STEPPER_H * 2 + BOX + 2, UI.STEPPER_H)
+    slider:SetSize(TRACK + GAP + BOX, UI.SLIDER_H)
 
     local box = CreateFrame("Frame", nil, slider)
-    box:SetSize(BOX, UI.STEPPER_H)
-    box:SetPoint("CENTER", slider, "CENTER", 0, 0)
+    box:SetSize(BOX, UI.SLIDER_H)
+    box:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
     Fill(box, "BACKGROUND", C.well)
+
+    -- A ONE-PIXEL EDGE, AND IT IS NOT DECORATION.
+    --
+    -- The box is `well` #0B0D10. In the inspector it stands on `sidebarBg`
+    -- #0E1013 - one and a half percent apart, which is nothing. The darkest
+    -- tone in the window is supposed to say "here is a value you can change",
+    -- and in the column that holds most of the values it said nothing at all.
+    -- It went unnoticed while two buttons flanked the box; alone, it vanished.
+    local boxEdge = ns.CreateBorder(box, 1, "BORDER")
+    boxEdge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
 
     -- AN EDIT BOX, NOT A LABEL. The number was read-only, which meant an exact
     -- value could only be reached by dragging until the display agreed - and
@@ -956,11 +1087,7 @@ local function BuildStepper(parent, cfg)
     value:SetTextColor(C.text[1], C.text[2], C.text[3], 1)
 
     local function Clamp(v)
-        if v < cfg.min then v = cfg.min end
-        if v > cfg.max then v = cfg.max end
-        -- Snap to the step, then round away the float noise it accumulates.
-        v = cfg.min + math.floor((v - cfg.min) / cfg.step + 0.5) * cfg.step
-        return math.floor(v * 1000 + 0.5) / 1000
+        return UI.SliderSnap(cfg.min, cfg.max, cfg.step, v)
     end
 
     local function Commit(v)
@@ -969,26 +1096,46 @@ local function BuildStepper(parent, cfg)
         slider.Refresh()
     end
 
-    local function Step(delta)
-        local current = cfg.get()
-        if type(current) ~= "number" then current = cfg.min end
-        Commit(current + delta * cfg.step)
-        -- The card column redraws itself from the model, so a shape change has
-        -- to go round the page. On-screen panels pass silent and repaint
-        -- themselves through cfg.apply instead.
+    -- A page-wide refresh is for a change that alters the SHAPE of the page.
+    -- Dragging does not - it changes one number many times a second - so the
+    -- two ways in are kept apart: the wheel and the keyboard settle on a value
+    -- and may redraw the page; the drag only repaints what it owns.
+    local function Settle(v)
+        Commit(v)
         if not cfg.silent then ns.Options:Refresh() end
     end
 
-    local minus = StepperButton(slider, "ui-minus", function() Step(-1) end)
-    minus:SetPoint("LEFT", slider, "LEFT", 0, 0)
+    local function Step(delta)
+        local current = cfg.get()
+        if type(current) ~= "number" then current = cfg.min end
+        Settle(current + delta * cfg.step)
+    end
 
-    local plus = StepperButton(slider, "ui-plus", function() Step(1) end)
-    plus:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+    -- DRAGGING MUST NOT REPAINT WHAT IT HAS NOT CHANGED.
+    --
+    -- The track reports a fraction every frame the button is down - sixty
+    -- times a second - but a 96px rail carrying a 0.4..2.5 range in steps of
+    -- .05 has only 42 stops on it, so most of those frames land on the step
+    -- the value is already on. Committing them anyway ran cfg.apply for each
+    -- one, and cfg.apply is what rebuilds a bar: sixty rebuilds a second to
+    -- show a number that did not move.
+    --
+    -- Comparing the SNAPPED value rather than the fraction is the whole trick.
+    local track = SliderTrack(slider, TRACK, function(fraction)
+        local wanted = UI.SliderValueAt(cfg.min, cfg.max, cfg.step, fraction)
+        local current = cfg.get()
+        if type(current) == "number" and Clamp(current) == wanted then return end
+        Commit(wanted)
+    end)
+    track:SetPoint("LEFT", slider, "LEFT", 0, 0)
 
-    -- The wheel over the value is the third way in, and it is the fast one:
-    -- it steps without moving the pointer off the row.
+    -- The wheel is the fast exact way: one step without moving the pointer off
+    -- the row. It sits on BOTH parts, because after a drag the pointer is on
+    -- the track and after typing it is on the box.
     box:EnableMouseWheel(true)
     box:SetScript("OnMouseWheel", function(_, delta) Step(delta) end)
+    track:EnableMouseWheel(true)
+    track:SetScript("OnMouseWheel", function(_, delta) Step(delta) end)
 
     -- Typing. The unit and any decoration the format added are stripped, so
     -- "85%", "85" and " 85 s" all mean the same thing - people re-type over a
@@ -1020,25 +1167,23 @@ local function BuildStepper(parent, cfg)
             value:SetText(cfg.format and cfg.format(current) or tostring(current))
         end
 
-        -- Compared against the CLAMPED ends rather than the raw bounds: with a
-        -- step that does not divide the range evenly the last reachable value
-        -- is short of cfg.max, and a plus button that stays lit on a number it
-        -- can no longer change is the same broken promise as a dead slider.
-        minus:SetEnabled(current > Clamp(cfg.min))
-        plus:SetEnabled(current < Clamp(cfg.max))
+        -- The knob IS the end-of-range affordance now. A stepper had to grey
+        -- its buttons out to admit there was nothing left; a knob sitting on
+        -- the end of its rail says the same thing without a second mechanism.
+        track.SetFraction(UI.SliderFraction(cfg.min, cfg.max, Clamp(current)))
     end
 
     return slider
 end
 
--- On a settings row: right-aligned in the control slot. 96 wide in the
--- inspector, which leaves the label 264 of the 368 and it never runs out.
+-- On a settings row: right-aligned in the control slot. 156 wide in the
+-- inspector, which leaves the label 204 of the 368 and it never runs out.
 function UI.Slider(row, cfg)
-    local stepper = BuildStepper(row.slot, cfg)
-    stepper:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
-    ClaimRow(row, stepper)
-    row.control = stepper
-    row.Refresh = stepper.Refresh
+    local slider = BuildSlider(row.slot, cfg)
+    slider:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+    ClaimRow(row, slider)
+    row.control = slider
+    row.Refresh = slider.Refresh
     return row
 end
 
@@ -1071,6 +1216,12 @@ local function GetPopup()
     Fill(popup, "BACKGROUND", C.well)
     local edge = ns.CreateBorder(popup, 1, "BORDER")
     edge:SetColor(C.overlayEdge[1], C.overlayEdge[2], C.overlayEdge[3], 1)
+
+    -- AND A SHADOW NOW. The bright outline used to carry "this is on top of
+    -- the page" on its own, which is one signal doing two jobs - it is also
+    -- what marks the SELECTED entry inside the list. A shadow says the layer;
+    -- the outline goes back to saying only what it is for.
+    UI.Shadow(popup, 16, 0.6)
     popup.rows = {}
     popup.divider = Tex(popup, "ARTWORK", C.separator[1], C.separator[2], C.separator[3], 1)
     popup.divider:SetHeight(1)
@@ -3937,6 +4088,162 @@ end
 -- the user works on sits in one, so the window reads as a set of objects
 -- rather than a wall of controls.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- NO KEY ART. It was here for one version and it is gone.
+--
+-- UI.KeyArt drew four gradients behind the rail head and the welcome window -
+-- a lit surface with a wordmark standing on it, the way a launcher does it.
+-- Owner, with a picture of the result: "lass den verlauf weg, das sieht
+-- unmoeglich aus."
+--
+-- The mechanism was sound and the idea was his. What it could not survive is
+-- that a GRADIENT IS NOT ARTWORK: a launcher's wordmark stands on a painting,
+-- and standing it on a colour ramp spends a third of the column to say
+-- nothing. It also cost the page header its readability once already - the
+-- run-out closed from the right, exactly where the title starts.
+--
+-- Removed rather than switched off, along with UI.RailArtHeight, which existed
+-- only to work out how tall the cap could be. What replaces that sum is
+-- UI.RailFits below: the question worth asking was never "how much room is
+-- left over for a picture" but "do the entries still fit at all".
+---------------------------------------------------------------------------
+
+-- DOES THE RAIL STILL HOLD ITS ENTRIES. Pure, so the check can run without a
+-- window.
+--
+-- Adding a page pushes the list down by one row, and going over does not clip
+-- - it puts the last entry BEHIND the foot, silently, because a rail that
+-- clips looks exactly like a rail that is simply full. That is not
+-- hypothetical: it happened while this column was being drawn, and the entry
+-- that vanished was Changelog.
+function UI.RailFits(railHeight, headHeight, footHeight, tailHeight, navHeight)
+    return navHeight <= railHeight - headHeight - footHeight - tailHeight
+end
+
+---------------------------------------------------------------------------
+-- Plate and Shadow - the two halves of depth, and neither needs a file
+--
+-- The design handoff specifies four nine-slice strips and ONE of them was ever
+-- drawn (`zs-hairline`, which is the 1px line everything already uses). The
+-- other three were marked optional and never made, which is why the window is
+-- perfectly flat.
+--
+-- Two of the three turn out not to need art at all:
+--
+--   PLATE   two pixels of darkening INSIDE the edge. A card stops being a
+--           rectangle with a line round it and becomes a shallow tray - it
+--           reads as something you could put a thing into. Four inset
+--           textures; no file.
+--   SHADOW  four gradient bands OUTSIDE the frame, black falling to nothing.
+--           Only for overlays. Until now a popup said "I am on top of the
+--           page" with a brighter outline and nothing else, which is one
+--           signal doing two jobs.
+--
+-- The third, a 3px corner radius, DOES need art: rounding is not a property in
+-- WoW, it is a drawing. That one stays open rather than being faked with
+-- something that looks like a rounded corner from one distance only.
+--
+-- Depth is an answer about LAYERS, and there are four here - window, card,
+-- control, overlay. It is deliberately not applied per row: forty trays under
+-- each other is the brick wall of 4.0.0 again, and the complaint that killed
+-- that shape was "altbacken, viel wasted space".
+---------------------------------------------------------------------------
+local function InsetBand(frame, layer, sublayer)
+    local tex = frame:CreateTexture(nil, layer, nil, sublayer)
+    tex:SetColorTexture(0, 0, 0, 1)
+    return tex
+end
+
+function UI.Plate(frame, alpha, thickness)
+    alpha = alpha or 0.32
+    thickness = thickness or 2
+
+    -- Inset by ONE, so the plate sits under the hairline rather than on it.
+    -- Drawn over the edge it darkens the line itself, and a 1px line at 70%
+    -- of its own colour is not a darker line, it is a line that looks wrong.
+    local inset = 1
+    local top    = InsetBand(frame, "BORDER", 1)
+    local bottom = InsetBand(frame, "BORDER", 1)
+    local left   = InsetBand(frame, "BORDER", 1)
+    local right  = InsetBand(frame, "BORDER", 1)
+
+    top:SetHeight(thickness)
+    top:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
+    top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -inset, -inset)
+
+    bottom:SetHeight(thickness)
+    bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", inset, inset)
+    bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -inset, inset)
+
+    left:SetWidth(thickness)
+    left:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
+    left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", inset, inset)
+
+    right:SetWidth(thickness)
+    right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -inset, -inset)
+    right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -inset, inset)
+
+    for _, tex in ipairs({ top, bottom, left, right }) do
+        tex:SetColorTexture(0, 0, 0, alpha)
+    end
+
+    return { top = top, bottom = bottom, left = left, right = right }
+end
+
+-- A shadow under an overlay. Four bands, no corners.
+--
+-- The corners are left out on purpose rather than forgotten: filling them
+-- needs either four more quads with a diagonal ramp - which SetGradient cannot
+-- draw - or a texture, and at 14px of black falling to nothing over a ground
+-- this dark, nobody can tell. What a corner CAN do is show a seam, which is
+-- what a wrong one would look like.
+function UI.Shadow(frame, size, strength)
+    if type(CreateColor) ~= "function" then return end
+    size = size or 14
+    strength = strength or 0.55
+
+    -- VERTICAL runs bottom to top and HORIZONTAL left to right, so `near` is
+    -- simply which of the two colours touches the frame. Writing it once and
+    -- passing the side is what keeps the four from disagreeing - three of them
+    -- right and one upside down is the classic way to lose an hour here.
+    local function Band(orientation, nearFirst)
+        local tex = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+        tex:SetColorTexture(1, 1, 1, 1)
+        local dark = CreateColor(0, 0, 0, strength)
+        local gone = CreateColor(0, 0, 0, 0)
+        if nearFirst then
+            tex:SetGradient(orientation, dark, gone)
+        else
+            tex:SetGradient(orientation, gone, dark)
+        end
+        return tex
+    end
+
+    -- Above the frame: the band's BOTTOM touches it, and VERTICAL's first
+    -- colour is the bottom one.
+    local top = Band("VERTICAL", true)
+    top:SetHeight(size)
+    top:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 0)
+    top:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", 0, 0)
+
+    local bottom = Band("VERTICAL", false)
+    bottom:SetHeight(size)
+    bottom:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, 0)
+    bottom:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+
+    local left = Band("HORIZONTAL", false)
+    left:SetWidth(size)
+    left:SetPoint("TOPRIGHT", frame, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", 0, 0)
+
+    local right = Band("HORIZONTAL", true)
+    right:SetWidth(size)
+    right:SetPoint("TOPLEFT", frame, "TOPRIGHT", 0, 0)
+    right:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", 0, 0)
+
+    return { top = top, bottom = bottom, left = left, right = right }
+end
+
 function UI.Card(parent, width)
     local card = CreateFrame("Frame", nil, parent)
     card:SetWidth(width)
@@ -3944,6 +4251,10 @@ function UI.Card(parent, width)
     Fill(card, "BACKGROUND", C.surface)
     card.edge = ns.CreateBorder(card, 1, "BORDER")
     card.edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    -- Two pixels of darkening inside the line: the card becomes a shallow
+    -- tray rather than a rectangle. See UI.Plate.
+    UI.Plate(card)
 
     -- The selected card is marked on its LEFT EDGE, not by turning its whole
     -- outline orange. A full orange rectangle round a card that already
@@ -3963,6 +4274,62 @@ function UI.Card(parent, width)
     end
 
     return card
+end
+
+---------------------------------------------------------------------------
+-- Stat - one measured number, with its caption over it
+--
+-- NOT A ROW, and the difference is the point: a row is a SETTING, with a
+-- control on the right you can change. Every one of these is a READING. They
+-- were rows, right-aligned against a control slot that held no control, which
+-- is why the diagnostics page read as a settings page whose switches had all
+-- gone missing.
+--
+-- The number is `title` size against an `eyebrow` caption - the widest gap
+-- this design has - because on a page of readings the number is the content
+-- and the word over it is the label.
+---------------------------------------------------------------------------
+UI.STAT_H = 58
+
+function UI.Stat(parent, caption)
+    local stat = CreateFrame("Frame", nil, parent)
+    stat:SetHeight(UI.STAT_H)
+
+    Fill(stat, "BACKGROUND", C.surface)
+    local edge = ns.CreateBorder(stat, 1, "BORDER")
+    edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+    UI.Plate(stat)
+
+    local label = UI.Eyebrow(stat, caption)
+    label:SetPoint("TOPLEFT", stat, "TOPLEFT", 12, -10)
+
+    local value = UI.Label(stat, "", UI.FS.title, C.text)
+    value:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
+    value:SetJustifyH("LEFT")
+
+    -- THREE STATES AND NO MORE: this is fine, this wants looking at, and no
+    -- opinion. A fourth colour on a number is a colour nobody can read off.
+    --
+    -- `warning` and not `danger` for the bad case, however wrong the reading
+    -- is. Danger is reserved for what DESTROYS something - see the palette -
+    -- and a diagnostic destroys nothing; it reports.
+    stat.Set = function(_, text, kind)
+        value:SetText(text or "")
+        local c = C.text
+        if kind == "good" then c = C.inUse
+        elseif kind == "warn" then c = C.warning end
+        value:SetTextColor(c[1], c[2], c[3])
+    end
+
+    -- A reading that will not fit its tile is a reading nobody can trust: it
+    -- is cut off mid-number and still looks like a number. The tile keeps the
+    -- text inside itself and the caller sizes the strip.
+    stat.SetTileWidth = function(self, tileWidth)
+        self:SetWidth(tileWidth)
+        value:SetWidth(tileWidth - 24)
+    end
+
+    return stat
 end
 
 ---------------------------------------------------------------------------
@@ -4171,7 +4538,10 @@ for _, name in ipairs({
     "place-scenario", "place-world",
     "preset-apply", "preset-save",
     "ui-arrow-right", "ui-check", "ui-close", "ui-drag-handle", "ui-gear",
-    "ui-lock", "ui-minus", "ui-plus", "ui-reset", "ui-search",
+    -- ui-minus and ui-plus went with the stepper's buttons. The mark files
+    -- were deleted with them: eight TGAs nothing draws are eight TGAs in
+    -- every player's download.
+    "ui-lock", "ui-reset", "ui-search",
 }) do
     ICON_FILES[name] = name
 end
@@ -4389,13 +4759,13 @@ function UI.NavItem(parent, text, glyphKind, onClick)
     item.marker:SetWidth(2)
     item.marker:Hide()
 
-    item.glyph = UI.Glyph(item, glyphKind, 14)
+    item.glyph = UI.Glyph(item, glyphKind, UI.NAV_GLYPH)
     -- The row now runs edge to edge, so the row's own left padding is here:
     -- past the 2px accent bar, on the same 16 the rail's heading uses.
     item.glyph:SetPoint("LEFT", item, "LEFT", UI.PAD, 0)
 
     item.label = UI.Label(item, text, UI.FS.row, C.textDim)
-    item.label:SetPoint("LEFT", item.glyph, "RIGHT", 10, 0)
+    item.label:SetPoint("LEFT", item.glyph, "RIGHT", UI.NAV_GLYPH_GAP, 0)
     item.label:SetWordWrap(false)
 
     -- A RIGHT EDGE, so the label has a width to obey.
@@ -4557,9 +4927,9 @@ function UI.GhostButton(parent, text, onClick, colour)
 end
 
 ---------------------------------------------------------------------------
--- MiniSlider - a labelled stepper on one compact line
+-- MiniSlider - a labelled slider on one compact line
 --
---   Rows            [ - ] [ 3 ] [ + ]
+--   Rows            [==o-----] [ 3 ]
 --
 -- The control the bar cards use, and the one on the Edit Mode panels. Same
 -- builder as the inspector's, with the narrow value box: a row count and a
@@ -4571,7 +4941,7 @@ function UI.MiniSlider(parent, cfg)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(UI.ROW_H)
 
-    local stepper = BuildStepper(row, {
+    local slider = BuildSlider(row, {
         min = cfg.min, max = cfg.max, step = cfg.step, compact = true,
         get = cfg.get, set = cfg.set, apply = cfg.apply,
         format = cfg.format, scale = cfg.scale,
@@ -4581,17 +4951,17 @@ function UI.MiniSlider(parent, cfg)
         -- that is a second rebuild per click and nothing more.
         silent = true,
     })
-    stepper:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    slider:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 
     local label = UI.Label(row, cfg.label or "", UI.FS.row, C.textBody)
     label:SetPoint("LEFT", row, "LEFT", 0, 0)
     label:SetWordWrap(false)
     -- Anchored to the control rather than given a width. A fixed width was
     -- what let a long label run under the value; this way the label owns
-    -- exactly what the stepper does not, whatever the column turns out to be.
-    label:SetPoint("RIGHT", stepper, "LEFT", -UI.GAP, 0)
+    -- exactly what the slider does not, whatever the column turns out to be.
+    label:SetPoint("RIGHT", slider, "LEFT", -UI.GAP, 0)
 
-    row.Refresh = stepper.Refresh
+    row.Refresh = slider.Refresh
     return row
 end
 

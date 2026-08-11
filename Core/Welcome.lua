@@ -26,6 +26,16 @@ local WIDTH = 560
 local PAD = 20
 local ROW_H = 44
 
+-- NO LIT HEADER HERE EITHER. It was a gradient - UI.KeyArt, now gone - and
+-- the owner threw it out of the rail on sight: "lass den verlauf weg, das
+-- sieht unmoeglich aus." Keeping it on this one window would leave the addon
+-- with exactly one surface that looks like that, which is worse than none.
+--
+-- HEAD_TOP stays as a name at nought rather than being deleted from thirty
+-- offsets below: every one of them is written as HEAD_TOP + something, and
+-- editing thirty numbers to remove one is how a layout picks up a typo.
+local HEAD_TOP = 0
+
 local frame
 
 local function BuildFrame()
@@ -52,7 +62,7 @@ local function BuildFrame()
     -- The addon's own mark, the same file the game shows in its addon list.
     local logo = frame:CreateTexture(nil, "ARTWORK")
     logo:SetSize(38, 38)
-    logo:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -PAD)
+    logo:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(HEAD_TOP + PAD))
     logo:SetTexture("Interface\\AddOns\\ZwoelfStuff\\Media\\logo")
 
     -- The brand in its two colours, which is how the TOC, the minimap tooltip
@@ -73,8 +83,8 @@ local function BuildFrame()
     local rule = frame:CreateTexture(nil, "ARTWORK")
     rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
     rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(PAD + 62))
-    rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(PAD + 62))
+    rule:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(HEAD_TOP + PAD + 62))
+    rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(HEAD_TOP + PAD + 62))
 
     -- ONE ROW PER MODULE, built from the registry rather than typed out. A
     -- fifth module has to appear here by existing - a welcome screen that has
@@ -136,7 +146,7 @@ local function BuildFrame()
 
     -- The height is what the rows added up to, not a number typed once and
     -- wrong after the fifth module.
-    frame:SetHeight(PAD + 62 + 4 + #frame.rows * ROW_H + PAD
+    frame:SetHeight(HEAD_TOP + PAD + 62 + 4 + #frame.rows * ROW_H + PAD
         + math.max(footer:GetStringHeight(), UI.BUTTON_H) + PAD)
 
     frame.version = version

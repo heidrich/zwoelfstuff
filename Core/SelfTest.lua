@@ -259,6 +259,207 @@ local function TestPatternRoundTrip()
 end
 
 ---------------------------------------------------------------------------
+-- The slider's arithmetic
+--
+-- Extracted from the control on purpose. The harness CANNOT see a geometry
+-- bug - its frame stub answers GetWidth with a fixed number whatever was set,
+-- so a track built at the wrong width tests exactly like a right one. What it
+-- CAN see is the arithmetic, so the arithmetic stands on its own and is
+-- checked here.
+---------------------------------------------------------------------------
+local function TestSliderMaths()
+    local Snap, Frac, At = ns.UI.SliderSnap, ns.UI.SliderFraction, ns.UI.SliderValueAt
+
+    -- The ends hold, from both directions and from nonsense.
+    Check("Below the range comes back as the minimum", Snap(0, 100, 1, -40) == 0)
+    Check("Above the range comes back as the maximum", Snap(0, 100, 1, 900) == 100)
+    Check("A non-number is the minimum, not an error", Snap(16, 100, 2, nil) == 16)
+
+    -- ROUNDING TO THE NEAREST STEP CAN LAND PAST THE END. 0..1 by .4 rounds a
+    -- typed 1 up to 1.2, and the old code clamped only BEFORE snapping - so it
+    -- handed back a value its own track had no room to draw. This is the check
+    -- that goes red if the second clamp is ever taken out again.
+    Check("A step that does not divide the range still ends at the maximum",
+        Snap(0, 1, 0.4, 1) <= 1, tostring(Snap(0, 1, 0.4, 1)))
+
+    -- Snapping accumulates float noise, and the box shows this number.
+    Check("Twenty steps of .05 from 0 is exactly 1", Snap(0, 1, 0.05, 1) == 1)
+    Check("A value between steps takes the nearer one", Snap(0, 100, 10, 24) == 20)
+    Check("Exactly halfway rounds up", Snap(0, 100, 10, 25) == 30)
+
+    -- Value and fraction have to be each other's inverse, or the knob sits
+    -- somewhere the number does not.
+    Check("The minimum is the left end", Near(Frac(0.4, 2.5, 0.4), 0))
+    Check("The maximum is the right end", Near(Frac(0.4, 2.5, 2.5), 1))
+    Check("Halfway is halfway", Near(Frac(0, 100, 50), 0.5))
+    Check("A fraction outside 0..1 is pulled in", Frac(0, 100, -20) == 0
+        and Frac(0, 100, 300) == 1)
+
+    -- A range with no span must not divide by zero - it happens whenever a
+    -- setting is temporarily pinned to one value.
+    Check("A range of nothing answers 0 rather than throwing", Frac(5, 5, 5) == 0)
+
+    local roundTrip = true
+    for _, value in ipairs({ 16, 30, 44, 68, 100 }) do
+        if At(16, 100, 2, Frac(16, 100, value)) ~= value then roundTrip = false end
+    end
+    Check("A value survives the trip through its own fraction", roundTrip)
+
+    Check("Dragging past either end stays inside", At(0, 1, 0.05, -3) == 0
+        and At(0, 1, 0.05, 4) == 1)
+
+    ---------------------------------------------------------------------
+    -- The rail still holds every entry
+    --
+    -- This is the sum that stops a page being added and the LAST rail entry
+    -- quietly disappearing behind the foot. It is not hypothetical: it
+    -- happened while that column was being drawn, and a rail that clips looks
+    -- exactly like a rail that is simply full.
+    --
+    -- It replaces the old RailArtHeight check. That one asked how much room
+    -- was LEFT OVER for the lit cap; the cap is gone (owner: "lass den
+    -- verlauf weg") and the question that was actually worth asking is this
+    -- one.
+    ---------------------------------------------------------------------
+    local Fits = ns.UI.RailFits
+
+    -- The real window: rail 758, head 62, foot 38, and the Discord row plus
+    -- its air at the bottom.
+    local TAIL = ns.UI.NAV_ITEM_H + 12
+    local navNow = ns.UI.NAV_ITEM_H * (#ns.Options.PAGES + 1) + 4 * 38
+
+    Check("Today's rail holds every entry", Fits(758, 62, 38, TAIL, navNow),
+        string.format("nav %d of %d", navNow, 758 - 62 - 38 - TAIL))
+
+    -- 758 - 62 - 38 - 42 = 616 is everything the entries may have. Written as
+    -- the sum rather than as a number: the first draft of the check this
+    -- replaces guessed 700 and went red against correct code.
+    local room = 758 - 62 - 38 - TAIL
+    Check("A nav that fills the column exactly still fits",
+        Fits(758, 62, 38, TAIL, room))
+    Check("One row more than fits is reported as not fitting",
+        not Fits(758, 62, 38, TAIL, room + 1))
+
+    -- The margin is worth naming, because it is what a new page spends. Two
+    -- more pages must still fit, or the next feature lands on a broken rail
+    -- and nobody finds out until a screenshot arrives.
+    Check("There is room for two more pages",
+        Fits(758, 62, 38, TAIL, navNow + 2 * ns.UI.NAV_ITEM_H),
+        string.format("%d spare", room - navNow))
+end
+
+---------------------------------------------------------------------------
+-- The command list, which two readers share
+--
+-- The About page draws ns.COMMANDS and the chat help prints it. Before this
+-- they were two hand-typed lists, and the second had gone stale: it still
+-- advertised /zs text and had never heard of build, modules, report, skin,
+-- test, taunt or death. Checked here so it cannot drift apart again.
+---------------------------------------------------------------------------
+local function TestCommandList()
+    local commands = ns.COMMANDS or {}
+
+    Check("There is a command list at all", #commands > 0,
+        string.format("%d entries", #commands))
+
+    -- An entry is a HEADING or a COMMAND. One that is both would be drawn
+    -- twice, and one that is neither is an empty row nobody can see.
+    local shaped, described = true, true
+    for _, entry in ipairs(commands) do
+        local isGroup = entry.group ~= nil
+        local isCommand = entry.cmd ~= nil
+        if isGroup == isCommand then shaped = false end
+        if isCommand and (entry.text == nil or entry.text == "") then
+            described = false
+        end
+    end
+    Check("Every entry is either a heading or a command", shaped)
+    Check("Every command says what it does", described)
+
+    -- WHAT THE SLASH HANDLER ACTUALLY ANSWERS TO. A list that names a command
+    -- with no handler behind it is worse than a short list - that is why
+    -- /zs route came out when Routes was parked.
+    local handled = {
+        [""] = true, unlock = true, lock = true, build = true, minimap = true,
+        cdm = true, skin = true, text = true, numbers = true, tanks = true,
+        cotanks = true, modules = true, module = true, welcome = true,
+        externals = true, external = true, taunt = true, taunts = true,
+        reminders = true, reminder = true, death = true, test = true,
+        report = true, auras = true, bars = true, reset = true,
+    }
+
+    local unknown
+    for _, entry in ipairs(commands) do
+        if entry.cmd then
+            -- "/zs auras forget <glowID>" -> "auras"; "/zs" -> "".
+            local word = entry.cmd:match("^/zs%s*(%S*)") or ""
+            if not handled[word:lower()] then unknown = entry.cmd end
+        end
+    end
+    Check("Every command listed has a handler behind it", unknown == nil,
+        unknown and ("no handler for " .. unknown) or nil)
+
+    ---------------------------------------------------------------------
+    -- Cutting it into two columns
+    ---------------------------------------------------------------------
+    local cut = ns.Options.SplitCommands(commands)
+
+    Check("The cut leaves something in both columns",
+        cut >= 1 and cut < #commands, string.format("cut after %d of %d",
+            cut, #commands))
+
+    -- A heading is a promise that entries follow it. Ending the left column
+    -- on one puts the heading at the bottom of one column and everything it
+    -- names at the top of the other.
+    Check("The left column does not end on a heading",
+        commands[cut] ~= nil and commands[cut].group == nil)
+
+    -- Degenerate input must answer rather than throw: an empty list has no
+    -- cut, and a single entry cannot be split at all.
+    Check("An empty list answers without throwing",
+        ns.Options.SplitCommands({}) == 0)
+    Check("One entry stays in one column",
+        ns.Options.SplitCommands({ { cmd = "/zs", text = "open" } }) == 1)
+
+    ---------------------------------------------------------------------
+    -- The in-game changelog, which is the OTHER hand-typed list
+    --
+    -- CHANGELOG.md is the source of truth and changelog.py renders the page
+    -- and the Discord post from it. ns.CHANGELOG is written by hand on top of
+    -- that, so it can drift the same way the command list did - and the way
+    -- it drifts is the worst one available: shipping a version whose own
+    -- Changelog page has never heard of it. The page marks entry 1 as the one
+    -- you are running, so if that is not true it says so out loud to every
+    -- player who opens it.
+    ---------------------------------------------------------------------
+    local newest = ns.CHANGELOG and ns.CHANGELOG[1]
+
+    Check("The changelog names the version being shipped",
+        newest ~= nil and newest.version == ns.version,
+        newest and ("newest entry " .. tostring(newest.version)
+            .. ", running " .. tostring(ns.version)) or "no changelog at all")
+
+    -- Newest first is what the page assumes; an entry inserted in the wrong
+    -- place puts "installed" on somebody else's release.
+    local ordered, empty = true, nil
+    local function Rank(version)
+        local major, minor, patch = tostring(version):match("(%d+)%.(%d+)%.(%d+)")
+        if not major then return -1 end
+        return tonumber(major) * 1000000 + tonumber(minor) * 1000 + tonumber(patch)
+    end
+    for index, entry in ipairs(ns.CHANGELOG or {}) do
+        if index > 1 and Rank(entry.version)
+            >= Rank(ns.CHANGELOG[index - 1].version) then
+            ordered = false
+        end
+        if not entry.lines or #entry.lines == 0 then empty = entry.version end
+    end
+    Check("The changelog runs newest first", ordered)
+    Check("No release in it is silent", empty == nil,
+        empty and (tostring(empty) .. " has no lines") or nil)
+end
+
+---------------------------------------------------------------------------
 -- The rows and columns sliders
 ---------------------------------------------------------------------------
 local function TestGridSliders()
@@ -1770,7 +1971,7 @@ local function TestDesignSystem()
     local metrics = {
         "HEADER_H", "ROW_H", "ROW_GAP", "SECTION_H", "COL_GAP",
         "WINDOW_W", "WINDOW_H", "RAIL_W", "INSPECTOR_W", "CONTENT_W",
-        "CARD_HEAD_H", "NAV_ITEM_H", "CONTROL_H", "BUTTON_H", "STEPPER_H",
+        "CARD_HEAD_H", "NAV_ITEM_H", "CONTROL_H", "BUTTON_H", "SLIDER_H",
         "PAD", "GAP", "RADIUS",
     }
     local measured, missing = true, nil
@@ -5233,6 +5434,8 @@ function Test:Run()
         { "Taunts",        TestTaunts },
         { "Addon channel", TestComm },
         { "CD answer",     TestAnswers },
+        { "Slider maths",  TestSliderMaths },
+        { "Lists with two readers", TestCommandList },
     }
 
     for _, suite in ipairs(suites) do

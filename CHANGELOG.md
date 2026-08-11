@@ -4,6 +4,93 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.76.0] - 2026-08-11
+
+### Changed
+
+- **Every number is a slider again — a track with the value beside it.** The
+  design this window was built to said *"no more sliders, every number is a
+  stepper"*, and the reason it gave was precision: a track standing in for a
+  range has only as many stops as the column leaves it. That objection is
+  answered and has been since 4.19.0 — the value is an **edit box**. Click it
+  and type, or roll the wheel one step at a time. What the stepper could not do
+  is say *where in the range* you are: "Icon size 44" is a number without a
+  scale. Four ways in now — drag the track, click it, wheel over either half,
+  or type. There is still exactly **one** numeric control in the addon, so
+  every page, every panel and Edit mode got this at once.
+- **The value field has an edge.** It is the darkest tone in the window, which
+  is meant to say "here is a value you can change" — but in the inspector it
+  stood on a ground one and a half percent lighter than itself and said
+  nothing. Nobody noticed while two buttons flanked it.
+- **A page's actions are in the header band now, beside its title.** They used
+  to be a column of buttons *inside* the page, next to that page's preview — so
+  the same kind of thing sat in a different place depending on which entry in
+  the list you had clicked, and where they existed they ate a third of the
+  width the preview needed. **Move bars / Build** on Cooldowns, **Make the
+  macro / What a taunt would say** on Co-Tanks, **Set keys / Test mode** on
+  External CD request, **Set keys / What every cell would cast** on External CD
+  answer, **Open it / Share in chat** on the Death-log.
+- **The slots, the offered spells and the co-tank preview have their whole band
+  back**, and each band is only as tall as what is actually in it. A one-row
+  panel used to hold a band four buttons deep with nothing in three quarters of
+  it.
+- **A button that belongs to one block stayed with that block.** *Who would be
+  asked* prints the "Who to ask" list out loud, so it stands under that list
+  rather than four sections above it.
+- **Moving a panel is one door, not two.** The per-page *Move the panel* and
+  *Move the bar* buttons opened the same edit mode the first entry in the list
+  opens. The pages say where that is instead.
+- **About is a page rather than a wall of text.** The mark, the name, why it
+  exists and the three facts anybody is asked for — author, version, client —
+  stand in a block at the top; the credits and the "what the client will not
+  let it do" paragraphs are two named sections under it, and the commands are a
+  list in two columns.
+- **Diagnostics opens with four readings**: how many cooldowns the Cooldown
+  Manager holds, how many cells on your bars are filled, how sharp the marks in
+  this window are, and whether another cooldown addon is fighting for the same
+  frames. All four are measured on your machine.
+- **Settings has no right-hand column.** It was a panel 400 pixels wide
+  standing empty until you pointed at something, to show two lines that fit
+  under the row perfectly well. The sentences are on the page now.
+- **The sidebar is tidy at the bottom.** *Discord* is a row like every other
+  row: its word starts where every other word in that column starts, it lights
+  up under the mouse the way its neighbours do, and it has air above it.
+- **The window ground has an up and a down.** One vertical gradient over a flat
+  colour. Three columns of three flat colours read as a wall.
+- **Cards, buttons and menus have depth.** Two pixels of darkening inside the
+  edge turn a card into a shallow tray, and menus cast a shadow instead of
+  saying "I am on top of the page" with the same bright outline that marks the
+  selected row inside them. Not under every settings row: forty trays stacked
+  up is the brick wall this window was rebuilt to get rid of.
+- **The window can be seen through — 94% by default, adjustable under
+  Settings.** One alpha on the outermost frame. Fading each layer separately
+  would multiply the values wherever two overlap, and no surface would keep a
+  colour you could predict. The floor is 70%: a window you cannot see is a
+  window you cannot close.
+
+### Fixed
+
+- **A number could land outside its own slider.** Snapping rounds to the
+  *nearest* step, and the range was only clamped before that — so a range of
+  0 to 1 in steps of 0.4 turned a typed 1 into 1.2. Pinned by a check that goes
+  red if the second clamp is ever removed.
+- **Dragging repainted sixty times a second even when nothing moved.** A 96px
+  track carrying 42 steps lands on the same step for most frames of a drag, and
+  each one rebuilt the bar it belongs to. It now only redraws when the snapped
+  value actually changes.
+- **The command list was written twice and the second copy had gone stale.**
+  About still advertised `/zs text` and had never heard of `/zs build`,
+  `/zs modules`, `/zs report`, `/zs skin`, `/zs test`, `/zs taunt` or
+  `/zs death`. There is one list now — the chat help and the About page both
+  draw it — and a check fails if it ever names a command with no handler
+  behind it.
+
+### Removed
+
+- **The plus and minus buttons, and their eight mark files.** The track
+  replaced them; leaving the artwork in would have shipped 80 KB that nothing
+  draws.
+
 ## [4.75.0] - 2026-08-11
 
 ### Changed

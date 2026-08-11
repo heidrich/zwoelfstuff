@@ -49,11 +49,62 @@ local PAD       = 20
 -- title and the rule under the right column's heading are the same line.
 local HEADER_H  = UI.HEADER_H
 
+-- The strip at the bottom of the rail that carries the version and the client
+-- build. Named because the sum that decides whether the list of entries fits
+-- has to subtract it, and a number typed in two places is a number that
+-- drifts - which is exactly how an entry ends up behind it.
+local RAIL_FOOT_H = 38
+
+-- THE CLOSE CROSS, AND WHY ITS SIZE IS A SHARED NUMBER.
+--
+-- The cross sits in the window's top-right corner. The page's header actions
+-- sit at the right edge of the MIDDLE column. On a page with a third column
+-- those are 400 pixels apart and nothing touches; on a page without one they
+-- are the same corner, and the cross was drawn straight through the last
+-- button's label. Owner, with a picture of the answer page: "das X oben
+-- rechts fixen".
+--
+-- So the actions have to know how much room to leave, which means the cross's
+-- width cannot be typed at the one place that draws it.
+local CLOSE_W = 24
+local CLOSE_ROOM = CLOSE_W + 10
+
 ---------------------------------------------------------------------------
 -- Diagnostics
 ---------------------------------------------------------------------------
+-- THE FOUR READINGS AT THE TOP OF DIAGNOSTICS.
+--
+-- Every one of them is measured on this machine. Nothing here is a number
+-- somebody typed in once, and nothing that has no live source is drawn: the
+-- design sketch also showed a "secret values" count and a timing chart, and
+-- neither exists to be read - the secret-value figure in About is a
+-- measurement taken by hand, not a counter, and there is no timing series at
+-- all. A dashboard that invents its own numbers is worse than one with four.
+local DIAG_STATS = { "Cooldowns held", "On your bars", "Pixels per unit",
+    "Another cooldown addon" }
+
 local function BuildDiagnosticsPage(page, width)
     local grid = UI.Page(page, width)
+
+    ---------------------------------------------------------------------
+    -- The readings
+    ---------------------------------------------------------------------
+    local statHost = CreateFrame("Frame", nil, grid.content)
+    statHost:SetHeight(UI.STAT_H)
+
+    local STAT_GAP = 10
+    local tileWidth = math.floor(
+        (grid.width - STAT_GAP * (#DIAG_STATS - 1)) / #DIAG_STATS)
+
+    local stats = {}
+    for index, caption in ipairs(DIAG_STATS) do
+        local stat = UI.Stat(statHost, caption)
+        stat:SetTileWidth(tileWidth)
+        stat:SetPoint("TOPLEFT", statHost, "TOPLEFT",
+            (index - 1) * (tileWidth + STAT_GAP), 0)
+        stats[index] = stat
+    end
+    grid:Wide(statHost, UI.STAT_H, 0, 12)
 
     grid:Section("Cooldown Manager")
     grid:Note("Everything on your bars comes from Blizzard's Cooldown Manager - it "
@@ -180,6 +231,42 @@ local function BuildDiagnosticsPage(page, width)
             or "|cff40ff40none found|r")
 
         local perUnit = UI.PixelsPerUnit()
+
+        ---------------------------------------------------------------
+        -- The four readings
+        ---------------------------------------------------------------
+        -- COUNTED, not asked for: there is no items-held call on CDM, and
+        -- walking what it hands out is the only honest answer. Guarded,
+        -- because on a client where the Cooldown Manager is not up
+        -- ForEachItemEverywhere walks nothing and the answer is nought
+        -- rather than an error.
+        local held = 0
+        if ns.CDM:IsAvailable() then
+            ns.CDM:ForEachItemEverywhere(function() held = held + 1 end)
+        end
+        stats[1]:Set(tostring(held), held > 0 and "good" or "warn")
+
+        -- The same sum the Cooldowns page's subline shows, so two places in
+        -- the window cannot disagree about how full the bars are.
+        local slots, filled = 0, 0
+        for index = 1, ns.Bars:Count() do
+            local cfg = ns.Bars:Get(index)
+            if cfg then
+                local total = ns.Bars:CellCount(cfg)
+                slots = slots + total
+                for cell = 1, total do
+                    if cfg.cells and cfg.cells[cell] then filled = filled + 1 end
+                end
+            end
+        end
+        stats[2]:Set(string.format("%d / %d", filled, slots))
+
+        stats[3]:Set(string.format("%.2f", perUnit))
+
+        -- A rival is the one reading here that is about something being
+        -- WRONG, and it is still a warning rather than a danger: this page
+        -- reports, it does not destroy anything.
+        stats[4]:Set(rival or "none", rival and "warn" or "good")
         sharpState:SetText(string.format(
             "%.2f px per unit - %dpx and %dpx files",
             perUnit, UI.IconCutFor(16, perUnit), UI.IconCutFor(32, perUnit)))
@@ -206,122 +293,280 @@ end
 ---------------------------------------------------------------------------
 -- About
 ---------------------------------------------------------------------------
-local function BuildAboutPage(page, width)
-    local scroll, content = UI.ScrollArea(page, width - 14)
+-- THE BLOCK AT THE TOP OF ABOUT: the mark, the name, why it exists, and the
+-- three facts anybody is asked for the moment something goes wrong.
+--
+-- Its own function because it is the one piece of this page that is a LAYOUT
+-- rather than a paragraph, and the page below it is built by the grid.
+local ABOUT_LOGO = 56
+local ABOUT_META = { "Author", "Version", "Client" }
 
-    -- Zwoelf with the umlaut: this line names the PERSON. The addon keeps the
-    -- transliteration everywhere it is an identifier. Owner: "der charakter
-    -- heisst Zwölf! das addon zwoelf, wichtig!"
-    local author = UI.Label(content, "Zwölf  -  EU Destromath", 15, C.accent)
-    author:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+local function BuildAboutHead(parent, width, intro)
+    local head = CreateFrame("Frame", nil, parent)
 
-    local version = UI.Label(content, "Version " .. ns.version, 12, C.textDim)
-    version:SetPoint("TOPLEFT", author, "BOTTOMLEFT", 0, -6)
+    local logo = head:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(ABOUT_LOGO, ABOUT_LOGO)
+    logo:SetPoint("TOPLEFT", head, "TOPLEFT", 0, 0)
+    logo:SetTexture(ns.ICON_TEXTURE)
 
-    -- WHY THIS ADDON EXISTS, IN HIS OWN WORDS, and the same words the README
-    -- opens with. Owner: "der text sollte auch ins about!" - and he is right
-    -- that it belongs here rather than only on a page nobody reads from inside
-    -- the game. Everything under it is what the addon cannot do and why, which
-    -- is a different question and a colder one.
-    local intro = UI.Label(content, table.concat({
-        "After many years I have built a new addon again, one that serves my own",
-        "needs as a tank first, and those of my M+ groups and friends. You will find",
-        "a lot of these features in other addons too - but like everybody, I have my",
-        "own ideas about what I want in the game. Hence this addon. I hope it is as",
-        "useful to you as it is to me.",
-        "",
-        "This addon is no replacement for EllesmereUI or ElvUI. I love both of them",
-        "and use them for my own UI. This is a collection of the features I like,",
-        "done my way. And of course - feature requests and feedback are welcome!",
-    }, "\n"), 13, C.textBody)
-    intro:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -16)
-    intro:SetJustifyH("LEFT")
-    intro:SetJustifyV("TOP")
-    intro:SetWidth(width - 30)
+    local column = ABOUT_LOGO + 18
 
-    -- THE CREDIT, WORD FOR WORD FROM THE README.
+    local name = UI.Label(head, "ZwoelfStuff", UI.FS.title, C.text)
+    name:SetPoint("TOPLEFT", head, "TOPLEFT", column, -2)
+
+    local blurb = UI.Label(head, intro, UI.FS.row, C.textBody)
+    blurb:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -10)
+    blurb:SetJustifyH("LEFT")
+    blurb:SetJustifyV("TOP")
+    blurb:SetWidth(width - column)
+
+    -- Author, version, client - caption over value, side by side. The same
+    -- three the rail's foot carries, which is not a duplication: the foot is
+    -- glanceable and this is the page you are sent to when somebody asks.
     --
-    -- Owner: "in about muss unter meinen text noch der info text aus der
-    -- readme rein." It belongs in both places for the same reason it exists at
-    -- all: the people who would recognise these names are players, and a
-    -- player never opens a repository. Kept as one text in two forms rather
-    -- than reworded here, so there is no version of it that says less.
-    local thanks = UI.Label(content, "Standing on other people's shoulders",
-        14, C.accentCool)
-    thanks:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -22)
+    -- Zwoelf with the umlaut: this VALUE names the person. The addon keeps
+    -- the transliteration everywhere it is an identifier. Owner: "der
+    -- charakter heisst Zwölf! das addon zwoelf, wichtig!"
+    local values = {
+        "Zwölf  -  EU Destromath",
+        ns.version,
+        (GetBuildInfo()) or "",
+    }
 
-    local credit = UI.Label(content, table.concat({
-        "This addon was written by reading other addons - EllesmereUI, ElvUI, BigWigs,",
-        "Method Raid Tools, Mythic Dungeon Tools, Details!, WeakAuras, Plater,",
-        "LibOpenRaid and a few more. Their authors have our thanks.",
-        "",
-        "No code was copied from any of them. What we took is a different thing: facts",
-        "about the game's API. Which field a table actually carries, which event fires",
-        "first, which call answers on a fresh login and which one returns nothing until",
-        "a frame later, which values the client withholds in a dungeon. None of that is",
-        "documented anywhere, and on a patch that keeps closing doors it is often not",
-        "discoverable at all except by reading code that already works.",
-        "",
-        "So the comments in Core/ cite those addons by name and by line, and they say",
-        "'read off working code on this machine' rather than pretending we knew. That is",
-        "deliberate. A number nobody can re-check is a number that quietly goes wrong two",
-        "patches later - see Core/CDM.lua, which is mostly a record of where each fact",
-        "came from.",
-        "",
-        "If you are one of those authors and you would rather not be named here, say so",
-        "and we will take the citation out.",
-    }, "\n"), 12, C.textBody)
-    credit:SetPoint("TOPLEFT", thanks, "BOTTOMLEFT", 0, -10)
-    credit:SetJustifyH("LEFT")
-    credit:SetJustifyV("TOP")
-    credit:SetWidth(width - 30)
+    local FIELD_GAP = 34
+    local x, fieldTop = 0, nil
+    for index, caption in ipairs(ABOUT_META) do
+        local label = UI.Eyebrow(head, caption)
+        local value = UI.Label(head, values[index], UI.FS.row, C.text)
 
-    local body = UI.Label(content, table.concat({
-        "Blizzard's Cooldown Manager can only show spells that exist in its own",
-        "C_CooldownViewer data set. Boiling Point (1265968) is not in that set, so it",
-        "cannot be added there by hand - and no Cooldown Manager addon can add it",
-        "either, because their spell pickers read the exact same list.",
-        "",
-        "Since patch 12.0 aura data is 'secret'. Measured on this character, in combat,",
-        "with the buff up: 0 readable, 18 secret. Not just Boiling Point - every buff.",
-        "So an addon cannot identify an aura at all, by ID, by name or by icon.",
-        "",
-        "Blizzard's answer is Blizzard_AuraContainer: an addon declares what it wants to",
-        "see and hands over the widgets, and the engine binds the aura, shows the button",
-        "only while it is up, and drives icon, duration, bar and stacks itself. That",
-        "frame type arrives in patch 12.1 - this client is 12.0.7, so it is not here yet.",
-        "",
-        "What is also readable is a proc: Boiling Point empowers Blood Boil, and",
-        "IsSpellOverlayed(50842) is a plain boolean that never touches aura data. That",
-        "is the fallback route, timed off our own clock.",
-        "",
-        "If no countdown number appears anywhere, enable it globally:",
-        "  /console countdownForCooldowns 1",
-        "",
-        "Commands",
-        "  /zs                    open this window",
-        "  /zs unlock | lock      move the bars around the screen",
-        "  /zs bars               list your bars   |   add <name>   |   remove <n>",
-        "  /zs cdm                what Blizzard's Cooldown Manager currently holds",
-        "  /zs auras              the procs seen on this spec, and what drives them",
-        "  /zs auras export       hand this spec's set back so it ships with the addon",
-        "  /zs auras icon <glowID> <spellID>    which icon a proc shows",
-        "  /zs auras bind <glowID> <auraID>     name the buff itself (12.1 route)",
-        "  /zs auras forget <glowID>            drop a recording",
-        "  /zs text               where each number and name actually ended up",
-        "  /zs minimap            show or hide the minimap button",
-        "  /zs reset              restore defaults, keeping recorded procs",
-    }, "\n"), 12, C.text)
-    body:SetPoint("TOPLEFT", credit, "BOTTOMLEFT", 0, -22)
-    body:SetJustifyV("TOP")
-    body:SetWidth(width - 30)
+        if fieldTop then
+            label:SetPoint("TOPLEFT", fieldTop, "TOPLEFT", x, 0)
+        else
+            label:SetPoint("TOPLEFT", blurb, "BOTTOMLEFT", 0, -18)
+            fieldTop = label
+        end
+        value:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
 
-    -- Every block that grows is asked for its own height. The credit was the
-    -- third one on this page and the sum did not know about it, which scrolls
-    -- to a stop with the last paragraph still below the edge.
-    content:SetHeight(intro:GetStringHeight() + credit:GetStringHeight()
-        + body:GetStringHeight() + 170)
-    if scroll.Update then scroll.Update() end
+        x = x + math.max(label:GetStringWidth(), value:GetStringWidth())
+            + FIELD_GAP
+    end
+
+    -- IT SETS ITS OWN SIZE, and that is not a detail.
+    --
+    -- Grid:Layout gives a wide block a POINT and nothing else - it never sets
+    -- a height. A frame left at its default 0 reserves the room the grid was
+    -- told about and draws none of it, which is exactly what this block did on
+    -- its first outing: owner, with a picture, "about hat ein riesen gap
+    -- oben." Every other frame block in this window sets its own rectangle -
+    -- Grid:Buttons does, the chip host does, the stat strip does - and this
+    -- one had been written as if the grid would do it.
+    --
+    -- Measured, not typed: the blurb wraps, and how many lines that takes
+    -- depends on the panel font the user chose.
+    local NAME_H, EYEBROW_H, VALUE_H = 22, 11, 15
+    local height = math.max(ABOUT_LOGO,
+        NAME_H + 10 + blurb:GetStringHeight() + 18 + EYEBROW_H + 4 + VALUE_H)
+
+    head:SetSize(width, height)
+    head.Measure = function() return height end
+    return head
+end
+
+-- WHY THIS ADDON EXISTS, IN HIS OWN WORDS, and the same words the README
+-- opens with. Owner: "der text sollte auch ins about!" - and he is right that
+-- it belongs here rather than only on a page nobody reads from inside the
+-- game.
+--
+-- One paragraph up top rather than nine lines: the block beside the mark is
+-- what somebody reads, and everything colder than that has its own heading
+-- under it.
+local ABOUT_INTRO =
+    "After many years I have built a new addon again, one that serves my own "
+    .. "needs as a tank first, and those of my M+ groups and friends. You will "
+    .. "find a lot of these features in other addons too - but like everybody, "
+    .. "I have my own ideas about what I want in the game. Hence this addon. I "
+    .. "hope it is as useful to you as it is to me."
+
+-- THE CREDIT, WORD FOR WORD FROM THE README. Owner: "in about muss unter
+-- meinen text noch der info text aus der readme rein." It belongs in both
+-- places for the same reason it exists at all: the people who would recognise
+-- these names are players, and a player never opens a repository.
+local ABOUT_CREDIT = {
+    "This addon is no replacement for EllesmereUI or ElvUI. I love both of "
+    .. "them and use them for my own UI. This is a collection of the features "
+    .. "I like, done my way. And of course - feature requests and feedback are "
+    .. "welcome!",
+
+    "It was written by reading other addons - EllesmereUI, ElvUI, BigWigs, "
+    .. "Method Raid Tools, Mythic Dungeon Tools, Details!, WeakAuras, Plater, "
+    .. "LibOpenRaid and a few more. Their authors have our thanks.",
+
+    "No code was copied from any of them. What we took is a different thing: "
+    .. "facts about the game's API. Which field a table actually carries, "
+    .. "which event fires first, which call answers on a fresh login and which "
+    .. "one returns nothing until a frame later, which values the client "
+    .. "withholds in a dungeon. None of that is documented anywhere, and on a "
+    .. "patch that keeps closing doors it is often not discoverable at all "
+    .. "except by reading code that already works.",
+
+    "So the comments in Core/ cite those addons by name and by line, and they "
+    .. "say 'read off working code on this machine' rather than pretending we "
+    .. "knew. A number nobody can re-check is a number that quietly goes wrong "
+    .. "two patches later - see Core/CDM.lua, which is mostly a record of "
+    .. "where each fact came from.",
+
+    "If you are one of those authors and you would rather not be named here, "
+    .. "say so and we will take the citation out.",
+}
+
+-- WHAT THE CLIENT WILL NOT LET IT DO, and why. A colder question than the one
+-- above, so it is under its own heading rather than in the same wall of text.
+local ABOUT_LIMITS = {
+    "Blizzard's Cooldown Manager can only show spells that exist in its own "
+    .. "C_CooldownViewer data set. Boiling Point (1265968) is not in that set, "
+    .. "so it cannot be added there by hand - and no Cooldown Manager addon "
+    .. "can add it either, because their spell pickers read the exact same "
+    .. "list.",
+
+    "Since patch 12.0 aura data is 'secret'. Measured on this character, in "
+    .. "combat, with the buff up: 0 readable, 18 secret. Not just Boiling "
+    .. "Point - every buff. So an addon cannot identify an aura at all, by ID, "
+    .. "by name or by icon.",
+
+    "Blizzard's answer is Blizzard_AuraContainer: an addon declares what it "
+    .. "wants to see and hands over the widgets, and the engine binds the "
+    .. "aura, shows the button only while it is up, and drives icon, duration, "
+    .. "bar and stacks itself. That frame type arrives in patch 12.1.",
+
+    "What is also readable is a proc: Boiling Point empowers Blood Boil, and "
+    .. "IsSpellOverlayed(50842) is a plain boolean that never touches aura "
+    .. "data. That is the fallback route, timed off our own clock.",
+
+    "If no countdown number appears anywhere, switch it on for the whole "
+    .. "client: |cffffd100/console countdownForCooldowns 1|r",
+}
+
+-- One command row: the command on the left in the accent, what it does beside
+-- it. NOT a Grid row - a row right-aligns its control against a slot, and
+-- these two are a pair read left to right.
+--
+-- There is no monospace face to set the command in. The client ships none and
+-- the panel font is whatever LibSharedMedia handed over, so the column is held
+-- by a MEASURED indent instead and the colour does the separating.
+local COMMAND_H = 20
+local COMMAND_GAP = 14
+
+local function BuildCommandColumn(parent, entries, columnWidth, cmdWidth)
+    local block = CreateFrame("Frame", nil, parent)
+    block:SetWidth(columnWidth)
+
+    local y = 0
+    for _, entry in ipairs(entries) do
+        if entry.group then
+            local caption = UI.Eyebrow(block, entry.group)
+            caption:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -(y + 10))
+            y = y + 10 + 18
+        else
+            local cmd = UI.Label(block, entry.cmd, UI.FS.meta, C.accent)
+            cmd:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -y)
+            cmd:SetWidth(cmdWidth)
+            cmd:SetJustifyH("LEFT")
+
+            local what = UI.Label(block, entry.text, UI.FS.meta, C.textDim)
+            what:SetPoint("TOPLEFT", block, "TOPLEFT",
+                cmdWidth + COMMAND_GAP, -y)
+            what:SetWidth(columnWidth - cmdWidth - COMMAND_GAP)
+            what:SetJustifyH("LEFT")
+            what:SetJustifyV("TOP")
+
+            -- A description can wrap, and the next row has to start under the
+            -- taller of the two rather than under a number typed here.
+            y = y + math.max(COMMAND_H, what:GetStringHeight() + 6)
+        end
+    end
+
+    block:SetHeight(math.max(1, y))
+    return block
+end
+
+-- Where to cut the command list into two columns, counting the HEIGHT each
+-- entry costs rather than the entries - a heading is not a command and a
+-- wrapped description is worth two rows.
+--
+-- Pure, and exported, because the harness cannot measure a string: it is the
+-- balance rule that is worth checking, not the pixels.
+function Options.SplitCommands(entries)
+    local weight = 0
+    for _, entry in ipairs(entries) do
+        weight = weight + (entry.group and 1.4 or 1)
+    end
+
+    local half, running = weight / 2, 0
+    for index, entry in ipairs(entries) do
+        running = running + (entry.group and 1.4 or 1)
+        -- Never cut so that a heading is the last thing in the left column.
+        if running >= half and not entry.group then return index end
+    end
+    return #entries
+end
+
+local function BuildAboutPage(page, width)
+    local grid = UI.Page(page, width)
+
+    local head = BuildAboutHead(grid.content, grid.width, ABOUT_INTRO)
+    grid:Wide(head, head.Measure(), 0, 10)
+
+    grid:Section("Standing on other people's shoulders")
+    for _, paragraph in ipairs(ABOUT_CREDIT) do grid:Note(paragraph) end
+
+    grid:Section("What it cannot do, and why")
+    for _, paragraph in ipairs(ABOUT_LIMITS) do grid:Note(paragraph) end
+
+    ---------------------------------------------------------------------
+    -- Commands
+    --
+    -- FROM ns.COMMANDS, which the chat help prints from as well. This page
+    -- used to carry a second list, typed by hand, and it had gone stale: it
+    -- advertised `/zs text` and knew nothing of build, modules, report, skin,
+    -- test, taunt or death.
+    ---------------------------------------------------------------------
+    grid:Section("Commands")
+
+    local cut = Options.SplitCommands(ns.COMMANDS)
+    local left, right = {}, {}
+    for index, entry in ipairs(ns.COMMANDS) do
+        local into = (index <= cut) and left or right
+        into[#into + 1] = entry
+    end
+
+    -- The widest command there is, measured once and used by both columns, so
+    -- the two lists have one indent between them rather than two.
+    local cmdWidth = 0
+    local ruler = UI.Label(grid.content, "", UI.FS.meta, C.accent)
+    for _, entry in ipairs(ns.COMMANDS) do
+        if entry.cmd then
+            ruler:SetText(entry.cmd)
+            cmdWidth = math.max(cmdWidth, ruler:GetStringWidth() or 0)
+        end
+    end
+    ruler:Hide()
+    cmdWidth = math.ceil(cmdWidth) + 6
+
+    local columnWidth = grid.colWidth
+    local host = CreateFrame("Frame", nil, grid.content)
+
+    local leftBlock = BuildCommandColumn(host, left, columnWidth, cmdWidth)
+    leftBlock:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+
+    local rightBlock = BuildCommandColumn(host, right, columnWidth, cmdWidth)
+    rightBlock:SetPoint("TOPLEFT", host, "TOPLEFT",
+        columnWidth + UI.COL_GAP, 0)
+
+    local tallest = math.max(leftBlock:GetHeight(), rightBlock:GetHeight())
+    host:SetHeight(tallest)
+    grid:Wide(host, tallest, 0, 10)
+
+    grid:Layout()
 end
 
 ---------------------------------------------------------------------------
@@ -407,16 +652,35 @@ local PAGES = {
     -- an instruction. "Your bars, in the order you built them" is true on the
     -- first visit and noise on every one after it, whereas how many cells are
     -- still empty is the one thing worth knowing at a glance.
+    --
+    -- ITS TWO ACTIONS CARRY THEIR MARKS. These are the only pair in the
+    -- window whose names describe the same activity from two sides - "move
+    -- them" and "take them apart" - and the marks separate them faster than
+    -- the words do.
     { key = "cooldowns", title = "Cooldowns", glyph = "grid", side = true,
-      status = true, module = "cooldowns" },
+      status = true, module = "cooldowns",
+      actions = {
+          { text = "Move bars", icon = "action-move-bars",
+            onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
+          { text = "Build", icon = "action-build",
+            onClick = function() ns.EditMode:SetUnlocked(true, "build") end },
+      } },
 
     -- Through the namespace like the pages below it: the builder lives in
     -- Core/OptionsSettings.lua. What this page holds is the split its own
     -- header comment explains - every bar, this window, the ways in - and
     -- nothing that changes WHICH settings you have. That is Profiles.
+    -- NO THIRD COLUMN. It had the explain panel - a column that shows the
+    -- paragraph belonging to whichever row you point at - and the owner threw
+    -- it out on sight: "die settings seite braucht keine rechte leiste."
+    --
+    -- He is right, and the reason is that this page is the one where the
+    -- paragraphs are SHORT. A panel 400 wide standing empty until you hover
+    -- something, to hold two lines that fit under the row perfectly well, is
+    -- 400 pixels spent on a hover state. The notes are drawn on the page now,
+    -- which is what every other page without a third column does.
     { key = "settings", title = "Settings", glyph = "sliders",
       subtitle = "Every bar, this window, and the ways in.",
-      explain = true,
       build = function(page, width) return ns.OptionsSettings:BuildPage(page, width) end },
 
     -- The one page that is about somebody ELSE. It carries its own right-hand
@@ -426,6 +690,15 @@ local PAGES = {
     { key = "cotanks", title = "Co-Tanks", glyph = "tanks", tanks = true,
       module = "cotanks",
       subtitle = "Every tank in the group, with their health and their auras.",
+      actions = {
+          { text = "Make the macro", onClick = function()
+              local ok, why = ns.Taunts.MakeMacro()
+              ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
+                  or ("|cffff8040Not made:|r " .. tostring(why)))
+          end },
+          { text = "What a taunt would say",
+            onClick = function() ns.Taunts:Dump() end },
+      },
       -- Through the namespace, not a local: the builder lives in
       -- Core/OptionsCoTanks.lua, which loads BEFORE this file but after this
       -- table would have captured a local upvalue that was still nil.
@@ -446,6 +719,18 @@ local PAGES = {
     { key = "externals", title = "External CD request", glyph = "tanks",
       externals = true, module = "externals",
       subtitle = "Somebody else's cooldown, and one click to ask for it.",
+      actions = {
+          { text = "Set keys",
+            onClick = function() ns.Keys:SetActive(true) end },
+          { text = "Test mode", widest = "Test mode: on",
+            label = function()
+                return ns.Externals.testing and "Test mode: on" or "Test mode"
+            end,
+            onClick = function()
+                ns.Externals:SetTestMode(not ns.Externals.testing)
+                ns.Options:Refresh()
+            end },
+      },
       build = function(page, width) return ns.OptionsExternals:BuildPage(page, width) end },
 
     -- THE MIRROR OF THE PAGE ABOVE. That one asks; this one is asked. Two
@@ -455,6 +740,15 @@ local PAGES = {
     { key = "answers", title = "External CD answer", glyph = "tanks",
       module = "answers",
       subtitle = "When somebody asks for one of yours, a button lights up.",
+      actions = {
+          { text = "Set keys",
+            onClick = function() ns.Keys:SetActive(true) end },
+          -- The report, and it is worth finding: it prints the macro each
+          -- cell would run, which is the one thing that says whether this
+          -- works at all.
+          { text = "What every cell would cast",
+            onClick = function() ns.Answers:Dump() end },
+      },
       build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },
 
     -- The death log, and with it the DEFENSIVES LIST that used to live on a
@@ -468,6 +762,10 @@ local PAGES = {
     { key = "deaths", title = "Death-log", glyph = "skull", deaths = true,
       module = "deaths",
       subtitle = "What killed you, and what could have prevented it.",
+      actions = {
+          { text = "Open it", onClick = function() ns.Death:Show() end },
+          { text = "Share in chat", onClick = function() ns.Death:Share() end },
+      },
       build = function(page, width) return ns.OptionsDeaths:BuildPage(page, width) end },
 
     -- The third page about the fight. No third column: what it shows is the
@@ -618,6 +916,27 @@ function Options:ApplyScale()
     if self.frame then self.frame:SetScale(ns.db.windowScale or 1) end
 end
 
+-- HOW SOLID THE WINDOW IS, and there is exactly ONE alpha - on the outermost
+-- frame, where it fades the whole thing at once.
+--
+-- Not per layer. Card 90, row 80, field 70 sounds like depth and is not: the
+-- values MULTIPLY wherever two of them overlap, so no surface has a colour you
+-- can predict from its own setting, and the darkest tone in the design stops
+-- being the darkest one.
+--
+-- 94% by default. That is enough to see that something is behind the window
+-- and little enough that no 13px label goes soft; below about 85 it stops
+-- being reliable over a bright scene. The file header in Widgets.lua used to
+-- say every colour here is opaque - the owner asked for this, so that block
+-- says what it says now.
+--
+-- Like windowScale, it is read with a fallback rather than seeded into
+-- DEFAULTS: a profile that predates the setting resolves to the same number
+-- as a new one, and nothing has to migrate.
+function Options:ApplyAlpha()
+    if self.frame then self.frame:SetAlpha(ns.db.windowAlpha or 0.94) end
+end
+
 function Options:Create()
     if self.frame then return end
 
@@ -639,6 +958,29 @@ function Options:Create()
     frame:Hide()
 
     UI.Fill(frame, "BACKGROUND", C.windowBg)
+
+    -- THE GROUND GETS AN UP AND A DOWN.
+    --
+    -- It was one flat colour, and three columns of three flat colours have no
+    -- direction at all - the window read as a wall rather than as a surface.
+    -- A single vertical gradient over the whole frame fixes that for the price
+    -- of one texture: lighter at the top, gone by the middle, so nothing sits
+    -- on a ground that is brighter than the row above it.
+    --
+    -- NO TILED WEAVE. It was drawn in the mockup and measured out again: a
+    -- pattern under 12px text needs to sit on the interface grid to stay
+    -- still, WoW does not put it there, and 4% of a texture that shimmers is
+    -- worse than no texture. The gradient carries the whole effect anyway.
+    if type(CreateColor) == "function" then
+        local lift = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+        lift:SetColorTexture(1, 1, 1, 1)
+        lift:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+        lift:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
+        lift:SetHeight(math.floor(WINDOW_H * 0.55))
+        lift:SetGradient("VERTICAL",
+            CreateColor(C.windowBg[1], C.windowBg[2], C.windowBg[3], 0),
+            CreateColor(0.106, 0.118, 0.145, 1))
+    end
     local outer = ns.CreateBorder(frame, 1, "BORDER")
     outer:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
@@ -655,33 +997,56 @@ function Options:Create()
     railEdge:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, 0)
     railEdge:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", 0, 0)
 
+    -- NO LIT CAP OVER THE RAIL, AND IT IS NOT TO COME BACK.
+    --
+    -- 4.76.0 put a four-layer gradient here and 160 pixels of dark red stood
+    -- over the wordmark. Owner, with a picture of it: "lass den verlauf weg,
+    -- das sieht unmoeglich aus und raum das menue wieder auf."
+    --
+    -- The gesture it was copying - a wordmark standing on artwork, the way a
+    -- launcher does it - needs artwork worth standing on. A gradient is not
+    -- that. What it actually bought was a third of the column spent on
+    -- nothing, above a list that then had to fight for the rest.
+    --
+    -- The head starts at the top of the rail now, where it started before.
+
     -- The rail head, on the same 62 as every other column's header band.
     --
+    -- A FRAME of its own now, rather than offsets from the rail's top corner.
+    -- Everything below it is anchored to it, so setting the art's height at
+    -- the end re-flows the head and the nav with it - and a hardcoded offset
+    -- here would have to be corrected in three more places every time the cap
+    -- changes.
+    local head = CreateFrame("Frame", nil, rail)
+    head:SetHeight(HEADER_H)
+    head:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, 0)
+    head:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, 0)
+
     -- The mark is the addon's own icon, at 26. The wordmark is lower case and
     -- carries the split in COLOUR rather than in weight: `zwoelf` in text and
     -- `stuff` a step back. There is no weight axis on a FontString - the panel
     -- font is whatever LibSharedMedia handed over and it may ship one cut - so
     -- a design that asks for 600 against 400 gets contrast it can actually
     -- have.
-    local mark = rail:CreateTexture(nil, "ARTWORK")
+    local mark = head:CreateTexture(nil, "ARTWORK")
     mark:SetSize(26, 26)
-    mark:SetPoint("TOPLEFT", rail, "TOPLEFT", UI.PAD, -18)
+    mark:SetPoint("TOPLEFT", head, "TOPLEFT", UI.PAD, -18)
     mark:SetTexture(ns.ICON_TEXTURE)
 
-    local brand = UI.Label(rail, "zwoelf", UI.FS.card, C.text)
+    local brand = UI.Label(head, "zwoelf", UI.FS.card, C.text)
     brand:SetPoint("TOPLEFT", mark, "TOPRIGHT", 10, -1)
 
-    local brandTail = UI.Label(rail, "stuff", UI.FS.card, C.textFaint)
+    local brandTail = UI.Label(head, "stuff", UI.FS.card, C.textFaint)
     brandTail:SetPoint("LEFT", brand, "RIGHT", 0, 0)
 
-    local brandSub = UI.Eyebrow(rail, "EU Destromath")
+    local brandSub = UI.Eyebrow(head, "EU Destromath")
     brandSub:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -3)
 
     -- The foot: what version this is, and what it is running on. Both are the
     -- first thing anybody is asked for when something is wrong, and neither
     -- belongs anywhere the eye goes while working.
     local foot = CreateFrame("Frame", nil, rail)
-    foot:SetHeight(38)
+    foot:SetHeight(RAIL_FOOT_H)
     foot:SetPoint("BOTTOMLEFT", rail, "BOTTOMLEFT", 0, 0)
     foot:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", 0, 0)
 
@@ -709,23 +1074,34 @@ function Options:Create()
 
     local discord = CreateFrame("Button", nil, rail)
     discord:SetHeight(UI.NAV_ITEM_H)
-    discord:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 6)
-    discord:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 6)
+    -- Air above it. At 6 it sat against Changelog and read as the last entry
+    -- of the Info group, which it is not - it leaves the addon.
+    discord:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 12)
+    discord:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 12)
+
+    -- The same hover ground a nav row has. Without it this was the one row in
+    -- the column that did not answer the mouse with anything but a colour, and
+    -- a row that behaves differently reads as a row of a different kind.
+    local discordBg = UI.Fill(discord, "BACKGROUND", C.surface)
+    discordBg:Hide()
 
     -- THE WORD, AND NO MARK. There was a mark here for one version and it was
     -- not Discord's - drawn from memory, and a brand mark you have traced
     -- yourself is worse than none, because it claims to be the real thing. The
     -- word says it exactly.
     --
-    -- Aligned on the same 16 as the rail's own headings, past where an active
-    -- row's accent bar sits, so it lines up with the nav above it.
+    -- ON THE NAV'S OWN INDENT, not on the headings'. See UI.NAV_LABEL_X: at 16
+    -- this lined up with "INFO" rather than with "Changelog" right above it,
+    -- and the whole foot of the column looked broken because of it.
     local discordLabel = UI.Label(discord, "Discord", UI.FS.row, C.textDim)
-    discordLabel:SetPoint("LEFT", discord, "LEFT", 16, 0)
+    discordLabel:SetPoint("LEFT", discord, "LEFT", UI.NAV_LABEL_X, 0)
 
     discord:SetScript("OnEnter", function()
+        discordBg:Show()
         discordLabel:SetTextColor(C.text[1], C.text[2], C.text[3])
     end)
     discord:SetScript("OnLeave", function()
+        discordBg:Hide()
         discordLabel:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
     end)
     discord:SetScript("OnClick", function()
@@ -757,7 +1133,7 @@ function Options:Create()
     -- The one close cross, in the window's top-right corner - which is also
     -- the top right of the inspector, which is where the design draws it.
     local close = CreateFrame("Button", nil, chrome)
-    close:SetSize(24, 24)
+    close:SetSize(CLOSE_W, CLOSE_W)
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -19)
     -- The design's cross, not the letter X. At 12 the two are hard to tell
     -- apart until you look, and then the letter is unmistakable: it has serif
@@ -846,6 +1222,17 @@ function Options:Create()
     -- level of the window rather than a trench between two raised sides.
     UI.Fill(stageHost, "BACKGROUND", C.windowBg)
 
+    -- NO LIT SURFACE ON THIS BAND, and it was tried. The run-out closed in
+    -- from the RIGHT, so the open, brightest part sat at x=20 - which is
+    -- exactly where the page title and its subline start. In game the title
+    -- was dark red on red and could not be read at all.
+    --
+    -- It is the same rule this design already writes down for settings rows,
+    -- and the band breaks it harder: a 20px title, a 12px subline AND two
+    -- buttons all stand on these 62 pixels. There is nowhere on it that is
+    -- free. The rail cap and the welcome window are where the surface earns
+    -- its place - both have room above the words.
+
     local pageTitle = UI.Label(stageHost, "", UI.FS.title, C.text)
     pageTitle:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -16)
 
@@ -856,28 +1243,72 @@ function Options:Create()
     pageSubtitle:SetJustifyH("LEFT")
     pageSubtitle:SetWordWrap(false)
 
-    -- The two ways into Edit Mode, in the header band where the page's own
-    -- actions live. They are shortcuts, not a second home: the rail entry
-    -- still opens edit mode, these two say which half of it you want.
+    -- THE PAGE'S OWN ACTIONS, IN THE BAND BESIDE ITS TITLE.
     --
-    -- Both carry their mark, because these two are the only pair in the window
-    -- whose names describe the same activity from two sides - "move them" and
-    -- "take them apart" - and the marks separate them faster than the words do.
-    -- The widths are named, because the subtitle below has to stop short of
-    -- them and a number typed twice is a number that drifts.
-    local BUILD_W, MOVE_W = 104, 124
+    -- Every page names its own in the PAGES table above and this draws
+    -- whichever pair the page in front of you asked for. They used to be a
+    -- COLUMN OF BUTTONS INSIDE the page, beside that page's preview - so the
+    -- same kind of thing lived in two different places depending on which
+    -- entry in the rail you had clicked, and on the pages that had them they
+    -- ate the width the preview needed.
+    --
+    -- TWO IS A MEASURED CEILING, not a preference. A page with a third column
+    -- gets a 790 middle, 750 of it inside the padding. A 20px title takes
+    -- some 190 of that, so the actions may have about 540 - and the SUBLINE
+    -- has to live in what is left of the line under them, without wrapping.
+    -- Four buttons at the width their own words ask for come to about 470 and
+    -- leave the sentence 260, cut off mid-word. Two leave it 400.
+    local ACTION_GAP = 6
+    local MAX_ACTIONS = 2
 
-    local buildBtn = UI.Button(stageHost, "Build", BUILD_W, function()
-        ns.EditMode:SetUnlocked(true, "build")
-    end)
-    buildBtn:SetPoint("TOPRIGHT", stageHost, "TOPRIGHT", -PAD, -18)
-    buildBtn:SetIcon("action-build")
+    -- A button with a mark in front of it needs room for the mark as well as
+    -- for its words, and UI.ButtonWidth measures the WORDS: twelve for the
+    -- glyph, four for the gap after it, four so the pair keeps its padding.
+    local ICON_ROOM = 20
 
-    local moveBtn = UI.Button(stageHost, "Move bars", MOVE_W, function()
-        ns.EditMode:SetUnlocked(true, "bars")
-    end)
-    moveBtn:SetPoint("TOPRIGHT", buildBtn, "TOPLEFT", -6, 0)
-    moveBtn:SetIcon("action-move-bars")
+    local actionsByPage = {}
+    for index, entry in ipairs(PAGES) do
+        if entry.actions then
+            local built, span = {}, 0
+            for slot, spec in ipairs(entry.actions) do
+                if slot > MAX_ACTIONS then break end
+
+                -- CUT FOR THE WIDEST IT WILL EVER SAY, not for what it says
+                -- while the window is being built. "Test mode" grows to
+                -- "Test mode: on" the moment it is running, and a button
+                -- measured for the short one clips the long one.
+                local room = UI.ButtonWidth(spec.widest or spec.text)
+                    + (spec.icon and ICON_ROOM or 0)
+
+                local button = UI.Button(stageHost, spec.text, room,
+                    spec.onClick)
+                if spec.icon then button:SetIcon(spec.icon) end
+                button:Hide()
+
+                built[#built + 1] = { button = button, spec = spec }
+                span = span + room + (slot > 1 and ACTION_GAP or 0)
+            end
+
+            -- Laid out from the right edge inwards, so the page reads
+            -- title -> air -> first action -> second action the way it is
+            -- written in the table. Only the LAST one touches the column
+            -- edge; the rest hang off it, which is why re-anchoring for the
+            -- close cross below is one call and not a loop.
+            local previous
+            for position = #built, 1, -1 do
+                local button = built[position].button
+                if previous then
+                    button:SetPoint("TOPRIGHT", previous, "TOPLEFT",
+                        -ACTION_GAP, 0)
+                end
+                previous = button
+            end
+
+            built.last = previous and built[#built].button or nil
+            built.span = span
+            actionsByPage[index] = built
+        end
+    end
 
     local body = CreateFrame("Frame", nil, stageHost)
     body:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -(HEADER_H + 16))
@@ -922,6 +1353,7 @@ function Options:Create()
     self.frame = frame
     self.pageIndex = 1
     self:ApplyScale()
+    self:ApplyAlpha()
 
     ---------------------------------------------------------------------
     -- Left column entries
@@ -981,14 +1413,18 @@ function Options:Create()
     local pageByKey = {}
     for index, entry in ipairs(PAGES) do pageByKey[entry.key] = index end
 
-    local y = HEADER_H + UI.PAD
+    -- Measured from the HEAD's bottom edge, not the rail's top corner. The lit
+    -- cap above the head has no height yet - it gets one at the end of this
+    -- function, from what the loop below turns out to need - and an offset
+    -- from the rail's top would have to be recomputed then.
+    local y = UI.PAD
     for position, entry in ipairs(NAV) do
         if entry.eyebrow then
             -- Air ABOVE the heading, and none under it. A heading belongs to
             -- what follows; spaced evenly it belongs to neither side.
             if position > 1 then y = y + 18 end
             local caption = UI.Eyebrow(rail, entry.eyebrow)
-            caption:SetPoint("TOPLEFT", rail, "TOPLEFT", UI.PAD, -y - 6)
+            caption:SetPoint("TOPLEFT", head, "BOTTOMLEFT", UI.PAD, -y - 6)
             y = y + 20
         else
             local index = entry.page and pageByKey[entry.page]
@@ -1004,12 +1440,24 @@ function Options:Create()
             -- from the column edge instead of ON it. The design runs the row
             -- from edge to edge; the padding belongs INSIDE the row, which is
             -- where the icon's own 8 already is.
-            item:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -y)
-            item:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, -y)
+            item:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -y)
+            item:SetPoint("TOPRIGHT", head, "BOTTOMRIGHT", 0, -y)
             if index then navItems[index] = item end
             y = y + UI.NAV_ITEM_H
         end
     end
+
+    -- WHAT THE LIST ACTUALLY NEEDS, checked rather than hoped for. `y` is the
+    -- nav's real height, counted as it was built. There is no artwork to take
+    -- the room from any more, but the sum still has to hold: rail less head
+    -- less foot less the Discord row is what the entries may use, and going
+    -- over it does not clip - it pushes the last entry behind the foot. That
+    -- is not hypothetical. It happened while this column was being designed,
+    -- and the one that vanished was Changelog.
+    -- The sum itself is UI.RailFits, and it is checked by the self test
+    -- against the real page count rather than here - a rail that does not fit
+    -- is a mistake made while editing this file, not a state a player can get
+    -- into, so it belongs in the checks and not in everybody's login.
 
     ---------------------------------------------------------------------
     -- Painting
@@ -1072,15 +1520,51 @@ function Options:Create()
             pageSubtitle:SetText(entry.subtitle)
         end
 
-        -- The header actions belong to the bars page. On a page with no bars
-        -- on it, "Move bars" is an instruction to leave.
-        moveBtn:SetShown(withSide)
-        buildBtn:SetShown(withSide)
+        -- WHATEVER THE LAST PAGE PUT IN THE BAND COMES OUT OF IT. Every
+        -- page's pair is walked, not only this one's: the band is one strip
+        -- of window shared by eleven pages, and a button left showing is a
+        -- button that acts on the page you just left.
+        --
+        -- A switched-off module takes its actions with it. "Move bars" over a
+        -- page that is greyed out is an offer to go and arrange nothing.
+        for pageIndex, built in pairs(actionsByPage) do
+            local mine = pageIndex == self.pageIndex and moduleOn
+            for _, item in ipairs(built) do
+                item.button:SetShown(mine)
+
+                -- A LABEL THAT REPORTS A STATE IS RE-READ HERE. "Test mode"
+                -- says "Test mode: on" while it is running, and what changed
+                -- is the state, not which page you are standing on - so it
+                -- cannot be set once when the button is made.
+                if mine and item.spec.label then
+                    item.button:SetText(item.spec.label())
+                end
+            end
+        end
+
+        -- WHERE THE LAST ACTION STOPS, and it is not the same edge on every
+        -- page. With a third column the close cross is 400 pixels away over
+        -- that column and the buttons may have the whole middle; without one
+        -- the middle runs to the window's edge and the cross is standing in
+        -- the last button's label.
+        --
+        -- Set on every repaint rather than at build time: whether a page has
+        -- its third column is not fixed - switching its module off takes the
+        -- column away and hands the middle those 400 pixels.
+        local crossRoom = third and 0 or CLOSE_ROOM
+        local mineActions = moduleOn and actionsByPage[self.pageIndex]
+        if mineActions and mineActions.last then
+            mineActions.last:ClearAllPoints()
+            mineActions.last:SetPoint("TOPRIGHT", stageHost, "TOPRIGHT",
+                -(PAD + crossRoom), -18)
+        end
 
         -- The subtitle stops at the buttons rather than at the column edge,
         -- or a long one runs underneath them.
         local room = (third and NARROW_W or WIDE_W) - PAD * 2
-        if withSide then room = room - (MOVE_W + BUILD_W + 6 + UI.PAD) end
+        if mineActions then
+            room = room - (mineActions.span + crossRoom + UI.PAD)
+        end
         pageSubtitle:SetWidth(room)
 
         barList:SetShown(withSide)
