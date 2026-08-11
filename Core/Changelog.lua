@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.78.0",
+        date = "2026-08-12",
+        lines = {
+            "|cffffd100The window builds a column when you open the page it belongs to,|r not all five the moment the window appears. Four of them belong to pages you may never visit that session, and one of them was being built even with its feature switched off. Measured: 1391 frames and about four megabytes, on every open.",
+            "|cffffd100Diagnostics shows how much memory this addon is using.|r It is the reading the page was missing - everything else there says what the addon is doing to your client, and this says what it costs. Taken at most once every five seconds, because asking the client walks every addon you have loaded.",
+        },
+    },
+    {
         version = "4.77.0",
         date = "2026-08-12",
         lines = {

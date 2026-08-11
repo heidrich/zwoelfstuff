@@ -95,8 +95,55 @@ local CLOSE_ROOM = CLOSE_W + 10
 -- neither exists to be read - the secret-value figure in About is a
 -- measurement taken by hand, not a counter, and there is no timing series at
 -- all. A dashboard that invents its own numbers is worse than one with four.
+-- MEMORY IS A READING LIKE THE OTHERS, and it is here because the owner had
+-- to ask: "warum ist unser addon im spiel 13 mb gross". Nothing in the window
+-- could answer him, so the answer took a desktop measurement. It is one call
+-- and it belongs on the page whose whole job is what this addon is doing to
+-- your client.
+--
+-- No good/warn colour on it. A threshold would be invented - what is "too
+-- much" depends on what you have open - and a tile that turns orange at a
+-- number somebody guessed teaches people to distrust the other four.
 local DIAG_STATS = { "Cooldowns held", "On your bars", "Pixels per unit",
-    "Another cooldown addon" }
+    "Another cooldown addon", "Memory" }
+
+-- HOW MUCH OF THE CLIENT'S LUA HEAP IS OURS, in a form a tile can show.
+--
+-- Two facts, both checked against addons installed on this machine rather
+-- than assumed:
+--
+--   * The memory pair is still GLOBAL - only the addon INFO calls moved into
+--     C_AddOns - and GetAddOnMemoryUsage takes a NAME as well as an index.
+--   * UpdateAddOnMemoryUsage walks every loaded addon and is a spike you can
+--     see. EllesmereUI, which puts the same number on a data bar, rescans
+--     once every thirty seconds and says why in its own comment.
+--
+-- This page repaints on every keystroke in a settings box, so the reading is
+-- taken at most once every five seconds and the tile shows the last one in
+-- between. A number five seconds old is the truth about an addon's memory;
+-- a scan per keystroke is a stutter while you type.
+local MEM_EVERY = 5
+local memTaken, memText = 0, "-"
+
+-- The client counts in KB. Pure, and exported, so the one thing here that can
+-- be wrong without anybody noticing - a tile reading "13312 KB" - has a test.
+function Options.MemoryText(kb)
+    kb = tonumber(kb) or 0
+    if kb >= 1024 then return string.format("%.1f MB", kb / 1024) end
+    return string.format("%d KB", kb)
+end
+
+local function MemoryReading()
+    if not (UpdateAddOnMemoryUsage and GetAddOnMemoryUsage) then return "-" end
+
+    local now = GetTime and GetTime() or 0
+    if memText ~= "-" and now - memTaken < MEM_EVERY then return memText end
+    memTaken = now
+
+    UpdateAddOnMemoryUsage()
+    memText = Options.MemoryText(GetAddOnMemoryUsage("ZwoelfStuff"))
+    return memText
+end
 
 local function BuildDiagnosticsPage(page, width)
     local grid = UI.Page(page, width)
@@ -282,6 +329,9 @@ local function BuildDiagnosticsPage(page, width)
         -- WRONG, and it is still a warning rather than a danger: this page
         -- reports, it does not destroy anything.
         stats[4]:Set(rival or "none", rival and "warn" or "good")
+
+        stats[5]:Set(MemoryReading())
+
         sharpState:SetText(string.format(
             "%.2f px per unit - %dpx and %dpx files",
             perUnit, UI.IconCutFor(16, perUnit), UI.IconCutFor(32, perUnit)))
@@ -1439,11 +1489,53 @@ function Options:Create()
 
 
     local barList = ns.OptionsBars:BuildList(body, listWidth)
-    local side = ns.OptionsBars:BuildSide(sideHost, PAD)
-    local tankSide = ns.OptionsCoTanks:BuildSide(sideHost, PAD)
-    local reminderSide = ns.OptionsReminders:BuildSide(sideHost, PAD)
-    local deathSide = ns.OptionsDeaths:BuildSide(sideHost, PAD)
-    local externalSide = ns.OptionsExternals:BuildSide(sideHost, PAD)
+
+    -- THE THIRD COLUMN IS BUILT WHEN A PAGE FIRST ASKS FOR IT.
+    --
+    -- All five used to be built right here, the moment the window opened,
+    -- whichever page you were on - and the co-tank one even with its module
+    -- switched off. MEASURED, because the owner asked why this addon holds
+    -- 13 MB while a whole UI replacement holds 15:
+    --
+    --   Options:Create                    4.6 MB
+    --     OptionsBars:BuildSide           2.4 MB   796 frames
+    --     OptionsCoTanks:BuildSide        1.7 MB   595 frames
+    --     the other three                 0.25 MB   80 frames
+    --
+    -- Two panes, 1391 frames, and on a normal evening you open one of them.
+    -- The PAGES have been lazy for versions - `entry.build and not
+    -- entry.built` a few lines down is this same idea - the panes were just
+    -- never brought over.
+    --
+    -- Built on first SHOW rather than on first page-visit, because that is
+    -- the same question: a pane is shown by exactly one page.
+    local SIDES = {
+        bars      = function() return ns.OptionsBars:BuildSide(sideHost, PAD) end,
+        tanks     = function() return ns.OptionsCoTanks:BuildSide(sideHost, PAD) end,
+        reminders = function() return ns.OptionsReminders:BuildSide(sideHost, PAD) end,
+        deaths    = function() return ns.OptionsDeaths:BuildSide(sideHost, PAD) end,
+        externals = function() return ns.OptionsExternals:BuildSide(sideHost, PAD) end,
+    }
+    local panes = {}
+
+    local function Pane(key)
+        local pane = panes[key]
+        if not pane then
+            pane = SIDES[key]()
+            panes[key] = pane
+        end
+        return pane
+    end
+
+    -- Hiding one that was never built is not a thing that has to happen: a
+    -- pane nobody has asked for is not on screen.
+    local function ShowPane(key, wanted)
+        if wanted then
+            Pane(key):Show()
+        elseif panes[key] then
+            panes[key]:Hide()
+        end
+    end
 
     -- Over the middle column, and built here so it is above every page frame
     -- created below it.
@@ -1598,16 +1690,16 @@ function Options:Create()
             or withDeaths or withExternals
         SetStageWidth(third)
         sideHost:SetShown(third)
-        side:SetShown(withSide)
+        ShowPane("bars", withSide)
         explain:SetShown(withExplain)
-        tankSide:SetShown(withTanks)
-        reminderSide:SetShown(withReminders)
-        deathSide:SetShown(withDeaths)
-        externalSide:SetShown(withExternals)
+        ShowPane("tanks", withTanks)
+        ShowPane("reminders", withReminders)
+        ShowPane("deaths", withDeaths)
+        ShowPane("externals", withExternals)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
         if withDeaths then ns.OptionsDeaths:Refresh() end
-        if withExternals then externalSide.Refresh() end
+        if withExternals then panes.externals.Refresh() end
 
         pageTitle:SetText(entry.title)
         if entry.status then
@@ -1693,7 +1785,9 @@ function Options:Create()
 
         if withSide then
             barList.Refresh()
-            side.Refresh()
+            -- ShowPane built it a few lines up, because withSide is the same
+            -- answer both times.
+            panes.bars.Refresh()
         else
             local page = pageFrames[self.pageIndex]
             if page and page.Refresh then page.Refresh() end

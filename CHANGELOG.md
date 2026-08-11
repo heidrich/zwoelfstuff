@@ -4,6 +4,25 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.78.0] - 2026-08-12
+
+### Changed
+
+- **The third column is built when a page first asks for it.** All five were
+  built the moment the window opened — whichever page you were on, and the
+  co-tank one even with its module switched off. Measured on the desktop
+  harness: `Options:Create` cost 4.6 MB, of which the spell palette was 2.4 MB
+  (796 frames) and the co-tank inspector 1.7 MB (595 frames). It is now 2.6 MB,
+  and the rest is paid only by the page that shows it. The page *builders* have
+  been lazy for versions; the panes were never brought over.
+
+### Added
+
+- **A memory reading on Diagnostics.** The page says what this addon is doing
+  to your client; it could not say what it costs. `UpdateAddOnMemoryUsage`
+  walks every loaded addon, so the reading is taken at most once every five
+  seconds and the tile shows the last one in between.
+
 ## [4.77.0] - 2026-08-12
 
 ### Added

@@ -4082,6 +4082,15 @@ local function TestModules()
     -- number any more; this is the list they count.
     Check("The module count is the list's own length",
         Modules:Count() == #Modules:All())
+
+    -- The memory tile on Diagnostics. The client answers in KB, and the whole
+    -- point of the tile is that somebody can read it at a glance - "13312 KB"
+    -- is the failure it exists to avoid.
+    local Text = ns.Options.MemoryText
+    Check("Memory under a megabyte reads in KB", Text(512) == "512 KB")
+    Check("13312 KB reads as 13.0 MB", Text(13312) == "13.0 MB")
+    Check("A megabyte exactly is already MB", Text(1024) == "1.0 MB")
+    Check("Nothing to report is not an error", Text(nil) == "0 KB")
 end
 
 ---------------------------------------------------------------------------
