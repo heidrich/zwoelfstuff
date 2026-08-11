@@ -4,6 +4,17 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.77.0] - 2026-08-11
+
+### Added
+
+- **The addon is on Wago as well as CurseForge.** Same build, from the same
+  release — take whichever you already use.
+- **About says where to get it, and how to reach us.** Both stores under
+  *Where to get it*, and **Discord** in the page header. None of them can open
+  your browser — no addon may hand a URL to one — so each puts the address in a
+  box you can copy from.
+
 ## [4.76.0] - 2026-08-11
 
 ### Changed

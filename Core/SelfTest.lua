@@ -323,9 +323,14 @@ local function TestSliderMaths()
     ---------------------------------------------------------------------
     local Fits = ns.UI.RailFits
 
-    -- The real window: rail 758, head 62, foot 38, and the Discord row plus
-    -- its air at the bottom.
-    local TAIL = ns.UI.NAV_ITEM_H + 12
+    -- The real window: rail 758, head 62, foot 38, and the block of outward
+    -- links between the nav and that foot.
+    --
+    -- TAIL IS ASKED FOR, NOT TYPED. It was a copy - one nav row plus air -
+    -- and it stayed that number while the window grew to three shorter rows,
+    -- so this check was quietly agreeing with a layout that no longer
+    -- existed. ns.Options.RailTail is what the window itself lays out to.
+    local TAIL = ns.Options.RailTail()
     local navNow = ns.UI.NAV_ITEM_H * (#ns.Options.PAGES + 1) + 4 * 38
 
     Check("Today's rail holds every entry", Fits(758, 62, 38, TAIL, navNow),

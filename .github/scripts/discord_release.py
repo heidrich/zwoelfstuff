@@ -39,6 +39,24 @@ import urllib.error
 import urllib.request
 
 DISCORD_LIMIT = 2000
+
+# WHERE PLAYERS GET IT. Both stores get the same build from the same tag - the
+# packager uploads to whichever it has a token and a project id for.
+#
+# This list is repeated in Core/Init.lua as ns.STORES, and that is the only
+# duplication in the project: this script runs on a runner where the addon
+# does not exist. checkposts.py compares the two, so they cannot drift.
+CURSEFORGE = "https://www.curseforge.com/wow/addons/zwoelfstuff"
+WAGO = "https://addons.wago.io/addons/zwoelfstuff"
+
+# WHAT COUNTS AS A RELEASE. Exactly X.Y.Z and nothing else: no -beta, no -rc,
+# no "test". The workflow packages any tag on purpose - cutting a beta build
+# is useful - but only a release is announced.
+RELEASE_TAG = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def is_release(tag):
+    return bool(RELEASE_TAG.match((tag or "").strip()))
 CAPTION = 240
 
 BADGES = {
@@ -221,17 +239,42 @@ def to_discord(version, link=None, masked=False):
                 block.append("-# " + rest)
             blocks.append(block)
 
-    if link:
-        blocks.append(["", "-# " + ("[Download](%s)" % link if masked
-                                    else "Download: " + link)])
+    # WHERE TO GET IT, on every release post. Owner's rule: "immer noch dazu
+    # schreiben, neue version online bei curse".
+    #
+    # CurseForge is where players actually install from, so it comes first and
+    # it is not conditional - the GitHub link only exists when the workflow
+    # passes one, and a post that sometimes says where to get the thing and
+    # sometimes does not is a post nobody learns to read.
+    if masked:
+        where = "[CurseForge](%s) and [Wago](%s)" % (CURSEFORGE, WAGO)
     else:
-        blocks.append(["", "-# Every word of it in the addon: `/zs` -> Changelog"])
+        where = "CurseForge: %s | Wago: %s" % (CURSEFORGE, WAGO)
+    footer = ["", "-# New version live on " + where]
+    if link:
+        footer.append("-# " + ("[Release notes on GitHub](%s)" % link if masked
+                               else "Release notes: " + link))
+    footer.append("-# Every word of it in the addon: `/zs` -> Changelog")
+    blocks.append(footer)
 
     return split(blocks)
 
 
+def weight(text):
+    """How long Discord thinks this is: UTF-16 CODE UNITS, not characters.
+
+    Every emoji in BADGES above sits outside the Basic Multilingual Plane and
+    therefore costs TWO. Measured with len() a message can be comfortably
+    under the limit here and refused over there, and the gap grows with every
+    section heading a release happens to have. The 4.76.0 post ran 2 units
+    over its own budget - inside the 16 held back below, so it went out, but
+    only by luck.
+    """
+    return sum(2 if ord(character) > 0xFFFF else 1 for character in text)
+
+
 def split(blocks):
-    """Blocks into messages of at most DISCORD_LIMIT characters.
+    """Blocks into messages of at most DISCORD_LIMIT, as DISCORD counts.
 
     The marker's own length is held back before anything is packed, or a part
     that fits exactly stops fitting once it is stamped.
@@ -240,13 +283,13 @@ def split(blocks):
     parts, current, length = [], [], 0
 
     for block in blocks:
-        cost = sum(len(line) + 1 for line in block)
+        cost = sum(weight(line) + 1 for line in block)
         if length + cost > room and current:
             parts.append(current)
             current, length = [], 0
             # A block that opens a part must not open it with a blank line.
             block = [line for line in block if line.strip()] or block
-            cost = sum(len(line) + 1 for line in block)
+            cost = sum(weight(line) + 1 for line in block)
         current.extend(block)
         length += cost
 
@@ -295,6 +338,19 @@ def main(argv):
             link = argv[index + 1]
         elif arg == "--changelog" and index + 1 < len(argv):
             source = argv[index + 1]
+
+    # ONLY RELEASE VERSIONS ARE ANNOUNCED. Owner's rule: "wir veroeffentlichen
+    # nur changelogs bei release versionen".
+    #
+    # The workflow packages on ANY tag, which is right - a beta build is a
+    # useful thing to be able to cut. But a tag is not a release, and a
+    # channel full of 4.77.0-beta3 posts is a channel people mute. The rule
+    # lives here rather than in the workflow's tag filter because here it can
+    # be read, tested and given a reason.
+    if tag and not is_release(tag):
+        print("%s is not a release version - nothing announced. Only X.Y.Z "
+              "is announced." % tag)
+        return 0
 
     webhook = os.environ.get("DISCORD_WEBHOOK", "").strip()
     if not webhook:

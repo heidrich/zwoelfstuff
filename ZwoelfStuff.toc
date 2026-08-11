@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwölf - EU Destromath
-## Version: 4.76.0
+## Version: 4.77.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -14,6 +14,16 @@
 # succeeds, and uploads nowhere. Public information; the API key that goes
 # with it is a repository secret and is never in this file.
 ## X-Curse-Project-ID: 1644286
+
+# THE SAME FOR WAGO. An 8-character alphanumeric id from the developer
+# dashboard at addons.wago.io/developers - NOT the slug in the addon's URL,
+# which is a different string that happens to look like a name.
+#
+# THIS LINE IS HALF OF IT. The other half is the WAGO_API_TOKEN secret in the
+# repository's Actions settings; a token cannot carry the project id and this
+# file cannot carry the token. With only one of the two the packager skips
+# Wago and says so - it does not fail the build, and CurseForge is unaffected.
+## X-Wago-ID: 96ELogNg
 
 # Embedded libraries. Not a design decision reversed - LibSharedMedia is a
 # REGISTRY, not a look: it is how the fonts and textures the user already has

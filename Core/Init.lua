@@ -30,6 +30,30 @@ end)()
 -- IconTexture line so the two cannot drift apart.
 ns.ICON_TEXTURE = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo"
 
+-- WHERE THIS LIVES, written down once.
+--
+-- The About page shows both, the rail's foot shows the Discord one, and the
+-- release announcement prints the CurseForge one - and the one thing worse
+-- than no address is three that disagree. (.github/scripts/discord_release.py
+-- has its own copy of the CurseForge line because it runs on a machine where
+-- this file does not exist; that is the one place it is repeated, and it is
+-- repeated on purpose.)
+--
+-- Neither of these can be OPENED from here. No addon can: the client has no
+-- call that hands a URL to a browser, by design. So a click puts the address
+-- in a box you can copy from, which is the honest version of a link in a game.
+ns.CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/zwoelfstuff"
+ns.WAGO_URL = "https://addons.wago.io/addons/zwoelfstuff"
+ns.DISCORD_URL = "https://discord.gg/d2EnXGNbGu"
+
+-- Both stores get the same build from the same tag - the packager uploads to
+-- whichever it has a token and a project id for. They are listed in the order
+-- they were published in, and neither is "the real one".
+ns.STORES = {
+    { name = "CurseForge", url = ns.CURSEFORGE_URL },
+    { name = "Wago", url = ns.WAGO_URL },
+}
+
 -- The aura this addon was built for: the Boiling Point buff, 15s, Blood
 -- Death Knight. Everything user-facing resolves the name from the client at
 -- runtime (ns.SpellName / aura.name) - the ID is the only fixed fact here.

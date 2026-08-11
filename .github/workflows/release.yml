@@ -38,9 +38,18 @@ jobs:
         uses: BigWigsMods/packager@v2
         env:
           # Settings, Secrets and variables, Actions:
-          #   CF_API_KEY   from CurseForge, Account, API Tokens
+          #   CF_API_KEY       from CurseForge, Account, API Tokens
+          #   WAGO_API_TOKEN   from addons.wago.io/account/apikeys
           # GITHUB_TOKEN is provided by Actions itself.
+          #
+          # WAGO NEEDS BOTH HALVES: this token AND a `## X-Wago-ID:` line in
+          # the TOC. With only one of them the packager skips Wago and says
+          # so - it does not fail the build, and CurseForge is unaffected.
+          # There is a direct upload API as well, and it is not needed: the
+          # packager already speaks to Wago, so writing our own uploader would
+          # be a second thing to keep working for no gain.
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
 
       # THE RELEASE ANNOUNCES ITSELF, if a channel has been set up for it.

@@ -55,6 +55,21 @@ local HEADER_H  = UI.HEADER_H
 -- drifts - which is exactly how an entry ends up behind it.
 local RAIL_FOOT_H = 38
 
+-- The block of outward links between the nav and that foot: one row per store
+-- plus Discord. SHORTER THAN A NAV ROW, and the number is measured, not
+-- preferred - see where they are built. It is also the right look: these are
+-- references, not pages, and a reference as tall as a destination claims to be
+-- one.
+local RAIL_LINK_H = 22
+
+-- What that block costs the nav, published so the check and the layout read
+-- ONE number. They were two for a version - the check still subtracted a
+-- single row while three were being drawn - which is a check quietly agreeing
+-- with a window that had already changed.
+function Options.RailTail()
+    return (#ns.STORES + 1) * RAIL_LINK_H + 12
+end
+
 -- THE CLOSE CROSS, AND WHY ITS SIZE IS A SHARED NUMBER.
 --
 -- The cross sits in the window's top-right corner. The page's header actions
@@ -516,6 +531,36 @@ local function BuildAboutPage(page, width)
     local head = BuildAboutHead(grid.content, grid.width, ABOUT_INTRO)
     grid:Wide(head, head.Measure(), 0, 10)
 
+    ---------------------------------------------------------------------
+    -- Where to get it
+    --
+    -- FROM ns.STORES, not typed here: the same list the release announcement
+    -- prints from, so a third store appears on this page by existing rather
+    -- than by somebody remembering.
+    --
+    -- A click cannot open a browser - no addon may hand a URL to one, by
+    -- design - so it opens a box with the address selected. That is the
+    -- honest version of a link inside a game: one Ctrl+C and it is in the
+    -- address bar. A row that looked like a link and did nothing would be
+    -- worse than no row.
+    ---------------------------------------------------------------------
+    grid:Section("Where to get it")
+
+    for _, store in ipairs(ns.STORES) do
+        local row = grid:Row(store.name)
+        local button = UI.Button(row.slot, "Copy the address",
+            UI.ButtonWidth("Copy the address"), function()
+                UI.CopyBox(store.name, store.url,
+                    "Ctrl+C copies it, then paste it into your browser. Esc "
+                    .. "closes. An addon cannot open a browser itself - the "
+                    .. "client has no call for it, by design.")
+            end)
+        button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
+    end
+
+    grid:Note("Both stores get the same build from the same release, so it "
+        .. "makes no difference which one you use.")
+
     grid:Section("Standing on other people's shoulders")
     for _, paragraph in ipairs(ABOUT_CREDIT) do grid:Note(paragraph) end
 
@@ -782,8 +827,26 @@ local PAGES = {
       subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
       build = BuildDiagnosticsPage },
 
+    -- ONE ACTION, AND THE STORES ARE NOT IT.
+    --
+    -- CurseForge was up here for a version. Then Wago arrived, and three
+    -- addresses do not fit a band with a measured ceiling of two - which is
+    -- the right answer, because it exposed the real mistake: a download
+    -- address is not something you DO on this page, it is something the page
+    -- SAYS. The stores are a section in the body now, built from ns.STORES,
+    -- so a third one appears by existing.
+    --
+    -- Discord stays, because "ask somebody" is an action.
     { key = "about", title = "About", glyph = "info",
       subtitle = "Why this addon exists, and every command.",
+      actions = {
+          { text = "Discord", onClick = function()
+              UI.CopyBox("Discord", ns.DISCORD_URL,
+                  "Ctrl+C copies it, then paste it into your browser. Esc "
+                  .. "closes. An addon cannot open a browser itself - the "
+                  .. "client has no call for it, by design.")
+          end },
+      },
       build = BuildAboutPage },
 
     { key = "changelog", title = "Changelog", glyph = "log",
@@ -1063,53 +1126,99 @@ function Options:Create()
         C.textGhost)
     clientVersion:SetPoint("RIGHT", foot, "RIGHT", -UI.PAD, 0)
 
-    -- DISCORD, above the foot rule.
+    -- THE THREE ADDRESSES, above the foot rule.
     --
-    -- The click cannot open a browser - no addon can, the client has no call
-    -- for it - so it opens the copy box with the invite already selected. That
-    -- is the honest version of a link here: one Ctrl+C and it is in the
-    -- address bar. A row that looked like a link and did nothing would be
-    -- worse than no row.
-    local DISCORD_URL = "https://discord.gg/d2EnXGNbGu"
-
-    local discord = CreateFrame("Button", nil, rail)
-    discord:SetHeight(UI.NAV_ITEM_H)
-    -- Air above it. At 6 it sat against Changelog and read as the last entry
-    -- of the Info group, which it is not - it leaves the addon.
-    discord:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 12)
-    discord:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 12)
-
-    -- The same hover ground a nav row has. Without it this was the one row in
-    -- the column that did not answer the mouse with anything but a colour, and
-    -- a row that behaves differently reads as a row of a different kind.
-    local discordBg = UI.Fill(discord, "BACKGROUND", C.surface)
-    discordBg:Hide()
-
-    -- THE WORD, AND NO MARK. There was a mark here for one version and it was
-    -- not Discord's - drawn from memory, and a brand mark you have traced
-    -- yourself is worse than none, because it claims to be the real thing. The
-    -- word says it exactly.
+    -- Where to get it, and where to ask. None of these can open a browser - no
+    -- addon can, the client has no call for it - so a click opens the copy box
+    -- with the address already selected. That is the honest version of a link
+    -- inside a game: one Ctrl+C and it is in the address bar. A row that looked
+    -- like a link and did nothing would be worse than no row.
     --
-    -- ON THE NAV'S OWN INDENT, not on the headings'. See UI.NAV_LABEL_X: at 16
-    -- this lined up with "INFO" rather than with "Changelog" right above it,
-    -- and the whole foot of the column looked broken because of it.
-    local discordLabel = UI.Label(discord, "Discord", UI.FS.row, C.textDim)
-    discordLabel:SetPoint("LEFT", discord, "LEFT", UI.NAV_LABEL_X, 0)
+    -- SHORTER THAN A NAV ROW, and the number is not a preference. The rail is
+    -- 758 tall; head 62 and foot 38 come off it, and the nav needs 512 today.
+    -- Three rows at the nav's own 30 plus their air would leave 44 - less than
+    -- the two spare pages the checks insist on. At 22 they leave 68. That is
+    -- also the right LOOK: these are references, not pages, and a reference
+    -- that stands as tall as a destination claims to be one.
+    --
+    -- Built from ns.STORES plus Discord rather than typed out, so a third
+    -- store appears here by existing. The addresses live in Init.lua, so this
+    -- column and the About page cannot end up pointing at different places.
+    local LINK_H = RAIL_LINK_H
+    local LINKS = {}
+    for _, store in ipairs(ns.STORES) do
+        LINKS[#LINKS + 1] = { text = store.name, url = store.url }
+    end
+    LINKS[#LINKS + 1] = { text = "Discord", url = ns.DISCORD_URL }
 
-    discord:SetScript("OnEnter", function()
-        discordBg:Show()
-        discordLabel:SetTextColor(C.text[1], C.text[2], C.text[3])
-    end)
-    discord:SetScript("OnLeave", function()
-        discordBg:Hide()
-        discordLabel:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
-    end)
-    discord:SetScript("OnClick", function()
-        UI.CopyBox("Discord", DISCORD_URL,
-            "Ctrl+C copies it, then paste it into your browser. Esc closes. "
-            .. "An addon cannot open a browser itself - the client has no "
-            .. "call for it, by design.")
-    end)
+    -- Laid out from the foot upwards, so the LAST one written sits nearest the
+    -- version line and adding a fourth pushes the block up rather than into
+    -- the foot.
+    local previousLink
+    for position = #LINKS, 1, -1 do
+        local entry = LINKS[position]
+
+        local link = CreateFrame("Button", nil, rail)
+        link:SetHeight(LINK_H)
+        if previousLink then
+            link:SetPoint("BOTTOMLEFT", previousLink, "TOPLEFT", 0, 0)
+            link:SetPoint("BOTTOMRIGHT", previousLink, "TOPRIGHT", 0, 0)
+        else
+            -- Air above the block. At 6 the first of these sat against
+            -- Changelog and read as the last entry of the Info group, which
+            -- it is not - all three leave the addon.
+            link:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 12)
+            link:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 12)
+        end
+        previousLink = link
+
+        -- The same hover ground a nav row has. Without it these are the only
+        -- rows in the column that answer the mouse with nothing but a colour,
+        -- and a row that behaves differently reads as a row of another kind.
+        local background = UI.Fill(link, "BACKGROUND", C.surface)
+        background:Hide()
+
+        -- NO MARKS. There was one here for Discord for a version and it was
+        -- not Discord's - traced from memory, and a brand mark you have drawn
+        -- yourself is worse than none, because it claims to be the real thing.
+        -- The words say it exactly, and two of the three have no mark that
+        -- could be drawn at all.
+        --
+        -- ON THE NAV'S OWN INDENT, not the headings'. See UI.NAV_LABEL_X: at
+        -- 16 this lined up with "INFO" rather than with "Changelog" right
+        -- above it, and the whole foot of the column looked broken for it.
+        -- A MARK ON EACH, on the nav's own 16 so the three line up with the
+        -- entries above them rather than starting a second left edge.
+        --
+        -- It is the SAME mark on all three, and it is not a brand. It says
+        -- "this leaves the game", which is the one thing all three have in
+        -- common and the only thing about them this addon can honestly draw.
+        -- Real logos are image files, and the two ways to get them are to
+        -- ship the official ones or to trace them from memory; the second is
+        -- worse than none, because a traced mark claims to be the real thing.
+        -- Drop the official files into Media/icons and this line takes them.
+        local outward = UI.Glyph(link, "menu-export", 12, C.textGhost)
+        outward:SetPoint("LEFT", link, "LEFT", UI.PAD, 0)
+
+        local label = UI.Label(link, entry.text, UI.FS.meta, C.textDim)
+        label:SetPoint("LEFT", link, "LEFT", UI.NAV_LABEL_X, 0)
+
+        link:SetScript("OnEnter", function()
+            background:Show()
+            label:SetTextColor(C.text[1], C.text[2], C.text[3])
+        end)
+        link:SetScript("OnLeave", function()
+            background:Hide()
+            label:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        end)
+        link:SetScript("OnClick", function()
+            UI.CopyBox(entry.text, entry.url,
+                "Ctrl+C copies it, then paste it into your browser. Esc "
+                .. "closes. An addon cannot open a browser itself - the "
+                .. "client has no call for it, by design.")
+        end)
+    end
+
 
     -- ONE rule, across the whole window. Three separate lines with three sets
     -- of padding never quite agree, and the eye reads the disagreement as

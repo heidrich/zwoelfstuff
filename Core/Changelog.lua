@@ -13,6 +13,14 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.77.0",
+        date = "2026-08-11",
+        lines = {
+            "|cffffd100The addon is on Wago as well as CurseForge.|r The same build, from the same release - take whichever you already use.",
+            "|cffffd100About says where to get it, and how to reach us.|r Both stores under |cffffd100Where to get it|r, and |cffffd100Discord|r in the page header. None of them can open your browser, because no addon is allowed to hand a URL to one; each puts the address in a box you can copy from instead.",
+        },
+    },
+    {
         version = "4.76.0",
         date = "2026-08-11",
         lines = {

@@ -6,6 +6,13 @@ Thumbs.db
 # lua-language-server --check writes its logs here
 .lscheck/
 
+# Python's compiled cache. One of these has been in the history since 4.67.0,
+# committed by accident the first time the release script was run locally:
+# a machine-specific artefact, rewritten by every Python version that touches
+# it, that a checkout does not need and cannot use.
+__pycache__/
+*.pyc
+
 # NOT THE ADDON, and this repo is public.
 #
 # HANDOFF.md is the working memory - what went wrong, what was decided, and
