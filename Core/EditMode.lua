@@ -2459,15 +2459,14 @@ local function BuildToolbar()
 
     toolbar.Refresh = function()
         -- The active mode is the one that reads as pressed. Two buttons and a
-        -- colour beats a segmented control nobody can tell is interactive.
-        moveBtn.label:SetTextColor(
-            mode == "bars" and C.accent[1] or C.textDim[1],
-            mode == "bars" and C.accent[2] or C.textDim[2],
-            mode == "bars" and C.accent[3] or C.textDim[3])
-        buildBtn.label:SetTextColor(
-            mode == "build" and C.accent[1] or C.textDim[1],
-            mode == "build" and C.accent[2] or C.textDim[2],
-            mode == "build" and C.accent[3] or C.textDim[3])
+        -- colour beats a segmented control nobody can tell is interactive -
+        -- but the colour has to be the BED, not the label. A dimmed label is
+        -- what SetEnabled does, so "not the current mode" and "you cannot
+        -- press this" looked the same on the one control that has to be
+        -- unmistakable. UI.Button:SetActive lights it the way the chip row
+        -- and the CURRENT badge light theirs.
+        moveBtn:SetActive(mode == "bars")
+        buildBtn:SetActive(mode == "build")
         addBtn:SetShown(mode == "build")
         spellsBtn:SetShown(mode == "build")
     end

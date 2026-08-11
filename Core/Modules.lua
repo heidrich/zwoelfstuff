@@ -135,6 +135,17 @@ for _, entry in ipairs(LIST) do byKey[entry.key] = entry end
 function Modules:Get(key) return byKey[key] end
 function Modules:All() return LIST end
 
+-- HOW MANY THERE ARE, for the two sentences that say so.
+--
+-- Both of them said "Four features in one addon" - the welcome window and the
+-- Modules note on the Settings page - and there have been SIX since External
+-- CD answer arrived. Neither was wrong when it was typed; a number in a
+-- sentence is simply a copy of a list, and the copy went stale the way every
+-- second copy in this addon has. The rows underneath were always built from
+-- the registry, so the window has been drawing six switches under a sentence
+-- promising four.
+function Modules:Count() return #LIST end
+
 -- THE SWITCH, and every gate in the addon reads it through here.
 --
 -- An unknown key answers YES, not no. A typo in a gate would otherwise

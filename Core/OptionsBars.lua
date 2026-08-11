@@ -168,6 +168,29 @@ local function BuildCard(parent, width)
     local kindBadge = UI.Badge(card, "", "kind")
     kindBadge:SetPoint("LEFT", title, "RIGHT", 11, 0)
 
+    -- A BAR THAT IS NOT ON SCREEN SAYS SO WHERE YOU CAN SEE IT.
+    --
+    -- Switching one off is two clicks in its Options panel, and afterwards the
+    -- list showed exactly what it showed before: a card with a preview of a
+    -- bar that is not there. The only way to find out was to open the panel
+    -- again, which is the page you have already left.
+    --
+    -- Only the settled reasons, never the moment - Visibility:Fixed says which
+    -- and why. The wording is Visibility's, so the badge and the panel cannot
+    -- disagree.
+    local offBadge = UI.Badge(card, "Hidden", "off")
+    offBadge:SetPoint("LEFT", kindBadge, "RIGHT", 8, 0)
+    offBadge:Hide()
+    offBadge:EnableMouse(true)
+    offBadge:SetScript("OnEnter", function(self)
+        if not self.why then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Not on screen")
+        GameTooltip:AddLine(self.why, 0.6, 0.6, 0.6, true)
+        GameTooltip:Show()
+    end)
+    offBadge:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     -- The overflow. Delete lives in here and nowhere else: it is the one
     -- action on this card with no undo, and an action with no undo does not
     -- belong one pixel away from the button you press all day.
@@ -444,10 +467,23 @@ local function BuildCard(parent, width)
 
         number:SetText(tostring(card.dkIndex))
         title:SetText(cfg.name)
+
+        -- Why this bar is not on screen, when the answer will still be true in
+        -- a minute. Stored on the badge rather than looked up in the tooltip,
+        -- because the tooltip fires long after the card knows which bar it is.
+        local why = ns.Visibility:Fixed(cfg)
+        offBadge.why = why
+        offBadge:SetShown(why ~= nil)
+
         -- Measured, then capped. A FontString cannot be given a left anchor
         -- and a right one at the same time, so the badge that follows the name
         -- has to be told where the name ended.
-        title:SetWidth(math.min(title:GetStringWidth() + 1, 150))
+        --
+        -- The cap is the LEFT HALF's whole allowance, so a second badge comes
+        -- out of the name rather than out of the buttons on the right: the
+        -- name is the part that can be shortened without losing a control.
+        local room = 150 - (why and (offBadge:GetWidth() + 8) or 0)
+        title:SetWidth(math.min(title:GetStringWidth() + 1, room))
 
         local isIcons = cfg.kind ~= "bar"
         kindBadge:SetLabel(isIcons and "Icon bar" or "Tracking bar")

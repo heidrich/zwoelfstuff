@@ -1082,6 +1082,33 @@ local function TestVisibility()
     end
     Check("Every rule explains itself the way it is applied", agree)
 
+    -- WHAT THE LIST IS ALLOWED TO SAY.
+    --
+    -- The card in the bar list carries a badge for a bar that is not on
+    -- screen, and that list is redrawn when you change something in it - not
+    -- when you pull, take a target or zone in. So Fixed may only hand back
+    -- reasons that outlive the moment, and it may not word them itself.
+    Check("A switched-off bar says so in the list",
+        ns.Visibility:Fixed(off) ~= nil)
+    Check("The list and the panel word it the same way",
+        ns.Visibility:Fixed(off) == ns.Visibility:Explain(off))
+    Check("'Never' is settled enough for the list",
+        ns.Visibility:Fixed(never) ~= nil)
+
+    local pull = Fresh()
+    pull.show.mode, pull.show.combat = "rules", "in"
+    Check("A bar waiting for combat is explained but not badged",
+        ns.Visibility:Explain(pull) ~= nil and ns.Visibility:Fixed(pull) == nil)
+
+    -- And the badge cannot lie: everything it appears on really is off screen.
+    local honest = true
+    for _, probe in ipairs({ cfg, off, never, pull }) do
+        if ns.Visibility:Fixed(probe) and ns.Visibility:Evaluate(probe) then
+            honest = false
+        end
+    end
+    Check("Nothing badged as hidden is on screen", honest)
+
     -- Alpha follows the answer, and the ghost setting is honoured.
     local ghost = Fresh()
     ghost.show.mode = "never"
@@ -2025,6 +2052,29 @@ local function TestDesignSystem()
     Check("The five text sizes descend", descends,
         table.concat({ tostring(ladder[1]), tostring(ladder[2]),
             tostring(ladder[3]), tostring(ladder[4]), tostring(ladder[5]) }, " "))
+
+    -- TWO CHANNELS ON ONE BUTTON, AND THEY ARE NOT THE SAME QUESTION.
+    --
+    -- "This is the current mode" is a bed; "you cannot press this" is a dimmed
+    -- label. They were the same channel once, on edit mode's Move/Build pair,
+    -- where the mode that was simply not current read as a dead button.
+    --
+    -- The colour cannot be read back out here - the harness has no pixels - so
+    -- what this checks is that both channels still exist and still take a
+    -- call. A button that lost SetActive throws in the one place that has no
+    -- test of its own: the overlay, in combat, with no window open.
+    local probe = UI.Button(UIParent, "Probe", 80, nil)
+    local channels = type(probe.SetActive) == "function"
+        and type(probe.SetEnabled) == "function"
+    if channels then
+        channels = pcall(function()
+            probe:SetActive(true)
+            probe:SetEnabled(false)
+            probe:SetEnabled(true)
+            probe:SetActive(false)
+        end)
+    end
+    Check("A button can say it is the one that is on", channels)
 
     -- An item with no tab is on every tab; a page with no tabs shows all of
     -- them. Both nil cases are decisions, and both were wrong once.
@@ -4011,6 +4061,27 @@ local function TestModules()
 
     due = Modules.WelcomeDue("yes", 2, FAKE)
     Check("A nonsense flag does not open the window every login", not due)
+
+    -- AND THEN THE PAIR WE ACTUALLY SHIP.
+    --
+    -- Everything above runs on a made-up list. The one that goes wrong in a
+    -- release is the real one: a module is added with `since = 4` and the
+    -- generation stays at 3, so every character is asked "have you seen
+    -- generation 3" - yes - and the new module is never offered to anybody.
+    -- Silent, and it looks exactly like a module nobody wanted.
+    local highest = 0
+    for _, entry in ipairs(Modules:All()) do
+        highest = math.max(highest, entry.since or 1)
+    end
+    Check("The generation we ship covers every module in it",
+        Modules.GENERATION >= highest,
+        string.format("generation %d, newest module since %d",
+            Modules.GENERATION, highest))
+
+    -- The two sentences that say how many features there are do not type the
+    -- number any more; this is the list they count.
+    Check("The module count is the list's own length",
+        Modules:Count() == #Modules:All())
 end
 
 ---------------------------------------------------------------------------

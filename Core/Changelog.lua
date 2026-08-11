@@ -14,10 +14,14 @@ local _, ns = ...
 ns.CHANGELOG = {
     {
         version = "4.77.0",
-        date = "2026-08-11",
+        date = "2026-08-12",
         lines = {
             "|cffffd100The addon is on Wago as well as CurseForge.|r The same build, from the same release - take whichever you already use.",
             "|cffffd100About says where to get it, and how to reach us.|r Both stores under |cffffd100Where to get it|r, and |cffffd100Discord|r in the page header. None of them can open your browser, because no addon is allowed to hand a URL to one; each puts the address in a box you can copy from instead.",
+            "|cffffd100A bar you switched off says so in the list.|r It looked exactly like a running one, and the only way to find out was to open its options again. The badge names the settled reasons only - switched off, or set to never show - because \"waiting for combat\" would be wrong a minute later and the list does not redraw when you pull.",
+            "|cffffd100Edit mode's Move bars and Build say which one you are in.|r The current one is lit the way everything else in this window marks what is current. It was a dimmed label before, which is also how a button says it cannot be pressed.",
+            "|cffffd100The welcome window has a second way out, and you can see it.|r Escape always closed it; a key nobody is told about is not an exit. |cffffd100Not now|r sits beside |cffffd100Let's go|r.",
+            "|cffffd100Fixed:|r the welcome window and the Settings page both said \"Four features in one addon\" over six switches. The count comes from the list now.",
         },
     },
     {

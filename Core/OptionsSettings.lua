@@ -43,7 +43,10 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Modules")
 
-    grid:Note("Four features in one addon. Switch off what you do not want.")
+    -- COUNTED, NOT TYPED. This said "Four" while six switches sat under it.
+    grid:Note(string.format(
+        "%d features in one addon. Switch off what you do not want.",
+        ns.Modules:Count()))
 
     for _, entry in ipairs(ns.Modules:All()) do
         UI.Toggle(grid:Row(entry.title, { sublabel = entry.blurb }),

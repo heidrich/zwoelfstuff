@@ -266,11 +266,18 @@ function UI.Eyebrow(parent, text, colour)
 end
 
 -- Badge - upper-case caption on its own bed. Three meanings, and they are the
--- only three: what KIND of thing this is (cool), what STATE it is in (green),
--- and which one is CURRENT (accent).
+-- only three: what KIND of thing this is (cool), what STATE it is in, and
+-- which one is CURRENT (accent).
+--
+-- STATE HAS TWO FACES, because it is one meaning either way round: something
+-- that is running says so in green, and something that is switched off says
+-- so quietly. The off face is deliberately the dimmest thing on its card - it
+-- marks the exception, and a red or orange badge on a bar you switched off
+-- yourself would read as a fault report.
 function UI.Badge(parent, text, kind)
     local fg, bed = C.accentCool, C.accentCoolSoft
     if kind == "state" then fg, bed = C.inUse, C.inUseSoft
+    elseif kind == "off" then fg, bed = C.textFaint, C.control
     elseif kind == "current" then fg, bed = C.accent, C.accentSoft end
 
     local badge = CreateFrame("Frame", nil, parent)
@@ -393,27 +400,65 @@ function UI.Button(parent, text, width, onClick, style)
     local hoverFg = style == "link" and Lift(C.accentCool, 0.25)
         or (style == "ghost" and C.text or nil)
 
+    -- THE ONE THAT IS ON, for a pair of buttons that are a switch between two
+    -- modes rather than two separate actions.
+    --
+    -- It has a BED, and that is the point. Edit mode's Move/Build pair used to
+    -- say it with the label's colour alone - and the label's colour is already
+    -- taken: SetEnabled below dims it to mean "you cannot press this". One
+    -- channel carrying two meanings is why a mode that was simply not current
+    -- could read as a button that had stopped working. accentSoft under accent
+    -- is what the chip row and the CURRENT badge already use for exactly this
+    -- question, so the answer looks the same everywhere it is asked.
+    local active, live = false, true
+
+    local function Ground()
+        if active then return C.accentSoft end
+        return base
+    end
+
+    local function Ink()
+        if not live then return C.textGhost end
+        if active then return C.accent end
+        return fg
+    end
+
+    -- The resting look - no cursor on it. Every state change goes through
+    -- here, so active, enabled and hover cannot each paint their own half.
+    local function Rest()
+        local ground = Ground()
+        if ground then
+            bg:SetColorTexture(ground[1], ground[2], ground[3], 1)
+            bg:Show()
+        else
+            bg:Hide()
+        end
+        local ink = Ink()
+        label:SetTextColor(ink[1], ink[2], ink[3])
+        if btn.mark then btn.mark:SetColor(ink[1], ink[2], ink[3]) end
+    end
+
     btn:SetScript("OnEnter", function()
         if not btn:IsEnabled() then return end
-        if hover then
-            bg:SetColorTexture(hover[1], hover[2], hover[3], 1)
+        -- An active button still answers the cursor; it just answers from its
+        -- own bed rather than from the grey one.
+        local lit = active and Lift(C.accentSoft, 0.12) or hover
+        if lit then
+            bg:SetColorTexture(lit[1], lit[2], lit[3], 1)
             bg:Show()
         end
-        if hoverFg then
+        if hoverFg and not active then
             label:SetTextColor(hoverFg[1], hoverFg[2], hoverFg[3])
             if btn.mark then btn.mark:SetColor(hoverFg[1], hoverFg[2], hoverFg[3]) end
         end
     end)
-    btn:SetScript("OnLeave", function()
-        if base then
-            bg:SetColorTexture(base[1], base[2], base[3], 1)
-        else
-            bg:Hide()
-        end
-        label:SetTextColor(fg[1], fg[2], fg[3])
-        if btn.mark then btn.mark:SetColor(fg[1], fg[2], fg[3]) end
-    end)
+    btn:SetScript("OnLeave", Rest)
     if onClick then btn:SetScript("OnClick", onClick) end
+
+    btn.SetActive = function(self, on)
+        active = on and true or false
+        Rest()
+    end
 
     -- SetEnabled exists on Button and still does the input half; only the
     -- greying is ours. Wrapped rather than hooked, because a hook cannot
@@ -421,9 +466,8 @@ function UI.Button(parent, text, width, onClick, style)
     local baseSetEnabled = btn.SetEnabled
     btn.SetEnabled = function(self, enabled)
         baseSetEnabled(self, enabled)
-        local c = enabled and fg or C.textGhost
-        label:SetTextColor(c[1], c[2], c[3])
-        if self.mark then self.mark:SetColor(c[1], c[2], c[3]) end
+        live = enabled and true or false
+        Rest()
     end
 
     btn.SetText = function(_, value) label:SetText(value) end

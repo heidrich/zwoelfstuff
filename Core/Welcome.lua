@@ -6,7 +6,7 @@
 -- module that character has never been offered, and reachable on purpose at
 -- any time from Settings or /zs welcome.
 --
--- WHAT IT IS FOR, and it is only this: which of the four features do you want
+-- WHAT IT IS FOR, and it is only this: which of the features do you want
 -- running. It is not a tour, it does not explain the bars, and it has no
 -- "next" button - a first-run wizard with four pages is three pages nobody
 -- reads and one decision buried in them.
@@ -126,7 +126,6 @@ local function BuildFrame()
         .. "Settings, and nothing here is permanent - a module you switch off "
         .. "keeps everything you set up in it.", UI.FS.meta, C.textFaint)
     footer:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -PAD)
-    footer:SetWidth(WIDTH - PAD * 2 - 150)
     footer:SetJustifyH("LEFT")
 
     -- AND THEN THE ADDON IS OPEN. Owner, 2026-08-10: "beim welcome screen,
@@ -143,6 +142,26 @@ local function BuildFrame()
         if ns.Options then ns.Options:Open() end
     end, "primary")
     go:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -PAD)
+
+    -- AND THE OTHER WAY OUT, DRAWN THIS TIME.
+    --
+    -- Escape has always closed this window and always counted as answered -
+    -- that is the paragraph above - but a keypress nobody is told about is not
+    -- an exit. This is the first window the addon ever shows: somebody who
+    -- does not want to decide right now was being offered one button, and one
+    -- button that opens a settings window is not an answer to "not yet".
+    --
+    -- A ghost, not a second button. It must be findable and it must not
+    -- compete with the answer the window is actually asking for.
+    local notNow = UI.Button(frame, "Not now", nil, function()
+        Welcome:Close()
+    end, "ghost")
+    notNow:SetPoint("RIGHT", go, "LEFT", -8, 0)
+
+    -- The sentence stops where the two buttons start. Measured, not typed: the
+    -- ghost is as wide as its own word - see UI.ButtonWidth - so a number here
+    -- would be wrong the day the word changes.
+    footer:SetWidth(WIDTH - PAD * 2 - (130 + 8 + notNow:GetWidth() + 16))
 
     -- The height is what the rows added up to, not a number typed once and
     -- wrong after the fifth module.
@@ -180,9 +199,13 @@ function Welcome:Show(fresh, first)
     if not frame then BuildFrame() end
 
     frame.version:SetText("v" .. (ns.version or "?"))
+    -- COUNTED, NOT TYPED. It said "Four features" and built six rows out of
+    -- the registry underneath - see Modules:Count.
     frame.lead:SetText(first == false
         and "This update brings something new. Pick what you want running."
-        or "Four features in one addon. Pick the ones you want running.")
+        or string.format(
+            "%d features in one addon. Pick the ones you want running.",
+            ns.Modules:Count()))
 
     local isFresh = {}
     for _, key in ipairs(fresh or {}) do isFresh[key] = true end

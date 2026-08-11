@@ -250,6 +250,29 @@ function Visibility:Explain(cfg)
     return nil
 end
 
+-- The same answer, but only when it will still be true in a minute.
+--
+-- WHY THE LIST NEEDS ITS OWN VERSION OF Explain. The card in the editor wants
+-- to say "this one is not on screen" beside the bar's name, and most of the
+-- reasons above are about THIS SECOND: you are in combat, you have a target,
+-- you are in a raid. The bar list is redrawn when you change something in it,
+-- not when you pull - so a badge built on those would be stale for as long as
+-- the window stayed open, and a stale badge on a settings page is worse than
+-- none, because the page is where people go to check.
+--
+-- What is left is the two reasons that are a SETTING: the bar is switched
+-- off, or its rule is "never". Both were typed by somebody and both stay true
+-- until somebody types again. The WORDING still comes from Explain, so the
+-- badge and the panel cannot end up saying it differently.
+function Visibility:Fixed(cfg)
+    if cfg.enabled == false then return self:Explain(cfg) end
+
+    local rule = cfg.show
+    if rule and rule.mode == "never" then return self:Explain(cfg) end
+
+    return nil
+end
+
 ---------------------------------------------------------------------------
 -- Staying current
 --

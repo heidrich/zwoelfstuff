@@ -4,7 +4,7 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.77.0] - 2026-08-11
+## [4.77.0] - 2026-08-12
 
 ### Added
 
@@ -14,6 +14,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   *Where to get it*, and **Discord** in the page header. None of them can open
   your browser — no addon may hand a URL to one — so each puts the address in a
   box you can copy from.
+- **A bar you switched off says so in the list.** A `HIDDEN` badge on the card
+  head, with the reason in its tooltip. Only settled reasons appear — switched
+  off, or set to never show. `Visibility:Fixed` is the one place that decides
+  which those are, and it takes the wording from `Visibility:Explain`, so the
+  badge and the panel cannot word it differently. Combat, target and spec are
+  deliberately excluded: the list is not redrawn when you pull, and a stale
+  badge on a settings page is worse than none.
+
+### Changed
+
+- **Edit mode's mode pair is lit, not tinted.** `UI.Button:SetActive` gives the
+  current mode the same `accentSoft` bed the chip row and the CURRENT badge use.
+  It was a dimmed label before — the channel `SetEnabled` already uses for "you
+  cannot press this", so the mode that was merely not current read as dead.
+- **The welcome window has a visible second exit.** *Not now*, a ghost beside
+  *Let's go*. Escape has always closed it and always counted as answered; a
+  keypress nobody is told about is not an exit.
+
+### Fixed
+
+- **"Four features in one addon" over six switches.** Both the welcome window
+  and the Modules note on the Settings page typed the number while the rows
+  under them were built from the registry. `Modules:Count()` counts it now, and
+  a check makes sure `Modules.GENERATION` covers every module's `since` — a
+  module added without that bump is never offered to anybody, silently.
 
 ## [4.76.0] - 2026-08-11
 
