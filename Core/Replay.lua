@@ -939,8 +939,16 @@ local function PlaceHeal(mark, ev, from, to)
         if ok and classFile and RAID_CLASS_COLORS
             and RAID_CLASS_COLORS[classFile] then
             local colour = RAID_CLASS_COLORS[classFile]
+            -- FLOORED, NOT LEFT TO %02x. A class colour is a fraction, and
+            -- 0.77 * 255 is 196.35: the client's Lua 5.1 truncates it
+            -- silently, the harness's raises "number has no integer
+            -- representation", and the harness is right. This line had never
+            -- been executed out here because nothing stubbed the colour table
+            -- until the raid check needed it - the first time it ran, it
+            -- threw.
             coloured = string.format("|cff%02x%02x%02x%s|r",
-                colour.r * 255, colour.g * 255, colour.b * 255, who)
+                math.floor(colour.r * 255), math.floor(colour.g * 255),
+                math.floor(colour.b * 255), who)
         end
         mark.who:SetText(coloured)
     else

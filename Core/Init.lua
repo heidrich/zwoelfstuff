@@ -150,6 +150,14 @@ ns.DEFAULTS = {
     -- existing profile gets these keys filled in by ApplyDefaults on the first
     -- login after the update, and any other value would mean an update
     -- silently switched somebody's bars off.
+    --
+    -- THE TWO FALSE ONES ARE NOT AN OVERSIGHT. The argument above is about
+    -- features somebody is ALREADY using; a module nobody has ever had cannot
+    -- be switched off by defaulting it off. And these two do something the
+    -- other six do not - one puts a row of buttons on the screen, the other
+    -- acts in your name at people who are not in the room - so they arrive
+    -- switched off and the welcome window offers them, which is what the
+    -- generation counter above exists for.
     modules    = {
         cooldowns = true,
         cotanks   = true,
@@ -157,7 +165,32 @@ ns.DEFAULTS = {
         externals = true,
         answers   = true,
         deaths    = true,
+        raidbar   = false,
+        invites   = false,
     },
+
+    -- WHICH LANGUAGE. "auto" is the client's own, which is what nearly
+    -- everybody wants and what a fresh profile gets; a code here is somebody
+    -- who wants a different one, and that choice outranks the client. See
+    -- Core/Locale.lua - it is a setting on the Settings page and never a
+    -- module.
+    language   = "auto",
+
+    -- THE RAID BAR. Its cells are NOT listed here, for the same reason the
+    -- externals ones are not: RaidBar.Config seeds them once under its own
+    -- flag, and a default table would be poured back in at every login over
+    -- a bar somebody has emptied on purpose.
+    raidBar    = {
+        onlyInGroup = true,
+        size        = 26,
+        gap         = 2,
+    },
+
+    -- THE INVITE TOOL, and every switch in it is missing on purpose. Each one
+    -- makes something happen without you, so the code reads `cfg.onWhisper
+    -- and true` - absent is off, and there is no default that could turn one
+    -- of them on for somebody who has never opened the page.
+    invites    = {},
 
     -- EXTERNAL COOLDOWNS: the ones somebody else presses on you. Empty, and
     -- never seeded - the panel draws nothing until you have picked something,
@@ -520,6 +553,41 @@ end
 
 function ns.Print(...)
     print("|cff7ec6d4Zwoelf|r|cffff7a3dStuff|r:", ...)
+end
+
+---------------------------------------------------------------------------
+-- A LATTICE: rows, columns, and which square the nth thing sits in.
+--
+-- Written inside the externals panel, and here because the raid bar is the
+-- SECOND panel built out of squares somebody arranges. Two copies of this
+-- would be two chances to disagree about which way a lattice fills - and the
+-- disagreement would be silent, because both look plausible until you count.
+--
+-- ns.Externals.Cell and .Extent still exist and still answer: a hundred lines
+-- of self test call them by those names, and a rename that gains nothing is
+-- churn. They delegate here now, so there is one rule and two doors.
+--
+-- `down` is the growth setting: fill a column before wrapping, rather than a
+-- row. Zero-based column and row out, because that is what a SetPoint offset
+-- multiplies.
+---------------------------------------------------------------------------
+function ns.LatticeCell(index, rows, columns, down)
+    local slot = index - 1
+    if down then
+        return math.floor(slot / rows), slot % rows
+    end
+    return slot % columns, math.floor(slot / columns)
+end
+
+-- How big the DRAWN thing is, in columns and rows. A bar showing three of its
+-- twelve places is three wide and one tall, not twelve by one: what is not
+-- drawn takes up no room.
+function ns.LatticeExtent(shown, rows, columns, down)
+    if shown <= 0 then return 0, 0 end
+    if down then
+        return math.ceil(shown / rows), math.min(shown, rows)
+    end
+    return math.min(shown, columns), math.ceil(shown / columns)
 end
 
 ---------------------------------------------------------------------------
@@ -1426,6 +1494,13 @@ ns.COMMANDS = {
     { cmd = "/zs auras remember", text = "put every forgotten one back" },
 
     { group = "M+ and raid stuff" },
+    { cmd = "/zs raidbar", text = "what is on the raid bar, and what each "
+        .. "press would send" },
+    { cmd = "/zs check", text = "the raid check window (|cffffd100ask|r "
+        .. "asks the group without opening it)" },
+    { cmd = "/zs invite", text = "what the invite tool is listening for "
+        .. "(|cffffd100guild|r invites, |cffffd100back|r re-invites, "
+        .. "|cffffd100disband|r empties the group)" },
     { cmd = "/zs tanks",
       text = "the co-tank panel (|cffffd100test|r fakes a raid)" },
     { cmd = "/zs reminders",
@@ -1574,6 +1649,41 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         else
             ns.Externals:Dump()
         end
+
+    -- The raid bar, the window one of its buttons opens, and the invite tool.
+    -- All three answer with what they WOULD do rather than doing it, because
+    -- that is the question anybody types a slash command to find out.
+    elseif cmd == "raidbar" or cmd == "raid" then
+        ns.RaidBar:Dump()
+
+    elseif cmd == "check" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "ask" then
+            -- Asks without opening anything. For a macro key: the answers are
+            -- worth collecting before you open the window, not after.
+            ns.RaidCheck:Ask()
+        elseif sub == "dump" then
+            ns.RaidCheck:Dump()
+        else
+            ns.RaidCheck:Toggle()
+        end
+
+    elseif cmd == "invite" or cmd == "invites" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "guild" then
+            ns.Invites.InviteGuild()
+        elseif sub == "back" then
+            ns.Invites.InviteBack()
+        elseif sub == "disband" then
+            ns.Invites.Disband()
+        else
+            ns.Invites:Dump()
+        end
+
+    -- Which language, how finished each one is, and what is left in it.
+    elseif cmd == "loca" or cmd == "language" then
+        local sub = (rest or ""):match("^(%S*)")
+        ns.Locale:Dump(sub ~= "" and sub or nil)
 
     -- The taunt announce. `ask` is the one meant for a macro key - it is the
     -- half of a tank swap an addon can actually do something about.

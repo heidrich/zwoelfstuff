@@ -146,6 +146,13 @@ function ns.OpenProfile()
     ns.db = ns.ApplyDefaults(store.profiles[name], ns.DEFAULTS)
     ns.profileKey = key
     ns.profileName = name
+
+    -- THE LANGUAGE IS PART OF OPENING A PROFILE, not part of booting a
+    -- feature. It is stored per profile, so switching profile can change it -
+    -- and every lookup after this line answers in the new one. Anything drawn
+    -- BEFORE it is in English, which is why nothing in this addon looks a
+    -- string up at file scope.
+    if ns.Locale then ns.Locale:Apply() end
 end
 
 ---------------------------------------------------------------------------

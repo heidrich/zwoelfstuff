@@ -534,11 +534,18 @@ end
 -- line on a black plate - and this tells them apart in one line.
 local function StyleLine(style)
     local colour = style.borderColor or { 0, 0, 0 }
+    -- FLOORED. A colour channel is a fraction; %02x on 0.77 * 255 truncates
+    -- on the client's Lua 5.1 and RAISES on 5.4. It survived this long
+    -- because the default border is black and 0.0 is integer-representable -
+    -- so the crash was waiting for the first person to pick a colour and then
+    -- type /zs externals.
+    local red = math.floor((colour[1] or 0) * 255)
+    local green = math.floor((colour[2] or 0) * 255)
+    local blue = math.floor((colour[3] or 0) * 255)
     return string.format(
         "border %d px, |cff%02x%02x%02x#%02x%02x%02x|r, texture %s; backdrop %s",
         style.borderSize or 0,
-        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
-        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
+        red, green, blue, red, green, blue,
         tostring(style.borderTexture),
         style.backdrop == false and "off" or "on")
 end

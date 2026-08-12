@@ -146,7 +146,23 @@ UI.COL_GAP    = 18
 -- Options.lua because the inspector needs to know how wide it is in order to
 -- decide what fits on a row, and it is not the thing that creates itself.
 UI.WINDOW_W    = 1382
-UI.WINDOW_H    = 760
+-- 760 UNTIL THE THIRTEENTH PAGE, and the number changed because the rail ran
+-- out rather than because anybody wanted a bigger window.
+--
+-- The rail holds one row per page plus Edit mode, four group headings and the
+-- three outward links. At thirteen pages that is 572 of the 580 the old height
+-- left - it FITS, and the self test would have gone green while the next
+-- feature landed with its entry hidden behind the foot. That check exists
+-- precisely so the decision is taken here instead of in a screenshot, and this
+-- is the decision: the column gets taller.
+--
+-- The alternatives were all worse. Shorter rows (30 -> 28) buys 28 pixels and
+-- makes every entry in the addon smaller to fit two of them; taking the air
+-- out from above the group headings buys 72 and runs the four groups
+-- together, which is the one thing the headings exist to prevent. 820 at 100%
+-- still stands on a 1366x768 laptop through the scale slider, which is what
+-- that slider is for.
+UI.WINDOW_H    = 820
 UI.RAIL_W      = 190
 UI.INSPECTOR_W = 400
 UI.CONTENT_W   = UI.WINDOW_W - UI.RAIL_W - UI.INSPECTOR_W  -- 792
@@ -3066,8 +3082,19 @@ function UI.SpellSlot(parent, cfg)
     slot.Refresh = function()
         local spellID = cfg.get and cfg.get()
         if spellID then
-            slot.icon:SetTexture((cfg.texture and cfg.texture(spellID))
-                or ns.SpellTexture(spellID))
+            -- AN ATLAS IS NOT A FILE PATH. The raid bar's ping buttons are
+            -- the client's own chat-ping art, which lives in an atlas and
+            -- comes out blank from SetTexture - so a slot that can hold one
+            -- asks for it first and falls back to the file route. Same
+            -- argument as cfg.texture above: one slot, several kinds of
+            -- contents, rather than a second slot widget that drifts.
+            local atlas = cfg.atlas and cfg.atlas(spellID)
+            if atlas and slot.icon.SetAtlas then
+                slot.icon:SetAtlas(atlas)
+            else
+                slot.icon:SetTexture((cfg.texture and cfg.texture(spellID))
+                    or ns.SpellTexture(spellID))
+            end
             slot.icon:Show()
             slot.mark:Hide()
         else

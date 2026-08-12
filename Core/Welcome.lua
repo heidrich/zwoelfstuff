@@ -96,8 +96,8 @@ local function BuildFrame()
         -- controlWidth 96: the toggle sits at the right end of the slot and
         -- the NEW badge at its left end, so the two never overlap and the
         -- label knows where to stop.
-        local row = UI.Row(frame, entry.title, {
-            sublabel = entry.blurb,
+        local row = UI.Row(frame, ns.L[entry.title], {
+            sublabel = ns.L[entry.blurb],
             icon = entry.glyph,
             controlWidth = 96,
         })
@@ -111,7 +111,7 @@ local function BuildFrame()
         end
         previous = row
 
-        row.badge = UI.Badge(row.slot, "NEW", "current")
+        row.badge = UI.Badge(row.slot, ns.L["NEW"], "current")
         row.badge:SetPoint("LEFT", row.slot, "LEFT", 0, 0)
         row.badge:Hide()
 
@@ -137,7 +137,7 @@ local function BuildFrame()
     --
     -- Escape still just closes, which is the difference between the two ways
     -- out: one is "yes, show me" and the other is "not now".
-    local go = UI.Button(frame, "Let's go", 130, function()
+    local go = UI.Button(frame, ns.L["Let's go"], 130, function()
         Welcome:Close()
         if ns.Options then ns.Options:Open() end
     end, "primary")
@@ -153,7 +153,7 @@ local function BuildFrame()
     --
     -- A ghost, not a second button. It must be findable and it must not
     -- compete with the answer the window is actually asking for.
-    local notNow = UI.Button(frame, "Not now", nil, function()
+    local notNow = UI.Button(frame, ns.L["Not now"], nil, function()
         Welcome:Close()
     end, "ghost")
     notNow:SetPoint("RIGHT", go, "LEFT", -8, 0)
@@ -203,8 +203,7 @@ function Welcome:Show(fresh, first)
     -- the registry underneath - see Modules:Count.
     frame.lead:SetText(first == false
         and "This update brings something new. Pick what you want running."
-        or string.format(
-            "%d features in one addon. Pick the ones you want running.",
+        or ns.L("%d features in one addon. Pick the ones you want running.",
             ns.Modules:Count()))
 
     local isFresh = {}

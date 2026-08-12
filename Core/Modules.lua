@@ -55,7 +55,12 @@ ns.Modules = Modules
 -- 3: answering. The other end of the externals panel - somebody asks, and
 --    this is the button that answers. It talks to other people's clients, so
 --    being ASKED about it rather than having it appear is the whole point.
-Modules.GENERATION = 3
+-- 4: the raid bar and the invite tool, together, because they arrived
+--    together. Both are OFF by default and the argument is at their entries:
+--    one puts buttons on your screen and the other acts in your name at
+--    people who are not in the room, and neither should start doing that
+--    because somebody updated an addon.
+Modules.GENERATION = 4
 
 local LIST = {
     {
@@ -115,6 +120,33 @@ local LIST = {
             ns.Answers:Start()
         end,
         Apply = function() ns.Answers.Refresh() end,
+    },
+    {
+        -- ONE MODULE, TWO THINGS ON SCREEN: the bar and the raid check window
+        -- it opens. They are not two features - the window is what one of the
+        -- bar's buttons does, and a switch that leaves half of a button
+        -- working is a switch nobody can reason about. It is also why the
+        -- raid check ANSWERS other people's asks only while this is on: a
+        -- switched-off feature that still talks on the addon channel is not
+        -- switched off.
+        key = "raidbar", title = "Raid Bar", glyph = "grid", since = 4,
+        blurb = "Markers, world markers, pings, a ready check and a pull timer, on a bar you build yourself.",
+        detail = "Off, the bar never appears and the raid check answers nobody.",
+        Boot = function()
+            ns.RaidBar:Create()
+        end,
+        Apply = function() ns.RaidBar.Refresh() end,
+    },
+    {
+        -- NO Boot AT ALL, and that is the design rather than an omission. It
+        -- owns no frame: its watcher is a file-scope frame listening for chat,
+        -- and every one of its own switches is off until somebody says
+        -- otherwise. Switching the module on therefore puts nothing in
+        -- motion, which is exactly right for the one feature here that acts
+        -- in your name.
+        key = "invites", title = "Invites", glyph = "tanks", since = 4,
+        blurb = "Somebody whispers \"inv\" and they are in the group.",
+        detail = "Off, nothing is listening and no invitation is sent.",
     },
     {
         key = "deaths", title = "Death-log", glyph = "skull", since = 1,

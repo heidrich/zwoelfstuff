@@ -49,6 +49,18 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibSerialize\LibSerialize.lua
 Libs\LibDeflate\LibDeflate.lua
 
+# THE LANGUAGE, ABOVE EVERYTHING. Not a module and not a feature: ns.L has to
+# answer from the first line of the addon onwards, because the first thing
+# that could ask it is the second file. Languages.lua is only data and loads
+# straight after the engine that reads it.
+#
+# NOTHING LOOKS A STRING UP AT FILE SCOPE. At file scope the profile is not
+# open, so the answer would be English and then frozen for the session - the
+# self test checks the tables, and the rule is written at the top of
+# Core/Locale.lua.
+Core\Locale.lua
+Core\Languages.lua
+
 Core\Init.lua
 
 # Turning a layout into a string and back. High up because Bars.lua uses its
@@ -122,6 +134,10 @@ Core\Externals.lua
 # Below Externals and Taunts, whose spell lists it reads to know what you can
 # be asked for.
 Core\Answers.lua
+# The group fills itself. Below Chat, whose rules about which channel you are
+# actually in it shares, and it holds no frame at all - a chat event and four
+# plain calls. Everything it does is off until switched on; see the file.
+Core\Invites.lua
 Core\History.lua
 Core\Death.lua
 # The death, played back on a timeline: what came in above the axis, what
@@ -137,6 +153,14 @@ Core\GameMenu.lua
 # takes a reference to the design system at file scope belongs BELOW this line.
 Core\Widgets.lua
 Core\Screen.lua
+# The raid bar and the window it opens. BELOW Widgets - both are built from
+# the design system - and above Edit Mode, which drags the bar around the
+# screen with the other panels.
+#
+# RaidBar reads ns.ICON_TEXTURE while it loads (one of its buttons opens a
+# window of ours and wears our own mark), so it is below Init as well.
+Core\RaidBar.lua
+Core\RaidCheck.lua
 Core\EditMode.lua
 # Setting a key is its own mode on the screen, next to Edit Mode and for the
 # same reason: what you are deciding lives out there, not in a list. Below
@@ -155,6 +179,8 @@ Core\OptionsCoTanks.lua
 Core\OptionsReminders.lua
 Core\OptionsExternals.lua
 Core\OptionsAnswers.lua
+Core\OptionsRaidBar.lua
+Core\OptionsInvites.lua
 Core\OptionsDeaths.lua
 Core\OptionsProfiles.lua
 Core\OptionsSettings.lua

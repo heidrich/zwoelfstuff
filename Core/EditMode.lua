@@ -1251,6 +1251,49 @@ local function RefreshExternalMover()
     RefreshPanelMover(externalMover, ExternalPanel, cfg.x, cfg.y)
 end
 
+-- THE RAID BAR, placed the same way as the two above it.
+--
+-- ONE DIFFERENCE, AND IT IS THE WHOLE OF ITS BEHAVIOUR: the bar is made of
+-- protected buttons, so it cannot be moved, resized or hidden during a fight.
+-- Nothing special is needed here for that - RaidBar.Refresh parks the work and
+-- does it on the way out of combat - but a mover that appears to do nothing
+-- mid-pull is a mover somebody will report, so the bar says so itself.
+local raidBarMover
+
+local function RaidBarPanel()
+    local panel = ns.RaidBar and ns.RaidBar.Frame()
+    if panel and panel:IsShown() then return panel end
+    return nil
+end
+
+local function ApplyRaidBarMove(x, y)
+    local cfg = ns.RaidBar.Config()
+    cfg.x, cfg.y = x, y
+    ns.RaidBar.Refresh()
+end
+
+local function RefreshRaidBarMover()
+    if not ns.Modules:IsOn("raidbar") then
+        if raidBarMover then raidBarMover:Hide() end
+        return
+    end
+    if not raidBarMover then
+        raidBarMover = CreatePanelMover({
+            label = "Raid Bar",
+            page = "raidbar",
+            module = "raidbar",
+            config = function() return ns.RaidBar.Config() end,
+            apply = function(x, y) ApplyRaidBarMove(x, y) end,
+            origin = function()
+                local cfg = ns.RaidBar.Config()
+                return cfg.x or 0, cfg.y or 0
+            end,
+        })
+    end
+    local cfg = ns.RaidBar.Config()
+    RefreshPanelMover(raidBarMover, RaidBarPanel, cfg.x, cfg.y)
+end
+
 -- THE TAUNT BUTTON, placed the same way. It belongs to the co-tank module, so
 -- that is the switch its mover reads and the page its cog opens - a third
 -- mover type for a forty-pixel square would be the drift this builder exists
@@ -1349,6 +1392,8 @@ local PANEL_MOVERS = {
       Mover = function() return externalMover end },
     { key = "answers", panel = AnswerBar, apply = ApplyAnswerMove,
       Mover = function() return answerMover end },
+    { key = "raidbar", panel = RaidBarPanel, apply = ApplyRaidBarMove,
+      Mover = function() return raidBarMover end },
 }
 
 local function RefreshTankMover()
@@ -2602,6 +2647,7 @@ function EditMode:Refresh()
     RefreshTauntMover()
     RefreshAnswerMover()
     RefreshExternalMover()
+    RefreshRaidBarMover()
     RefreshReminderMovers()
 
     -- The selection can outlive what it pointed at: delete a bar, or shrink a
@@ -2710,6 +2756,13 @@ function EditMode:SetUnlocked(state, wanted)
     if ns.Externals then ns.Externals:SetPlacing(state) end
     if ns.Taunts then ns.Taunts:SetPlacing(state) end
     if ns.Answers then ns.Answers:SetPlacing(state) end
+
+    -- THE RAID BAR, which hides itself when you are alone - and somebody
+    -- opening edit mode to place it is alone almost by definition. It refuses
+    -- in combat like everything else it does; the mover simply has nothing to
+    -- sit on until the fight ends, which is the honest behaviour rather than a
+    -- bar that moves and snaps back.
+    if ns.RaidBar then ns.RaidBar:SetPlacing(state) end
 
     -- AND SO DO THE REMINDERS, for the same reason one layer sharper: a
     -- reminder is on screen only while the thing it names is wrong. Waiting

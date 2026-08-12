@@ -333,23 +333,33 @@ local function TestSliderMaths()
     local TAIL = ns.Options.RailTail()
     local navNow = ns.UI.NAV_ITEM_H * (#ns.Options.PAGES + 1) + 4 * 38
 
-    Check("Today's rail holds every entry", Fits(758, 62, 38, TAIL, navNow),
-        string.format("nav %d of %d", navNow, 758 - 62 - 38 - TAIL))
+    -- THE RAIL IS THE WINDOW LESS ITS OWN EDGE, and it is asked for rather
+    -- than typed. It was 758 in four places here while UI.WINDOW_H said 760,
+    -- and the raid bar wave then made the window taller - at which point four
+    -- correct numbers would all have been wrong at once, and this check would
+    -- have gone on agreeing with a window that no longer existed. That is the
+    -- exact fault the TAIL line above was written to fix.
+    local RAIL = ns.UI.WINDOW_H - 2
 
-    -- 758 - 62 - 38 - 42 = 616 is everything the entries may have. Written as
-    -- the sum rather than as a number: the first draft of the check this
-    -- replaces guessed 700 and went red against correct code.
-    local room = 758 - 62 - 38 - TAIL
+    Check("Today's rail holds every entry", Fits(RAIL, 62, 38, TAIL, navNow),
+        string.format("nav %d of %d", navNow, RAIL - 62 - 38 - TAIL))
+
+    -- The sum rather than a number: the first draft of the check this replaces
+    -- guessed 700 and went red against correct code.
+    local room = RAIL - 62 - 38 - TAIL
     Check("A nav that fills the column exactly still fits",
-        Fits(758, 62, 38, TAIL, room))
+        Fits(RAIL, 62, 38, TAIL, room))
     Check("One row more than fits is reported as not fitting",
-        not Fits(758, 62, 38, TAIL, room + 1))
+        not Fits(RAIL, 62, 38, TAIL, room + 1))
 
     -- The margin is worth naming, because it is what a new page spends. Two
     -- more pages must still fit, or the next feature lands on a broken rail
     -- and nobody finds out until a screenshot arrives.
+    --
+    -- IT HAS ALREADY EARNED ITS KEEP ONCE: the raid bar and the invite tool
+    -- took the spare down to 8 pixels, which is what made the window taller.
     Check("There is room for two more pages",
-        Fits(758, 62, 38, TAIL, navNow + 2 * ns.UI.NAV_ITEM_H),
+        Fits(RAIL, 62, 38, TAIL, navNow + 2 * ns.UI.NAV_ITEM_H),
         string.format("%d spare", room - navNow))
 end
 
@@ -391,6 +401,8 @@ local function TestCommandList()
         externals = true, external = true, taunt = true, taunts = true,
         reminders = true, reminder = true, death = true, test = true,
         report = true, auras = true, bars = true, reset = true,
+        raidbar = true, raid = true, check = true, invite = true,
+        invites = true, loca = true, language = true,
     }
 
     local unknown
@@ -3995,9 +4007,40 @@ local function TestModules()
 
     -- The defaults. Read from ns.DEFAULTS rather than from a live profile:
     -- this is the table an existing character gets filled in from.
+    --
+    -- EVERY MODULE HAS AN ANSWER HERE, and that is the rule - not "everything
+    -- is on". A module missing from this table is filled in as nil, which
+    -- Modules:IsOn reads as ON, so a feature that was meant to arrive quietly
+    -- would switch itself on for everybody with no line anywhere saying so.
+    --
+    -- WHICH answer is a per-module decision and it is written at the entry.
+    -- The six that draw or record something default on, because for those an
+    -- update that switched them off would be an update that broke somebody's
+    -- screen. The raid bar and the invite tool default OFF: one puts a row of
+    -- buttons on the screen and the other acts in your name at people who are
+    -- not in the room, and neither should start because somebody updated an
+    -- addon. The welcome window is what offers them - which is what
+    -- Modules.GENERATION exists for, and it is checked below.
     for _, entry in ipairs(list) do
-        Check("Module '" .. entry.key .. "' defaults to ON",
-            ns.DEFAULTS.modules and ns.DEFAULTS.modules[entry.key] == true)
+        Check("Module '" .. entry.key .. "' has a default",
+            ns.DEFAULTS.modules
+                and type(ns.DEFAULTS.modules[entry.key]) == "boolean",
+            "missing means nil, and nil reads as ON")
+    end
+
+    Check("A module that acts on its own is off until it is asked for",
+        ns.DEFAULTS.modules.raidbar == false
+            and ns.DEFAULTS.modules.invites == false)
+
+    -- AND THE OTHER SIX ARE STILL ON. Written out rather than "every other
+    -- entry", because the list of features that may arrive switched on is a
+    -- decision and not a default: the next module added has to be argued for
+    -- in one of the two directions rather than inheriting whichever way this
+    -- loop happened to be written.
+    for _, key in ipairs({ "cooldowns", "cotanks", "reminders", "externals",
+        "answers", "deaths" }) do
+        Check("Module '" .. key .. "' still defaults to ON",
+            ns.DEFAULTS.modules[key] == true)
     end
     Check("The welcome flag is NOT in the defaults",
         ns.DEFAULTS.welcomeSeen == nil,
@@ -5477,11 +5520,679 @@ local function TestPanelMovers()
     end
 end
 
+---------------------------------------------------------------------------
+-- The language
+--
+-- WHAT CAN ACTUALLY GO WRONG HERE, because it is not what it looks like. A
+-- missing translation is harmless by design - the key IS the English string,
+-- so it comes back as itself. The three things that are NOT harmless:
+--
+--   a key that is in a translation and not in enUS   a word nothing asks for.
+--                                                    It is a typo, and it
+--                                                    shows as English forever
+--                                                    while looking translated
+--                                                    in the file.
+--   a translation that loses a placeholder            "%d features" becoming
+--                                                    "Funktionen" drops the
+--                                                    number silently, or
+--                                                    throws inside format.
+--   a lookup at FILE SCOPE                            answered in English
+--                                                    before the profile is
+--                                                    open, then frozen for
+--                                                    the session.
+---------------------------------------------------------------------------
+local function TestLocale()
+    local Locale = ns.Locale
+    local L = ns.L
+
+    Check("There is a language engine", Locale ~= nil and L ~= nil)
+    if not Locale then return end
+
+    ---------------------------------------------------------------------
+    -- Which language, given what
+    ---------------------------------------------------------------------
+    Check("A chosen language wins over the client",
+        Locale.Resolve("frFR", "deDE") == "frFR")
+    Check("auto follows the client",
+        Locale.Resolve("auto", "deDE") == "deDE")
+    Check("Nothing chosen follows the client",
+        Locale.Resolve(nil, "ruRU") == "ruRU")
+    -- The British client is the American strings, and nobody ships a separate
+    -- enGB. Without this line every British player gets the raw keys back -
+    -- which happens to be English, so it works by luck rather than by rule.
+    Check("enGB is enUS", Locale.Resolve("auto", "enGB") == "enUS")
+    Check("A language we do not ship falls back to English",
+        Locale.Resolve("xxXX", "xxXX") == "enUS")
+    Check("No client at all falls back to English",
+        Locale.Resolve(nil, nil) == "enUS")
+
+    ---------------------------------------------------------------------
+    -- The tables
+    ---------------------------------------------------------------------
+    local master = Locale.TABLES.enUS
+    Check("There is a master list", type(master) == "table")
+
+    local masterCount = 0
+    for _ in pairs(master or {}) do masterCount = masterCount + 1 end
+    Check("The master list has something in it", masterCount > 50,
+        tostring(masterCount) .. " strings")
+
+    for _, entry in ipairs(Locale.LANGUAGES) do
+        Check("Language " .. entry.code .. " has a table",
+            type(Locale.TABLES[entry.code]) == "table")
+        -- IN ITS OWN LANGUAGE. Somebody looking for their language in a list
+        -- is looking for the word they use for it, which may not be a word
+        -- they would recognise in English.
+        Check("Language " .. entry.code .. " names itself",
+            type(entry.native) == "string" and entry.native ~= "")
+    end
+
+    -- A KEY THAT IS NOT IN THE MASTER. See the header: it is a typo that
+    -- cannot be seen, because the screen shows English and the file shows a
+    -- translation.
+    local stray, strayIn
+    for _, entry in ipairs(Locale.LANGUAGES) do
+        if entry.code ~= "enUS" then
+            for key in pairs(Locale.TABLES[entry.code] or {}) do
+                if master[key] == nil then
+                    stray, strayIn = key, entry.code
+                end
+            end
+        end
+    end
+    Check("Every translated key is one the addon asks for", stray == nil,
+        stray and (strayIn .. ": " .. stray) or nil)
+
+    -- PLACEHOLDERS SURVIVE TRANSLATION. %d and %s carry the numbers, and a
+    -- translation that drops one prints a sentence with the fact missing -
+    -- or throws inside string.format, which takes the page down.
+    local function Marks(text)
+        local count = 0
+        for _ in tostring(text):gmatch("%%[%a]") do count = count + 1 end
+        return count
+    end
+
+    local lost, lostIn
+    for _, entry in ipairs(Locale.LANGUAGES) do
+        for key, value in pairs(Locale.TABLES[entry.code] or {}) do
+            if type(value) == "string" and Marks(key) ~= Marks(value) then
+                lost, lostIn = key, entry.code
+            end
+        end
+    end
+    Check("No translation loses a placeholder", lost == nil,
+        lost and (lostIn .. ": " .. lost) or nil)
+
+    ---------------------------------------------------------------------
+    -- The lookup
+    ---------------------------------------------------------------------
+    local was = ns.db and ns.db.language
+    local restore = Locale.active
+
+    Locale:Use("enUS")
+    Check("English answers with the key itself", L["Ready check"] == "Ready check")
+    Check("A string nobody has translated answers with itself",
+        L["a sentence that is in no table anywhere"]
+            == "a sentence that is in no table anywhere")
+
+    Locale:Use("deDE")
+    Check("A translated string comes back translated",
+        L["Settings"] == "Einstellungen")
+    Check("An untranslated one still answers in English",
+        L["a sentence that is in no table anywhere"]
+            == "a sentence that is in no table anywhere")
+
+    -- The formatting door. A translation with a broken placeholder must not
+    -- take the caller down with it - see the pcall in Locale.lua.
+    Check("A formatted string fills in", L("%d of %d answered", 3, 5)
+        == "3 von 5 haben geantwortet")
+    Check("A formatted string with no arguments is the string",
+        L("Settings") == "Einstellungen")
+
+    Locale:Use(restore)
+    if ns.db then ns.db.language = was end
+
+    -- READ-ONLY. A translation assigned at runtime would put one language's
+    -- word into every later session of another one, and it would be found
+    -- weeks later.
+    Check("The table refuses to be written to",
+        not pcall(function() ns.L["Ready check"] = "nope" end))
+
+    ---------------------------------------------------------------------
+    -- Coverage, which the Settings list and /zs loca both print
+    ---------------------------------------------------------------------
+    local done, total = Locale.Coverage("enUS")
+    Check("English is complete by definition", done == total and total > 0)
+
+    local germanDone, germanTotal = Locale.Coverage("deDE")
+    -- The file says German is finished. Held to it here, because "complete"
+    -- in a comment is a claim and this is the same claim as a number.
+    Check("German is complete", germanDone == germanTotal,
+        string.format("%d of %d", germanDone, germanTotal))
+
+    for _, entry in ipairs(Locale.LANGUAGES) do
+        local hit, all = Locale.Coverage(entry.code)
+        Check("Coverage for " .. entry.code .. " is a real fraction",
+            hit >= 0 and hit <= all and all == masterCount)
+    end
+
+    Check("What is missing is listed",
+        #Locale.Missing("koKR") == masterCount - select(1, Locale.Coverage("koKR")))
+
+    ---------------------------------------------------------------------
+    -- The window's own strings resolve
+    --
+    -- Every page title and every module name goes through L when it is drawn.
+    -- A title that is not a string would come back as a table address on a
+    -- button, which is the sort of thing that only shows up in a screenshot.
+    ---------------------------------------------------------------------
+    local titles = true
+    for _, page in ipairs(ns.Options.PAGES) do
+        if type(L[page.title]) ~= "string" or L[page.title] == "" then
+            titles = false
+        end
+    end
+    Check("Every page title resolves to a string", titles)
+
+    local moduleNames = true
+    for _, entry in ipairs(ns.Modules:All()) do
+        if type(L[entry.title]) ~= "string" or type(L[entry.blurb]) ~= "string" then
+            moduleNames = false
+        end
+    end
+    Check("Every module name and blurb resolves to a string", moduleNames)
+end
+
+---------------------------------------------------------------------------
+-- The raid bar
+--
+-- WHAT THE DESKTOP CAN AND CANNOT SEE HERE, and the split decides the whole
+-- suite. It cannot press a secure button, and it cannot know whether the game
+-- accepted the macro. What it CAN check is the two things that actually break
+-- a marks bar: the text of the macro each place is given, and the arithmetic
+-- that decides which place is which.
+--
+-- A macro with the wrong word in it is a button that does nothing in a raid,
+-- silently, for one language's players only. That is the failure this suite
+-- exists for.
+---------------------------------------------------------------------------
+local function TestRaidBar()
+    local RaidBar = ns.RaidBar
+    Check("There is a raid bar", RaidBar ~= nil)
+    if not RaidBar then return end
+
+    ---------------------------------------------------------------------
+    -- What can go on it
+    ---------------------------------------------------------------------
+    local keys, kinds = {}, {}
+    local duplicate, artless, nameless
+    for _, entry in ipairs(RaidBar.ACTIONS) do
+        if keys[entry.key] then duplicate = entry.key end
+        keys[entry.key] = true
+        kinds[entry.kind] = (kinds[entry.kind] or 0) + 1
+        -- EVERY BUTTON IS A PICTURE. A place with no art is a black square on
+        -- the bar, and the picker beside it is a list of blank rows.
+        if not (entry.texture or entry.atlas) then artless = entry.key end
+        if type(entry.label) ~= "string" or entry.label == "" then
+            nameless = entry.key
+        end
+    end
+
+    Check("Every button has its own key", duplicate == nil, duplicate)
+    Check("Every button has a picture", artless == nil, artless)
+    Check("Every button has a name", nameless == nil, nameless)
+
+    Check("There are eight markers and a clear", kinds.marker == 9,
+        tostring(kinds.marker))
+    Check("There are eight world markers and a clear", kinds.worldmarker == 9,
+        tostring(kinds.worldmarker))
+    Check("There are four pings", kinds.ping == 4, tostring(kinds.ping))
+    Check("Three buttons run in the addon", kinds.call == 3,
+        tostring(kinds.call))
+
+    ---------------------------------------------------------------------
+    -- WHAT A PRESS SENDS
+    --
+    -- The slash commands are the CLIENT'S, because they are translated on
+    -- some clients - MRT carries a special case for exactly the four
+    -- languages where "/wm" is not "/wm". Passed in here rather than read,
+    -- so both halves are executed.
+    ---------------------------------------------------------------------
+    Check("A marker toggles rather than sets",
+        RaidBar.MarkerMacro(3, false, "/tm") == "/tm !3")
+    Check("The clear button clears every marker",
+        RaidBar.MarkerMacro(0, true, "/tm") == "/tm 0")
+    Check("A marker macro follows a translated command",
+        RaidBar.MarkerMacro(5, false, "/marcador") == "/marcador !5")
+
+    Check("A world marker is placed",
+        RaidBar.WorldMarkerMacro(2, false, "/wm", "/cwm") == "/wm 2")
+    Check("A world marker is taken away",
+        RaidBar.WorldMarkerMacro(2, true, "/wm", "/cwm"):find("/cwm") == 1)
+    Check("The world clear takes them all",
+        RaidBar.WorldMarkerMacro(0, false, "/wm", "/cwm"):find("/cwm") == 1)
+
+    Check("A ping is aimed at the target",
+        RaidBar.PingMacro("attack", "/ping", "Attack")
+            == "/ping [@target] Attack")
+
+    ---------------------------------------------------------------------
+    -- The lattice, which is now shared with the externals panel
+    ---------------------------------------------------------------------
+    local sameAsExternals = true
+    for index = 1, 12 do
+        local ax, ay = ns.LatticeCell(index, 2, 6, false)
+        local bx, by = ns.Externals.Cell(index, 2, 6, false)
+        if ax ~= bx or ay ~= by then sameAsExternals = false end
+    end
+    Check("Both panels place a place the same way", sameAsExternals)
+
+    local x, y = ns.LatticeCell(7, 2, 6, false)
+    Check("The seventh of six across starts the second row", x == 0 and y == 1)
+    x, y = ns.LatticeCell(3, 2, 6, true)
+    Check("Running down fills a column first", x == 1 and y == 0)
+
+    local wide, tall = ns.LatticeExtent(3, 2, 6, false)
+    Check("Three of twelve is three wide and one tall", wide == 3 and tall == 1)
+    Check("Nothing shown takes no room",
+        select(1, ns.LatticeExtent(0, 2, 6, false)) == 0)
+
+    ---------------------------------------------------------------------
+    -- The bar's own settings, on a copy of the profile's
+    --
+    -- Put back at the end. This is the one part of the suite that writes, and
+    -- it writes to the live raid bar - so it is wrapped the way the module
+    -- switch test is.
+    ---------------------------------------------------------------------
+    if not ns.db then
+        Skip("The raid bar's settings", "no profile open")
+        return
+    end
+
+    local kept = ns.db.raidBar
+    local ok, err = pcall(function()
+        ns.db.raidBar = nil
+
+        local cfg = RaidBar.Config()
+        Check("A fresh bar is seeded", cfg.cells[1] ~= nil and cfg.seeded)
+        Check("The seed is a marks bar", cfg.cells[1] == "mark1"
+            and cfg.cells[9] == "markclear")
+
+        -- SEEDED ONCE. A migration that runs twice puts back the place
+        -- somebody has just emptied, and it does it at every login.
+        RaidBar.ClearSlot(1)
+        RaidBar.Config()
+        Check("Emptying a place survives the next read",
+            RaidBar.Config().cells[1] == nil)
+
+        RaidBar.SetSlot(1, "mark1")
+        Check("A button goes where it is put",
+            RaidBar.ActionAt(1) == "mark1")
+
+        -- ONE BUTTON, ONE PLACE. Two Skulls on a bar is two places doing one
+        -- job and a key bound to whichever of them you did not mean.
+        RaidBar.SetSlot(4, "mark1")
+        Check("Putting a button somewhere else moves it",
+            RaidBar.ActionAt(1) == nil and RaidBar.ActionAt(4) == "mark1")
+
+        Check("An unknown button is refused",
+            (RaidBar.Pick("nonesuch") == nil) and not RaidBar.IsPicked("nonesuch"))
+
+        -- Into the marked place, not the first free one.
+        RaidBar.ClearSlot(2)
+        Check("A button lands in the place you marked",
+            RaidBar.Pick("pingattack", 2) == 2)
+
+        RaidBar.SetRows(1)
+        RaidBar.SetColumns(2)
+        Check("Rows times columns is the count", RaidBar.Count() == 2)
+
+        RaidBar.SetColumns(RaidBar.MAX_COLUMNS + 5)
+        Check("Columns are clamped",
+            RaidBar.Columns() == RaidBar.MAX_COLUMNS)
+        RaidBar.SetRows(0)
+        Check("Rows are clamped", RaidBar.Rows() == 1)
+
+        -- WHAT FALLS OFF THE END STAYS PUT. Taking the bar down and back up
+        -- has to give you what you had - the same rule a cooldown bar's cells
+        -- follow.
+        RaidBar.SetRows(1)
+        RaidBar.SetColumns(12)
+        RaidBar.SetSlot(12, "readycheck")
+        RaidBar.SetColumns(4)
+        RaidBar.SetColumns(12)
+        Check("A button off the end comes back",
+            RaidBar.ActionAt(12) == "readycheck")
+    end)
+    ns.db.raidBar = kept
+    if not ok then error(err) end
+
+    ---------------------------------------------------------------------
+    -- The two calls the game may refuse
+    ---------------------------------------------------------------------
+    local may, why = RaidBar.MayLead()
+    if IsInGroup and IsInGroup() then
+        Skip("Leading refused when alone", "you are in a group")
+    else
+        Check("Alone, there is nobody to ready-check",
+            may == false and why == "not in a group")
+    end
+
+    ---------------------------------------------------------------------
+    -- The keys
+    --
+    -- The NAME shape, which is the half that can be checked in game: a
+    -- binding this addon names has to be the CLICK form, because a line of
+    -- Lua may not press a protected button. Whether Bindings.xml carries
+    -- twelve of them is checked by the desktop harness, which can read files.
+    ---------------------------------------------------------------------
+    Check("A raid bar key presses the button itself",
+        RaidBar.BindingName(3) == "CLICK ZwoelfStuffRaidBar3:LeftButton")
+    Check("There are keys for the first twelve places",
+        RaidBar.KEYS == 12)
+
+    local reads = true
+    for index = 1, RaidBar.KEYS do
+        if not pcall(RaidBar.Key, index) then reads = false end
+    end
+    Check("Reading a bound key never throws", reads)
+end
+
+---------------------------------------------------------------------------
+-- The raid check
+--
+-- The window cannot be judged out here, but everything that DECIDES what it
+-- draws can: what this client says about itself, what travels, and what
+-- arrives. The wire is the part worth guarding - it is read from another
+-- machine, and a decoder that trusts what it is handed is a decoder that can
+-- be handed a table key.
+---------------------------------------------------------------------------
+local function TestRaidCheck()
+    local RaidCheck = ns.RaidCheck
+    local Comm = ns.Comm
+    Check("There is a raid check", RaidCheck ~= nil)
+    if not RaidCheck then return end
+
+    ---------------------------------------------------------------------
+    -- The buffs, and the bits they travel as
+    ---------------------------------------------------------------------
+    local bits, spells = {}, 0
+    for _, buff in ipairs(RaidCheck.BUFFS) do
+        Check("Buff " .. buff.key .. " has a bit of its own", not bits[buff.bit])
+        bits[buff.bit] = true
+        for _ in pairs(buff.spells) do spells = spells + 1 end
+    end
+    Check("There are six group buffs", #RaidCheck.BUFFS == 6)
+    Check("Every buff names at least one spell", spells >= #RaidCheck.BUFFS)
+
+    local all = 0
+    for _, buff in ipairs(RaidCheck.BUFFS) do all = all + buff.bit end
+    local everyBit, noBit = true, false
+    for _, buff in ipairs(RaidCheck.BUFFS) do
+        if not RaidCheck.HasBuff(all, buff) then everyBit = false end
+        if RaidCheck.HasBuff(0, buff) then noBit = true end
+    end
+    Check("Every bit reads back out of a full mask", everyBit)
+    Check("An empty mask has nothing in it", not noBit)
+    Check("A mask that is not a number is not a buff",
+        not RaidCheck.HasBuff(nil, RaidCheck.BUFFS[1]))
+
+    -- One bit set and the others clear, which is the case a bad shift gets
+    -- wrong while a full mask still looks right.
+    local second = RaidCheck.BUFFS[2]
+    Check("One buff alone reads as that buff",
+        RaidCheck.HasBuff(second.bit, second)
+            and not RaidCheck.HasBuff(second.bit, RaidCheck.BUFFS[1]))
+
+    ---------------------------------------------------------------------
+    -- What this client says about itself
+    ---------------------------------------------------------------------
+    local mine = RaidCheck.Read()
+    Check("The reading is a table", type(mine) == "table")
+
+    if GetInventoryItemDurability then
+        local worst = RaidCheck.Durability()
+        -- THE LOWEST, NOT THE AVERAGE. A raid leader asking about durability
+        -- is asking whether somebody's weapon is about to fall apart, and an
+        -- average hides exactly that.
+        Check("Durability is the worst piece worn",
+            worst == nil or (worst >= 0 and worst <= 100),
+            tostring(worst))
+    end
+
+    if RaidCheck.AurasReadable() then
+        Check("Food is found by the Well Fed icon", mine.fo == 1)
+        Check("A flask is found by its id", mine.fl == 1)
+        Check("Buffs that are not up are not claimed",
+            mine.bf ~= nil and not RaidCheck.HasBuff(mine.bf,
+                RaidCheck.BUFFS[6]))
+    else
+        Skip("Reading your own consumables", "this client keeps auras secret")
+    end
+
+    ---------------------------------------------------------------------
+    -- The wire
+    ---------------------------------------------------------------------
+    local wire = Comm.EncodeCheck({ il = 639, du = 94, fo = 1, fl = 1, ru = 0,
+        bf = 63 })
+    local back = Comm.DecodeCheck(wire)
+    Check("A reading survives the trip", back ~= nil and back.fields
+        and back.fields.il == 639 and back.fields.du == 94
+        and back.fields.bf == 63)
+
+    -- WRITTEN IN A FIXED ORDER, so the same facts are the same string.
+    Check("The same facts encode the same way",
+        Comm.EncodeCheck({ bf = 1, il = 2 })
+            == Comm.EncodeCheck({ il = 2, bf = 1 }))
+
+    local ask = Comm.DecodeCheck(Comm.EncodeCheckAsk())
+    Check("An ask decodes as an ask", ask ~= nil and ask.ask == true)
+
+    -- THE TWO WIRE FORMS MUST NOT READ EACH OTHER. This is the whole reason
+    -- the check form was shaped the way it was: an older client runs
+    -- Comm.Decode alone, and it has to come back with nothing rather than
+    -- with a spell it half understood.
+    Check("The old decoder rejects a raid check", Comm.Decode(wire) == nil)
+    Check("The old decoder rejects an ask",
+        Comm.Decode(Comm.EncodeCheckAsk()) == nil)
+    Check("The check decoder rejects a cooldown message",
+        Comm.DecodeCheck(Comm.Encode(Comm.USED, Comm.EXTERNAL, 1022, 300))
+            == nil)
+
+    -- DATA FROM ANOTHER MACHINE IS NOT TRUSTED. A key nobody knows and a
+    -- number wider than its field are both dropped rather than kept.
+    local dirty = Comm.DecodeCheck("1|CHECK|il=639,zz=1,du=99999")
+    Check("An unknown field is dropped",
+        dirty ~= nil and dirty.fields.zz == nil)
+    Check("A number too wide for its field is dropped",
+        dirty ~= nil and dirty.fields.du == nil and dirty.fields.il == 639)
+    Check("A message with nothing usable in it is nil",
+        Comm.DecodeCheck("1|CHECK|zz=1") == nil)
+    Check("Another version's check is not read",
+        Comm.DecodeCheck("9|CHECK|il=1") == nil)
+    Check("Rubbish is not a check", Comm.DecodeCheck("hello") == nil
+        and Comm.DecodeCheck(nil) == nil)
+
+    ---------------------------------------------------------------------
+    -- The columns
+    ---------------------------------------------------------------------
+    local buffColumns = 0
+    for _, column in ipairs(RaidCheck.COLUMNS) do
+        if column.kind == "bit" then buffColumns = buffColumns + 1 end
+    end
+    Check("Every group buff has a column of its own",
+        buffColumns == #RaidCheck.BUFFS)
+    Check("The window is as wide as its columns", RaidCheck.Width() > 400)
+    Check("The first column is the name", RaidCheck.COLUMNS[1].key == "name")
+end
+
+---------------------------------------------------------------------------
+-- The invite tool
+--
+-- EVERY RULE IN HERE IS ONE STRING COMPARISON, and getting it wrong is either
+-- a raid nobody can join or a raid that invites everybody who says hello.
+-- None of it needs a group, which is the point of writing it as pure
+-- functions in the first place.
+---------------------------------------------------------------------------
+local function TestInvites()
+    local Invites = ns.Invites
+    Check("There is an invite tool", Invites ~= nil)
+    if not Invites then return end
+
+    ---------------------------------------------------------------------
+    -- The keywords
+    ---------------------------------------------------------------------
+    local set, order = Invites.Keywords("inv\nINVITE\n  1  \ninv\n\n")
+    Check("Keywords are lower-cased and trimmed",
+        set.inv and set.invite and set["1"])
+    Check("A repeated keyword is kept once", #order == 3,
+        table.concat(order, ","))
+    Check("Empty lines are not keywords", set[""] == nil)
+    Check("Commas separate too", select(2, Invites.Keywords("inv, invite"))[2]
+        == "invite")
+    -- The brackets are load-bearing: Keywords answers TWO values, and
+    -- `next(a, b)` reads the second as a key to start from - which threw
+    -- "invalid key to 'next'" rather than answering.
+    Check("No keywords at all is an empty set",
+        next((Invites.Keywords(""))) == nil)
+
+    ---------------------------------------------------------------------
+    -- The match
+    ---------------------------------------------------------------------
+    Check("The exact word invites", Invites.Matches("inv", set, false))
+    Check("Case does not matter", Invites.Matches("INV", set, false))
+    Check("Trailing punctuation does not matter",
+        Invites.Matches("inv!", set, false) and Invites.Matches("inv.", set, false))
+    Check("Space around it does not matter",
+        Invites.Matches("  inv  ", set, false))
+
+    -- STRICT IS STRICT. This is the half that keeps a raid leader from
+    -- inviting somebody who was talking about something else.
+    Check("A sentence containing the word does not invite",
+        not Invites.Matches("inv please", set, false))
+    Check("A sentence containing the word invites when asked to",
+        Invites.Matches("inv please", set, true))
+    -- AND THE COST OF LOOSE, which is on the page in as many words.
+    Check("Loose matching finds it in a refusal too",
+        Invites.Matches("I cannot inv you sorry", set, true))
+    Check("An empty message never matches",
+        not Invites.Matches("", set, true) and not Invites.Matches("  ", set, true))
+    Check("Something that is not a message never matches",
+        not Invites.Matches(nil, set, true))
+
+    ---------------------------------------------------------------------
+    -- Who gets in
+    ---------------------------------------------------------------------
+    Check("With no filters anybody gets in",
+        Invites.MayInvite({}, false, false))
+    Check("Guild only keeps a stranger out",
+        not Invites.MayInvite({ guildOnly = true }, false, false))
+    Check("Guild only lets a guild member in",
+        Invites.MayInvite({ guildOnly = true }, true, false))
+    Check("Friends only lets a friend in",
+        Invites.MayInvite({ friendsOnly = true }, false, true))
+    -- GUILD COUNTS AS FRIEND, and it is deliberate rather than sloppy: a
+    -- guild member is somebody you have already said yes to once.
+    Check("Friends only lets a guild member in",
+        Invites.MayInvite({ friendsOnly = true }, true, false))
+    Check("A refusal says why",
+        select(2, Invites.MayInvite({ guildOnly = true }, false, false))
+            == "not in your guild")
+
+    ---------------------------------------------------------------------
+    -- Being invited
+    ---------------------------------------------------------------------
+    Check("Nothing is accepted while the switch is off",
+        not Invites.ShouldAccept({}, true, true))
+    Check("A friend's invitation is accepted",
+        Invites.ShouldAccept({ autoAccept = true }, true, false))
+    Check("A guild member's invitation is accepted",
+        Invites.ShouldAccept({ autoAccept = true }, false, true))
+    Check("A stranger's invitation is not",
+        not Invites.ShouldAccept({ autoAccept = true }, false, false))
+
+    ---------------------------------------------------------------------
+    -- Ranks, which count the wrong way round
+    ---------------------------------------------------------------------
+    Check("Any rank passes when none is set",
+        Invites.RankAllowed(4, nil))
+    Check("The guild master passes every filter",
+        Invites.RankAllowed(0, 3))
+    Check("A rank below the line is kept out",
+        not Invites.RankAllowed(5, 3))
+    Check("The line itself is in", Invites.RankAllowed(3, 3))
+    Check("A rank that is not a number is out",
+        not Invites.RankAllowed(nil, 3))
+
+    ---------------------------------------------------------------------
+    -- Promotion
+    ---------------------------------------------------------------------
+    Check("A named player is promoted",
+        Invites.ShouldPromote("Zwoelf", "zwoelf\nakui"))
+    Check("A name with a realm on it still matches",
+        Invites.ShouldPromote("Akui-Gilneas", "akui"))
+    Check("Nobody else is promoted",
+        not Invites.ShouldPromote("Somebody", "zwoelf\nakui"))
+    Check("An empty list promotes nobody",
+        not Invites.ShouldPromote("Zwoelf", ""))
+
+    ---------------------------------------------------------------------
+    -- The listener, which must do nothing until it is switched on
+    ---------------------------------------------------------------------
+    if not ns.db then
+        Skip("The invite listener", "no profile open")
+        return
+    end
+
+    local keptModules = ns.db.modules and ns.db.modules.invites
+    local keptInvites = ns.db.invites
+    local ok, err = pcall(function()
+        ns.db.modules = ns.db.modules or {}
+        ns.db.invites = { keywords = "inv" }
+
+        ns.db.modules.invites = false
+        Check("A switched-off module does not invite",
+            not Invites.OnMessage("inv", "Somebody", "WHISPER"))
+
+        ns.db.modules.invites = true
+        Check("Nothing happens until the switch is on",
+            not Invites.OnMessage("inv", "Somebody", "WHISPER"))
+
+        ns.db.invites.onWhisper = true
+        Check("Say and yell are ignored until asked for",
+            not Invites.OnMessage("inv", "Somebody", "SAYYELL"))
+
+        -- YOUR OWN MESSAGE COMES BACK TO YOU on some channels, and inviting
+        -- yourself is a refusal in the client and a puzzled line in chat.
+        Check("Your own message is not an invitation",
+            not Invites.OnMessage("inv", UnitName("player"), "WHISPER"))
+
+        Check("Something that is not a word is not a request",
+            not Invites.OnMessage("hello", "Somebody", "WHISPER"))
+
+        -- A NAME THE CLIENT WITHHELD. Comparing it raises; the guard is the
+        -- only reason this does not take the chat handler down with it.
+        Check("A withheld name is not invited",
+            not Invites.OnMessage("inv", __SECRET, "WHISPER"))
+
+        ns.db.invites.guildOnly = true
+        Check("Guild only keeps a stranger out of the group",
+            not Invites.OnMessage("inv", "Somebody", "WHISPER"))
+    end)
+    ns.db.invites = keptInvites
+    if ns.db.modules then ns.db.modules.invites = keptModules end
+    if not ok then error(err) end
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
     local suites = {
         { "Modules",       TestModules },
+        { "Language",      TestLocale },
+        { "Raid bar",      TestRaidBar },
+        { "Raid check",    TestRaidCheck },
+        { "Invites",       TestInvites },
         { "CD request",    TestExternals },
         { "Arrangements",  TestLayout },
         { "Coordinates",   TestOffsets },

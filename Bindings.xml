@@ -48,6 +48,36 @@
         Their names are set in Core/Answers.lua, which also draws the bound
         key in the corner of each cell.
     -->
+    <!--
+        THE RAID BAR, AND THESE CARRY NO BODY EITHER - for a reason that is
+        the same one as the answer cells above and worth stating in its own
+        words: putting a skull on the target, dropping a flare on the floor
+        and sending a ping are all PROTECTED on this patch. A line of Lua
+        cannot do any of them. "CLICK <frame>:<button>" can, because the game
+        presses the button itself.
+
+        Twelve, because a bar wider than that is a bar nobody has keys for.
+        The number is ns.RaidBar.KEYS in Lua and twelve lines here, which is
+        one of the very few numbers in this addon that lives in two places -
+        this file is static XML and cannot count. The self test holds the two
+        together.
+
+        Their names are set in Core/RaidBar.lua, which also draws the bound
+        key in the corner of each place.
+    -->
+    <Binding name="CLICK ZwoelfStuffRaidBar1:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar2:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar3:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar4:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar5:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar6:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar7:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar8:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar9:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar10:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar11:LeftButton" category="ZwoelfStuff" />
+    <Binding name="CLICK ZwoelfStuffRaidBar12:LeftButton" category="ZwoelfStuff" />
+
     <Binding name="CLICK ZwoelfStuffAnswer1:LeftButton" category="ZwoelfStuff" />
     <Binding name="CLICK ZwoelfStuffAnswer2:LeftButton" category="ZwoelfStuff" />
     <Binding name="CLICK ZwoelfStuffAnswer3:LeftButton" category="ZwoelfStuff" />

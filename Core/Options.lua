@@ -846,6 +846,33 @@ local PAGES = {
       },
       build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },
 
+    -- THE RAID LEADER'S PAGE. Its third column is the list of buttons there
+    -- are, which is the externals page's shape and deliberately so - the
+    -- owner asked for "das bewaehrte layout wo ich mir die bar zusammen
+    -- stellen kann", and two pages that assemble a lattice must not be two
+    -- different pictures.
+    { key = "raidbar", title = "Raid Bar", glyph = "grid", raidbar = true,
+      module = "raidbar",
+      subtitle = "Markers, pings, a ready check and a pull timer.",
+      actions = {
+          { text = "Raid check",
+            onClick = function() ns.RaidCheck:Toggle() end },
+          { text = "Move it",
+            onClick = function() ns.EditMode:SetUnlocked(true) end },
+      },
+      build = function(page, width) return ns.OptionsRaidBar:BuildPage(page, width) end },
+
+    -- NO THIRD COLUMN. Everything on it is a yes-or-no about something that
+    -- happens without you, and there is no list to pick from - the two boxes
+    -- are typed into.
+    { key = "invites", title = "Invites", glyph = "tanks", module = "invites",
+      subtitle = "Somebody whispers a word and they are in the group.",
+      actions = {
+          { text = "What is listening",
+            onClick = function() ns.Invites:Dump() end },
+      },
+      build = function(page, width) return ns.OptionsInvites:BuildPage(page, width) end },
+
     -- The death log, and with it the DEFENSIVES LIST that used to live on a
     -- Timeline page of its own. That page is gone: what it drew live was the
     -- fight's next scheduled hit, and the replay answers the same question
@@ -982,7 +1009,7 @@ local function BuildModuleGate(parent)
     detail:SetWidth(460 - UI.PAD * 2)
     detail:SetJustifyH("LEFT")
 
-    local button = UI.Button(card, "Switch it on", 140, function()
+    local button = UI.Button(card, ns.L["Switch it on"], 140, function()
         if gate.key then
             ns.Modules:Set(gate.key, true)
             ns.Options:Refresh()
@@ -1000,9 +1027,9 @@ local function BuildModuleGate(parent)
             self:Hide()
             return
         end
-        title:SetText(entry.title .. " is switched off")
-        blurb:SetText(entry.blurb)
-        detail:SetText(entry.detail or "")
+        title:SetText(ns.L("%s is switched off", ns.L[entry.title]))
+        blurb:SetText(ns.L[entry.blurb])
+        detail:SetText(entry.detail and ns.L[entry.detail] or "")
         detail:SetShown((entry.detail or "") ~= "")
         card:SetHeight(UI.PAD + title:GetStringHeight() + 8
             + blurb:GetStringHeight() + (detail:IsShown() and (6 + detail:GetStringHeight()) or 0)
@@ -1015,7 +1042,7 @@ end
 
 function Options.HasThirdColumn(entry)
     return (entry.side or entry.explain or entry.tanks or entry.reminders
-        or entry.deaths or entry.externals) and true or false
+        or entry.deaths or entry.externals or entry.raidbar) and true or false
 end
 
 function Options.PageWidth(entry, narrow, wide)
@@ -1515,6 +1542,7 @@ function Options:Create()
         reminders = function() return ns.OptionsReminders:BuildSide(sideHost, PAD) end,
         deaths    = function() return ns.OptionsDeaths:BuildSide(sideHost, PAD) end,
         externals = function() return ns.OptionsExternals:BuildSide(sideHost, PAD) end,
+        raidbar   = function() return ns.OptionsRaidBar:BuildSide(sideHost, PAD) end,
     }
     local panes = {}
 
@@ -1597,11 +1625,16 @@ function Options:Create()
         { eyebrow = "Bars" },
         { page = "cooldowns" },
         { eyebrow = "M+ and raid stuff" },
+        -- THE RAID BAR HEADS THIS GROUP. It is the one entry here that is
+        -- about the whole group rather than about you - markers, a ready
+        -- check, a pull - and it is what a raid leader opens first.
+        { page = "raidbar" },
         { page = "cotanks" },
         { page = "reminders" },
         { page = "externals" },
         { page = "answers" },
         { page = "deaths" },
+        { page = "invites" },
         { eyebrow = "System" },
         { page = "settings" },
         { page = "profiles" },
@@ -1624,14 +1657,14 @@ function Options:Create()
             -- Air ABOVE the heading, and none under it. A heading belongs to
             -- what follows; spaced evenly it belongs to neither side.
             if position > 1 then y = y + 18 end
-            local caption = UI.Eyebrow(rail, entry.eyebrow)
+            local caption = UI.Eyebrow(rail, ns.L[entry.eyebrow])
             caption:SetPoint("TOPLEFT", head, "BOTTOMLEFT", UI.PAD, -y - 6)
             y = y + 20
         else
             local index = entry.page and pageByKey[entry.page]
             local pageEntry = index and PAGES[index]
             local item = UI.NavItem(rail,
-                entry.title or (pageEntry and pageEntry.title) or "",
+                ns.L[entry.title or (pageEntry and pageEntry.title) or ""],
                 entry.glyph or (pageEntry and pageEntry.glyph),
                 entry.onClick or function() ShowPage(index) end)
             -- FLUSH WITH BOTH EDGES of the rail, not inset.
@@ -1678,6 +1711,7 @@ function Options:Create()
         local withReminders = entry.reminders and moduleOn or false
         local withDeaths = entry.deaths and moduleOn or false
         local withExternals = entry.externals and moduleOn or false
+        local withRaidBar = entry.raidbar and moduleOn or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
@@ -1687,7 +1721,7 @@ function Options:Create()
         -- the half that is still live is the half that edits settings for
         -- something that is not running.
         local third = withSide or withExplain or withTanks or withReminders
-            or withDeaths or withExternals
+            or withDeaths or withExternals or withRaidBar
         SetStageWidth(third)
         sideHost:SetShown(third)
         ShowPane("bars", withSide)
@@ -1696,12 +1730,17 @@ function Options:Create()
         ShowPane("reminders", withReminders)
         ShowPane("deaths", withDeaths)
         ShowPane("externals", withExternals)
+        ShowPane("raidbar", withRaidBar)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
         if withDeaths then ns.OptionsDeaths:Refresh() end
         if withExternals then panes.externals.Refresh() end
+        if withRaidBar then panes.raidbar.Refresh() end
 
-        pageTitle:SetText(entry.title)
+        -- THROUGH L, and the fallback is what makes this free: a page whose
+        -- title has no translation gets its own English word back, which is
+        -- the string that was there before this line existed.
+        pageTitle:SetText(ns.L[entry.title])
         if entry.status then
             local count = ns.Bars:Count()
             local slots, filled = 0, 0
@@ -1718,7 +1757,7 @@ function Options:Create()
             pageSubtitle:SetText(string.format("%d bar%s - %d of %d cells filled",
                 count, count == 1 and "" or "s", filled, slots))
         else
-            pageSubtitle:SetText(entry.subtitle)
+            pageSubtitle:SetText(entry.subtitle and ns.L[entry.subtitle] or nil)
         end
 
         -- WHATEVER THE LAST PAGE PUT IN THE BAND COMES OUT OF IT. Every

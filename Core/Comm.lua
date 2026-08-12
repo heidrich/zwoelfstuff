@@ -78,6 +78,91 @@ Comm.EXTERNAL = "EXT"
 Comm.TAUNT = "TAUNT"
 
 ---------------------------------------------------------------------------
+-- THE SECOND WIRE FORM: a raid check
+--
+-- Everything above names a SPELL. A raid check names none - it is "here is
+-- what I am carrying", a handful of numbers about one player - and forcing it
+-- into five fields built for a cooldown would have meant a spellID of 0 with
+-- a meaning written down somewhere else.
+--
+-- WHY IT IS SENT AT ALL, rather than read: on this patch another player's
+-- auras are secret, so their flask is not knowable from here. Their OWN
+-- client knows it exactly. That is the same door LibDurability walks through
+-- for durability, and it is the honest one - what is reported is a fact from
+-- the machine that holds it, and somebody without this addon reports nothing
+-- and is drawn as nothing rather than as a guess.
+--
+-- IT IS DELIBERATELY A SHAPE THE OLD DECODER REJECTS. Decode's third field is
+-- %u+ and this one carries "il=639,du=94" - so a client one version behind
+-- drops it silently, which is exactly what a client that cannot understand a
+-- message should do. That is why the VERSION is not bumped: bumping it would
+-- make the two clients ignore each other's COOLDOWNS as well.
+Comm.CHECK = "CHECK"
+Comm.CHECK_ASK = "ASK"
+
+-- Which fields may travel, and every one of them is a small non-negative
+-- integer. An allowlist rather than a parse: this is data from another
+-- machine, and a reader that accepts whatever arrives is a reader that can be
+-- handed a table key.
+Comm.CHECK_FIELDS = {
+    il = 4,   -- item level, whole numbers
+    du = 3,   -- durability, percent
+    fo = 1,   -- food
+    fl = 1,   -- flask
+    ru = 1,   -- augment rune
+    bf = 3,   -- the raid buffs, as a bitmask
+}
+
+function Comm.EncodeCheck(fields)
+    local parts = {}
+    -- Written in a FIXED order rather than pairs order, so the same facts
+    -- always produce the same string - which is what makes it testable and
+    -- what lets a receiver ignore a repeat cheaply.
+    for _, key in ipairs({ "il", "du", "fo", "fl", "ru", "bf" }) do
+        local value = fields and fields[key]
+        if type(value) == "number" then
+            parts[#parts + 1] = key .. "="
+                .. tostring(math.max(0, math.floor(value)))
+        end
+    end
+    return table.concat({ tostring(Comm.VERSION), Comm.CHECK,
+        table.concat(parts, ",") }, "|")
+end
+
+-- The ask has no fields: "everybody say what you have".
+function Comm.EncodeCheckAsk()
+    return table.concat({ tostring(Comm.VERSION), Comm.CHECK,
+        Comm.CHECK_ASK }, "|")
+end
+
+function Comm.DecodeCheck(message)
+    if type(message) ~= "string" then return nil end
+
+    local version, body = message:match("^(%d+)|" .. Comm.CHECK .. "|(.*)$")
+    if not version then return nil end
+    if tonumber(version) ~= Comm.VERSION then return nil end
+
+    if body == Comm.CHECK_ASK then
+        return { what = Comm.CHECK, ask = true }
+    end
+
+    local fields = {}
+    for key, value in body:gmatch("(%a%a)=(%d+)") do
+        local width = Comm.CHECK_FIELDS[key]
+        -- An unknown key is dropped, not kept: a newer version may send more
+        -- than this one understands, and half-understanding it is worse than
+        -- ignoring it. A number wider than the field allows is a lie or a
+        -- mistake; either way it is not shown.
+        if width and #value <= width then
+            fields[key] = tonumber(value)
+        end
+    end
+
+    if next(fields) == nil then return nil end
+    return { what = Comm.CHECK, fields = fields }
+end
+
+---------------------------------------------------------------------------
 -- The wire
 --
 -- Pure both ways, because "my group-mate's addon says nothing" is the least
@@ -184,6 +269,41 @@ function Comm.Send(what, kind, spellID, value)
     return true
 end
 
+-- THE RAID CHECK'S TWO MESSAGES, on their own door because they are throttled
+-- differently and for a different reason. An ask is a button in somebody's
+-- hand and the group does not need it twice a second; an answer is a reply to
+-- that ask, and forty of them arriving at once is the normal case rather than
+-- a flood - so they share one bucket with a longer quiet, keyed by which of
+-- the two it is.
+Comm.CHECK_QUIET = 3.0
+
+local function SendCheckMessage(message, bucket)
+    local send = Sender()
+    if not send then return false, "this client has no addon channel" end
+
+    local channel = Comm.Channel(IsInGroup(), IsInRaid(),
+        ns.Chat.InInstanceGroup())
+    if not channel then return false, "you are not in a group" end
+
+    local now = GetTime and GetTime() or 0
+    if not Comm.MaySend(bucket, now, lastSent[bucket], Comm.CHECK_QUIET) then
+        return false, "just sent it"
+    end
+    lastSent[bucket] = now
+
+    local ok = pcall(send, Comm.PREFIX, message, channel)
+    if not ok then return false, "the message would not go out" end
+    return true
+end
+
+function Comm.AskCheck()
+    return SendCheckMessage(Comm.EncodeCheckAsk(), "CHECKASK")
+end
+
+function Comm.SendCheck(fields)
+    return SendCheckMessage(Comm.EncodeCheck(fields), "CHECKSAY")
+end
+
 ---------------------------------------------------------------------------
 -- Receiving
 --
@@ -211,7 +331,11 @@ function Comm.OnMessage(prefix, message, _, sender)
     local short = sender:match("^([^%-]+)") or sender
     if me and (sender == me or short == me) then return end
 
-    local packet = Comm.Decode(message)
+    -- TWO WIRE FORMS, TRIED IN AGE ORDER. The spell form is the one nearly
+    -- every message on this channel is; the raid check's is deliberately
+    -- shaped so the first decoder rejects it, which is also how a client that
+    -- predates it behaves - it simply stops here.
+    local packet = Comm.Decode(message) or Comm.DecodeCheck(message)
     if not packet then return end
 
     packet.from = sender

@@ -6,7 +6,78 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [4.78.0] - 2026-08-12
 
+### Added
+
+- **Localisation, in eleven languages.** `ns.L` looks a string up by the
+  English sentence itself, so a missing translation renders as the English it
+  replaces rather than as a raw key — which is what lets nine unfinished
+  languages ship without a single broken screen. The language follows the
+  client (`enGB` resolves to `enUS`) and can be overridden per profile under
+  *Settings → Language*; the list shows how far each translation has got.
+  German is complete. French, Spanish (ES and MX), Italian, Portuguese and
+  Russian carry the interface and its sentences; Korean, Simplified and
+  Traditional Chinese carry the vocabulary. `/zs loca` prints coverage, and
+  `/zs loca deDE` prints exactly what is left.
+- **A Raid Bar.** Eight raid markers and a clear, eight world markers and a
+  clear, the game's four pings, a ready check, a pull timer and the raid check
+  window — assembled into a lattice the same way the externals panel is, with
+  the list of buttons in the third column. Rows, columns, growth direction,
+  icon size, spacing, scale, opacity, border and backdrop, and the first twelve
+  places carry a key from the game's own key list.
+
+  Every marker, world marker and ping is a `SecureActionButton` carrying a
+  macro, because all three are protected on this patch — verified against MRT,
+  which switches to the same route the moment it detects Midnight. It follows
+  that the bar cannot be rebuilt in combat: `ApplyLayout` parks the work and
+  does it on `PLAYER_REGEN_ENABLED`, and `/zs raidbar` says when it is waiting.
+  World markers use the 12.x `worldmarker` button type where the client has it
+  and the `/wm` macro where it does not. Slash commands come from the client's
+  own `SLASH_*` globals, which are translated on four locales.
+- **The raid check window.** Name, item level, durability, food, flask, rune
+  and the six group buffs, per group member. Another player's auras are secret
+  on this patch, so the facts are **reported, not read**: everybody's client
+  answers for itself over the addon channel. `Comm` gained a second wire form
+  for it — deliberately shaped so the old decoder rejects it, which is exactly
+  how a client one version behind should behave. Somebody without the addon is
+  drawn as *no answer*, never as a guess.
+- **An invite tool.** Keyword invites on whisper (and optionally say and yell),
+  strict or loose matching, guild-only and friends-only filters, auto-accept
+  from friends and guild, auto-promote by name, convert to raid at five, invite
+  the guild by rank, disband, and invite everybody back afterwards. Every one
+  of those is off until it is switched on, and `/zs invite` prints what is
+  listening.
+- **A memory reading on Diagnostics.** The page says what this addon is doing
+  to your client; it could not say what it costs. `UpdateAddOnMemoryUsage`
+  walks every loaded addon, so the reading is taken at most once every five
+  seconds and the tile shows the last one in between.
+
 ### Changed
+
+- **The window is 820 tall instead of 760.** Thirteen pages, four group
+  headings and the three outward links leave the rail with 8 spare pixels at
+  the old height — it fits, and the next feature would have landed with its
+  entry hidden behind the foot. `UI.RailFits` exists to force that decision
+  here rather than in a screenshot. Shorter rows or less air between the groups
+  were the alternatives, and both spend the design to save the window.
+- **The lattice arithmetic is shared.** `ns.LatticeCell` / `ns.LatticeExtent`;
+  `Externals.Cell` and `Externals.Extent` are doors onto them. Two panels made
+  of squares must not each carry their own copy of which way a row fills.
+- **Modules may default to off.** The check that every module defaults to ON
+  became "every module has an answer in the defaults" — a module missing from
+  that table reads as on, which is the failure worth guarding. The six that
+  draw or record something still default on; the raid bar and the invite tool
+  do not, and the welcome window is what offers them.
+
+### Fixed
+
+- **A class colour could not be printed.** The death replay formatted a
+  healer's name with `%02x` on `colour.r * 255` — a float. Lua 5.1 truncates
+  it silently and 5.4 raises; the desktop harness had never executed the line
+  because nothing stubbed `RAID_CLASS_COLORS` until the raid check needed it.
+  The same latent fault was in the externals and taunt style dumps, where it
+  survived only because the default border is black.
+
+### Changed (the memory wave, 2026-08-12)
 
 - **The third column is built when a page first asks for it.** All five were
   built the moment the window opened — whichever page you were on, and the
@@ -15,13 +86,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (796 frames) and the co-tank inspector 1.7 MB (595 frames). It is now 2.6 MB,
   and the rest is paid only by the page that shows it. The page *builders* have
   been lazy for versions; the panes were never brought over.
-
-### Added
-
-- **A memory reading on Diagnostics.** The page says what this addon is doing
-  to your client; it could not say what it costs. `UpdateAddOnMemoryUsage`
-  walks every loaded addon, so the reading is taken at most once every five
-  seconds and the tile shows the last one in between.
 
 ## [4.77.0] - 2026-08-12
 

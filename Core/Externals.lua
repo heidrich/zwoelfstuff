@@ -310,12 +310,12 @@ end
 -- it, so a preview that disagrees with the screen is not a thing that can
 -- happen. `down` is the growth setting - fill a column before wrapping
 -- instead of a row.
+--
+-- THE RULE ITSELF MOVED TO ns.LatticeCell when the raid bar became the second
+-- panel made of squares. This is the door it was always called through and it
+-- stays one; what is not allowed to happen is a second COPY of the arithmetic.
 function Externals.Cell(index, rows, columns, down)
-    local slot = index - 1
-    if down then
-        return math.floor(slot / rows), slot % rows
-    end
-    return slot % columns, math.floor(slot / columns)
+    return ns.LatticeCell(index, rows, columns, down)
 end
 
 -- HOW BIG THE DRAWN THING IS, in columns and rows. A panel showing three of
@@ -323,11 +323,7 @@ end
 -- is not drawn takes up no room, which is the whole meaning of "verschwindet
 -- ganz". Pure, and the panel's own size comes from it.
 function Externals.Extent(shown, rows, columns, down)
-    if shown <= 0 then return 0, 0 end
-    if down then
-        return math.ceil(shown / rows), math.min(shown, rows)
-    end
-    return math.min(shown, columns), math.ceil(shown / columns)
+    return ns.LatticeExtent(shown, rows, columns, down)
 end
 
 function Externals.SpellAt(index)
@@ -1041,11 +1037,18 @@ end)
 -- line on a black plate - and this tells them apart in one line.
 local function StyleLine(style)
     local colour = style.borderColor or { 0, 0, 0 }
+    -- FLOORED. A colour channel is a fraction; %02x on 0.77 * 255 truncates
+    -- on the client's Lua 5.1 and RAISES on 5.4. It survived this long
+    -- because the default border is black and 0.0 is integer-representable -
+    -- so the crash was waiting for the first person to pick a colour and then
+    -- type /zs externals.
+    local red = math.floor((colour[1] or 0) * 255)
+    local green = math.floor((colour[2] or 0) * 255)
+    local blue = math.floor((colour[3] or 0) * 255)
     return string.format(
         "border %d px, |cff%02x%02x%02x#%02x%02x%02x|r, texture %s; backdrop %s",
         style.borderSize or 0,
-        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
-        (colour[1] or 0) * 255, (colour[2] or 0) * 255, (colour[3] or 0) * 255,
+        red, green, blue, red, green, blue,
         tostring(style.borderTexture),
         style.backdrop == false and "off" or "on")
 end

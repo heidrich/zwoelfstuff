@@ -25,6 +25,7 @@ local Page = {}
 ns.OptionsSettings = Page
 
 function Page:BuildPage(page, width)
+    local L = ns.L
     -- NOT `explain = true` ANY MORE, and the pair matters: the PAGES entry
     -- dropped its third column, and `explain` here does not merely style the
     -- notes - it takes each one OUT of the layout and hangs it on the row
@@ -41,15 +42,14 @@ function Page:BuildPage(page, width)
     -- a fifth module must appear here by existing, or this page becomes the
     -- place a feature goes missing.
     ---------------------------------------------------------------------
-    grid:Section("Modules")
+    grid:Section(L["Modules"])
 
     -- COUNTED, NOT TYPED. This said "Four" while six switches sat under it.
-    grid:Note(string.format(
-        "%d features in one addon. Switch off what you do not want.",
+    grid:Note(L("%d features in one addon. Switch off what you do not want.",
         ns.Modules:Count()))
 
     for _, entry in ipairs(ns.Modules:All()) do
-        UI.Toggle(grid:Row(entry.title, { sublabel = entry.blurb }),
+        UI.Toggle(grid:Row(L[entry.title], { sublabel = L[entry.blurb] }),
             function() return ns.Modules:IsOn(entry.key) end,
             function(value)
                 ns.Modules:Set(entry.key, value)
@@ -59,17 +59,58 @@ function Page:BuildPage(page, width)
     end
 
     grid:Buttons({
-        { text = "Show the welcome screen", onClick = function()
+        { text = L["Show the welcome screen"], onClick = function()
             ns.Welcome:Show()
         end },
     }, 14)
 
     ---------------------------------------------------------------------
+    -- Language
+    --
+    -- HERE AND NOWHERE ELSE. Owner, 2026-08-12: "Kein Modul, das ist fest in
+    -- den settings" - and he is right for a reason worth writing down: a
+    -- module is a feature you can want or not want, and nobody wants "no
+    -- language". It is a property of the whole addon, like the window's scale
+    -- two sections down.
+    --
+    -- Directly under Modules, because it is the other setting on this page
+    -- that changes what every OTHER page looks like.
+    ---------------------------------------------------------------------
+    grid:Section(L["Language"])
+
+    UI.Dropdown(grid:Row(L["Language"]), function()
+        local items = { { value = "auto", text = L["Same as the game"] } }
+        for _, entry in ipairs(ns.Locale.LANGUAGES) do
+            local done, total = ns.Locale.Coverage(entry.code)
+            local percent = total > 0 and math.floor(done / total * 100) or 0
+            items[#items + 1] = {
+                value = entry.code,
+                -- HOW FINISHED IT IS, IN THE LIST. Nine of these are
+                -- unfinished, and somebody picking one deserves to know that
+                -- before the window redraws rather than after.
+                text = entry.native
+                    .. (percent < 100
+                        and string.format("  |cff888888%d%%|r", percent) or ""),
+            }
+        end
+        return items
+    end, function() return ns.Locale.Chosen() end,
+        function(value)
+            ns.db.language = value
+            ns.Locale:Apply()
+            ns.Print(L["Pick a language, then reload."]
+                .. " |cffffd100/reload|r")
+        end)
+
+    grid:Note(L["The window is drawn when it opens, so a new language reaches it after a |cffffd100/reload|r."]
+        .. " " .. L["Missing lines are shown in English."])
+
+    ---------------------------------------------------------------------
     -- Every bar
     ---------------------------------------------------------------------
-    grid:Section("Every bar")
+    grid:Section(L["Every bar"])
 
-    UI.Toggle(grid:Row("Take the display over",
+    UI.Toggle(grid:Row(L["Take the display over"],
         { sublabel = "Hide the cooldowns you have not placed on a bar" }),
         function() return ns.db.takeOverCDM ~= false end,
         function(value)
@@ -80,7 +121,7 @@ function Page:BuildPage(page, width)
 
     grid:Note("Every icon on your bars, and how they look.")
 
-    UI.MediaPicker(grid:FullRow("Bar text", { controlWidth = 220 }), "font",
+    UI.MediaPicker(grid:FullRow(L["Bar text"], { controlWidth = 220 }), "font",
         function() return ns.db.font end,
         function(value) ns.db.font = value end,
         function() ns.Screen:Render() end)
@@ -91,12 +132,12 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- This window
     ---------------------------------------------------------------------
-    grid:Section("This window")
+    grid:Section(L["This window"])
 
     -- The window is drawn at 1360x760 and not everybody has the pixels for
     -- that - the owner's words: "nicht alle haben grosse screens". SetScale
     -- is live, so the row shows its own effect while being dragged through.
-    UI.Slider(grid:Row("Scale"), {
+    UI.Slider(grid:Row(L["Scale"]), {
         get = function() return ns.db.windowScale or 1 end,
         set = function(value) ns.db.windowScale = value end,
         min = 0.6, max = 1.25, step = 0.05,
@@ -123,7 +164,7 @@ function Page:BuildPage(page, width)
     -- The floor is 70 rather than 0. A window you cannot see is a window you
     -- cannot close, and there is no second way back to this row once it is
     -- gone - the minimap button opens the same invisible frame.
-    UI.Slider(grid:Row("Opacity"), {
+    UI.Slider(grid:Row(L["Opacity"]), {
         get = function() return ns.db.windowAlpha or 0.94 end,
         set = function(value) ns.db.windowAlpha = value end,
         min = 0.7, max = 1, step = 0.02,
@@ -143,7 +184,7 @@ function Page:BuildPage(page, width)
     -- window; bar text is read at a glance over a moving scene. The design
     -- draws the window in a narrow grotesk, and the client's own face is not
     -- one - which is why this is not the same setting as "Bar text" above.
-    UI.MediaPicker(grid:FullRow("Panel font", { controlWidth = 220 }), "font",
+    UI.MediaPicker(grid:FullRow(L["Panel font"], { controlWidth = 220 }), "font",
         function() return ns.db.panelFont or ns.Media.PanelFont() end,
         function(value) ns.db.panelFont = value end,
         function() ns.Print("Panel font set. |cffffd100/reload|r to redraw the window in it.") end)
@@ -154,23 +195,23 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- Ways in
     ---------------------------------------------------------------------
-    grid:Section("Ways in")
+    grid:Section(L["Ways in"])
 
-    UI.Toggle(grid:Row("Minimap button"),
+    UI.Toggle(grid:Row(L["Minimap button"]),
         function() return ns.db.minimap.show end,
         function(value) ns.MinimapButton:SetShown(value) end)
 
     grid:Note("Left click opens this window, right click moves the bars, and "
         .. "drag moves the button around the minimap edge.")
 
-    UI.Toggle(grid:Row("Lock its position"),
+    UI.Toggle(grid:Row(L["Lock its position"]),
         function() return ns.db.minimap.locked end,
         function(value) ns.db.minimap.locked = value end)
 
     grid:Note("The button stays where you put it on the minimap edge, and "
         .. "dragging it does nothing until you unlock it again.")
 
-    UI.Toggle(grid:Row("Game menu entry"),
+    UI.Toggle(grid:Row(L["Game menu entry"]),
         function() return ns.db.gameMenu ~= false end,
         function(value) ns.GameMenu:SetShown(value) end)
 
