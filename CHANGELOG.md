@@ -76,6 +76,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   because nothing stubbed `RAID_CLASS_COLORS` until the raid check needed it.
   The same latent fault was in the externals and taunt style dumps, where it
   survived only because the default border is black.
+- **A row's second line ran under its control.** `UI.Row` has stopped the
+  label at the control slot since it was written; the sublabel got one anchor
+  and ran the full width of the row. Photographed on the welcome window, where
+  the raid bar's blurb was drawn straight through the `NEW` badge — and it
+  affects every page in the addon, not that window. The desktop stub now
+  counts anchors, so "a piece of text with one anchor has no right-hand edge"
+  is a check rather than a screenshot.
 
 ### Changed (the memory wave, 2026-08-12)
 

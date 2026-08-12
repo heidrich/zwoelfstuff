@@ -570,8 +570,19 @@ function UI.Row(parent, text, opts)
     row.slot:SetPoint("RIGHT", row, "RIGHT", -UI.ROW_PAD, 0)
     row.slot:SetSize(opts.controlWidth or CONTROL_W, row:GetHeight() - 6)
 
-    -- The label must never run under the control.
+    -- NEITHER LINE MAY RUN UNDER THE CONTROL, and the second line is the one
+    -- that was missing. The label has been stopped here since this widget was
+    -- written; the sublabel got a TOPLEFT and nothing else, so it ran the full
+    -- width of the row - underneath the toggle, and underneath the NEW badge
+    -- on the welcome window, where the owner photographed it.
+    --
+    -- It is the same fault the comment above the label describes, one line
+    -- lower, and it was invisible for as long as every blurb happened to be
+    -- short enough. The raid bar's is not.
     row.label:SetPoint("RIGHT", row.slot, "LEFT", -UI.GAP, 0)
+    if row.sub then
+        row.sub:SetPoint("RIGHT", row.slot, "LEFT", -UI.GAP, 0)
+    end
 
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self) self.bg:Show() end)

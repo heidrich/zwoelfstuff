@@ -22,7 +22,21 @@ local _, ns = ...
 local Welcome = {}
 ns.Welcome = Welcome
 
-local WIDTH = 560
+-- 560 UNTIL THE EIGHTH MODULE. Owner, with a photograph of the window:
+-- "hier musste noch den screen breiter machen."
+--
+-- What the picture showed was two faults on top of each other, and widening
+-- only cures one of them. The row itself was letting the second line run
+-- under the control - see UI.Row, where the sublabel now stops at the slot
+-- like the label always has - so the raid bar's blurb was drawn straight
+-- through the NEW badge. With that fixed the sentence would have been CUT
+-- instead, which is better and still not right: it is one of eight rows the
+-- whole window exists to let somebody read.
+--
+-- 700 gives the longest blurb its line and takes the foot's three wrapped
+-- lines down to two. It is a dialog, not the main window, and it is centred
+-- on a screen that is holding a 1382-wide one behind it.
+local WIDTH = 700
 local PAD = 20
 local ROW_H = 44
 

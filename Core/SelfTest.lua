@@ -1977,6 +1977,42 @@ local function TestDesignSystem()
     local UI = ns.UI
     local C = UI.C
 
+    ---------------------------------------------------------------------
+    -- A ROW'S TEXT STOPS BEFORE ITS CONTROL - BOTH LINES OF IT
+    --
+    -- The owner photographed the welcome window with a module's blurb drawn
+    -- straight through the NEW badge beside it. The label had been stopped at
+    -- the control since this widget was written and the SUBLABEL never was:
+    -- it got one anchor, top-left, and ran the full width of the row.
+    --
+    -- Invisible for as long as every blurb was short enough, and every page
+    -- in the addon uses this row.
+    --
+    -- The rule is checkable without a screen because it is not about pixels:
+    -- a piece of text with ONE anchor has no right-hand edge at all. Two
+    -- anchors is what "stops somewhere" means, in game and out here alike.
+    ---------------------------------------------------------------------
+    local sampleParent = CreateFrame("Frame", nil, UIParent)
+    local sample = UI.Row(sampleParent, "Label", {
+        sublabel = "A second line long enough to run under a control",
+        controlWidth = 96,
+    })
+
+    Check("A row's label stops before its control",
+        sample.label and sample.label:GetNumPoints() >= 2,
+        sample.label and tostring(sample.label:GetNumPoints()) or "no label")
+
+    Check("A row's second line stops before its control too",
+        sample.sub and sample.sub:GetNumPoints() >= 2,
+        sample.sub and tostring(sample.sub:GetNumPoints()) or "no sublabel")
+
+    -- And a row WITHOUT one still has exactly the label. Written because the
+    -- fix above is one `if row.sub`, and an `if` that is wrong in the other
+    -- direction throws on every ordinary row in the addon.
+    local plain = UI.Row(sampleParent, "Label", { controlWidth = 96 })
+    Check("A row with no second line is still built",
+        plain.label ~= nil and plain.sub == nil)
+
     local names = {
         "canvasBg", "windowBg", "sidebarBg", "well", "surface", "control",
         "controlHi", "separator", "edge", "overlayEdge", "accent", "accentSoft",
