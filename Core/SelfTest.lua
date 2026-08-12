@@ -5768,7 +5768,15 @@ local function TestRaidBar()
         kinds[entry.kind] = (kinds[entry.kind] or 0) + 1
         -- EVERY BUTTON IS A PICTURE. A place with no art is a black square on
         -- the bar, and the picker beside it is a list of blank rows.
-        if not (entry.texture or entry.atlas) then artless = entry.key end
+        -- A PATH OR A FILE ID, and both are real. The pull timer is drawn
+        -- with 134376, the number BigWigs uses for its own timer bars; a
+        -- check that insisted on a string would go red against correct code.
+        -- Anything else - a table, a boolean, a nil - is a place that draws
+        -- nothing.
+        local art = entry.texture or entry.atlas
+        if not (type(art) == "string" or type(art) == "number") then
+            artless = entry.key
+        end
         if type(entry.label) ~= "string" or entry.label == "" then
             nameless = entry.key
         end

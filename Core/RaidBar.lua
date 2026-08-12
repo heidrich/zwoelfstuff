@@ -127,17 +127,33 @@ end
 
 -- OURS. Three things that are not protected, so they are plain calls with a
 -- plain script - and each one says why it did nothing when it does nothing.
+-- THE TICK AND THE QUESTION MARK WERE THE WRONG WAY ROUND. Owner, with a
+-- picture of the picker: "ready check und pull timer, die icons sind
+-- vertauscht."
+--
+-- He is right, and the reason is worth writing down because it decides both
+-- of these buttons rather than one:
+--
+--   A ready check IS THE QUESTION. The green tick is what somebody ANSWERS
+--   with; the yellow "?" is what the game's own ready-check window shows
+--   while it waits, which is exactly what this button starts.
+--
+--   A pull timer is neither. Swapping them straight over would have put the
+--   tick on it, which reads as "confirm" - a different wrong. It is a clock,
+--   so it gets one: 134376 is Interface\Icons\INV_Misc_PocketWatch_01, and
+--   the id is BigWigs' own - it is what its custom timer bars are drawn with,
+--   read out of Bars.lua on this machine rather than remembered.
 Add({
     key = "readycheck", kind = "call", group = "The group",
     label = "Ready check", needsLead = true,
-    texture = "Interface\\RaidFrame\\ReadyCheck-Ready",
+    texture = "Interface\\RaidFrame\\ReadyCheck-Waiting",
     Run = function() return RaidBar.ReadyCheck() end,
 })
 
 Add({
     key = "pull", kind = "call", group = "The group", label = "Pull timer",
     needsLead = true,
-    texture = "Interface\\RaidFrame\\ReadyCheck-Waiting",
+    texture = 134376,
     -- Left starts the timer, right cancels it. Two things on one button
     -- because they are the same thought a second apart, and because a bar
     -- with a Pull and an Unpull on it is a bar with a button you press once
