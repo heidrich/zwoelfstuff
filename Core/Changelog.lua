@@ -26,6 +26,7 @@ ns.CHANGELOG = {
             "|cffffd100Fixed:|r a healer's name in the death replay was drawn with a colour the game could not read, on any client whose Lua is stricter than the one this was written on.",
             "|cffffd100The window builds a column when you open the page it belongs to,|r not all five the moment the window appears. Four of them belong to pages you may never visit that session, and one of them was being built even with its feature switched off. Measured: 1391 frames and about four megabytes, on every open.",
             "|cffffd100Diagnostics shows how much memory this addon is using.|r It is the reading the page was missing - everything else there says what the addon is doing to your client, and this says what it costs. Taken at most once every five seconds, because asking the client walks every addon you have loaded.",
+            "|cffffd100The spell list builds what you can see.|r It used to build a row for every spell you own the moment the column opened, and keep all of them for the session - a hundred and more, for a column that shows a dozen. It now builds the dozen and re-uses them as you scroll. Nothing about using it changes; it is the same list, in the same order, and it costs a fraction of what it did.",
         },
     },
     {

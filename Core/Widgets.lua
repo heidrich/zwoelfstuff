@@ -3643,9 +3643,25 @@ function UI.ScrollArea(parent, contentWidth, gutter)
         end
         ScrollBy(delta)
     end)
-    scroll:SetScript("OnVerticalScroll", UpdateThumb)
-    scroll:SetScript("OnScrollRangeChanged", UpdateThumb)
-    scroll:SetScript("OnSizeChanged", UpdateThumb)
+    -- WHAT A LIST THAT ONLY BUILDS WHAT YOU CAN SEE NEEDS FROM HERE.
+    --
+    -- A recycled list has to be repainted whenever the window over its
+    -- contents moves, and there are exactly three moments: the scroll changed,
+    -- the contents changed under it, or the column was resized. Those are the
+    -- three scripts below, so the hook belongs beside them rather than in the
+    -- caller: a caller using SetScript would take the thumb's own handler off
+    -- and a caller using HookScript would depend on the order they were hung.
+    --
+    -- Called on the way out of UpdateThumb, INCLUDING the early return - a
+    -- list too short to scroll still has to draw the rows it does have.
+    local function Changed()
+        UpdateThumb()
+        if scroll.OnScrolled then scroll.OnScrolled(scroll:GetVerticalScroll() or 0) end
+    end
+
+    scroll:SetScript("OnVerticalScroll", Changed)
+    scroll:SetScript("OnScrollRangeChanged", Changed)
+    scroll:SetScript("OnSizeChanged", Changed)
 
     thumb:SetScript("OnEnter", function()
         thumbFill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
@@ -3681,7 +3697,10 @@ function UI.ScrollArea(parent, contentWidth, gutter)
         scroll:SetVerticalScroll(next_)
     end)
 
-    scroll.Update = UpdateThumb
+    -- The same door for callers who changed the contents themselves: they get
+    -- the thumb AND the repaint, because a caller that has just made the list
+    -- longer is exactly the caller whose visible window is now wrong.
+    scroll.Update = Changed
     UpdateThumb()
 
     return scroll, content
@@ -4200,6 +4219,66 @@ end
 -- that vanished was Changelog.
 function UI.RailFits(railHeight, headHeight, footHeight, tailHeight, navHeight)
     return navHeight <= railHeight - headHeight - footHeight - tailHeight
+end
+
+---------------------------------------------------------------------------
+-- WHICH LINES OF A LIST ARE ACTUALLY IN THE COLUMN
+--
+-- The spell picker held one frame per spell and kept it for the session -
+-- around a hundred buttons, each with an icon, two strings and a badge, for a
+-- column that shows twelve at a time. Measured: it was the single most
+-- expensive thing this addon builds.
+--
+-- The fix is the standard one and it needs exactly this: given every line's
+-- place and height, and the window over them, which ones can be seen. The
+-- caller then fills THAT many frames and re-uses them as the window moves.
+--
+-- Pure, and it takes the list rather than reading a frame, because the whole
+-- point is that it can be checked without a window - the harness answers
+-- GetHeight with a constant, so a check that went through the real column
+-- would be asking the stub rather than the arithmetic.
+--
+-- `y` counts DOWNWARDS from the top of the contents and is positive, which is
+-- how the list is built; the caller flips the sign when it anchors.
+--
+-- Returns first, last. An empty answer is first > last, on purpose: it is the
+-- honest reply for a list that is empty, for a column with no height yet, and
+-- for a window scrolled past the end - and all three have to draw nothing
+-- rather than draw something arbitrary.
+---------------------------------------------------------------------------
+function UI.VisibleRange(items, offset, height)
+    local count = items and #items or 0
+    if count == 0 or (height or 0) <= 0 then return 1, 0 end
+    if not offset or offset < 0 then offset = 0 end
+
+    -- The first line whose BOTTOM edge is still below the top of the window.
+    -- Binary search rather than a scan: this runs on every wheel click, and
+    -- the list it runs over is the whole catalogue.
+    local low, high = 1, count
+    while low < high do
+        local middle = math.floor((low + high) / 2)
+        local item = items[middle]
+        if (item.y + item.h) <= offset then low = middle + 1 else high = middle end
+    end
+    local first = low
+
+    -- THE SEARCH CANNOT ANSWER "PAST THE END" ON ITS OWN. It clamps to the
+    -- last line, so a window scrolled below everything comes back pointing at
+    -- that line - and the forward walk below then happily keeps it, because a
+    -- line above the window is not a line below it. Asked once, here.
+    local firstItem = items[first]
+    if (firstItem.y + firstItem.h) <= offset then return 1, 0 end
+
+    -- ...and then forwards while the TOP edge is still above the bottom of the
+    -- window. A line that is half in is in.
+    local bottom = offset + height
+    local last = first - 1
+    for index = first, count do
+        if items[index].y >= bottom then break end
+        last = index
+    end
+
+    return first, last
 end
 
 ---------------------------------------------------------------------------

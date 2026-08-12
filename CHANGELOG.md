@@ -89,10 +89,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **The third column is built when a page first asks for it.** All five were
   built the moment the window opened — whichever page you were on, and the
   co-tank one even with its module switched off. Measured on the desktop
-  harness: `Options:Create` cost 4.6 MB, of which the spell palette was 2.4 MB
-  (796 frames) and the co-tank inspector 1.7 MB (595 frames). It is now 2.6 MB,
-  and the rest is paid only by the page that shows it. The page *builders* have
-  been lazy for versions; the panes were never brought over.
+  harness: `Options:Create` cost 4.6 MB, of which `OptionsBars:BuildSide` was
+  2.4 MB (796 frames) and the co-tank inspector 1.7 MB (595 frames). It is now
+  2.6 MB, and the rest is paid only by the page that shows it. The page
+  *builders* have been lazy for versions; the panes were never brought over.
+
+  That 2.4 MB was read as "the spell palette" for a version, and it is not: the
+  desktop has no Cooldown Manager, so the palette out there is a list of
+  nothing. Split, it is `BuildOptionsPane` 2.2 MB / 639 frames, `BuildCellPane`
+  0.45 MB, and the palette itself 50 KB. `memcheck.lua` now weighs the three
+  separately, because a total that gets attributed to the wrong one of its
+  parts sends the next session after the wrong file.
+- **The spell picker builds one row per line you can see, not per spell there
+  is.** It held a `UI.SpellRow` for every catalogue entry and kept it for the
+  session — around a hundred buttons, each with an icon, two strings and a
+  badge, for a column that shows a dozen at a time. It now builds the plan (one
+  small table a line) and draws only the lines inside the column, re-filling
+  them as it scrolls. Used by three pages: bars, reminders and the death log.
+
+  Measured with a 200-spell catalogue held up to it, which is what the harness
+  could never do before: the whole pane is 166 KB / 34 frames, against 2.25 MB
+  / 400 frames for 200 bare rows. `UI.VisibleRange` is the arithmetic, and it
+  is pure — the harness answers `GetHeight` with a constant, so a check that
+  went through the real column would be asking the stub rather than the sum.
+  `UI.ScrollArea` gained `OnScrolled` for it: one door for the three moments
+  that move the window over a list, rather than every caller hooking the
+  thumb's own handler and depending on the order.
 
 ## [4.77.0] - 2026-08-12
 

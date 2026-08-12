@@ -2245,6 +2245,142 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- WHICH LINES OF A LIST ARE IN THE COLUMN
+    --
+    -- The spell picker held one frame per spell for the session. It builds
+    -- what fits now and re-uses it as you scroll, and THIS is the arithmetic
+    -- that decides which lines those are - so it is checked here rather than
+    -- through the window: the harness answers GetHeight with a constant, so a
+    -- check that went through the real column would be asking the stub.
+    --
+    -- The list is deliberately MIXED - headings are 26 and rows are 32 - which
+    -- is the case a "divide by the row height" version gets wrong the moment
+    -- a group boundary is on screen.
+    -----------------------------------------------------------------------
+    do
+        local Range = ns.UI.VisibleRange
+
+        local function Lines(heights)
+            local items, y = {}, 0
+            for _, height in ipairs(heights) do
+                items[#items + 1] = { y = y, h = height }
+                y = y + height
+            end
+            return items
+        end
+
+        -- 26, then eight rows of 32: 26, 58, 90, 122, 154, 186, 218, 250, 282
+        local mixed = Lines({ 26, 32, 32, 32, 32, 32, 32, 32, 32 })
+
+        local first, last = Range(mixed, 0, 100)
+        Check("The top of a list starts at its first line", first == 1)
+        Check("A 100 tall column holds a heading and three rows", last == 4,
+            string.format("%d..%d", first, last))
+
+        -- Offset 90 is exactly the bottom edge of the third line, so the
+        -- third is GONE and the fourth is the first one drawn. The off-by-one
+        -- here is a real one: `<=` rather than `<` is the difference between
+        -- a line that has just left the column and one that is still in it.
+        first, last = Range(mixed, 90, 100)
+        Check("A line whose bottom edge is the top of the column is out",
+            first == 4, tostring(first))
+        -- The window ends at 190 and the seventh line starts at 186: four
+        -- pixels of it are showing, and it is drawn.
+        Check("A line four pixels into the column is in", last == 7,
+            tostring(last))
+
+        -- The one that decides whether a saving is real: the answer has to be
+        -- a HANDFUL out of a long list, not a share of it.
+        local long = {}
+        do
+            local y = 0
+            for index = 1, 400 do
+                long[index] = { y = y, h = 32 }
+                y = y + 32
+            end
+        end
+        first, last = Range(long, 0, 384)
+        Check("Four hundred lines in a 384 column are twelve", last - first + 1 == 12,
+            string.format("%d", last - first + 1))
+
+        first, last = Range(long, 32 * 399, 384)
+        Check("The end of a list is reachable", last == 400, tostring(last))
+
+        -- THE THREE EMPTY ANSWERS, and all three have to be first > last
+        -- rather than 1..1: a column with no height yet is the state every
+        -- one of these frames is in before it is laid out, and drawing "the
+        -- first line" then would put a spell nobody asked for on screen.
+        first, last = Range({}, 0, 100)
+        Check("An empty list draws nothing", first > last)
+
+        first, last = Range(long, 0, 0)
+        Check("A column with no height draws nothing", first > last)
+
+        first, last = Range(long, 32 * 500, 384)
+        Check("Scrolled past the end, nothing is drawn", first > last)
+
+        -- Negative scroll is not a state the client produces, but the sum
+        -- that produces it here is `y - height` and that one has been
+        -- negative before.
+        first, last = Range(mixed, -50, 100)
+        Check("A scroll above the top starts at the top", first == 1)
+    end
+
+    -----------------------------------------------------------------------
+    -- A HUNDRED SPELLS, A DOZEN FRAMES
+    --
+    -- The picker was the most expensive thing this addon builds. The check
+    -- is not "is it smaller" - nothing here can weigh a frame - it is the
+    -- CONTRACT that makes it smaller: the list knows every line, and only
+    -- the ones in the column exist as frames.
+    --
+    -- It has to hold a catalogue up to the pane, because the desktop client
+    -- has no Cooldown Manager and the real one comes back empty out here -
+    -- which is exactly how "the picker costs 2.4 MB" went unmeasured for a
+    -- version: the harness was building a list of nothing and reporting a
+    -- number that was all the OTHER panes.
+    -----------------------------------------------------------------------
+    do
+        local realCDM, realAuras = ns.CDM.Catalogue, ns.Auras.Catalogue
+
+        local many = {}
+        for index = 1, 200 do
+            many[index] = {
+                spellID = 900000 + index,
+                name = string.format("Test spell %d", index),
+                viewer = "essential",
+                order = index,
+                known = true,
+            }
+        end
+
+        ns.CDM.Catalogue = function() return many end
+        ns.Auras.Catalogue = function() return {} end
+
+        local host = CreateFrame("Frame", nil, UIParent)
+        host:Hide()
+
+        local pane = ns.OptionsBars:BuildSpellPane(host, 380, {
+            Used = function() return {} end,
+            Assign = function() end,
+        })
+        pane.Fill()
+
+        ns.CDM.Catalogue, ns.Auras.Catalogue = realCDM, realAuras
+
+        -- 200 spells and the heading over them.
+        Check("Every spell is in the list", pane.LineCount() == 201,
+            tostring(pane.LineCount()))
+
+        -- The harness's column answers 200 tall, so seven rows fit and one
+        -- more is the slack below the fold. The number is not the point; the
+        -- ORDER OF MAGNITUDE is, and 200 rows would sail past this.
+        Check("Two hundred spells do not build two hundred rows",
+            pane.RowCount() > 0 and pane.RowCount() <= 24,
+            tostring(pane.RowCount()))
+    end
+
+    -----------------------------------------------------------------------
     -- A SLOT TAKES WHAT IS ON THE CURSOR
     --
     -- The owner asked for it - "kann man das so machen, das man die sachen da
