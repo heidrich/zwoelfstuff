@@ -1625,15 +1625,23 @@ function Options:Create()
         { eyebrow = "Bars" },
         { page = "cooldowns" },
         { eyebrow = "M+ and raid stuff" },
-        -- THE RAID BAR HEADS THIS GROUP. It is the one entry here that is
-        -- about the whole group rather than about you - markers, a ready
-        -- check, a pull - and it is what a raid leader opens first.
-        { page = "raidbar" },
         { page = "cotanks" },
         { page = "reminders" },
         { page = "externals" },
         { page = "answers" },
         { page = "deaths" },
+        -- THE TWO NEWEST GO AT THE END, at the owner's word: "raid bar bitte
+        -- unter death log stellen".
+        --
+        -- The first draft put the raid bar at the head of this group on the
+        -- argument that it is the entry about the whole group rather than
+        -- about you. That argument is fine and it loses to a better one: the
+        -- five above it have not moved since they were added, and a rail
+        -- somebody has been reading for weeks is a list they no longer read -
+        -- they go to the place. Inserting a row at the top moves every one of
+        -- those places by one, to save one row of travel on a page that is
+        -- new to everybody anyway.
+        { page = "raidbar" },
         { page = "invites" },
         { eyebrow = "System" },
         { page = "settings" },
