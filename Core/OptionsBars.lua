@@ -1881,6 +1881,23 @@ function Workspace:BuildOptionsPane(parent, width)
     FxSwitch("Only in combat", "readyGlowCombatOnly")
     FxColour("Edge colour", "glowColor")
     FxSlide("Edge thickness", "glowSize", 1, 5, 1)
+
+    -- Beside the edge they change, not three sections further down. A control
+    -- nobody can find is a control that does not work: the owner had this
+    -- built for him and still had to ask where it was.
+    UI.Dropdown(grid:FullRow("Edge style", { controlWidth = 150 }), {
+        { value = "edge",  label = "Soft edge" },
+        { value = "pixel", label = "Running squares" },
+    }, FxGet("glowStyle"), function(value)
+        FxSet("glowStyle")(value); Apply()
+    end)
+    FxSlide("How many squares", "glowDots", 2, 24, 1,
+        function(v) return string.format("%d", v) end)
+
+    FxSwitch("Only when castable", "readyGlowUsableOnly")
+    grid:Note("Keeps the edge dark while you are short of the resource. "
+        .. "Range and target are ignored - a defensive with nothing targeted "
+        .. "is not the same as one you cannot pay for.")
     grid:Note("Blizzard's Cooldown Manager is asked whether the spell is on a "
         .. "real cooldown, so the global cooldown never sets any of this off.")
 
@@ -1911,19 +1928,7 @@ function Workspace:BuildOptionsPane(parent, width)
     -- The dependency is stated rather than discovered. "I switched it on and
     -- nothing happens" is otherwise a question with no answer on this screen.
     grid:Note("The tail of an aura where recasting it wastes nothing.")
-    UI.Dropdown(grid:FullRow("Glow style", { controlWidth = 150 }), {
-        { value = "edge",  label = "Soft edge" },
-        { value = "pixel", label = "Running squares" },
-    }, FxGet("glowStyle"), function(value)
-        FxSet("glowStyle")(value); Apply()
-    end)
-    FxSlide("How many squares", "glowDots", 2, 24, 1,
-        function(v) return string.format("%d", v) end)
-
-    FxSwitch("Only when castable", "readyGlowUsableOnly")
-    grid:Note("Keeps the edge dark while you are short of the resource. "
-        .. "Range and target are ignored - a defensive with nothing targeted "
-        .. "is not the same as one you cannot pay for.")
+    grid:Section("Fading and hiding", "fx-hide")
 
     FxSwitch("Grey out on cooldown", "dimOnCooldown")
     FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent, 100)
