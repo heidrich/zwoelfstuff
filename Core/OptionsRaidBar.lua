@@ -178,18 +178,18 @@ function Page:BuildPage(page, width)
     end
     band.Fit()
 
-    grid:Note("Pick from the list on the right. Right-click a place to empty "
-        .. "it. To put the bar somewhere on your screen, open "
-        .. "|cffffd100Edit mode|r at the top of the list on the left.")
+    grid:Note(L["Pick from the list on the right. Right-click a place to "
+        .. "empty it. To put the bar somewhere on your screen, open "
+        .. "|cffffd100Edit mode|r at the top of the list on the left."])
 
     -- THE ONE SENTENCE NOBODY WOULD GUESS, and it is on the page rather than
     -- in a tooltip because it explains a delay somebody will otherwise report
     -- as a bug: the marker buttons are the game's own protected kind, and the
     -- game freezes those for the length of a fight.
-    grid:Note("|cffffd100Marker, world marker and ping buttons are the game's "
-        .. "own protected kind|r - the addon cannot press them for you, and "
-        .. "the bar cannot be rearranged while you are in combat. Changes made "
-        .. "in a fight appear the moment it ends.")
+    grid:Note(L["|cffffd100Marker, world marker and ping buttons are the "
+        .. "game's own protected kind|r - the addon cannot press them for "
+        .. "you, and the bar cannot be rearranged while you are in combat. "
+        .. "Changes made in a fight appear the moment it ends."])
 
     ---------------------------------------------------------------------
     -- The bar
@@ -237,8 +237,8 @@ function Page:BuildPage(page, width)
     UI.Toggle(grid:Row(L["Only in an instance"]),
         function() return Cfg().onlyInInstance and true or false end,
         function(value) Cfg().onlyInInstance = value and true or false; Apply() end)
-    grid:Note("Out in the world there is nothing to mark. Off, the bar is "
-        .. "there whenever you are in a group.")
+    grid:Note(L["Out in the world there is nothing to mark. Off, the bar is "
+        .. "there whenever you are in a group."])
 
     ---------------------------------------------------------------------
     -- The pull timer
@@ -253,20 +253,25 @@ function Page:BuildPage(page, width)
 
     -- WHY THERE IS NO "ALSO TELL BIGWIGS" SWITCH, said on the page because
     -- the absence is the surprising part.
-    grid:Note("The countdown is the game's own - the one Blizzard added for "
-        .. "exactly this - so a boss mod picks it up by itself and everybody "
-        .. "without one still sees the numbers. Right-click the Pull button on "
-        .. "the bar to cancel it. The game refuses to start one in combat.")
+    grid:Note(L["The countdown is the game's own - the one Blizzard added "
+        .. "for exactly this - so a boss mod picks it up by itself and "
+        .. "everybody without one still sees the numbers. Right-click the "
+        .. "Pull button on the bar to cancel it. The game refuses to start "
+        .. "one in combat."])
 
     ---------------------------------------------------------------------
     -- Keys
     ---------------------------------------------------------------------
     grid:Section(L["Keys"])
 
-    grid:Note("The first |cffffd100" .. ns.RaidBar.KEYS .. "|r places on the "
-        .. "bar can carry a key, set in the game's own key list under "
-        .. "|cffffd100ZwoelfStuff|r. The key belongs to the PLACE, not to what "
-        .. "is in it - so rearranging the bar moves what each key does.")
+    -- L(...) rather than L[...], because the number is ours and a translator
+    -- must be able to put it where their sentence wants it. A translation
+    -- that loses the placeholder falls back to the English line rather than
+    -- throwing inside format - see the __call door in Core/Locale.lua.
+    grid:Note(L("The first |cffffd100%d|r places on the bar can carry a key, "
+        .. "set in the game's own key list under |cffffd100ZwoelfStuff|r. The "
+        .. "key belongs to the PLACE, not to what is in it - so rearranging "
+        .. "the bar moves what each key does.", ns.RaidBar.KEYS))
 
     ---------------------------------------------------------------------
     -- Look

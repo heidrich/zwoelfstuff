@@ -30,9 +30,9 @@ function Page:BuildPage(page, width)
 
     -- THE WARNING IS THE FIRST THING ON THE PAGE, because everything under it
     -- acts in your name at people who are not in the room.
-    grid:Note("Everything on this page is |cffffd100off until you switch it "
-        .. "on|r. Nothing here invites, promotes or accepts anything until the "
-        .. "switch above it says so.")
+    grid:Note(L["Everything on this page is |cffffd100off until you switch "
+        .. "it on|r. Nothing here invites, promotes or accepts anything "
+        .. "until the switch above it says so."])
 
     local keywordHost = CreateFrame("Frame", nil, grid.content)
     local keywords = UI.TextArea(keywordHost, width - 40, 70,
@@ -50,24 +50,25 @@ function Page:BuildPage(page, width)
     UI.Toggle(grid:Row(L["Invite on a whisper"]),
         function() return Cfg().onWhisper and true or false end,
         function(value) Cfg().onWhisper = value and true or false end)
-    grid:Note("Somebody whispers one of the words above and the invitation "
+    grid:Note(L["Somebody whispers one of the words above and the invitation "
         .. "goes out. A Battle.net whisper names an account rather than a "
-        .. "character, which cannot be invited - so that one is answered with "
-        .. "a line telling them to whisper the character instead.")
+        .. "character, which cannot be invited - so that one is answered "
+        .. "with a line telling them to whisper the character instead."])
 
     UI.Toggle(grid:Row(L["Also on say and yell"]),
         function() return Cfg().onSayYell and true or false end,
         function(value) Cfg().onSayYell = value and true or false end)
-    grid:Note("For standing at a summoning stone and shouting. It listens to "
-        .. "everybody in earshot, so it belongs to the ten minutes you are "
-        .. "filling a group and not to the evening.")
+    grid:Note(L["For standing at a summoning stone and shouting. It listens "
+        .. "to everybody in earshot, so it belongs to the ten minutes you "
+        .. "are filling a group and not to the evening."])
 
     UI.Toggle(grid:Row("Anywhere in the message"),
         function() return Cfg().looseMatch and true or false end,
         function(value) Cfg().looseMatch = value and true or false end)
-    grid:Note("Off, the whole message has to BE the word - \"inv\" invites, "
-        .. "\"inv please\" does not. On, the word is found anywhere in the "
-        .. "sentence, which also finds it in \"I cannot inv you sorry\".")
+    grid:Note(L["Off, the whole message has to BE the word - \"inv\" "
+        .. "invites, \"inv please\" does not. On, the word is found anywhere "
+        .. "in the sentence, which also finds it in \"I cannot inv you "
+        .. "sorry\"."])
 
     ---------------------------------------------------------------------
     -- Who gets in
@@ -77,20 +78,20 @@ function Page:BuildPage(page, width)
     UI.Toggle(grid:Row(L["Guild members only"]),
         function() return Cfg().guildOnly and true or false end,
         function(value) Cfg().guildOnly = value and true or false end)
-    grid:Note("Anybody else who whispers the word is told nothing happened - "
-        .. "in your chat frame, not theirs.")
+    grid:Note(L["Anybody else who whispers the word is told nothing happened "
+        .. "- in your chat frame, not theirs."])
 
     UI.Toggle(grid:Row(L["Friends only"]),
         function() return Cfg().friendsOnly and true or false end,
         function(value) Cfg().friendsOnly = value and true or false end)
-    grid:Note("Your friends list, and guild members count as friends here.")
+    grid:Note(L["Your friends list, and guild members count as friends here."])
 
     UI.Toggle(grid:Row(L["Accept invites from friends"]),
         function() return Cfg().autoAccept and true or false end,
         function(value) Cfg().autoAccept = value and true or false end)
-    grid:Note("The other direction: an invitation FROM a friend or a guild "
+    grid:Note(L["The other direction: an invitation FROM a friend or a guild "
         .. "member is accepted for you and the box goes away. From anybody "
-        .. "else the box stays, which is the point.")
+        .. "else the box stays, which is the point."])
 
     ---------------------------------------------------------------------
     -- The group
@@ -100,9 +101,9 @@ function Page:BuildPage(page, width)
     UI.Toggle(grid:Row(L["Make it a raid at five"]),
         function() return Cfg().convertAtFive and true or false end,
         function(value) Cfg().convertAtFive = value and true or false end)
-    grid:Note("A party holds five. Without this the sixth invitation goes "
-        .. "nowhere at all - which is the step everybody forgets. Not done in "
-        .. "combat: the game refuses.")
+    grid:Note(L["A party holds five. Without this the sixth invitation goes "
+        .. "nowhere at all - which is the step everybody forgets. Not done "
+        .. "in combat: the game refuses."])
 
     UI.Toggle(grid:Row(L["Promote"]),
         function() return Cfg().autoPromote and true or false end,
@@ -118,16 +119,16 @@ function Page:BuildPage(page, width)
     promoteHost.Refresh = function() promote:SetText(Cfg().promote or "") end
     grid.widgets[#grid.widgets + 1] = promoteHost
 
-    grid:Note("One name a line. They are made assistants when they join, and "
-        .. "only while you are the leader of a raid. A raid where everybody is "
-        .. "an assistant is a raid where anybody can pull.")
+    grid:Note(L["One name a line. They are made assistants when they join, "
+        .. "and only while you are the leader of a raid. A raid where "
+        .. "everybody is an assistant is a raid where anybody can pull."])
 
     UI.Toggle(grid:Row("Say what it did"),
         function() return Cfg().announce ~= false end,
         function(value) Cfg().announce = value and true or false end)
-    grid:Note("A line in your own chat frame for every invitation sent. Worth "
-        .. "keeping on: an invite tool that works silently is one you cannot "
-        .. "tell from one that has stopped.")
+    grid:Note(L["A line in your own chat frame for every invitation sent. "
+        .. "Worth keeping on: an invite tool that works silently is one you "
+        .. "cannot tell from one that has stopped."])
 
     ---------------------------------------------------------------------
     -- Right now
@@ -153,9 +154,9 @@ function Page:BuildPage(page, width)
         Cfg().maxRank = (value ~= "" and tonumber(value)) or nil
     end, { emptyText = L["Any rank"] })
 
-    grid:Note("Everybody at that rank and above it. Rank numbers count "
-        .. "downwards from the guild master, which is why this reads as \"and "
-        .. "above\" rather than \"and below\".")
+    grid:Note(L["Everybody at that rank and above it. Rank numbers count "
+        .. "downwards from the guild master, which is why this reads as "
+        .. "\"and above\" rather than \"and below\"."])
 
     grid:Buttons({
         { text = L["Invite the guild"],

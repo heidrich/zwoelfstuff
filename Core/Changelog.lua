@@ -13,6 +13,17 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.81.0",
+        date = "2026-08-13",
+        lines = {
+            "|cffffd100Fixed: the external cooldown panel offered spells the person cannot cast.|r A priest in your group meant both Pain Suppression and Guardian Spirit on screen, though no priest has both. It now reads what everybody is actually playing and offers only what they can cast. Somebody too far away to read still gets their icon - an empty panel while you run into the room would be worse than one icon too many.",
+            "|cffffd100A saved bar now holds the whole bar,|r not just its look: the sizes and colours, the grid it is laid out in, and the spells you put in it. Under |cffffd100Bars - Reuse|r, and the same goes for copying one bar onto another. |cffffd100Take the spells too|r switches it back off if you only ever wanted the styling. Where a bar sits on screen never travels.",
+            "|cffffd100The Healing on you lane is gone from the death replay.|r It took a fifth of the window and was usually empty. The heals are still recorded and still counted in the death window.",
+            "|cffffd100The description texts on the Raid Bar, Invites and Settings pages are translated|r - German for now. Their labels had been for months; the sentences under them had not, which read like an addon that gave up half way.",
+            "|cffffd100New: |r|cffffd100/zs specs|r prints what the game says each specialisation is, and which one every request slot is waiting for.",
+        },
+    },
+    {
         version = "4.80.0",
         date = "2026-08-13",
         lines = {

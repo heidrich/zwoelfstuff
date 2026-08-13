@@ -872,9 +872,16 @@ end
 -- be taken from another bar in one click, or saved once and applied to any
 -- bar later.
 --
--- Only the LOOK travels. Which spells are in the bar, how many rows it has
--- and where it sits on screen are what makes it that bar, and copying those
--- would overwrite the work rather than the styling.
+-- THE LOOK ALWAYS TRAVELS; THE CONTENTS TRAVEL WHEN ASKED. It was look-only
+-- until 4.81.0, on the reasoning that copying somebody's spells overwrites
+-- their work rather than their styling. That reasoning still holds - which is
+-- why it is a switch and not a silent change - but the owner asked for the
+-- other half by name: "bei reuse kann man keine profile fuer die einzelnen
+-- bars speichern ... wie bar 1 oder so", and, asked what such a saved bar
+-- should carry: "Alles, auch die Spells."
+--
+-- Where it SITS never travels, under any setting. Two bars on top of each
+-- other is not a thing anybody asks for by pressing Apply.
 ---------------------------------------------------------------------------
 ns.BAR_STYLE_KEYS = {
     "kind",
@@ -1195,9 +1202,101 @@ function Bars:ApplyStyle(index, style)
     return true
 end
 
+---------------------------------------------------------------------------
+-- WHAT A BAR HOLDS, as a transferable thing
+--
+-- The shape the spells were laid into travels WITH the spells and never
+-- without them: six spells arriving in a bar set to one row of three is two
+-- of them off the end, which is not a thing anybody asked to happen.
+--
+-- cellOpts comes along for the same reason. It is the per-cell size, place
+-- and kind - the puzzle layout, the one icon that is twice the size - and a
+-- hand-built arrangement that arrived without it would be the spells in a
+-- neat row and none of the work.
+---------------------------------------------------------------------------
+ns.BAR_CONTENT_KEYS = { "rows", "columns", "freeCount", "cellOpts" }
+
+function Bars:CaptureContent(index)
+    local cfg = self:Get(index)
+    if not cfg then return nil end
+
+    local content = {}
+    for _, key in ipairs(ns.BAR_CONTENT_KEYS) do
+        content[key] = DeepCopy(cfg[key])
+    end
+
+    -- THE SPELLS OF THE SPEC YOU ARE PLAYING, and there is no other honest
+    -- answer: cfg.cells is bound to cellsBySpec[class:spec], so "the spells
+    -- on this bar" only means anything for one character at a time. Saving
+    -- every spec's set would put a paladin's list on a death knight's bar.
+    content.cells = DeepCopy(cfg.cells)
+    return content
+end
+
+function Bars:ApplyContent(index, content)
+    local cfg = self:Get(index)
+    if not (cfg and content) then return false end
+
+    for _, key in ipairs(ns.BAR_CONTENT_KEYS) do
+        if content[key] ~= nil then cfg[key] = DeepCopy(content[key]) end
+    end
+
+    -- REFILLED, NOT REPLACED, and this is the whole reason this function
+    -- exists instead of one more entry in the key list. cfg.cells IS
+    -- cfg.cellsBySpec[key] - the same table under two names - so assigning a
+    -- new one leaves the stored set untouched and the spells vanish at the
+    -- next spec bind, which is the next reload. Emptying and refilling the
+    -- table everybody already holds keeps both names pointing at the answer.
+    if content.cells then
+        local cells = cfg.cells
+        if cells then
+            wipe(cells)
+            for slot, spellID in pairs(content.cells) do
+                cells[slot] = spellID
+            end
+        end
+    end
+
+    ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
+    self:Changed(index)
+    return true
+end
+
+-- Whether an applied preset - or a bar copied from another - brings the
+-- spells with it. His choice, and it is why the feature was asked for, so it
+-- is on unless somebody turns it off.
+--
+-- READ THROUGH ns.DEFAULTS rather than against a literal `true`. Top-level
+-- profile keys are filled in by ApplyDefaults every time a profile is opened,
+-- so an existing profile does get this one - but the default then lives in
+-- two places, and the day they disagree the switch and the behaviour would
+-- disagree with each other. One source, read at the point of use.
+function Bars:CarriesSpells()
+    local value = ns.db and ns.db.presetSpells
+    if value == nil then value = ns.DEFAULTS.presetSpells end
+    return value and true or false
+end
+
+function Bars:SetCarriesSpells(on)
+    ns.db.presetSpells = on and true or false
+end
+
 function Bars:CopyStyleFrom(source, target)
     if source == target then return false end
     return self:ApplyStyle(target, self:CaptureStyle(source))
+end
+
+-- One bar taken from another, contents included when that is switched on.
+-- The same rule as an applied preset on purpose: "copy bar 1" and "apply the
+-- preset I made out of bar 1" are one idea from two ends, and two answers to
+-- it would be the kind of difference nobody can predict from the screen.
+function Bars:CopyFrom(source, target)
+    if source == target then return false end
+    local done = self:ApplyStyle(target, self:CaptureStyle(source))
+    if done and self:CarriesSpells() then
+        self:ApplyContent(target, self:CaptureContent(source))
+    end
+    return done
 end
 
 ---------------------------------------------------------------------------
@@ -1365,7 +1464,23 @@ end
 
 ---------------------------------------------------------------------------
 -- Presets
+--
+-- A SAVED PRESET ALWAYS HOLDS BOTH, and the switch decides what is taken OUT
+-- of it. Storing only the look when the switch happened to be off would mean
+-- a preset that can never carry the spells afterwards, and the state of a
+-- checkbox on the day you pressed Save is not something anybody remembers.
+--
+-- THE OLD SHAPE IS A BARE STYLE TABLE. Every preset saved before 4.81.0 is
+-- one, and it stays readable: a table with a `style` field is the new pair, a
+-- table without one is a look and nothing else. No migration, no rewrite of
+-- somebody's saved variables, and the two can sit in the list together.
 ---------------------------------------------------------------------------
+local function PresetParts(saved)
+    if type(saved) ~= "table" then return nil, nil end
+    if saved.style then return saved.style, saved.content end
+    return saved, nil
+end
+
 function Bars:SavePreset(name, index)
     name = (name or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if name == "" then return false end
@@ -1373,8 +1488,18 @@ function Bars:SavePreset(name, index)
     local style = self:CaptureStyle(index)
     if not style then return false end
 
-    ns.db.barPresets[name] = style
+    ns.db.barPresets[name] = {
+        style = style,
+        content = self:CaptureContent(index),
+    }
     return true
+end
+
+-- Whether this preset has spells in it at all, for the picker to say so. A
+-- look saved last week is not broken, it is just a look.
+function Bars:PresetHasSpells(name)
+    local _, content = PresetParts(ns.db.barPresets[name])
+    return content ~= nil and content.cells ~= nil and next(content.cells) ~= nil
 end
 
 function Bars:DeletePreset(name)
@@ -1393,7 +1518,12 @@ function Bars:PresetNames()
 end
 
 function Bars:ApplyPreset(name, index)
-    return self:ApplyStyle(index, ns.db.barPresets[name])
+    local style, content = PresetParts(ns.db.barPresets[name])
+    local done = self:ApplyStyle(index, style)
+    if done and content and self:CarriesSpells() then
+        self:ApplyContent(index, content)
+    end
+    return done
 end
 
 ---------------------------------------------------------------------------

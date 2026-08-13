@@ -2087,8 +2087,23 @@ function Workspace:BuildOptionsPane(parent, width)
     -- Reuse ---------------------------------------------------------------
     grid:Tab("Reuse")
     grid:Section("Reuse")
-    grid:Note("Sizes, spacing and colours only. Which spells a bar holds and "
-        .. "how many rows it has always stay with that bar.")
+    grid:Note("A saved bar holds everything about it: the sizes, spacing "
+        .. "and colours, the grid it is laid out in, and the spells of the "
+        .. "spec you saved it on. Where it sits on screen never travels.")
+
+    -- HIS ANSWER, when asked what a saved bar should carry: "Alles, auch die
+    -- Spells." It is a switch and not a silent change because applying with
+    -- it on OVERWRITES what the target bar holds, and there is no undo in
+    -- this window. Off is exactly what every version before 4.81.0 did.
+    UI.Toggle(grid:FullRow("Take the spells too", {
+        controlWidth = 124,
+        sublabel = "Applying a preset or copying a bar replaces "
+            .. "what this one holds",
+    }), function() return Bars:CarriesSpells() end,
+        function(value)
+            Bars:SetCarriesSpells(value)
+            ns.Options:Refresh()
+        end)
 
     -- Somewhere to start. Thirty settings is what people ask for, and nobody
     -- wants to build a look out of thirty settings from nothing.
@@ -2136,9 +2151,16 @@ function Workspace:BuildOptionsPane(parent, width)
         end,
         onSelect = function(index)
             local target = Workspace:Current()
-            if Bars:CopyStyleFrom(index, target) then
-                ns.Print("Took the look of", Bars:Get(index).name)
+            if Bars:CopyFrom(index, target) then
+                -- WHAT IT DID, not what it was asked to do. With the switch
+                -- on this just replaced the spells on the bar in front of
+                -- him, and a message that says only "took the look" would be
+                -- the one line able to make that look like a bug.
+                ns.Print(Bars:CarriesSpells()
+                    and "Copied everything from" or "Took the look of",
+                    Bars:Get(index).name)
             end
+            Apply()
             ns.Options:Refresh()
         end,
     })
@@ -2172,7 +2194,9 @@ function Workspace:BuildOptionsPane(parent, width)
         end,
         onSelect = function(name)
             if name and Bars:ApplyPreset(name, (Workspace:Current())) then
-                ns.Print("Applied the preset", name)
+                ns.Print("Applied the preset", name,
+                    (Bars:CarriesSpells() and Bars:PresetHasSpells(name))
+                        and "- spells and all." or "- the look only.")
             end
             ns.Options:Refresh()
         end,

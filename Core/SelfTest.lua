@@ -403,6 +403,7 @@ local function TestCommandList()
         report = true, auras = true, bars = true, reset = true,
         raidbar = true, raid = true, check = true, invite = true,
         invites = true, loca = true, language = true,
+        specs = true, spec = true,
     }
 
     local unknown
@@ -5014,6 +5015,141 @@ local function TestExternals()
 
     Check("An unknown spell has no candidates",
         #X.Candidates(nil, ROSTER) == 0)
+
+    ---------------------------------------------------------------------
+    -- WHICH SPEC, which is the owner's priest bug
+    --
+    -- "wenn ich einen priester in der gruppe habe, werden fuer beide heiler
+    -- specs die icons angezeigt." Pain Suppression is Discipline's and
+    -- Guardian Spirit is Holy's, and a class check cannot tell them apart.
+    --
+    -- THE NUMBERS BELOW ARE THE GAME'S, not ours. The test asks
+    -- Specs.Table() what a priest's specs actually are and builds its roster
+    -- out of that, so it is checking the rule rather than agreeing with the
+    -- assumption the rule is built on.
+    ---------------------------------------------------------------------
+    local S = ns.Specs
+
+    Check("Unknown spec keeps the icon", S and X.SpecFits({ spec = nil }, 42))
+    Check("A matching spec keeps it", S and X.SpecFits({ spec = 42 }, 42))
+    Check("A different spec loses it", S and not X.SpecFits({ spec = 43 }, 42))
+    Check("No restriction keeps everybody",
+        S and X.SpecFits({ spec = 43 }, nil))
+
+    -- The role guard, on a table we control: an index that points at the
+    -- wrong KIND of spec must produce nothing rather than a wrong filter.
+    local FAKE = { PRIEST = {
+        [1] = { id = 111, name = "One",   role = "HEALER" },
+        [2] = { id = 222, name = "Two",   role = "HEALER" },
+        [3] = { id = 333, name = "Three", role = "DAMAGER" },
+    } }
+    Check("A spec index resolves to the game's id",
+        S and S.Resolve(FAKE, "PRIEST", 2, "HEALER") == 222)
+    Check("An index whose role is wrong resolves to nothing",
+        S and S.Resolve(FAKE, "PRIEST", 3, "HEALER") == nil)
+    Check("An index past the end resolves to nothing",
+        S and S.Resolve(FAKE, "PRIEST", 9, "HEALER") == nil)
+    Check("A class the game does not know resolves to nothing",
+        S and S.Resolve(FAKE, "TINKER", 1, "HEALER") == nil)
+
+    -- The throttle. Pure, with its own clock, because the alternative is a
+    -- test that waits thirty seconds.
+    Check("A fresh guid may be asked about", S and S.MayAsk(100, nil, nil))
+    Check("Not twice within the gap", S and not S.MayAsk(100, 99.5, nil))
+    Check("And not again straight after a failure",
+        S and not S.MayAsk(100, nil, 90))
+    Check("But it is worth another try later",
+        S and S.MayAsk(200, nil, 100))
+
+    ---------------------------------------------------------------------
+    -- AGAINST THE REAL TABLE. In game this is the check that matters: every
+    -- index the catalogue claims has to point at a spec of the role it says,
+    -- on THIS client. It cannot catch two specs of one class with the same
+    -- role swapped - /zs specs prints the names for that - but it does catch
+    -- the whole family of "the order moved".
+    ---------------------------------------------------------------------
+    local list = S and S.Table() or {}
+    Check("The game answered about specialisations", next(list) ~= nil)
+
+    if next(list) then
+        local bad
+        for _, entry in ipairs(X.SpecRestrictions()) do
+            if not S.Resolve(list, entry.class, entry.index, entry.role) then
+                bad = string.format("%s %s %d", tostring(entry.name),
+                    entry.class, entry.index)
+            end
+        end
+        Check("Every spec the catalogue names is the role it says",
+            bad == nil, bad)
+
+        -- TWO LISTS, ONE WORD, TWO MEANINGS is how a drag rule rejected
+        -- every drop in silence three days ago. Taunts.SPELLS carries a spec
+        -- ID under `spec`; the externals carry an INDEX under `specIndex`.
+        -- Neither list may grow the other's field.
+        local crossed
+        for _, entry in ipairs(X.SPELLS) do
+            if entry.spec then crossed = "an external carries `spec`" end
+        end
+        for _, entry in ipairs(ns.Taunts.SPELLS) do
+            if entry.specIndex then crossed = "a taunt carries `specIndex`" end
+        end
+        Check("The two spell lists do not swap each other's spec field",
+            crossed == nil, crossed)
+
+        -- AND THE ID THAT WAS ALREADY THERE, checked at last. Taunts has
+        -- carried spec = 250 for Death Grip since the day it was written, on
+        -- the word of another addon's table. The game can settle it now: it
+        -- has to be a real specialisation OF THAT CLASS.
+        --
+        -- ONLY AGAINST A CLIENT. The desk harness invents its spec ids on
+        -- purpose - baking the real ones into a stub would turn this into the
+        -- assumption agreeing with itself, which is not a check.
+        if __FAKE_SPECS then
+            Skip("The taunt list's spec ids are real",
+                "the harness invents them - a client has to answer this")
+        else
+            local wrong
+            for _, entry in ipairs(ns.Taunts.SPELLS) do
+                if entry.spec then
+                    local found
+                    for _, spec in pairs(list[entry.class] or {}) do
+                        if spec.id == entry.spec then found = true end
+                    end
+                    if not found then
+                        wrong = string.format("%s has no spec %d",
+                            entry.class, entry.spec)
+                    end
+                end
+            end
+            Check("Every spec id the taunt list names belongs to its class",
+                wrong == nil, wrong)
+        end
+
+        -- THE BUG ITSELF, end to end. Two priest slots, one priest, and the
+        -- panel must offer exactly the one he can actually cast.
+        local priest = list.PRIEST
+        local disc = priest and priest[1] and priest[1].id
+        local holy = priest and priest[2] and priest[2].id
+        if disc and holy and disc ~= holy then
+            local WITH_DISC = {
+                { name = "Zwoelf", class = "DEATHKNIGHT", isPlayer = true },
+                { name = "Prister", class = "PRIEST", role = "HEALER",
+                  spec = disc },
+            }
+            Check("A discipline priest is offered Pain Suppression",
+                #X.Candidates(X.Get(33206), WITH_DISC) == 1)
+            Check("And is NOT offered Guardian Spirit",
+                #X.Candidates(X.Get(47788), WITH_DISC) == 0)
+
+            local UNREAD = {
+                { name = "Zwoelf", class = "DEATHKNIGHT", isPlayer = true },
+                { name = "Prister", class = "PRIEST", role = "HEALER" },
+            }
+            Check("A priest nobody has read yet is offered both",
+                #X.Candidates(X.Get(33206), UNREAD) == 1
+                and #X.Candidates(X.Get(47788), UNREAD) == 1)
+        end
+    end
 
     ---------------------------------------------------------------------
     -- What the whisper says

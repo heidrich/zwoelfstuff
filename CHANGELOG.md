@@ -4,6 +4,43 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.81.0] - 2026-08-13
+
+### Fixed
+
+- **The external cooldown panel offered spells the person cannot cast.** A
+  priest in the group put both Pain Suppression and Guardian Spirit on screen,
+  and no priest has both — one belongs to Discipline and the other to Holy.
+  The panel checked the class and nothing else. It now reads which
+  specialisation each group member is actually playing, asynchronously,
+  the way every damage meter does. **Somebody who cannot be read yet keeps
+  their icon**: an empty panel while you run into the room would be a worse
+  answer than one icon too many. The catalogue never stores a specialisation
+  id — it stores which one, and asks the game for the number, so a client
+  that renumbers them drops the restriction rather than applying it wrongly.
+- **The `Healing on you` lane is gone from the death replay.** It held a
+  fifth of the window's height and was usually empty. Heals are still
+  recorded and the death window still counts them.
+
+### Added
+
+- **A saved bar now carries the whole bar.** Under *Bars → Reuse*: the sizes,
+  spacing and colours as before, and now also the grid it is laid out in, the
+  per-cell arrangement, and the spells of the spec you saved it on. Copying
+  one bar onto another does the same. **Take the spells too** switches it back
+  to the old look-only behaviour for anybody who wants that; where a bar sits
+  on screen never travels either way. Presets saved by earlier versions are
+  still readable and are still a look.
+- **`/zs specs`** — what the game says each specialisation is, and which one
+  every request slot is waiting for.
+
+### Changed
+
+- **The description texts on the Raid Bar, Invites and Settings pages are
+  translated.** Twenty-four sentences, German for now. Their labels had been
+  translated for months and the sentences under them had not, which reads as
+  an addon that gave up half way rather than one that is honestly unfinished.
+
 ## [4.80.0] - 2026-08-13
 
 ### Added

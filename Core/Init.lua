@@ -264,9 +264,21 @@ ns.DEFAULTS = {
     reminders  = {},
 
 
-    -- Saved looks, by name. A preset carries ns.BAR_STYLE_KEYS only - sizes,
-    -- spacing and colours - never the spells or the grid shape.
+    -- Saved bars, by name: { style = ..., content = ... }. The style is
+    -- ns.BAR_STYLE_KEYS, the content is the grid shape, the per-cell overrides
+    -- and the spells of the spec it was saved on. Presets written before
+    -- 4.81.0 are a bare style table and stay readable as one - see
+    -- Bars:SavePreset.
     barPresets = {},
+
+    -- Whether applying one of the above - or copying one bar onto another -
+    -- brings the spells and the grid shape with it, or only the styling.
+    --
+    -- ON, because it is the reason the owner asked for saved bars at all:
+    -- "Alles, auch die Spells." Off is the behaviour every version before
+    -- 4.81.0 had, and it is one switch away for anybody who wants a look
+    -- without the work that went into the bar underneath it.
+    presetSpells = true,
 
     -- Highest bar id handed out so far. Ids are never reused, because an
     -- anchor points at one and a recycled id would silently re-attach a bar
@@ -659,11 +671,22 @@ function ns.Roster()
                     full = name
                 end
 
+                -- THE SPEC IS ASKED FOR HERE AND ANSWERED LATER. Want puts
+                -- anybody we have not read into the inspect queue, Of hands
+                -- back what has already come in - so every walk over the
+                -- group is also the thing that keeps the answers coming, and
+                -- no caller has to know an inspect exists. nil means "not
+                -- known yet"; see Core/Specs.lua for why that must never
+                -- hide anything.
+                local specs = ns.Specs
+                if specs then specs.Want(unit) end
+
                 rosterScratch[#rosterScratch + 1] = {
                     unit = unit,
                     name = name,
                     fullName = full,
                     class = class,
+                    spec = specs and specs.Of(unit) or nil,
                     role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil,
                     isPlayer = ns.Truth(UnitIsUnit(unit, "player"), false),
                 }
@@ -1523,6 +1546,8 @@ ns.COMMANDS = {
       text = "every reminder, and why each one is or is not up" },
     { cmd = "/zs externals", text = "who each external slot would whisper "
         .. "(|cffffd100test|r shows the panel)" },
+    { cmd = "/zs specs", text = "what the game says each specialisation is, "
+        .. "and which spec each slot is waiting for" },
     { cmd = "/zs taunt", text = "what your next taunt would say "
         .. "(|cffffd100ask|r tells the other tank to take it)" },
     { cmd = "/zs death", text = "the last death's analysis (|cffffd100share|r "
@@ -1671,6 +1696,13 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- that is the question anybody types a slash command to find out.
     elseif cmd == "raidbar" or cmd == "raid" then
         ns.RaidBar:Dump()
+
+    -- WHAT THE GAME SAYS EACH SPEC IS, next to what the catalogue assumed.
+    -- The one check that cannot be run from a desk: an index that points at
+    -- the wrong spec of the right role hides the right healer and looks like
+    -- a panel that is working.
+    elseif cmd == "specs" or cmd == "spec" then
+        ns.Specs:Dump()
 
     elseif cmd == "hide" then
         -- Every reading behind "take off screen", printed while the state

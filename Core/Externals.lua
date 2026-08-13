@@ -46,6 +46,31 @@ ns.Externals = Externals
 --           WHO to ask in a five-man, where there is one healer and asking
 --           the retribution paladin for a Blessing of Sacrifice is asking
 --           the wrong paladin - even though he does have it.
+-- specIndex: which specialisation of that class, as an INDEX, plus the role
+--           that index has to have in specRole. Owner: "es wird nicht
+--           geprueft in welchen spec die klassen sind, wenn ich einen priester
+--           in der gruppe habe, werden fuer beide heiler specs die icons
+--           angezeigt."
+--
+--           NOT CALLED `spec`, and that is not fussiness: Taunts.SPELLS
+--           already has a field of that name and an ID lives in it. Two
+--           lists, one word, two meanings is how a drag-and-drop rule
+--           rejected every drop in silence three days ago. The name says
+--           which of the two it is.
+--
+--           AN INDEX AND NOT AN ID, deliberately. A spec id is a five-digit
+--           number and the only place to get one is memory or a website, and
+--           this project has been wrong twice that way. The index is the
+--           order the game itself lists them in, the id is looked up from the
+--           game at run time, and specRole is the guard: if the game says
+--           priest 1 is a damage spec then the order moved under us and the
+--           restriction is DROPPED rather than applied. See Core/Specs.lua.
+--
+--           The one thing that guard cannot catch is two specs of the same
+--           class with the same role swapped - Discipline against Holy - so
+--           `/zs specs` prints the game's own name beside every assumption.
+--           Absent means "any spec", which is the normal case and what a
+--           class-wide spell like Lay on Hands gets.
 -- cooldown: for the tooltip. Never counted down. See the header.
 -- covers:   the spellings this one slot stands for, each with the class that
 --           has it. Absent on an ordinary spell, and absence is the normal
@@ -59,16 +84,24 @@ Externals.SPELLS = {
     { spellID = 1044,   class = "PALADIN", cooldown = 25 },   -- Blessing of Freedom
     { spellID = 1022,   class = "PALADIN", cooldown = 300 },  -- Blessing of Protection
     { spellID = 6940,   class = "PALADIN", cooldown = 120 },  -- Blessing of Sacrifice
-    { spellID = 204018, class = "PALADIN", cooldown = 300 },  -- Blessing of Spellwarding
+    { spellID = 204018, class = "PALADIN", cooldown = 300,
+      specIndex = 2, specRole = "TANK" },                          -- Blessing of Spellwarding, Protection
     { spellID = 633,    class = "PALADIN", cooldown = 600 },  -- Lay on Hands
-    { spellID = 33206,  class = "PRIEST",  cooldown = 180, healer = true },  -- Pain Suppression
-    { spellID = 47788,  class = "PRIEST",  cooldown = 180, healer = true },  -- Guardian Spirit
-    { spellID = 2050,   class = "PRIEST",  cooldown = 60,  healer = true },  -- Holy Word: Serenity
+    { spellID = 33206,  class = "PRIEST",  cooldown = 180, healer = true,
+      specIndex = 1, specRole = "HEALER" },                        -- Pain Suppression, Discipline
+    { spellID = 47788,  class = "PRIEST",  cooldown = 180, healer = true,
+      specIndex = 2, specRole = "HEALER" },                        -- Guardian Spirit, Holy
+    { spellID = 2050,   class = "PRIEST",  cooldown = 60,  healer = true,
+      specIndex = 2, specRole = "HEALER" },                        -- Holy Word: Serenity, Holy
     { spellID = 108968, class = "PRIEST",  cooldown = 300 },  -- Void Shift
-    { spellID = 116849, class = "MONK",    cooldown = 120, healer = true },  -- Life Cocoon
-    { spellID = 102342, class = "DRUID",   cooldown = 90,  healer = true },  -- Ironbark
-    { spellID = 363534, class = "EVOKER",  cooldown = 240, healer = true },  -- Rewind
-    { spellID = 357170, class = "EVOKER",  cooldown = 60 },   -- Time Dilation
+    { spellID = 116849, class = "MONK",    cooldown = 120, healer = true,
+      specIndex = 2, specRole = "HEALER" },                        -- Life Cocoon, Mistweaver
+    { spellID = 102342, class = "DRUID",   cooldown = 90,  healer = true,
+      specIndex = 4, specRole = "HEALER" },                        -- Ironbark, Restoration
+    { spellID = 363534, class = "EVOKER",  cooldown = 240, healer = true,
+      specIndex = 2, specRole = "HEALER" },                        -- Rewind, Preservation
+    { spellID = 357170, class = "EVOKER",  cooldown = 60,
+      specIndex = 2, specRole = "HEALER" },                        -- Time Dilation, Preservation
 
     ---------------------------------------------------------------------
     -- LUST, AND A BATTLE RESURRECTION
@@ -419,6 +452,30 @@ end
 -- a paladin tank whispering himself for a Blessing of Sacrifice is the panel
 -- answering its own question.
 ---------------------------------------------------------------------------
+-- WHICH SPEC ID THIS SLOT WANTS, or nil for "any". Resolved through
+-- Core/Specs.lua, which asks the game rather than trusting the index, and
+-- hands back nil the moment anything about it does not add up - so a spell
+-- whose entry has gone stale behaves exactly like one with no restriction.
+function Externals.SpecID(spell)
+    if not (spell and spell.specIndex) then return nil end
+    local specs = ns.Specs
+    if not specs then return nil end
+    return (specs.IdFor(spell.class, spell.specIndex, spell.specRole))
+end
+
+-- PURE, and the whole rule in four lines.
+--
+-- UNKNOWN MEANS YES. Somebody who has not been read yet - out of range, just
+-- joined, an inspect the server has not answered - keeps his icon. The
+-- alternative is a panel that goes blank while you run into the room, and a
+-- tank who cannot ask for Pain Suppression because the priest was thirty
+-- yards away when the pull started has been failed by the feature.
+function Externals.SpecFits(member, wanted)
+    if not wanted then return true end
+    if not (member and member.spec) then return true end
+    return member.spec == wanted
+end
+
 function Externals.Candidates(spell, roster)
     local out = {}
     if not spell then return out end
@@ -426,9 +483,29 @@ function Externals.Candidates(spell, roster)
     -- behaves exactly as it did; a grouped slot accepts anybody who has a
     -- version of it.
     local classes = Externals.ClassesFor(spell)
+    local wanted = Externals.SpecID(spell)
     for _, member in ipairs(roster or {}) do
-        if classes[member.class] and not member.isPlayer then
+        if classes[member.class] and not member.isPlayer
+            and Externals.SpecFits(member, wanted) then
             out[#out + 1] = member
+        end
+    end
+    return out
+end
+
+-- Everything the catalogue claims about specs, for /zs specs to check against
+-- the game. Built on demand and never cached: it is read once, by a person.
+function Externals.SpecRestrictions()
+    local out = {}
+    for _, spell in ipairs(Externals.SPELLS) do
+        if spell.specIndex then
+            out[#out + 1] = {
+                spellID = spell.spellID,
+                name = Externals.Label(spell.spellID),
+                class = spell.class,
+                index = spell.specIndex,
+                role = spell.specRole,
+            }
         end
     end
     return out
@@ -1033,6 +1110,18 @@ watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 watcher:SetScript("OnEvent", function()
     if ns.db then Externals.Refresh() end
 end)
+
+-- AND WHEN A SPEC FINALLY ARRIVES. The inspect answers seconds after the
+-- roster event that asked for it, so without this the panel would be right
+-- about who can cast what and still be showing the icon it drew before the
+-- answer came in. Nothing here is protected - asking is a message, not a
+-- spell - so redrawing mid-fight is allowed, and it is exactly when it
+-- matters.
+if ns.Specs then
+    ns.Specs.OnLearned(function()
+        if ns.db then Externals.Refresh() end
+    end)
+end
 
 -- What the panel would do right now, printed. The one question anybody has
 -- about this feature is "who does this button whisper", and it has an answer

@@ -119,15 +119,15 @@ function Page:BuildPage(page, width)
             ns.Screen:Render()
         end)
 
-    grid:Note("Every icon on your bars, and how they look.")
+    grid:Note(L["Every icon on your bars, and how they look."])
 
     UI.MediaPicker(grid:FullRow(L["Bar text"], { controlWidth = 220 }), "font",
         function() return ns.db.font end,
         function(value) ns.db.font = value end,
         function() ns.Screen:Render() end)
 
-    grid:Note("Every piece of text on every bar, unless a bar has its own "
-        .. "font.")
+    grid:Note(L["Every piece of text on every bar, unless a bar has its own "
+        .. "font."])
 
     ---------------------------------------------------------------------
     -- This window
@@ -154,9 +154,9 @@ function Page:BuildPage(page, width)
         apply = function() ns.Options:ApplyScale() end,
     })
 
-    grid:Note("The size of this window on your screen, not of anything on "
+    grid:Note(L["The size of this window on your screen, not of anything on "
         .. "the bars. 100% is the size it was designed at; on a laptop 80% "
-        .. "keeps all three columns in view. Takes effect as you change it.")
+        .. "keeps all three columns in view. Takes effect as you change it."])
 
     -- HOW SOLID THE WINDOW IS. See Options:ApplyAlpha for why there is one
     -- alpha and not one per layer.
@@ -175,10 +175,10 @@ function Page:BuildPage(page, width)
         apply = function() ns.Options:ApplyAlpha() end,
     })
 
-    grid:Note("Lets the scene behind the window through. It fades the whole "
-        .. "window at once, on purpose: fading each layer separately makes the "
-        .. "values multiply where they overlap and no surface keeps its "
-        .. "colour. Judge it in a bright zone, not a dark one.")
+    grid:Note(L["Lets the scene behind the window through. It fades the "
+        .. "whole window at once, on purpose: fading each layer separately "
+        .. "makes the values multiply where they overlap and no surface "
+        .. "keeps its colour. Judge it in a bright zone, not a dark one."])
 
     -- Two fonts, two jobs, two sections. Panel text is read in rows in a
     -- window; bar text is read at a glance over a moving scene. The design
@@ -189,8 +189,8 @@ function Page:BuildPage(page, width)
         function(value) ns.db.panelFont = value end,
         function() ns.Print("Panel font set. |cffffd100/reload|r to redraw the window in it.") end)
 
-    grid:Note("The window you are looking at - its labels, values and "
-        .. "headings.")
+    grid:Note(L["The window you are looking at - its labels, values and "
+        .. "headings."])
 
     ---------------------------------------------------------------------
     -- Ways in
@@ -201,21 +201,21 @@ function Page:BuildPage(page, width)
         function() return ns.db.minimap.show end,
         function(value) ns.MinimapButton:SetShown(value) end)
 
-    grid:Note("Left click opens this window, right click moves the bars, and "
-        .. "drag moves the button around the minimap edge.")
+    grid:Note(L["Left click opens this window, right click moves the bars, "
+        .. "and drag moves the button around the minimap edge."])
 
     UI.Toggle(grid:Row(L["Lock its position"]),
         function() return ns.db.minimap.locked end,
         function(value) ns.db.minimap.locked = value end)
 
-    grid:Note("The button stays where you put it on the minimap edge, and "
-        .. "dragging it does nothing until you unlock it again.")
+    grid:Note(L["The button stays where you put it on the minimap edge, and "
+        .. "dragging it does nothing until you unlock it again."])
 
     UI.Toggle(grid:Row(L["Game menu entry"]),
         function() return ns.db.gameMenu ~= false end,
         function(value) ns.GameMenu:SetShown(value) end)
 
-    grid:Note("An entry in the game's own addon list.")
+    grid:Note(L["An entry in the game's own addon list."])
 
     grid:Layout()
     page.Refresh = function() grid:Refresh() end

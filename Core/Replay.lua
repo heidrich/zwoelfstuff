@@ -33,11 +33,11 @@ local frame
 -- The plot. The axis runs the full width between these margins, time
 -- flowing left to right and ending at the killing blow on the right edge.
 local PLOT_L, PLOT_R = 30, 30
-local FRAME_W, FRAME_H = 780, 596
+local FRAME_W, FRAME_H = 780, 476
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
 local AXIS_Y = 268          -- from the top of the frame
 local COLUMN_MAX = 70       -- tallest an incoming column may draw
-local MARKS_IN, MARKS_OUT, MARKS_HEAL, MARKS_CAST = 28, 20, 20, 24
+local MARKS_IN, MARKS_OUT, MARKS_CAST = 28, 20, 24
 
 -- The columns stand clear of the axis rather than on it: the seconds are
 -- written ON the line now, and a column starting at the line drew straight
@@ -58,12 +58,24 @@ local HEALTH_Y = 84         -- your own health bar
 local LANE_IN_Y = 112       -- "what came in", growing UP to the axis
 local LANE_CAST_Y = 272     -- everything else you cast, as icons only
 local LANE_OUT_Y = 312      -- your DEFENSIVES, as bars, under those
-local LANE_HEAL_Y = 400     -- "who healed you", under those
+
+-- THERE WAS A FOURTH LANE, "Healing on you", and it went in 4.81.0. Owner:
+-- "bitte noch im death log replay der healing on you bereich rausnehmen." It
+-- held a fifth of the window's height and, on the death he photographed,
+-- nothing at all - which is the ordinary case for the deaths worth opening
+-- this window over. The heals are still RECORDED and the death window still
+-- counts them; what went is the empty band under the plot.
 
 -- The press bars: how tall each row is and how many rows may stack before
 -- the rest are dropped onto the last one. Four is more overlapping
 -- defensives than anybody presses in ten seconds.
 local BAR_H, BAR_GAP, BAR_ROWS = 18, 2, 4
+
+-- WHERE THE PLOT ENDS, so the window is exactly as tall as what it draws.
+-- The press bars are the lowest thing in it and BAR_ROWS of them can stack.
+-- Derived rather than typed: the healing lane used to hold this edge down,
+-- and a number left behind after it went would have left the gap behind too.
+local PLOT_BOTTOM = LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP)
 
 -- Half a second before the first thing happens, so the eye is on the plot
 -- when it starts moving rather than arriving after it.
@@ -505,16 +517,6 @@ local function BuildMark(parent, kind)
     mark.value:SetJustifyH("CENTER")
     mark.value:SetWidth(70)
 
-    -- The heal lane names WHO. A number with no name on it answers "was I
-    -- healed" and not "was anybody healing me", and the second is the
-    -- question a tank has after a death.
-    if kind == "heal" then
-        mark.who = UI.Label(mark, "", 10, C.textFaint)
-        mark.who:SetJustifyH("CENTER")
-        mark.who:SetWidth(84)
-        mark.who:SetWordWrap(false)
-    end
-
     mark:EnableMouse(true)
     mark:SetScript("OnEnter", function(self)
         if self.item then Tooltip(self, self.item) end
@@ -629,7 +631,7 @@ local function BuildWindow()
     local pan = CreateFrame("Frame", nil, frame)
     pan:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 20))
     pan:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
-        -(LANE_HEAL_Y + 100))
+        -PLOT_BOTTOM)
     pan:SetFrameLevel(frame:GetFrameLevel())
     pan:EnableMouse(true)
 
@@ -735,14 +737,12 @@ local function BuildWindow()
     frame.playhead:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
     frame.playhead:SetWidth(1)
     frame.playhead:SetPoint("TOP", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 4))
-    frame.playhead:SetHeight(LANE_HEAL_Y + 112 - HEALTH_Y)
+    frame.playhead:SetHeight(PLOT_BOTTOM - HEALTH_Y)
 
-    -- Three lanes: what hit you above the axis, what you pressed below it,
-    -- and who was healing you under that.
-    frame.incoming, frame.outgoing, frame.heals, frame.casts = {}, {}, {}, {}
+    -- Two lanes: what hit you above the axis, and what you pressed below it.
+    frame.incoming, frame.outgoing, frame.casts = {}, {}, {}
     for i = 1, MARKS_IN do frame.incoming[i] = BuildMark(frame, "in") end
     for i = 1, MARKS_OUT do frame.outgoing[i] = BuildMark(frame, "press") end
-    for i = 1, MARKS_HEAL do frame.heals[i] = BuildMark(frame, "heal") end
     for i = 1, MARKS_CAST do frame.casts[i] = BuildMark(frame, "press") end
 
     frame.laneIn = UI.Eyebrow(frame, "Damage on you")
@@ -751,8 +751,6 @@ local function BuildWindow()
     -- text kann eigentlich raus, das sieht jeder" - a row of your own spell
     -- icons under a time axis needs no label, and the legend at the foot of
     -- the window already names the defensives among them.
-    frame.laneHeal = UI.Eyebrow(frame, "Healing on you")
-    frame.laneHeal:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_HEAL_Y)
 
     ---------------------------------------------------------------------
     -- The transport
@@ -892,75 +890,6 @@ end
 -- Painting
 ---------------------------------------------------------------------------
 
--- One heal, in the bottom lane: the amount, the spell's icon, and the name
--- of whoever cast it under both. The class colour comes from the client
--- when that person is in your group, which is when it can.
-local function PlaceHeal(mark, ev, from, to)
-    local C = ns.UI.C
-    mark.item = ev
-    if not Replay.Visible(ev.t, from, to) then
-        mark:Hide()
-        return
-    end
-    local x = PLOT_L + Replay.Fraction(ev.t, from, to) * PLOT_W
-
-    mark:ClearAllPoints()
-    mark:SetPoint("TOP", frame, "TOPLEFT", x, -(LANE_HEAL_Y + 16))
-    mark:SetSize(24, 64 + AVATAR)
-
-    mark.column:ClearAllPoints()
-    mark.column:SetPoint("TOP", mark, "TOP", 0, 0)
-    mark.column:SetHeight(8)
-    mark.column:SetColorTexture(0.12, 0.42, 0.16, 1)
-
-    mark.value:ClearAllPoints()
-    mark.value:SetPoint("TOP", mark.column, "BOTTOM", 0, -1)
-    mark.value:SetText("|cff67c971+" .. ns.ShortNumber(ev.amount) .. "|r")
-
-    mark.icon:ClearAllPoints()
-    mark.icon:SetPoint("TOP", mark.value, "BOTTOM", 0, -2)
-    mark.icon:SetTexture((ev.spellID and ns.SpellTexture(ev.spellID)) or 135966)
-
-    -- The healer's face over their own heal, for the same reason the mob's
-    -- sits over its own hit: in a five man three people are healing you.
-    local hasFace = PaintFace(mark, ev.who)
-    if hasFace then
-        mark.face:ClearAllPoints()
-        mark.face:SetPoint("TOP", mark.icon, "BOTTOM", 0, -3)
-    end
-
-    -- The healer's name, in their class colour where the client will give
-    -- it. UnitClass answers for a name that is in your group and nothing
-    -- else, so it is asked under pcall and the plain name is the fallback.
-    local who = ev.who
-    if who then
-        local coloured = who
-        local ok, _, classFile = pcall(UnitClass, who)
-        if ok and classFile and RAID_CLASS_COLORS
-            and RAID_CLASS_COLORS[classFile] then
-            local colour = RAID_CLASS_COLORS[classFile]
-            -- FLOORED, NOT LEFT TO %02x. A class colour is a fraction, and
-            -- 0.77 * 255 is 196.35: the client's Lua 5.1 truncates it
-            -- silently, the harness's raises "number has no integer
-            -- representation", and the harness is right. This line had never
-            -- been executed out here because nothing stubbed the colour table
-            -- until the raid check needed it - the first time it ran, it
-            -- threw.
-            coloured = string.format("|cff%02x%02x%02x%s|r",
-                math.floor(colour.r * 255), math.floor(colour.g * 255),
-                math.floor(colour.b * 255), who)
-        end
-        mark.who:SetText(coloured)
-    else
-        mark.who:SetText("|cff626a76unnamed|r")
-    end
-    mark.who:ClearAllPoints()
-    mark.who:SetPoint("TOP", hasFace and mark.face or mark.icon, "BOTTOM",
-        0, -2)
-    mark.who:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
-    mark:Show()
-end
-
 -- Places every mark for one death. Positions do not change while it plays;
 -- only what is lit does, which is what makes the playhead read as time
 -- passing rather than as things appearing out of nowhere.
@@ -968,17 +897,13 @@ local function Place(snapshot, from, to)
     local events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
     local maxHP = snapshot.maxHP
 
-    -- Damage above the axis, healing in a lane of its own below it. They
-    -- were one lane and two colours; two questions - "what hit me" and
-    -- "was anybody healing me" - read better as two rows of one clock.
-    local slot, healSlot = 0, 0
+    -- WHAT CAME IN, above the axis. Heals are skipped rather than filtered
+    -- out of the list: the list is Death's, several things read it, and
+    -- rebuilding it here to leave one kind out would be a second version of
+    -- the story that has to be kept in step with the first.
+    local slot = 0
     for _, ev in ipairs(events) do
-        if ev.heal then
-            healSlot = healSlot + 1
-            if healSlot <= MARKS_HEAL then
-                PlaceHeal(frame.heals[healSlot], ev, from, to)
-            end
-        else
+        if not ev.heal then
             slot = slot + 1
             if slot <= MARKS_IN then
                 local mark = frame.incoming[slot]
@@ -1033,10 +958,6 @@ local function Place(snapshot, from, to)
     for i = slot + 1, MARKS_IN do
         frame.incoming[i].item = nil
         frame.incoming[i]:Hide()
-    end
-    for i = healSlot + 1, MARKS_HEAL do
-        frame.heals[i].item = nil
-        frame.heals[i]:Hide()
     end
 
     -- YOUR PRESSES, AS BARS. Each starts where you cast it and runs for as
@@ -1243,7 +1164,7 @@ local function Paint(now)
     local state = Replay.state
     local from, to = state.viewFrom or state.span, state.viewTo or 0
 
-    for _, lane in ipairs({ frame.incoming, frame.outgoing, frame.heals,
+    for _, lane in ipairs({ frame.incoming, frame.outgoing,
         frame.casts }) do
         for _, mark in ipairs(lane) do
             if mark.item then

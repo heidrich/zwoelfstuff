@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwölf - EU Destromath
-## Version: 4.80.0
+## Version: 4.81.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -126,6 +126,11 @@ Core\Reminders.lua
 Core\Taunts.lua
 # Own casts recorded, readiness estimated - History feeds the Timeline
 # panel's strip and the death window's "was it still ready".
+# Which specialisation everybody is playing. Above Externals, whose panel is
+# its only reader, and above nothing else on purpose: it answers "I do not
+# know" until the server says otherwise, and every caller is written to treat
+# that as "show it anyway".
+Core\Specs.lua
 # The cooldowns somebody ELSE presses on you. Below Reminders because it is
 # the same kind of thing - a panel with its own placement - and it needs
 # nothing from anybody: class and the roster are all it reads.

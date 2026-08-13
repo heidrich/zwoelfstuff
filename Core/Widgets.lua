@@ -2346,6 +2346,46 @@ function UI.MediaPicker(row, kind, get, set, apply, inheritLabel, tint)
 end
 
 ---------------------------------------------------------------------------
+-- AN OPTION THAT CANNOT BE DRAWN
+--
+-- 2026-08-13, three new rows shipped with EMPTY MENUS. The field is `text`
+-- and `label` had been written instead - and nothing anywhere said so. The
+-- widget built, the row painted, the menu opened, and every line in it was
+-- blank. A control that is silently unusable is the worst kind of bug this
+-- window can have, because it looks like a control.
+--
+-- So the picker now says so. Collected rather than raised: this runs inside
+-- a paint pass and a throw there takes the whole page down, which is a worse
+-- answer than one loud line. The harness reads the list after building every
+-- page, which is what turns this from a message into a check.
+---------------------------------------------------------------------------
+UI.optionFaults = {}
+
+local reportedOption = {}
+
+local function OptionFault(where, option, index)
+    local what
+    if type(option) ~= "table" then
+        what = string.format("entry %d is a %s, not an option",
+            index, type(option))
+    elseif option.text == nil or option.text == "" then
+        what = string.format("entry %d has no `text` (value %s)",
+            index, tostring(option.value))
+    elseif option.value == nil then
+        what = string.format("entry %d (%s) has no `value`",
+            index, tostring(option.text))
+    else
+        return
+    end
+
+    local line = where .. ": " .. what
+    if reportedOption[line] then return end
+    reportedOption[line] = true
+    UI.optionFaults[#UI.optionFaults + 1] = line
+    ns.Print("|cffff4040A menu in this window cannot be drawn|r - " .. line)
+end
+
+---------------------------------------------------------------------------
 -- Dropdown - a plain value picker inside a settings row
 ---------------------------------------------------------------------------
 function UI.Dropdown(row, options, get, set, cfg)
@@ -2389,12 +2429,23 @@ function UI.Dropdown(row, options, get, set, cfg)
     button.Refresh = function()
         local current = get()
         local text, icon = cfg.emptyText or "-", nil
-        for _, option in ipairs(Options()) do
-            if option.value == current then
-                text, icon = option.text, option.icon
-                break
+        -- EVERY PAINT, not only when the menu is opened: a menu nobody has
+        -- clicked yet is exactly the one whose emptiness went unnoticed for a
+        -- release. The name comes off the row so the message says which.
+        -- ALL of them, and the match found separately: stopping at the
+        -- current entry would leave everything below it unchecked, which is
+        -- where a blank line is most likely to be sitting unseen.
+        local where = row.label and row.label.GetText and row.label:GetText()
+        if where == "" then where = nil end
+        local found
+        for index, option in ipairs(Options()) do
+            OptionFault(where or "a dropdown", option, index)
+            if not found and type(option) == "table"
+                and option.value == current then
+                found = option
             end
         end
+        if found then text, icon = found.text, found.icon end
         button.label:SetText(text)
         button:SetMark(icon)
     end
