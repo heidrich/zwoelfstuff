@@ -4,6 +4,37 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.79.0] - 2026-08-13
+
+### Added
+
+- **A proc's buff now identifies itself.** The 12.1 route shows the real aura —
+  the game's own icon, the game's own timer, extensions included — but it needs
+  the aura's spell ID, and there is no call that gives it. Until now that meant
+  somebody had to play each spec and write the pairing down; exactly one shipped.
+  It is watched instead. A proc's glow rises when the buff lands and falls when
+  it is spent, so the buff is in your aura list at one end and gone at the other;
+  the flask, the food and the raid buffs are in both and cancel out. Three procs
+  agreeing on one buff, with everything else eliminated, is the buff — and then
+  the bar switches from our stopwatch to the game's own timing and says so.
+
+  **Out in the world, not in a dungeon.** Inside instanced content the client
+  withholds aura data and the reading simply does not happen. One proc on a
+  target dummy is enough, and it is enough for everybody who plays that spec.
+- **The aura strips on the co-tank panel sweep.** The round cooldown sweep on
+  the icon, drawn by the game from the aura's own duration object — so an aura
+  that gets extended mid-fight sweeps to the new end instead of finishing early.
+  Under *Co-tanks → Auras → Sweep*, on by default: these strips have never drawn
+  live for anybody, so this is a first impression rather than a change.
+
+### Fixed
+
+- **The addon no longer talks as though 12.1 were still coming.** The Auras page
+  said the engine "arrives in patch 12.1" on a client that has it, and claimed
+  aura data is secret everywhere — where you are standing decides that, and out
+  in the world it frequently is not. Both now say what is true, and the page
+  explains what is actually left to do.
+
 ## [4.78.1] - 2026-08-13
 
 ### Fixed

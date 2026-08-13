@@ -979,6 +979,15 @@ local function StripSection(grid, key, label, note)
         ns.Media.OUTLINES, ElGet("outline", "OUTLINE"), ElSet("outline"),
         { apply = Apply })
 
+    -- The sweep across the icon, drawn by the game out of the aura's own
+    -- duration. Above the countdown because it is the coarser of the two
+    -- readings: you see the sweep without looking at it.
+    -- Bare, like every other row on this page. A single translated label
+    -- among untranslated ones reads as a page that is localised when it is
+    -- not; this one comes along when the page does.
+    UI.Toggle(grid:FullRow("Sweep", { controlWidth = 124 }),
+        ElGet("swipe", true), ElSet("swipe"))
+
     UI.Toggle(grid:FullRow("Countdown", { controlWidth = 124 }),
         ElGet("countdown", true), ElSet("countdown"))
     UI.Slider(grid:FullRow("Countdown size", { controlWidth = 124 }), {

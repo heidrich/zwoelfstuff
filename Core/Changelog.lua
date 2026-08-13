@@ -13,6 +13,15 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.79.0",
+        date = "2026-08-13",
+        lines = {
+            "|cffffd100A proc's buff now identifies itself.|r Patch 12.1 lets the game show the real buff - its own icon, its own timer, extensions and all - instead of our stopwatch, but only if the addon knows which buff belongs to which proc, and nothing in the game will tell it. So it watches: the glow comes up when the buff lands and goes down when it is spent, and whatever came and went with it three times running is the buff. Nothing to press and nothing to set. It needs to happen |cffffd100out in the world|r - in a dungeon the game hides your buffs from addons - so one proc on a target dummy is enough, for you and for everybody else who plays that spec.",
+            "|cffffd100The aura icons on the co-tank panel have a sweep now,|r the round one you know from every cooldown. The game draws it from the buff's own timer, so a buff that gets extended sweeps to the new end instead of finishing early. |cffffd100Co-tanks - Auras - Sweep|r if you would rather not have it.",
+            "|cffffd100Fixed:|r the Auras page still talked as though patch 12.1 were coming, on a client that already has it. It also said your buffs are hidden from addons everywhere - where you are standing decides that, and out in the world they usually are not.",
+        },
+    },
+    {
         version = "4.78.1",
         date = "2026-08-13",
         lines = {

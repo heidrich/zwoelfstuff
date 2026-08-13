@@ -795,7 +795,12 @@ end
 function Externals.Style()
     local cfg = Externals.Config()
     return {
-        borderSize      = math.max(0, cfg.borderSize or 1),
+        -- The `or` is the fallback for a profile that predates the key, and
+        -- it has to say the same thing ns.DEFAULTS does - 0. Two places
+        -- naming a default is how they drift, and this one drifted the wrong
+        -- way round: the table would have said 0 while an older profile
+        -- silently kept the line.
+        borderSize      = math.max(0, cfg.borderSize or 0),
         borderColor     = cfg.borderColor or { 0, 0, 0 },
         borderTexture   = cfg.borderTexture or "None",
         borderGradient  = cfg.borderGradient,

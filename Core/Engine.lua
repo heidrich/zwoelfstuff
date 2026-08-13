@@ -198,6 +198,37 @@ end
 
 Engine.BindDurationBar = BindDurationBar
 
+-- THE SWIPE, and it is the one an aura icon actually wants.
+--
+-- A StatusBar is a bar beside the icon; this is the round sweep ON it, the
+-- shape every player already reads as "time left" because that is what a
+-- cooldown looks like. The engine drives it from the aura's own duration
+-- OBJECT rather than from numbers we would have to read - so it is exact,
+-- it costs no OnUpdate, and an aura that gets EXTENDED mid-fight sweeps to
+-- the new end instead of finishing early and lying.
+--
+-- Two things this cannot do, both learned rather than assumed:
+--
+--   * The Cooldown frame must be created inside initializeFrame like every
+--     other child, and it must not be touched afterwards. The engine takes
+--     OWNERSHIP at registration - a SetCooldown of ours from outside fights
+--     it and wins for one frame, which reads as a flicker.
+--   * An engine-bound cooldown draws no widget countdown of its own. The
+--     number belongs to SetDurationText; leaving the widget's own numbers on
+--     puts two clocks on one icon.
+local function BindDurationCooldown(button, cooldown)
+    if not (button and cooldown and button.SetDurationCooldown) then
+        return false
+    end
+    return (pcall(button.SetDurationCooldown, button, cooldown))
+end
+
+-- There is deliberately no "does this client have the swipe" question to ask
+-- beforehand: SetDurationCooldown lives on the BUTTON, and a button exists
+-- only inside initializeFrame. The return value above IS the answer, at the
+-- only moment it can honestly be given.
+Engine.BindDurationCooldown = BindDurationCooldown
+
 ---------------------------------------------------------------------------
 -- Sorting
 ---------------------------------------------------------------------------

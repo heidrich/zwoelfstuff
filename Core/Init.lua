@@ -226,9 +226,16 @@ ns.DEFAULTS = {
         --
         -- The values are the bar defaults, so a panel and a bar look like
         -- they belong to one addon before anybody has touched either.
+        --
+        -- EXCEPT THE BORDER, which is 0 here on purpose. Owner, 2026-08-13:
+        -- "cd request border bitte auf 0 dicke per default stellen." A bar
+        -- is a row of cells that need telling apart; this panel is a list of
+        -- names, and a line around each row only boxes in what the spacing
+        -- already separates. The setting is untouched - anybody who wants
+        -- the line back sets it under the panel's own Appearance.
         scale            = 1.0,
         alpha            = 1.0,
-        borderSize       = 1,
+        borderSize       = 0,
         borderColor      = { 0.00, 0.00, 0.00 },
         borderTexture    = "None",
         backdrop         = true,
@@ -502,6 +509,7 @@ ns.DEFAULTS = {
             font = "", outline = "OUTLINE",
             countdown = true, countdownSize = 0,
             stacks = true, stacksSize = 0,
+            swipe = true,
         },
         buffs = {
             show = true, max = 8, size = 22, spacing = 1, perRow = 8,
@@ -511,6 +519,14 @@ ns.DEFAULTS = {
             font = "", outline = "OUTLINE",
             countdown = true, countdownSize = 0,
             stacks = true, stacksSize = 0,
+            -- THE SWEEP ON THE ICON, engine-driven. On by default, and that
+            -- is a free choice rather than a change: these strips have never
+            -- drawn live for anybody - they were test mode only until 12.1 -
+            -- so this default IS the first impression, not a disturbance of
+            -- a settled one. The engine reads the aura's own duration OBJECT,
+            -- so an aura that gets extended sweeps to the new end instead of
+            -- finishing early and lying about it.
+            swipe = true,
         },
     },
 }

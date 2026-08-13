@@ -1403,6 +1403,27 @@ local function BuildEngineStrip(strip, cfg, filter)
                 end)
             end
 
+            -- THE SWEEP, and it goes on BEFORE the text so the number sits on
+            -- top of it. Engine-owned from the moment it is registered: a
+            -- SetCooldown of ours from outside would fight it and win for a
+            -- single frame, which reads as a flicker rather than as a bug.
+            --
+            -- Its own countdown numbers stay off - the number belongs to
+            -- SetDurationText below, and two clocks on one icon is what
+            -- leaving them on looks like.
+            if cfg.swipe then
+                pcall(function()
+                    local sweep = CreateFrame("Cooldown", nil, button,
+                        "CooldownFrameTemplate")
+                    sweep:SetAllPoints(button)
+                    sweep:SetDrawEdge(false)
+                    sweep:SetDrawBling(false)
+                    sweep:SetHideCountdownNumbers(true)
+                    sweep:SetFrameLevel(button:GetFrameLevel() + 1)
+                    ns.Engine.BindDurationCooldown(button, sweep)
+                end)
+            end
+
             if cfg.countdown then
                 pcall(function()
                     local text = textLayer:CreateFontString(nil, "OVERLAY")

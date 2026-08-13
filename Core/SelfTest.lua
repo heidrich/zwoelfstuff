@@ -2358,6 +2358,9 @@ local function TestDesignSystem()
             run and pressed == "LeftButton")
 
         -- Two presses, four edges, two runs - the whole point, counted.
+        --
+        -- (The aura-binding block below is the other half of today's lesson:
+        -- a rule with a test, and a wiring with one.)
         local runs = 0
         local memory = nil
         for _, edge in ipairs({ true, false, true, false }) do
@@ -2366,6 +2369,62 @@ local function TestDesignSystem()
             if acts then runs = runs + 1 end
         end
         Check("Two presses run the thing twice, not four times", runs == 2)
+    end
+
+    -----------------------------------------------------------------------
+    -- THE AURA BINDS ITSELF
+    --
+    -- Owner: "das muss auch ohne mich gehen, die sachen sind doch alle im
+    -- spiel." He is right about the second half and it does not follow from
+    -- it: there is no call that says which buff an ability lights up for -
+    -- EllesmereUI is fully on 12.1 and keeps exactly ONE such pairing, by
+    -- hand. So it is watched instead, and the watching is what must not need
+    -- a person.
+    --
+    -- A proc's glow rises with the buff and falls when it is spent, so the
+    -- buff is in the aura list at SHOW and gone at HIDE. The flask, the food
+    -- and the raid buffs are in both and cancel. What survives across
+    -- several procs is the aura.
+    -----------------------------------------------------------------------
+    do
+        local Narrow = ns.Auras.NarrowAura
+
+        -- One proc never decides. Three things ended together and any of
+        -- them could be the one.
+        local cand, bound = Narrow(nil, { [10] = true, [20] = true }, 3)
+        Check("One proc is a shortlist, not an answer", bound == nil)
+        Check("Both of them are still standing", cand[10] == 1 and cand[20] == 1)
+
+        -- The second proc drops the coincidence. Still not enough: alone is
+        -- not the same as confirmed.
+        cand, bound = Narrow(cand, { [10] = true }, 3)
+        Check("What did not happen again falls out", cand[20] == nil)
+        Check("Alone after two is still not confirmed", bound == nil)
+
+        cand, bound = Narrow(cand, { [10] = true }, 3)
+        Check("Alone and agreed three times is the aura", bound == 10)
+        Check("The shortlist is dropped once it is decided", cand == nil)
+
+        -- THE ONE THAT STOPS A WRONG BINDING. Three agreements while two ids
+        -- are still standing does not say which - and a wrong auraID drives
+        -- the caption and the timing of a real bar.
+        local two = { [10] = true, [20] = true }
+        local both = Narrow(Narrow(Narrow(nil, two, 3), two, 3), two, 3)
+        Check("Three agreements on two ids still binds nothing",
+            select(2, Narrow(both, two, 3)) == nil)
+
+        -- A moment the client would not answer for - inside a dungeon - must
+        -- not throw away what was learned outside it.
+        local kept = Narrow({ [10] = 2 }, {}, 3)
+        Check("A reading with nothing in it changes nothing",
+            kept and kept[10] == 2)
+        Check("So does no reading at all", Narrow({ [10] = 2 }, nil, 3)[10] == 2)
+
+        -- Everything disagreed: the recorder starts again from what it just
+        -- saw rather than sitting on an empty set for ever.
+        local restarted = Narrow({ [10] = 2 }, { [30] = true }, 3)
+        Check("A total disagreement starts over instead of dying",
+            restarted[30] == 1 and restarted[10] == nil)
     end
 
     -----------------------------------------------------------------------

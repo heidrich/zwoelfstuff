@@ -54,15 +54,20 @@
 --
 -- AND THE SWITCH IS ONLY HALF A FEATURE UNTIL THE IDS EXIST. Measured on the
 -- day 12.1 landed: the frame type is there, IsAvailable() answers true, and
--- almost every entry still takes the glow route - because it has no auraID,
--- not because the engine is missing. One is shipped (Core/KnownProcs.lua).
--- Everything else has to be BOUND, once, by somebody playing that spec. That
--- is the work this patch actually opened, and it is data collection rather
--- than a code change.
+-- almost every entry still took the glow route - because it had no auraID,
+-- not because the engine was missing. One was shipped, and the plan was that
+-- somebody would play each spec and write the rest down.
+--
+-- THAT PLAN IS GONE. The ids bind THEMSELVES now - see "BINDING THE AURA BY
+-- WATCHING" further down. Nobody types anything and nobody has to notice:
+-- three procs out in the world are enough, and the export still carries the
+-- result so it can ship for everybody.
 --
 -- WHY THERE IS NO HARDCODED TABLE OF LINKS.
 --
--- There is no API that says "aura X lights up ability Z". Writing such a table
+-- There is no API that says "aura X lights up ability Z", and that is not for
+-- want of looking: EllesmereUI is fully on 12.1 and keeps exactly ONE such
+-- pairing, written out by hand, for the same reason. Writing such a table
 -- from memory is exactly the mistake that already cost this project two wrong
 -- spell IDs. So the addon watches instead:
 --
@@ -159,6 +164,11 @@ end
 ---------------------------------------------------------------------------
 local showAt = {}
 
+-- The player's auras at the moment each glow came up - see "BINDING THE AURA
+-- BY WATCHING" below. Declared beside showAt because it is the same kind of
+-- thing: a note about one live proc, never stored, worse than useless stale.
+local auraAt = {}
+
 ---------------------------------------------------------------------------
 -- Telling you about a proc nobody had seen before
 --
@@ -221,6 +231,12 @@ local function NoteShow(spellID)
     end
 
     entry.seen = (entry.seen or 0) + 1
+
+    -- The reading that binds the aura. Only while there is something to
+    -- learn: a proc that already knows its aura costs nothing here.
+    if not entry.auraID then
+        auraAt[spellID] = ns.OwnAuras("player", "HELPFUL")
+    end
 end
 
 -- When the player last cast each spell. A glow that ends right after its own
@@ -234,6 +250,83 @@ local CAST_WINDOW = 0.5
 
 local function NoteCast(spellID)
     castAt[spellID] = GetTime()
+end
+
+---------------------------------------------------------------------------
+-- BINDING THE AURA BY WATCHING, instead of by hand
+--
+-- The 12.1 route needs the aura's own spell ID, and there is no call that
+-- gives it: nothing answers "which buff does this ability light up for".
+-- That is not this addon being short of an idea - EllesmereUI is fully on
+-- 12.1 and keeps exactly one such pairing, written out by hand, for the same
+-- reason. So the pairing has to be OBSERVED, and the only question worth
+-- asking is whether a person has to do the observing.
+--
+-- They do not. A proc's glow comes up when the buff lands and goes down when
+-- it is spent, so the buff is in the list at SHOW and out of it at HIDE.
+-- Everything else you are carrying - the flask, the food, the raid buffs -
+-- is in both lists and falls out of the subtraction. What survives, across
+-- several procs, is the aura itself.
+--
+-- WHY IT NEEDS SEVERAL. One proc can easily be shared with something that
+-- happened to expire at the same moment. Two agreeing is a coincidence
+-- worth suspecting; three agreeing on ONE id, with everything else
+-- eliminated, is the id. A wrong binding is expensive - it would drive the
+-- caption and the timing of the real bar - and this file has already cost
+-- this project a day over two wrong spell IDs.
+--
+-- WHERE IT WORKS, stated plainly rather than discovered later: out in the
+-- world. Inside a dungeon or a raid the client withholds aura data and the
+-- reading simply does not happen - see ns.OwnAuras. One proc on a target
+-- dummy binds it for everybody who plays the spec, which is the whole point
+-- of a table that ships.
+---------------------------------------------------------------------------
+
+-- How many separate procs have to name the same aura before it is believed.
+local CONFIRMATIONS = 3
+
+-- PURE, and that is deliberate: the harness has no client to proc anything
+-- on, so this is the part that can be asked directly.
+--
+--   candidates  { [auraID] = how many procs have agreed } or nil
+--   fresh       { [auraID] = true } - what came and went with THIS proc
+--   needed      agreements required
+--
+-- Returns the new candidate table and, once one id is alone and confirmed,
+-- that id.
+function Auras.NarrowAura(candidates, fresh, needed)
+    -- Nothing came and went. Says nothing either way, so it changes nothing -
+    -- emptying the candidates here would let one unreadable moment throw away
+    -- everything learned before it.
+    if not fresh or next(fresh) == nil then return candidates, nil end
+    needed = needed or CONFIRMATIONS
+
+    local narrowed = {}
+    if candidates == nil then
+        for id in pairs(fresh) do narrowed[id] = 1 end
+    else
+        for id, times in pairs(candidates) do
+            if fresh[id] then narrowed[id] = times + 1 end
+        end
+        -- Every previous candidate disagreed with this reading. Rather than
+        -- sit empty for ever - which is what an intersection does once it
+        -- hits nothing - start again from what was just seen.
+        if next(narrowed) == nil then
+            for id in pairs(fresh) do narrowed[id] = 1 end
+        end
+    end
+
+    local only, count = nil, 0
+    for id, times in pairs(narrowed) do
+        count = count + 1
+        if times >= needed then only = id end
+    end
+
+    -- ALONE **AND** CONFIRMED. Either one on its own is a guess: one
+    -- candidate after a single proc is just a short list, and three
+    -- agreements while two ids are still standing does not say which.
+    if count == 1 and only then return nil, only end
+    return narrowed, nil
 end
 
 ---------------------------------------------------------------------------
@@ -306,7 +399,12 @@ end
 
 local function NoteHide(spellID)
     local started = showAt[spellID]
+    -- Taken and CLEARED in the same breath as showAt, on every path out of
+    -- here. A reading kept past its own proc would be subtracted from some
+    -- later one and name the wrong buff.
+    local before = auraAt[spellID]
     showAt[spellID] = nil
+    auraAt[spellID] = nil
     if not started then return end
 
     local store = Recorded(Auras:SpecKey(), false)
@@ -316,6 +414,38 @@ local function NoteHide(spellID)
     local now = GetTime()
     local lasted = now - started
     if lasted <= 0.5 or lasted >= 600 then return end
+
+    -- BEHIND THE SAME GUARD AS THE DURATION, on purpose. A glow that came and
+    -- went inside half a second is a flicker, and whatever was on you at both
+    -- ends of it says nothing about which buff it was.
+    if before and not entry.auraID then
+        local after = ns.OwnAuras("player", "HELPFUL")
+        if after then
+            local fresh = {}
+            for id in pairs(before) do
+                if not after[id] then fresh[id] = true end
+            end
+
+            local narrowed, bound = Auras.NarrowAura(entry.auraCand, fresh)
+            entry.auraCand = narrowed
+            if bound then
+                entry.auraID = bound
+                -- Says what CHANGED for the player, not what was stored: from
+                -- here on the bar is driven by the game's own timer instead of
+                -- ours, which is the part they will notice.
+                ns.Print(string.format(
+                    "|cff40ff40%s|r is now timed by the game itself, not by "
+                    .. "our stopwatch - its buff identified itself over %d "
+                    .. "procs.",
+                    ns.SpellName(entry.display or bound) or tostring(bound),
+                    CONFIRMATIONS))
+                Auras:Invalidate()
+                if ns.Options and ns.Options.OnCatalogChanged then
+                    ns.Options:OnCatalogChanged()
+                end
+            end
+        end
+    end
 
     -- Anything recorded before the two readings were told apart was a floor.
     entry.floor = entry.floor or entry.duration

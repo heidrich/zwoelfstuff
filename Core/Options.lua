@@ -504,13 +504,23 @@ local ABOUT_LIMITS = {
 
     "Since patch 12.0 aura data is 'secret'. Measured on this character, in "
     .. "combat, with the buff up: 0 readable, 18 secret. Not just Boiling "
-    .. "Point - every buff. So an addon cannot identify an aura at all, by ID, "
-    .. "by name or by icon.",
+    .. "Point - every buff. Where you are standing decides it: inside a "
+    .. "dungeon or a raid the client withholds them, and out in the world it "
+    .. "often does not. So an addon cannot rely on identifying an aura at "
+    .. "all - not by ID, not by name, not by icon.",
 
     "Blizzard's answer is Blizzard_AuraContainer: an addon declares what it "
     .. "wants to see and hands over the widgets, and the engine binds the "
     .. "aura, shows the button only while it is up, and drives icon, duration, "
-    .. "bar and stacks itself. That frame type arrives in patch 12.1.",
+    .. "bar and stacks itself. That frame type arrived with patch 12.1, and "
+    .. "this addon uses it wherever it knows the aura's own ID. Diagnostics "
+    .. "says whether your client has it.",
+
+    "Knowing that ID is the whole of what is left. There is no call that "
+    .. "answers 'which buff does this ability light up for', so it has to be "
+    .. "watched once - which this addon now does by itself, out in the world, "
+    .. "where the client still answers. One proc on a target dummy is enough, "
+    .. "and it is enough for everybody who plays that spec.",
 
     "What is also readable is a proc: Boiling Point empowers Blood Boil, and "
     .. "IsSpellOverlayed(50842) is a plain boolean that never touches aura "

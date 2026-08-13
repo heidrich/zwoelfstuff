@@ -52,3 +52,48 @@ function ns.SameValue(a, b)
     end
     return a == b
 end
+
+---------------------------------------------------------------------------
+-- WHAT THIS CLIENT WILL ACTUALLY NAME, right now
+--
+-- "Auras are secret" is true in the place it matters and not everywhere:
+-- WHERE YOU ARE STANDING DECIDES IT. Inside restricted content - a dungeon,
+-- a raid - the client withholds them; out in the world it frequently does
+-- not. EllesmereUI documents the same edge from the other side, on a buff
+-- that was moved onto the withheld list in build 68824: its own read
+-- "returns nothing for it in restricted content".
+--
+-- So this answers for the moment it is asked and never caches. Two callers
+-- with one enumeration between them, because two loops over the same sixty
+-- slots would be two places to get the guard wrong:
+--
+--   RaidCheck   which helpful buffs are on me, to report to the group
+--   Auras       which buff came and went with a proc's glow
+--
+-- nil means "the client is not saying", which is a THIRD answer and not an
+-- empty list - an empty list would read as "no buffs".
+---------------------------------------------------------------------------
+function ns.AurasReadable()
+    if C_Secrets and C_Secrets.ShouldAurasBeSecret then
+        local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
+        if ok and secret then return false end
+    end
+    return C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and true or false
+end
+
+-- ids, icons - both as sets, both nil when the client is withholding.
+function ns.OwnAuras(unit, filter)
+    if not ns.AurasReadable() then return nil, nil end
+
+    local ids, icons = {}, {}
+    for index = 1, 60 do
+        -- A secret one is SKIPPED rather than guarded around: reading it is
+        -- the thing that raises, and there is nothing to do with it anyway.
+        local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex,
+            unit or "player", index, filter or "HELPFUL")
+        if not ok or not data then break end
+        if ns.CanCompute(data.spellId) then ids[data.spellId] = true end
+        if ns.CanCompute(data.icon) then icons[data.icon] = true end
+    end
+    return ids, icons
+end

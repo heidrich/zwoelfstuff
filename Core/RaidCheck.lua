@@ -102,30 +102,15 @@ end
 -- all the way to the window as "no answer", because a zero would read as
 -- "this person has no flask".
 ---------------------------------------------------------------------------
-function RaidCheck.AurasReadable()
-    if C_Secrets and C_Secrets.ShouldAurasBeSecret then
-        local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
-        if ok and secret then return false end
-    end
-    return C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and true or false
-end
+-- BOTH OF THESE MOVED TO Core/Secrets.lua and are called through, not
+-- copied. The proc recorder in Core/Auras.lua asks the same question for a
+-- different reason - which buff came and went with a glow - and two loops
+-- over the same sixty slots would be two places to get the secrecy guard
+-- wrong. Kept under these names because this file's callers read well with
+-- them.
+function RaidCheck.AurasReadable() return ns.AurasReadable() end
 
--- Every helpful aura on the player, as ids we are allowed to compute with.
--- A secret one is skipped rather than guarded around: reading it is the thing
--- that raises, and there is nothing this window could do with it anyway.
-local function OwnAuraIDs()
-    local ids, icons = {}, {}
-    if not RaidCheck.AurasReadable() then return nil, nil end
-
-    for index = 1, 60 do
-        local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex, "player", index,
-            "HELPFUL")
-        if not ok or not data then break end
-        if ns.CanCompute(data.spellId) then ids[data.spellId] = true end
-        if ns.CanCompute(data.icon) then icons[data.icon] = true end
-    end
-    return ids, icons
-end
+local function OwnAuraIDs() return ns.OwnAuras("player", "HELPFUL") end
 
 -- The lowest durability of anything worn, as a percent. The LOWEST and not
 -- the average: a raid leader asking about durability is asking whether
