@@ -2410,6 +2410,16 @@ local function TestDesignSystem()
 
         Check("No settings at all hides nothing", not Hidden(nil, true))
 
+        -- A PROFILE FROM BEFORE THE SETTING EXISTED. ns.DEFAULTS only reaches
+        -- a profile being created, so the key is simply absent from every
+        -- older one - and absent must read as "never", never as "hide it".
+        Check("A profile that predates the setting hides nothing",
+            not Hidden({ dimOnCooldown = true }, true)
+            and not Hidden({ dimOnCooldown = true }, false))
+        Check("And the default the page falls back to is 'never'",
+            ns.EFFECT_DEFAULTS.hideWhen == "never"
+            and ns.EFFECT_DEFAULTS.reflow == "off")
+
         -- A bar that ONLY hides still has to be ticked - the ticker is the
         -- only thing watching for the flip that puts the icon back.
         Check("A bar that only hides is still watched",

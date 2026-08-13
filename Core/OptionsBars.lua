@@ -1830,10 +1830,24 @@ function Workspace:BuildOptionsPane(parent, width)
     -- their eye. Every one of these is off by default: a screen that flashes
     -- at you before you asked it to is the reason some addons get uninstalled
     -- in the first fight.
+    -- THE DEFAULT ANSWERS FOR A KEY A PROFILE HAS NEVER HEARD OF.
+    --
+    -- ns.DEFAULTS only reaches a profile that is being CREATED, so every
+    -- setting added after somebody started playing is simply absent from
+    -- theirs. A switch reads that as off and carries on; a dropdown finds no
+    -- entry matching nil and draws an EMPTY box, which is what the owner saw
+    -- on a bar he had had for weeks: "mach nothing als standard auswahl,
+    -- wenn die funktion aktiviert ist. ansonsten sehen leute die bars nicht."
+    --
+    -- Answering from ns.EFFECT_DEFAULTS is the same fallback the renderer
+    -- already applies, so the page now shows what the bar is actually doing
+    -- rather than a blank where the answer is "the default".
     local function FxGet(key)
         return function()
             local _, cfg = Workspace:Current()
-            return cfg and cfg.effects and cfg.effects[key]
+            local value = cfg and cfg.effects and cfg.effects[key]
+            if value == nil then return ns.EFFECT_DEFAULTS[key] end
+            return value
         end
     end
     local function FxSet(key)
