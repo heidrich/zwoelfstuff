@@ -1911,6 +1911,15 @@ function Workspace:BuildOptionsPane(parent, width)
     -- The dependency is stated rather than discovered. "I switched it on and
     -- nothing happens" is otherwise a question with no answer on this screen.
     grid:Note("The tail of an aura where recasting it wastes nothing.")
+    UI.Dropdown(grid:FullRow("Glow style", { controlWidth = 150 }), {
+        { value = "edge",  label = "Soft edge" },
+        { value = "pixel", label = "Running squares" },
+    }, FxGet("glowStyle"), function(value)
+        FxSet("glowStyle")(value); Apply()
+    end)
+    FxSlide("How many squares", "glowDots", 2, 24, 1,
+        function(v) return string.format("%d", v) end)
+
     FxSwitch("Only when castable", "readyGlowUsableOnly")
     grid:Note("Keeps the edge dark while you are short of the resource. "
         .. "Range and target are ignored - a defensive with nothing targeted "

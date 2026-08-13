@@ -2446,6 +2446,52 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- THE SQUARES THAT RUN ROUND THE OUTLINE
+    --
+    -- Motion is caught by the corner of your eye in a way a steady colour is
+    -- not, which is the whole job of a proc marker. The harness has no screen
+    -- and does not need one: "where is dot 3 of 8 at this instant" is
+    -- arithmetic, and arithmetic is exactly what goes wrong here - an
+    -- off-by-one at a corner puts a dot inside the icon for a quarter of
+    -- every lap.
+    -----------------------------------------------------------------------
+    do
+        local At = ns.Effects.PerimeterPoint
+        local W, H = 40, 20                      -- perimeter 120
+
+        local function Same(progress, wantX, wantY)
+            local x, y = At(progress, W, H)
+            return math.abs(x - wantX) < 0.001 and math.abs(y - wantY) < 0.001
+        end
+
+        -- The four corners, walking clockwise from the top-left.
+        Check("It starts in the top-left corner", Same(0, 0, H))
+        Check("A third of the way round is the top-right", Same(40 / 120, W, H))
+        Check("Half way round is the bottom-right", Same(60 / 120, W, 0))
+        Check("Five sixths round is the bottom-left", Same(100 / 120, 0, 0))
+
+        -- Midpoints of each side, because a corner can be right while the
+        -- side between two corners runs the wrong way.
+        Check("The top runs left to right", Same(20 / 120, 20, H))
+        Check("The right side runs downwards", Same(50 / 120, W, 10))
+        Check("The bottom runs right to left", Same(80 / 120, 20, 0))
+        Check("The left side runs upwards", Same(110 / 120, 0, 10))
+
+        -- A caller adds an offset per dot and must not have to think about
+        -- the end of the lap.
+        Check("Past the end is back at the start", Same(1, 0, H))
+        -- A quarter of 120 is 30 along the top, and a whole lap further on is
+        -- the same place.
+        Check("A lap and a quarter is a quarter", Same(1.25, 30, H))
+        Check("Backwards wraps too", Same(-0.5, W, 0))
+
+        -- A cell that has not been laid out yet has no size, and dividing by
+        -- its perimeter would be a divide by zero on the very first pass.
+        Check("A rectangle with no size answers without dividing by zero",
+            select(1, At(0.5, 0, 0)) == 0 and select(2, At(0.5, 0, 0)) == 0)
+    end
+
+    -----------------------------------------------------------------------
     -- THE AURA BINDS ITSELF
     --
     -- Owner: "das muss auch ohne mich gehen, die sachen sind doch alle im

@@ -50,6 +50,18 @@ ns.EFFECT_DEFAULTS = {
     readyGlow    = false,
     readyGlowCombatOnly = true,
 
+    -- WHAT THE GLOW LOOKS LIKE.
+    --
+    --   "edge"   two rings at different alphas - a soft rectangle
+    --   "pixel"  a handful of squares running round the outline
+    --
+    -- The edge is the quiet one and stays the default. The running squares
+    -- are the shape people know from every other addon that has ever marked
+    -- "press this", and motion is caught by the corner of your eye in a way a
+    -- steady colour is not - which is the entire job of a proc marker.
+    glowStyle    = "edge",
+    glowDots     = 8,
+
     -- READY AND AFFORDABLE ARE TWO DIFFERENT THINGS, and only one of them is
     -- what "can I press this" means. A cooldown that has finished while you
     -- are short of the rage, the runic power or the runes is an icon telling
@@ -140,6 +152,15 @@ function Effects.Attach(cell)
     fx.haloEdge = ns.CreateBorder(fx.halo, 2, "OVERLAY")
     fx.haloEdge:Hide()
 
+    -- The running squares live on a frame of their own, OUTSIDE the cell's
+    -- rect: a dot is centred on the outline, so half of it hangs over the
+    -- edge and would be clipped by a parent that stops there.
+    fx.dotHost = CreateFrame("Frame", nil, fx)
+    fx.dotHost:SetPoint("TOPLEFT", fx, "TOPLEFT", -4, 4)
+    fx.dotHost:SetPoint("BOTTOMRIGHT", fx, "BOTTOMRIGHT", 4, -4)
+    fx.dotHost:Hide()
+    fx.dots = {}
+
     fx.flash = fx:CreateTexture(nil, "OVERLAY", nil, 3)
     fx.flash:SetAllPoints(fx)
     fx.flash:SetTexture(ns.WHITE)
@@ -195,6 +216,7 @@ function Effects.Silence(cell)
     if not fx then return end
     fx:Hide()
     fx.glow:Hide()
+    if fx.dotHost then fx.dotHost:Hide() end
     fx.haloEdge:Hide()
     fx.flash:SetAlpha(0)
     cell.fxState = nil
@@ -233,6 +255,45 @@ function Effects.Ready(cooldownID)
     local onCd = OnCooldown(cooldownID)
     if onCd == nil then return nil end
     return not onCd
+end
+
+---------------------------------------------------------------------------
+-- WALKING THE OUTLINE OF A RECTANGLE
+--
+-- PURE, and the reason the running glow can be checked at all out here: the
+-- harness has no screen, but "where is dot 3 of 8 at this instant" is
+-- arithmetic.
+--
+-- progress 0..1 walks CLOCKWISE from the top-left corner and wraps, so a
+-- caller can hand in 0.9 + 0.3 without thinking about it. Returns x, y
+-- measured from the BOTTOM-LEFT, which is the corner WoW's SetPoint arithmetic
+-- is happiest with.
+---------------------------------------------------------------------------
+function Effects.PerimeterPoint(progress, width, height)
+    width, height = math.max(0, width or 0), math.max(0, height or 0)
+    local perimeter = 2 * (width + height)
+    if perimeter <= 0 then return 0, 0 end
+
+    -- Wrap first: a dot at 1.25 is a dot at 0.25, and a negative one runs
+    -- backwards rather than off the end.
+    progress = progress % 1
+    if progress < 0 then progress = progress + 1 end
+
+    local along = progress * perimeter
+
+    if along <= width then                       -- the top, left to right
+        return along, height
+    end
+    along = along - width
+    if along <= height then                      -- the right, downwards
+        return width, height - along
+    end
+    along = along - height
+    if along <= width then                       -- the bottom, right to left
+        return width - along, 0
+    end
+    along = along - width
+    return 0, along                              -- the left, upwards
 end
 
 -- Can it actually be cast right now - not "is the cooldown back", but "will
@@ -304,6 +365,54 @@ local function Pulse(speed, phase)
     -- 0..1, smooth. phase keeps two different pulses on one cell from lining
     -- up into a single brighter one.
     return 0.5 + 0.5 * sin(GetTime() * 3.2 * (speed or 1) + (phase or 0))
+end
+
+-- THE SQUARES, PLACED. Everything decided here is arithmetic from
+-- Effects.PerimeterPoint; this function only turns it into anchors.
+--
+-- The dots are made on demand and kept: a frame cannot be freed in this game,
+-- so a pool that only ever grows to the largest count a bar has used is the
+-- honest shape rather than a leak.
+local function RunDots(fx, fxOpts, colour, alpha, thickness)
+    local host = fx.dotHost
+    if not host then return end
+
+    local wanted = math.max(2, math.min(24, math.floor(fxOpts.glowDots or 8)))
+    local size = math.max(2, thickness + 1)
+
+    -- The inset the host was given, so a dot centred on the OUTLINE of the
+    -- cell sits at the middle of its own square rather than at its corner.
+    local width = math.max(0, (host:GetWidth() or 0) - 8)
+    local height = math.max(0, (host:GetHeight() or 0) - 8)
+
+    -- One lap every four seconds at speed 1. Slow enough to read as a
+    -- travelling light rather than as a flicker.
+    local lap = (GetTime() * 0.25 * (fxOpts.pulseSpeed or 1)) % 1
+
+    for index = 1, wanted do
+        local dot = fx.dots[index]
+        if not dot then
+            dot = host:CreateTexture(nil, "OVERLAY")
+            dot:SetTexture(ns.WHITE)
+            dot:SetBlendMode("ADD")
+            fx.dots[index] = dot
+        end
+
+        local x, y = Effects.PerimeterPoint(lap + (index - 1) / wanted,
+            width, height)
+        dot:SetSize(size, size)
+        dot:ClearAllPoints()
+        -- +4 puts it back into the host's own coordinates, and the half-size
+        -- centres the square on the line instead of hanging it off one side.
+        dot:SetPoint("CENTER", host, "BOTTOMLEFT", x + 4, y + 4)
+        dot:SetColorTexture(colour[1], colour[2], colour[3], alpha)
+        dot:Show()
+    end
+
+    -- Anything left over from a larger count is parked, never destroyed.
+    for index = wanted + 1, #fx.dots do fx.dots[index]:Hide() end
+
+    host:Show()
 end
 
 local function TickCell(entry, inCombat, span)
@@ -414,17 +523,29 @@ local function TickCell(entry, inCombat, span)
 
     if glowColour then
         local thickness = fxOpts.glowSize or 2
-        fx.glow:SetThickness(thickness)
-        fx.glow:SetColor(glowColour[1], glowColour[2], glowColour[3], glowAlpha)
-        fx.glow:Show()
-        fx.haloEdge:SetThickness(math.max(1, thickness - 1))
-        fx.haloEdge:SetColor(glowColour[1], glowColour[2], glowColour[3],
-            glowAlpha * 0.35)
-        fx.haloEdge:Show()
+
+        if fxOpts.glowStyle == "pixel" then
+            -- The two rings step aside entirely. A running outline INSIDE a
+            -- solid one is a box with something crawling in it; the motion is
+            -- the whole signal and it needs the edge to itself.
+            fx.glow:Hide()
+            fx.haloEdge:Hide()
+            RunDots(fx, fxOpts, glowColour, glowAlpha, thickness)
+        else
+            if fx.dotHost then fx.dotHost:Hide() end
+            fx.glow:SetThickness(thickness)
+            fx.glow:SetColor(glowColour[1], glowColour[2], glowColour[3], glowAlpha)
+            fx.glow:Show()
+            fx.haloEdge:SetThickness(math.max(1, thickness - 1))
+            fx.haloEdge:SetColor(glowColour[1], glowColour[2], glowColour[3],
+                glowAlpha * 0.35)
+            fx.haloEdge:Show()
+        end
         fx:Show()
     else
         fx.glow:Hide()
         fx.haloEdge:Hide()
+        if fx.dotHost then fx.dotHost:Hide() end
     end
 
     if state.flashLeft and state.flashLeft > 0 then
