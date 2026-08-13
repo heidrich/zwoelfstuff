@@ -416,17 +416,39 @@ end
 function CDM:ItemStacks(item)
     if not item then return nil end
 
-    local cached = item.auraDataCached
-    if cached and cached.applications ~= nil then return cached.applications end
+    -- THE READ ITSELF IS GUARDED NOW, and that is the 12.1 change in this
+    -- function. Fetching a secret NUMBER has never been a problem - `x ~= nil`
+    -- on a secret is the comparison this whole addon is built on - but on 12.1
+    -- the table it lives in is inside restricted content, and reading a field
+    -- of one of those is an ERROR rather than a nil. An error here is not a
+    -- missing stack count: it is thrown inside the render pass that draws
+    -- every icon on every bar.
+    --
+    -- pcall rather than a check, because there is nothing to check first:
+    -- whether a table is reachable is only answered by reaching for it. The
+    -- fallback below has been guarded this way since it was written; the
+    -- reason the cheap path was not is that on 12.0 it could not throw.
+    local ok, cached = pcall(function() return item.auraDataCached end)
+    if ok and cached then
+        local readable, stacks = pcall(function()
+            if cached.applications ~= nil then return cached.applications end
+            return nil
+        end)
+        if readable and stacks ~= nil then return stacks end
+    end
 
-    local instanceID = item.auraInstanceID
-    local unit = item.auraDataUnit
+    local gotID, instanceID = pcall(function() return item.auraInstanceID end)
+    local gotUnit, unit = pcall(function() return item.auraDataUnit end)
+    if not (gotID and gotUnit) then return nil end
+
     local get = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
     -- ns.CanCompute rather than a bare issecretvalue: a secret instance ID
     -- may not be passed to the query, and nil must not reach it either.
     if get and unit and ns.CanCompute(instanceID) then
-        local ok, data = pcall(get, unit, instanceID)
-        if ok and data and data.applications ~= nil then return data.applications end
+        local answered, data = pcall(get, unit, instanceID)
+        if answered and data and data.applications ~= nil then
+            return data.applications
+        end
     end
 
     return nil

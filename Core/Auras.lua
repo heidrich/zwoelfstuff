@@ -29,7 +29,12 @@
 -- description names the glowing ability, which has the right icon and the
 -- right name, and it can be set to anything.
 --
--- THE SECOND ROUTE: 12.1, ARRIVING 11 AUG 2026.
+-- THE SECOND ROUTE: 12.1, AND IT IS LIVE.
+--
+-- No date in this heading any more. It said "ARRIVING 11 AUG 2026", the patch
+-- came on the 12th, and a date in a header is a promise that expires - it was
+-- describing the future in the past tense within a day. What the route IS does
+-- not expire.
 --
 -- Blizzard_AuraContainer binds a real aura by ID and drives icon, duration,
 -- stacks and show/hide itself. That is strictly better than the glow proxy: a
@@ -44,8 +49,16 @@
 --   auraID   the aura itself                      - drives the 12.1 route
 --
 -- Route selection is automatic: engine when the frame type exists and an
--- auraID is known, glow otherwise. Recording the auraID now, on 12.0, is why
--- the switch costs nothing next week.
+-- auraID is known, glow otherwise. Recording the auraID on 12.0 is why the
+-- switch cost nothing when the patch came.
+--
+-- AND THE SWITCH IS ONLY HALF A FEATURE UNTIL THE IDS EXIST. Measured on the
+-- day 12.1 landed: the frame type is there, IsAvailable() answers true, and
+-- almost every entry still takes the glow route - because it has no auraID,
+-- not because the engine is missing. One is shipped (Core/KnownProcs.lua).
+-- Everything else has to be BOUND, once, by somebody playing that spec. That
+-- is the work this patch actually opened, and it is data collection rather
+-- than a code change.
 --
 -- WHY THERE IS NO HARDCODED TABLE OF LINKS.
 --

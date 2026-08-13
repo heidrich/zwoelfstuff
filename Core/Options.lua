@@ -340,10 +340,19 @@ local function BuildDiagnosticsPage(page, width)
             and "|cff40ff40available|r"
             or ("|cffff4040" .. (ns.CDM:UnavailableReason() or "unavailable") .. "|r"))
 
-        -- Engine.lua is parked on a 12.0 client, so ns.Engine is nil here.
-        -- Reading it without the guard is a crash, not a missing feature.
+        -- THIS COMMENT SAID "Engine.lua is parked on a 12.0 client, so
+        -- ns.Engine is nil here" AND IT HAD BEEN FALSE FOR FIVE DAYS. It was
+        -- written 2026-08-06, when the file really was out of the TOC; the
+        -- co-tank wave put Core\Engine.lua back in on 2026-08-08 and this line
+        -- was never revisited. ns.Engine has existed on every client since -
+        -- the file assigns it at file scope - and the only thing 12.1 changed
+        -- is that Engine:IsAvailable() now answers true.
+        --
+        -- The guard stays, because a file CAN be parked again and reading
+        -- through a nil is a crash rather than a missing feature. What went is
+        -- the sentence that promised a patch which has since arrived.
         if not ns.Engine then
-            engineState:SetText("|cff888888not on this client - parked until 12.1|r")
+            engineState:SetText("|cff888888not loaded on this client|r")
         elseif ns.Engine:IsAvailable() then
             engineState:SetText("|cff40ff40available|r")
         else
