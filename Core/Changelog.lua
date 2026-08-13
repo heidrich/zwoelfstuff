@@ -13,6 +13,20 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.80.0",
+        date = "2026-08-13",
+        lines = {
+            "|cffffd100Take a cooldown off the bar while it is recharging.|r Under |cffffd100Bars - Behaviour - Fading and hiding|r. Ready is always on screen, and pressing something does not make it vanish: it stays as long as its buff is still running - Anti-Magic Shell, Blood Shield - and only goes once there is nothing left but the wait. Buffs and procs are treated the same way, so one setting works on a bar holding all of them.",
+            "|cffffd100The others can close up behind it,|r or the place can stay empty - which is what it does unless you say otherwise. A display whose icons move around as cooldowns come and go has to be read again every time, and \"the third one is my stun\" is worth more than an empty square costs. |cffffd100Close up in the row|r keeps a grid's shape, so your second row stays your second row.",
+            "|cffffd100A glow that runs round the icon|r instead of sitting on it, under |cffffd100Edge style|r. Movement catches your eye where a steady colour does not, which is the whole point of a proc marker.",
+            "|cffffd100The ready glow can wait until you can actually cast it.|r |cffffd100Only when castable|r keeps the edge dark while you are short of the resource. It ignores range and target on purpose - a defensive with nothing targeted is not the same as one you cannot pay for.",
+            "|cffffd100Fixed: the flash, the ready edge, the reminder and the greying did nothing on Cooldown Manager icons.|r They all asked the game one question that this version of WoW no longer answers, and an addon that gets no answer stays quiet - so it looked like four switches that did not work. They work again.",
+            "|cffffd100Fixed:|r a setting added in an update showed an empty box instead of its value, because a setting only reaches your profile when the profile is made. It now shows what your bar is really doing.",
+            "|cffffd100Fixed:|r switching tabs in the options kept the scroll position of the tab you left, so the new one opened with its first heading cut in half.",
+            "|cffffd100Fixed:|r two settings looked like the same thing twice. |cffffd100Grey out while the aura is down|r and |cffffd100Grey out while the cooldown runs|r never touch the same icon - an aura has no cooldown - and now say so.",
+        },
+    },
+    {
         version = "4.79.0",
         date = "2026-08-13",
         lines = {

@@ -4,6 +4,56 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.80.0] - 2026-08-13
+
+### Added
+
+- **Take a cooldown off the bar while it is recharging.** Under *Bars →
+  Behaviour → Fading and hiding*. **Ready is always on screen** — the icon
+  earns its place by being usable, or by working: press a defensive and it
+  stays while its buff is still running, Anti-Magic Shell and Blood Shield
+  being the obvious ones, and only goes once there is nothing left but the
+  wait. A tracked buff counts as working while it is up, and a proc this addon
+  clocks itself is treated the same way, so one setting reads correctly on a
+  bar holding all three. Anything the client will not answer for stays where
+  it is: an icon that vanished because something could not be *read* is
+  indistinguishable from a bug.
+- **And the others can close up behind it,** or leave the place empty. Leaving
+  it empty is the default and it is the one worth thinking about: a display
+  whose icons move as cooldowns come and go has to be re-read every time, and
+  "the third one is my stun" is worth more than an empty square costs. Closing
+  up **in the row** keeps a grid's shape, so the second row stays the second
+  row instead of a defensive being pulled up into the first.
+- **A glow that runs round the icon** instead of sitting on it. *Edge style →
+  Running squares*, with the count from two to twenty-four. Motion is caught
+  by the corner of your eye in a way a steady colour is not, which is the
+  whole job of a proc marker.
+- **A ready glow that only lights what you can actually pay for.** *Only when
+  castable*. Range and target are deliberately ignored — a defensive with
+  nothing targeted is not the same as one you are short of the resource for,
+  and greying that out would be wrong on every pull.
+
+### Fixed
+
+- **Everything that depended on "is this on cooldown" had been dead on
+  Cooldown Manager icons.** The ready flash, the ready edge, the reminder and
+  the greying all read one field that this client does not carry at all, so
+  they stood down silently — which is exactly what this addon does on purpose
+  with a value it may not read, so nothing ever complained. They work again.
+- **Settings added after you started playing showed an empty box.** A new
+  setting only reaches a profile when that profile is created; a switch reads
+  the gap as *off* and looks fine, a dropdown finds nothing to match and draws
+  blank. The page now falls back to the default, so it shows what the bar is
+  actually doing.
+- **Switching tabs kept the scroll position of the tab you left,** which put
+  the first heading of the new one half above the visible edge. It reads as a
+  clipped layout rather than as a page scrolled by twenty pixels.
+- **Two settings that looked like the same one, twice.** *Grey out while
+  inactive* and *Grey out on cooldown* never touch the same icon — an aura has
+  no cooldown and a Cooldown Manager icon has no "down" — but nothing on the
+  page said so. They are now named for the state they mean and each points at
+  the other.
+
 ## [4.79.0] - 2026-08-13
 
 ### Added
