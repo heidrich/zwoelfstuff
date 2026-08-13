@@ -4,7 +4,7 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.78.0] - 2026-08-12
+## [4.78.0] - 2026-08-13
 
 ### Added
 
@@ -84,7 +84,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   counts anchors, so "a piece of text with one anchor has no right-hand edge"
   is a check rather than a screenshot.
 
-### Changed (the memory wave, 2026-08-12)
+### Changed (continued)
 
 - **The third column is built when a page first asks for it.** All five were
   built the moment the window opened — whichever page you were on, and the
@@ -101,11 +101,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   separately, because a total that gets attributed to the wrong one of its
   parts sends the next session after the wrong file.
 - **Every place you can put something into can be dragged out of, swapped, and
-  dropped into.** Owner: *"ich hätte gern das alle spells, icons what ever im
-  addon drag and drop bar sind. da anklicken etc checken die wow spieler
-  nicht"*, and then the half that decides the design: *"also auch plätze
-  tauschen, reinziehen, rausziehen etc. überall wo man sachen adden kann. das
-  ist ein total natürliches wow verhalten."*
+  dropped into.** Pick a marker, a spell or a cooldown up out of any list and
+  drop it on a place; drop it on a place that is taken and the two swap; pull
+  one off into empty space and it comes off. Clicking still works exactly as it
+  did — this is the second way in, not a replacement.
+
+  Asked for as the gesture rather than as a feature: *drag and drop everywhere,
+  including swapping places, dragging in and dragging out — the natural WoW
+  behaviour*, and the point behind it is that a player should not have to work
+  out that a list row is clickable.
 
   `UI.SpellSlot` had answered a drag since it was written and never started
   one: things went in, and the only way out was a right click. It is a drag
@@ -132,10 +136,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Clicking is untouched everywhere. The rule is guarded by the self test; the
   wiring — which page passes which callback — is not, and that is exactly the
   gap this change was fixing, so it wants a pair of eyes in game.
-- **The mouse wheel no longer sets values.** Owner: *"schiebregler sollten
-  nicht mit dem mausrad gehen, auch werte eintragen sollten nicht mit dem
-  mausrad einstellbar sein."* Every number in the addon is one control
-  (`BuildSlider`), and it bound the wheel on both the rail and the value box —
+- **The mouse wheel scrolls the page and nothing else.** It used to change
+  whatever number the pointer happened to be over, so reading further down a
+  settings page could quietly change a setting on the way. Drag the rail or
+  type into the box — both are aimed.
+
+  Every number in the addon is one control (`BuildSlider`), and it bound the
+  wheel on both the rail and the value box —
   which on a page you scroll with the wheel is a hole the scroll falls into.
   Unbound rather than swallowed: a frame with `EnableMouseWheel(true)` eats the
   gesture whether or not it does anything with it, so an empty handler would
@@ -147,8 +154,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   scroll areas, the dropdown popup, paging between deaths, panning the replay,
   capturing a key, and the edit-mode cell handle — are named there with the
   reason each one moves you through something rather than setting something.
-- **The raid bar preview drew every button half again too big.** Owner, with a
-  screenshot: *"die icons sind einfach zu gross in der vorschau."* The page was
+- **The raid bar preview drew every button half again too big.** It now draws
+  the bar at the size the bar actually is, and follows the icon-size slider
+  while you move it.
+
+  The page was
   built as a copy of the externals page, and it copied the constant `SLOT = 40`
   without the calibration behind it: on that page 40 *is* the panel's own
   default cell size, so preview and screen agree by construction. The raid

@@ -14,7 +14,7 @@ local _, ns = ...
 ns.CHANGELOG = {
     {
         version = "4.78.0",
-        date = "2026-08-12",
+        date = "2026-08-13",
         lines = {
             "|cffffd100The addon speaks your language.|r Eleven of them, picked automatically from your client and changeable under |cffffd100Settings|r. German is finished; French, Spanish, Italian, Portuguese and Russian carry the whole interface; Korean and Chinese carry the words on the buttons. Anything not translated yet is shown in English rather than left blank, and the list says how far each language has got.",
             "|cffffd100New: a Raid Bar.|r Every raid marker, the eight world markers, the game's four pings, a ready check and a pull timer - on a bar you put together yourself and place where you like. The first twelve places can carry a key, set in the game's own key list. Under |cffffd100M+ and raid stuff|r, and switched off until you ask for it.",
