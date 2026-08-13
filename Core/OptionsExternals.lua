@@ -139,7 +139,17 @@ function Page:BuildPage(page, width)
 
         local slot = UI.SpellSlot(host, {
             size = SLOT,     -- re-sized by Fit; this is only the first guess
+            -- Its own kind: these hold a spell ID like a bar cell does, but a
+            -- panel place and a bar cell are not interchangeable - one asks
+            -- somebody else to press it, the other is yours to press.
+            kind = "external",
             get = function() return ns.Externals.SpellAt(index) end,
+            -- Same gap the raid bar had: the slot answered a drag and had
+            -- nothing to write with, so a drop here did nothing at all.
+            onPick = function(spellID)
+                ns.Externals.SetSlot(index, spellID)
+                ns.Options:Refresh()
+            end,
             onEmptyClick = function()
                 Page.selected = (Page.selected ~= index) and index or nil
                 ns.Options:Refresh()

@@ -66,6 +66,14 @@ function Page:BuildPage(page, width)
     for index = 1, SLOTS do
         local slot = UI.SpellSlot(slotHost, {
             size = SLOT,
+            kind = "defensive",
+            -- THESE SQUARES ARE NOT POSITIONS. `picked` is rebuilt sorted by
+            -- name on every refresh, so which square a spell lands in is
+            -- arithmetic rather than a choice - and swapping two of them would
+            -- take both out, put both back and change nothing. Dragging one
+            -- OUT still works: that is taking it off the list, which is the
+            -- one thing these squares can actually say.
+            ordered = false,
             get = function() return picked[index] end,
             onPick = function(spellID)
                 if not spellID then return end

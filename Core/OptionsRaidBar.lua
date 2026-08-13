@@ -96,7 +96,24 @@ function Page:BuildPage(page, width)
 
         local slot = UI.SpellSlot(host, {
             size = previewSize,
+            -- A PLACE ON THIS BAR HOLDS A WORD, not a spell ID - "mark3",
+            -- "pull". Named, because the drag machinery keeps one list of
+            -- every grid in the window and a marker key written into a
+            -- cooldown bar would draw an empty square for the rest of the
+            -- session. See UI.DragOutcome.
+            kind = "raidbar",
             get = function() return ns.RaidBar.ActionAt(index) end,
+            -- THIS PAGE COULD NOT BE DROPPED INTO AT ALL. The slot has
+            -- answered a drag since it was written, but with no onPick behind
+            -- it the answer was to do nothing - so dragging anything at this
+            -- bar was silence, and the only way to fill a place was to click
+            -- it and then click a row. SetSlot also MOVES a key that is
+            -- already somewhere else, which is what makes a swap come out
+            -- right rather than duplicating a button.
+            onPick = function(key)
+                ns.RaidBar.SetSlot(index, key)
+                ns.Options:Refresh()
+            end,
             texture = function(key)
                 local entry = ns.RaidBar.Get(key)
                 return entry and entry.texture or nil
@@ -361,6 +378,14 @@ function Page:BuildSide(sideHost, pad)
         local row = UI.SpellRow(content, rowWidth, 30)
         row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
         row.actionKey = entry.key
+
+        -- DRAGGABLE, and carrying a WORD rather than a spell ID. The row has
+        -- had the whole drag machinery in it since it was written and this
+        -- list could not use it: dkSpellID is a number everywhere else, and a
+        -- marker has none. dkPayload is the opaque one, dkKind is what keeps
+        -- "mark3" out of a cooldown bar.
+        row.dkPayload = entry.key
+        row.dkKind = "raidbar"
         row:SetScript("OnClick", function()
             if ns.RaidBar.IsPicked(entry.key) then
                 ns.RaidBar.Drop(entry.key)

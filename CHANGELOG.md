@@ -100,6 +100,38 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   0.45 MB, and the palette itself 50 KB. `memcheck.lua` now weighs the three
   separately, because a total that gets attributed to the wrong one of its
   parts sends the next session after the wrong file.
+- **Every place you can put something into can be dragged out of, swapped, and
+  dropped into.** Owner: *"ich hätte gern das alle spells, icons what ever im
+  addon drag and drop bar sind. da anklicken etc checken die wow spieler
+  nicht"*, and then the half that decides the design: *"also auch plätze
+  tauschen, reinziehen, rausziehen etc. überall wo man sachen adden kann. das
+  ist ein total natürliches wow verhalten."*
+
+  `UI.SpellSlot` had answered a drag since it was written and never started
+  one: things went in, and the only way out was a right click. It is a drag
+  source now, and `UI.DragOutcome` is the pure rule behind every release —
+  **drop** onto an empty place, **swap** with a full one, **clear** when you
+  let go over open air, **refused** when the two places do not hold the same
+  kind of thing.
+
+  Refused is not a detail: the drag machinery keeps one list of every grid in
+  the window, so a raid bar place — which holds the word `mark3` — is a
+  neighbour of a cooldown cell, which holds a number. Written into each other
+  they draw an empty square and say nothing about why. Every grid names its
+  kind now, and a place that would refuse the drop does not light up while you
+  are dragging over it.
+
+  **Two pages could not be dropped into at all**, and nobody had noticed
+  because the click path worked: the raid bar and the externals panel both
+  built their slots without an `onPick`, so the slot answered the drag by
+  doing nothing. The death log's defensives are marked `ordered = false` —
+  those squares are a view of a set sorted by name, so a swap would take both
+  out, put both back and change nothing; dragging one out still removes it,
+  which is the one thing those squares can say.
+
+  Clicking is untouched everywhere. The rule is guarded by the self test; the
+  wiring — which page passes which callback — is not, and that is exactly the
+  gap this change was fixing, so it wants a pair of eyes in game.
 - **The mouse wheel no longer sets values.** Owner: *"schiebregler sollten
   nicht mit dem mausrad gehen, auch werte eintragen sollten nicht mit dem
   mausrad einstellbar sein."* Every number in the addon is one control

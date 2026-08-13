@@ -3046,6 +3046,18 @@ function UI.SpellSlot(parent, cfg)
         if cfg.onPick then cfg.onPick(spellID) end
     end
 
+    -- WHAT KIND OF THING THIS PLACE HOLDS, and what is in it right now. The
+    -- drag machinery keeps one list of every grid in the window, so these two
+    -- are what stop a raid bar place handing "mark3" to a cooldown bar. See
+    -- UI.DragOutcome.
+    slot.dkKind = cfg.kind or "spell"
+    slot.dkPayload = function() return cfg.get and cfg.get() end
+    slot.dkTake = function() if cfg.onClear then cfg.onClear() end end
+
+    -- Whether this place is a POSITION. False where the squares are a view of
+    -- a set rather than an arrangement - see UI.DragOutcome.
+    slot.dkOrdered = cfg.ordered ~= false
+
     -- AN ITEM CARRIED ON THE CURSOR, dropped straight in.
     --
     -- Owner, 2026-08-09: "kann man das so machen, das man die sachen da
@@ -3068,14 +3080,98 @@ function UI.SpellSlot(parent, cfg)
         return true
     end
 
-    -- Only a slot that can actually take one registers for drag. A spell slot
-    -- is not a place to drop a sword, and RegisterForDrag changes what a
-    -- press-and-move means on a frame - not something to switch on for every
-    -- slot in the addon to serve the two that need it.
+    -----------------------------------------------------------------------
+    -- A PLACE YOU CAN TAKE THINGS OUT OF, not only put things into
+    --
+    -- This widget has answered a drag since it was written and never started
+    -- one: you could drop a spell in from the list, and then the only way back
+    -- out was a right click. Owner: "also auch plaetze tauschen, reinziehen,
+    -- rausziehen etc. ueberall wo man sachen adden kann. das ist ein total
+    -- natuerliches wow verhalten."
+    --
+    -- It is the action bar's gesture and it needs no explaining to anybody who
+    -- has played this game. What decides each release is UI.DragOutcome; this
+    -- is only the hands.
+    --
+    -- THE BOUNDARY, stated rather than discovered later: a slot drag lands on
+    -- another SLOT. Grids that carry no kind - the bar cards - refuse it,
+    -- because their cells are addressed by index and reading what is in the
+    -- one under the cursor is a second contract. Dropping a spell from the
+    -- LIST onto a bar card is untouched and still works; that road runs
+    -- through UI.SpellRow.
+    -----------------------------------------------------------------------
+    slot:RegisterForDrag("LeftButton")
+
+    -- The item road, which is a different road to the same slot: a spell comes
+    -- out of our own list through the drag machinery, an item comes off the
+    -- CLIENT'S cursor. Only a slot that can take one answers it.
     if cfg.onDropItem then
-        slot:RegisterForDrag("LeftButton")
         slot:SetScript("OnReceiveDrag", TakeCursorItem)
     end
+
+    slot:SetScript("OnDragStart", function(self)
+        local payload = slot.dkPayload()
+        if payload == nil then return end
+
+        local proxy = GetDragProxy()
+        proxy:SetSize(30, 30)
+        proxy.icon:SetTexture(slot.icon:GetTexture())
+        proxy:Show()
+
+        -- The same OnUpdate the palette rows run: the proxy follows the
+        -- cursor and the place under it lights up, so the drop is aimed
+        -- rather than hoped for.
+        self:SetScript("OnUpdate", function()
+            local scale = UIParent:GetEffectiveScale()
+            local x, y = GetCursorPosition()
+            proxy:ClearAllPoints()
+            proxy:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+
+            local grid = UI.CellUnderCursor()
+            if slot.dkMarked and slot.dkMarked ~= grid then
+                slot.dkMarked.HideMarker()
+            end
+            slot.dkMarked = grid
+            -- Only a place that would ACTUALLY take it lights up. A marker
+            -- over a grid that is about to refuse the drop is a promise.
+            if grid and grid ~= slot and grid.dkKind == slot.dkKind then
+                grid.ShowMarker(1)
+            end
+        end)
+    end)
+
+    slot:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+        if dragProxy then dragProxy:Hide() end
+        if slot.dkMarked then slot.dkMarked.HideMarker() end
+        slot.dkMarked = nil
+
+        local target = UI.CellUnderCursor()
+        local carried = slot.dkPayload()
+
+        local outcome = UI.DragOutcome(
+            { kind = slot.dkKind, payload = carried },
+            target and {
+                kind = target.dkKind,
+                payload = target.dkPayload and target.dkPayload() or nil,
+                ordered = target.dkOrdered,
+                same = target == slot,
+            } or nil)
+
+        if outcome == "clear" then
+            slot.dkTake()
+        elseif target and (outcome == "drop" or outcome == "swap") then
+            -- Read before anything is written, and the ORDER of the three
+            -- writes is the whole correctness of a swap: the source is emptied
+            -- first, so a writer that moves a thing rather than copying it -
+            -- RaidBar.SetSlot does exactly that - finds the place it is about
+            -- to fill already free.
+            local held = target.dkPayload and target.dkPayload() or nil
+            slot.dkTake()
+            target.dkDrop(1, carried)
+            if outcome == "swap" then slot.dkDrop(1, held) end
+        end
+    end)
 
     slot:SetScript("OnClick", function(_, button)
         -- Before anything else: a click while carrying something is an
@@ -3147,6 +3243,11 @@ function UI.CellGrid(parent, cfg)
     grid.cells = {}
     grid.slots = {}
     grids[#grids + 1] = grid
+
+    -- A bar cell holds a spell ID. Stated rather than left nil, because the
+    -- drag machinery matches kinds now and an unnamed grid would refuse every
+    -- drop that used to work. See UI.DragOutcome.
+    grid.dkKind = cfg and cfg.kind or "spell"
 
     -- Where a dragged cell would land: an accent outline rather than a wash
     -- over the icon, so it can be fully opaque and still show what is under it.
@@ -4246,6 +4347,68 @@ function UI.RailFits(railHeight, headHeight, footHeight, tailHeight, navHeight)
 end
 
 ---------------------------------------------------------------------------
+-- WHAT A DRAG BETWEEN TWO PLACES MEANS
+--
+-- Owner, 2026-08-13: "ich haette gern das alle spells, icons what ever im
+-- addon drag and drop bar sind. da anklicken etc checken die wow spieler
+-- nicht" - and then, because the first half is only half of it: "also auch
+-- plaetze tauschen, reinziehen, rausziehen etc. ueberall wo man sachen adden
+-- kann. das ist ein total natuerliches wow verhalten."
+--
+-- He is describing the action bar, which every player has used for twenty
+-- years without being told how: you pick a thing up, and where you let go
+-- decides what happens. Four outcomes, and they are the whole feature:
+--
+--   drop     the place you let go over is empty       - it goes there
+--   swap     it is full                               - the two change places
+--   clear    you let go over nothing at all           - it comes off
+--   refused  the two places do not hold the same kind of thing
+--
+-- REFUSED IS NOT A DETAIL. The drag machinery keeps ONE list of every grid in
+-- the window, so a raid bar place - which holds the word "mark3" - and a
+-- cooldown cell - which holds a spell ID - are neighbours in it. Without a
+-- kind, dragging one onto the other would write a marker key into a bar and
+-- draw an empty square for the rest of the session, and nothing would say why.
+--
+-- Pure, and it takes the world rather than reading it: the harness answers
+-- GetCursorPosition with a constant and IsVisible with false, so a check that
+-- went through the real widgets would be asking the stub what a drag does.
+-- This is the part that can be asked properly.
+---------------------------------------------------------------------------
+-- from = { kind = "raidbar", payload = "mark3" }
+-- to   = { kind = ..., payload = ..., ordered = false } or nil for open air
+function UI.DragOutcome(from, to)
+    from = from or {}
+
+    -- Nothing was picked up. Not an error and not a refusal - there is simply
+    -- no gesture here, and an empty slot must still take a plain click.
+    if from.payload == nil then return "none" end
+
+    -- Let go over nothing: the thing comes off, which is what the action bar
+    -- does and what "rausziehen" means.
+    if not to then return "clear" end
+
+    -- Let go over where it started. Not "swap with itself" - that would write
+    -- the same value twice and refresh the page for nothing.
+    if to.same then return "none" end
+
+    if from.kind ~= to.kind then return "refused" end
+
+    if to.payload == nil then return "drop" end
+
+    -- A PLACE THAT IS NOT A POSITION CANNOT BE SWAPPED WITH.
+    --
+    -- The death log's defensive slots are a VIEW of a set, sorted by name and
+    -- rebuilt on every refresh - a spell is picked or it is not, and which
+    -- square it lands in is arithmetic rather than a choice. Swapping two of
+    -- them would take both out, put both back, redraw the page twice and
+    -- change nothing, which reads as broken rather than as refused.
+    if to.ordered == false then return "refused" end
+
+    return "swap"
+end
+
+---------------------------------------------------------------------------
 -- HOW BIG ONE SLOT IS DRAWN IN A PREVIEW LATTICE
 --
 -- Owner, with a picture of the raid bar page: "die icons sind einfach zu gross
@@ -5203,8 +5366,17 @@ function UI.SpellRow(parent, width, height)
     -- first - and until now the list simply did not answer it.
     row:RegisterForDrag("LeftButton")
 
+    -- WHAT THIS ROW IS CARRYING, and it is not always a spell ID. The raid bar
+    -- list holds words - "mark3", "pull" - so the payload is opaque here and
+    -- named by dkKind, which is what decides where it may land. dkSpellID
+    -- stays the default so every existing list keeps working untouched.
+    row.dkCarried = function(self)
+        if self.dkPayload ~= nil then return self.dkPayload end
+        return self.dkSpellID
+    end
+
     row:SetScript("OnDragStart", function(self)
-        if not self.dkSpellID then return end
+        if self:dkCarried() == nil then return end
 
         local proxy = GetDragProxy()
         proxy:SetSize(30, 30)
@@ -5225,7 +5397,11 @@ function UI.SpellRow(parent, width, height)
                 row.dkMarked.HideMarker()
             end
             row.dkMarked = grid
-            if grid then grid.ShowMarker(cell) end
+            -- Only a place that would take it lights up: a marker over a grid
+            -- of a different kind is a promise the drop will not keep.
+            if grid and grid.dkKind == (row.dkKind or "spell") then
+                grid.ShowMarker(cell)
+            end
         end)
     end)
 
@@ -5237,8 +5413,10 @@ function UI.SpellRow(parent, width, height)
         if row.dkMarked then row.dkMarked.HideMarker() end
         row.dkMarked = nil
 
-        if grid and cell and grid.dkDrop and self.dkSpellID then
-            grid.dkDrop(cell, self.dkSpellID)
+        local carried = self:dkCarried()
+        if grid and cell and grid.dkDrop and carried ~= nil
+            and grid.dkKind == (self.dkKind or "spell") then
+            grid.dkDrop(cell, carried)
         end
     end)
 

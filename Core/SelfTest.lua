@@ -2245,6 +2245,72 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- WHAT A DRAG BETWEEN TWO PLACES MEANS
+    --
+    -- Owner, 2026-08-13: "ich haette gern das alle spells, icons what ever im
+    -- addon drag and drop bar sind ... also auch plaetze tauschen, reinziehen,
+    -- rausziehen etc. ueberall wo man sachen adden kann."
+    --
+    -- The rule is checked here and the hands are not, and that split is
+    -- forced: the harness answers GetCursorPosition with a constant 0,0 and
+    -- IsVisible with false, so every hit test comes back nil out here. A check
+    -- driven through the real widgets would prove the stub refuses drops.
+    -----------------------------------------------------------------------
+    do
+        local What = ns.UI.DragOutcome
+
+        Check("Dragging nothing is not a gesture",
+            What({ kind = "spell" }, { kind = "spell" }) == "none")
+
+        Check("Let go over open air and it comes off",
+            What({ kind = "spell", payload = 42 }, nil) == "clear")
+
+        Check("Let go over an empty place and it goes there",
+            What({ kind = "spell", payload = 42 },
+                 { kind = "spell" }) == "drop")
+
+        Check("Let go over a full place and the two change places",
+            What({ kind = "spell", payload = 42 },
+                 { kind = "spell", payload = 99 }) == "swap")
+
+        Check("Let go over where it started and nothing happens",
+            What({ kind = "spell", payload = 42 },
+                 { kind = "spell", payload = 42, same = true }) == "none")
+
+        -- THE ONE THAT STOPS A SILENT CORRUPTION. One list holds every grid in
+        -- the window, so a raid bar place - which holds the word "mark3" - is
+        -- a neighbour of a cooldown cell, which holds a number. Written into
+        -- each other they draw an empty square and say nothing about why.
+        Check("A marker may not be dropped into a cooldown bar",
+            What({ kind = "raidbar", payload = "mark3" },
+                 { kind = "spell", payload = 42 }) == "refused")
+
+        Check("A cooldown may not be dropped onto the raid bar",
+            What({ kind = "spell", payload = 42 },
+                 { kind = "raidbar" }) == "refused")
+
+        -- Squares that are a VIEW of a set rather than an arrangement: the
+        -- death log sorts its defensives by name and rebuilds them every
+        -- refresh, so a swap would take both out, put both back and change
+        -- nothing - which reads as broken rather than as refused.
+        Check("A place that is not a position cannot be swapped with",
+            What({ kind = "defensive", payload = 42 },
+                 { kind = "defensive", payload = 99, ordered = false })
+                == "refused")
+
+        -- ...but taking one OUT of that set is exactly what those squares can
+        -- say, so it must still work.
+        Check("An unordered place can still be dragged out of",
+            What({ kind = "defensive", payload = 42 }, nil) == "clear")
+
+        -- And a spell may still land in an EMPTY unordered square: that is
+        -- adding it to the set, which is the whole point of the page.
+        Check("An empty unordered place still takes a drop",
+            What({ kind = "defensive", payload = 42 },
+                 { kind = "defensive", ordered = false }) == "drop")
+    end
+
+    -----------------------------------------------------------------------
     -- A PREVIEW DRAWS WHAT THE THING IS
     --
     -- Owner, with a screenshot of the raid bar page: "die icons sind einfach
