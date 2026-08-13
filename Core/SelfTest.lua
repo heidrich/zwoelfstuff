@@ -2311,6 +2311,64 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- ONE PRESS, ONE RUN
+    --
+    -- Owner, 2026-08-13: "der raid check, der geht nur auf wenn man den
+    -- button gedrueckt haellt ... bitte so einstellen, das bei klick fenster
+    -- aufgeht und auch stehen bleibt."
+    --
+    -- A place is registered for both directions - a secure one has to be - so
+    -- every press arrives at the script twice. Toggle on the way down opened
+    -- the window, Toggle on the way up shut it, and the only way to see it
+    -- was to keep holding the mouse down. The pull timer and the ready check
+    -- fired twice as well and simply did not look wrong.
+    --
+    -- The gate cannot be pressed out here: the stub has no mouse. It is a
+    -- pure function for that reason, and the DELIVERY ORDER is the thing
+    -- being checked - including the two lopsided ones, because a keyboard
+    -- binding and a scripted Click() do not deliver the same pair a mouse
+    -- does.
+    -----------------------------------------------------------------------
+    do
+        local Gate = ns.RaidBar.PressGate
+
+        -- A mouse: down, then up. One run, on the first edge.
+        local run, pressed = Gate(nil, "LeftButton", true)
+        Check("A press acts on the way down", run and pressed == "LeftButton")
+        run, pressed = Gate(pressed, "LeftButton", false)
+        Check("The release of that same press does nothing",
+            not run and pressed == nil)
+
+        -- A scripted Click() and any client that only ever hands over the up
+        -- edge: that up IS the press, and it must not be swallowed.
+        run, pressed = Gate(nil, "LeftButton", false)
+        Check("A lone release is a press of its own", run)
+
+        -- Slide off the button and let go somewhere else: the up never comes.
+        -- The stale memory may not eat the NEXT press.
+        run, pressed = Gate(nil, "LeftButton", true)
+        run, pressed = Gate(pressed, "LeftButton", true)
+        Check("A press whose release went missing does not eat the next one",
+            run and pressed == "LeftButton")
+
+        -- Right-click cancels the pull timer while the left is still held.
+        -- A different button is a different press.
+        run, pressed = Gate("LeftButton", "RightButton", false)
+        Check("The other button is its own press, and the first is remembered",
+            run and pressed == "LeftButton")
+
+        -- Two presses, four edges, two runs - the whole point, counted.
+        local runs = 0
+        local memory = nil
+        for _, edge in ipairs({ true, false, true, false }) do
+            local acts
+            acts, memory = Gate(memory, "LeftButton", edge)
+            if acts then runs = runs + 1 end
+        end
+        Check("Two presses run the thing twice, not four times", runs == 2)
+    end
+
+    -----------------------------------------------------------------------
     -- A PREVIEW DRAWS WHAT THE THING IS
     --
     -- Owner, with a screenshot of the raid bar page: "die icons sind einfach

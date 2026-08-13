@@ -13,6 +13,13 @@ local _, ns = ...
 
 ns.CHANGELOG = {
     {
+        version = "4.78.1",
+        date = "2026-08-13",
+        lines = {
+            "|cffffd100Fixed: the raid check window would not stay open.|r It appeared while you held the button down and disappeared again when you let go. A place on the raid bar hears the press and the release - it has to, or the markers stop working for anybody casting on key down - and the three buttons that are not spells were doing their job on both. Opened, then shut, faster than you could see. The pull timer and the ready check went out twice for the same reason.",
+        },
+    },
+    {
         version = "4.78.0",
         date = "2026-08-13",
         lines = {

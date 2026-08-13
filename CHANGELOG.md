@@ -4,6 +4,42 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.78.1] - 2026-08-13
+
+### Fixed
+
+- **The raid check would not stay open.** It appeared while the raid bar
+  button was held down and vanished the moment it was let go. A place on the
+  raid bar registers for clicks in **both** directions, because a secure one
+  has to — with
+  `AnyUp` alone a marker never fires for anybody who has *cast on key down*
+  switched on, which is the default. The three actions that are not protected
+  hang a plain Lua script on that same button, and a script does not care
+  about the setting: it heard the press and it heard the release, and it ran
+  twice. `Toggle` opened the window on the way down and shut it again on the
+  way up, so the only way to see it was to keep holding the mouse down. The
+  pull timer and the ready check went out twice for the same reason and simply
+  did not look wrong.
+
+  `RaidBar.PressGate` decides it now, and **which edge to drop is not a coin
+  flip**: the conventional button acts on the release, so that you can slide
+  off it to cancel — but a place is also reachable from the keyboard
+  (`CLICK ZwoelfStuffRaidBarN:LeftButton` in `Bindings.xml`), and an up that
+  never arrives is a button that never fires. So the gate takes the **first**
+  edge it is handed and swallows the matching second one. Both edges, down
+  only, up only — the action runs exactly once.
+
+  Two checks, and they do different jobs. `PressGate` is a pure function with
+  six cases in the self test, including a scripted `Click()` and a press whose
+  release went missing. That alone would not have caught this, because the
+  fault was never in a rule — **the harness now takes the click script off the
+  real slot, presses it, and counts how often the action ran**, which reports
+  `click 2` against the old code. The drag wave shipped a correct rule wired up
+  wrong twice; this is the first check that tests the wiring. A third,
+  source-level, lists every button that hears both edges together with the
+  reason one press runs once — registering both directions is not the bug and
+  cannot be forbidden, so it has to be deliberate rather than forbidden.
+
 ## [4.78.0] - 2026-08-13
 
 ### Added

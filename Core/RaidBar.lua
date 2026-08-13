@@ -484,6 +484,34 @@ function RaidBar.Key(index)
 end
 
 ---------------------------------------------------------------------------
+-- ONE PRESS, ONE RUN
+--
+-- A place takes clicks in BOTH directions, because a secure one has to (see
+-- BuildSlot). The three unprotected actions run a Lua script, and a script
+-- does not care about that setting: it simply hears the press and the
+-- release, and does the thing twice.
+--
+-- WHICH EDGE TO DROP IS NOT A COIN FLIP. Dropping the DOWN would be the
+-- conventional button, the one you can slide off to cancel - but a place is
+-- also reachable from the keyboard (`CLICK ZwoelfStuffRaidBarN:LeftButton`
+-- in Bindings.xml), and an up that never arrives is a button that never
+-- fires. So the rule prefers the FIRST edge it is given and swallows the
+-- matching second one. Whatever the client delivers - both, down only, up
+-- only - the action runs exactly once.
+--
+-- Pure on purpose: the desktop harness cannot press a button, but it can ask
+-- this question. `pressed` is the slot's memory of an unmatched down.
+---------------------------------------------------------------------------
+function RaidBar.PressGate(pressed, button, down)
+    if down then return true, button end
+    -- The release of a press we already answered. Forget it and stay quiet.
+    if pressed ~= nil and pressed == button then return false, nil end
+    -- An up with no down of its own: the only edge there is, so it is the
+    -- press. Any other button's unmatched down is left where it was.
+    return true, pressed
+end
+
+---------------------------------------------------------------------------
 -- ONE PLACE ON THE BAR
 --
 -- A SecureActionButton whichever action lands in it, including the three that
@@ -550,9 +578,20 @@ local function BuildSlot(index)
     -- THE UNPROTECTED THREE. A secure button whose `type` was cleared falls
     -- through to here; one whose type is set never reaches it, because the
     -- game handles the press itself.
-    slot:SetScript("OnClick", function(self, button)
+    --
+    -- ONE PRESS, ONE RUN. The place is registered for both directions above,
+    -- so a single press arrives HERE TWICE - and the three that run a script
+    -- ran it twice. Owner: "der raid check, der geht nur auf wenn man den
+    -- button gedrueckt haellt." Toggle on the way down opened the window and
+    -- Toggle on the way up shut it again, so the only way to see it was to
+    -- keep holding. The pull timer started twice and the ready check asked
+    -- twice for the same reason; those two just did not look broken.
+    slot:SetScript("OnClick", function(self, button, down)
         local entry = self.action and byKey[self.action]
-        if entry and entry.Run then entry.Run(self, button) end
+        if not (entry and entry.Run) then return end
+        local run, pressed = RaidBar.PressGate(self.pressed, button, down)
+        self.pressed = pressed
+        if run then entry.Run(self, button) end
     end)
 
     return slot
