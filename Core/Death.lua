@@ -2229,14 +2229,36 @@ function Death:Probe()
         return
     end
 
-    -- BOTH session types, and the session's OWN fields before anything in
-    -- it. The first in-game run printed "no deaths this fight" because the
-    -- list sat under a field this code had guessed wrong - a probe that
-    -- dumps the parent cannot be blinded that way.
-    for _, sessionType in ipairs({
-        { key = Enum.DamageMeterSessionType.Current, label = "Current" },
-        { key = Enum.DamageMeterSessionType.Overall, label = "Overall" },
-    }) do
+    -- EVERY SESSION TYPE THE CLIENT DECLARES, not the two this addon happens
+    -- to read. A first run against a live client answered "0 deaths" in both
+    -- Current and Overall while somebody had certainly died; walking the enum
+    -- costs nothing and rules out "the deaths are in a session we never ask
+    -- for" without another trip.
+    --
+    -- The session's OWN fields are printed before anything in it. The first
+    -- in-game run printed "no deaths this fight" because the list sat under a
+    -- field this code had guessed wrong - a probe that dumps the parent
+    -- cannot be blinded that way.
+    local types = {}
+    for name, value in pairs(Enum.DamageMeterSessionType or {}) do
+        if type(value) == "number" then
+            types[#types + 1] = { key = value, label = name }
+        end
+    end
+    table.sort(types, function(a, b) return a.key < b.key end)
+    if #types == 0 then
+        types = { { key = 0, label = "0 (the enum is empty)" } }
+    end
+
+    local me = UnitName("player")
+    if not ns.CanCompute(me) then me = nil end
+
+    -- EVERY DEATH, not the first. The whole question behind the raid death
+    -- log is what a row about SOMEBODY ELSE carries, and the first row is as
+    -- likely as not to be the player. Capped, because a long wipe is a long
+    -- list and this goes into a chat frame.
+    local foreignID
+    for _, sessionType in ipairs(types) do
         local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType,
             sessionType.key, Enum.DamageMeterType.Deaths)
         if not ok or type(session) ~= "table" then
@@ -2244,10 +2266,52 @@ function Death:Probe()
         else
             DumpTable(sessionType.label .. " session, every field", session)
             local list = session.combatSources or session.sources
-            if type(list) == "table" and list[1] then
-                DumpTable(sessionType.label .. " first death, every field", list[1])
+            for index = 1, math.min(#(list or {}), 6) do
+                local row = list[index]
+                local name = row and row.name
+                local mine = me and ns.CanCompute(name)
+                    and type(name) == "string" and StripRealm(name) == me
+                DumpTable(string.format("%s death %d, every field%s",
+                    sessionType.label, index, mine and " (YOU)" or ""), row)
+
+                -- Keep the first one that is NOT the player, for the single
+                -- question that decides whether a raid death log can say what
+                -- killed each person.
+                if not mine and not foreignID then
+                    local rid = row and row.deathRecapID
+                    if ns.CanCompute(rid) and type(rid) == "number"
+                        and rid > 0 then
+                        foreignID = rid
+                    end
+                end
             end
         end
+    end
+
+    ---------------------------------------------------------------------
+    -- THE ONE QUESTION THE RAID DEATH LOG HANGS ON
+    --
+    -- Owner asked for a timeline of who died and to what. Who and when is
+    -- already in the list above. WHAT killed them needs the recap of a death
+    -- that is not ours - and nothing anywhere says whether the client will
+    -- hand that over. Asking is one call; reasoning about it is a guess.
+    ---------------------------------------------------------------------
+    if foreignID then
+        local okOther, other = pcall(C_DeathRecap.GetRecapEvents, foreignID)
+        if okOther and type(other) == "table" and other[1] then
+            ns.Print(string.format(
+                "  |cff40ff40SOMEBODY ELSE'S RECAP READS|r - id %s gave %d events.",
+                tostring(foreignID), #other))
+            DumpTable("their newest event, every field", other[1])
+        else
+            ns.Print("  |cffff4040somebody else's recap gave nothing|r - id "
+                .. tostring(foreignID)
+                .. ". A raid death log can say who and when, not to what.")
+        end
+    else
+        ns.Print("  |cff888888no death by anybody but you in the list|r - run "
+            .. "this after a wipe where somebody else died, or the question "
+            .. "about reading their recap stays open.")
     end
 
     local recapID, why = Death.OwnRecapID()
