@@ -338,24 +338,30 @@ local function OwnBuffUp(spellID)
     return aura ~= nil
 end
 
--- IS SOMETHING HAPPENING WITH THIS RIGHT NOW - one question, and it means the
--- same thing on both kinds of item, which is the whole point.
+-- IS THIS WORTH A SQUARE ON THE SCREEN RIGHT NOW.
 --
---   a buff       it is up
---   an ability   its buff is up, OR its cooldown is running
+--   an ability   it is READY, or it is WORKING - the buff it just put on you
+--                is still running. Not while it is merely recharging.
+--   a buff       it is up.
 --
--- Owner, in two goes, and the second one corrected me: "das darf erst
--- ausgeblendet sein, sobald auch der buff weg ist" and then "und wenn der cd
--- rennt, muss das sichtbar sein."
+-- THE OWNER SAID THIS THREE TIMES AND I GOT IT WRONG TWICE, so it is written
+-- out in his own shape: "icon ist sichtbar wenn nicht auf cd; wenn drücken,
+-- muss das icon solange sichtbar sein, bis der buff wie blood shield auch
+-- noch rennt; erst dann ausblenden."
 --
--- Together those are one rule, not two: an ability is DOING something from
--- the moment it is pressed until its cooldown ends - first the buff, then the
--- wait - and it is idle only when it is sitting there ready. I had built the
--- opposite for abilities (relevant = ready) and it took both sentences to
--- see that "worth looking at" and "usable" are not the same question.
+--   ready ................ visible   you can press it
+--   pressed, buff running  visible   it is doing the thing you pressed it for
+--   recharging, buff gone  HIDDEN    a picture of something you cannot use
 --
--- A bar can hold both kinds, so this is also the only place the two can be
--- reconciled: leaving it to whoever reads the menu means a setting that is
+-- My first version hid it the moment it was pressed, because it read "on
+-- cooldown" as "not usable". My second kept it up for the whole cooldown,
+-- because I read "wenn der cd rennt muss das sichtbar sein" as the whole
+-- cooldown rather than as the part where the buff is still going. The rule
+-- is neither: the icon earns its square by being USABLE or by WORKING, and a
+-- long recharge with nothing running is exactly what he wants off the bar.
+--
+-- A bar holds both kinds, so this is the only place the two can be
+-- reconciled - leaving it to whoever reads the menu means a setting that is
 -- right for half a bar.
 --
 -- nil means the client would not say, and nil never hides anything.
@@ -370,13 +376,20 @@ function Effects.Relevant(item, spellID, cooldownID)
         return up and true or false
     end
 
-    -- Its own buff first: it answers even for an ability whose cooldown the
-    -- client will not talk about, and it is the half the owner named first.
-    if OwnBuffUp(spellID) == true then return true end
-
     local onCd = OnCooldown(spellID, cooldownID)
     if onCd == nil then return nil end
-    return onCd
+
+    -- Ready: nothing else to ask.
+    if not onCd then return true end
+
+    -- On cooldown, so the only thing that still earns it a square is its own
+    -- buff. Most defensives grant one carrying the ABILITY'S own spell id,
+    -- which is why a single lookup covers them; Blood Shield is the one he
+    -- named. When the client will not answer - inside restricted content it
+    -- often will not - this falls through to hiding, because "goes a few
+    -- seconds early in a dungeon" is a smaller fault than "never goes".
+    if OwnBuffUp(spellID) == true then return true end
+    return false
 end
 
 ---------------------------------------------------------------------------

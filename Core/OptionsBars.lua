@@ -1950,18 +1950,19 @@ function Workspace:BuildOptionsPane(parent, width)
     -- is an empty bar nobody meant to ask for.
     UI.Dropdown(grid:FullRow("Take off screen", { controlWidth = 150 }), {
         { value = "never",   text = "Nothing" },
-        { value = "cooling", text = "While it is not up to anything" },
-        { value = "ready",   text = "While it is" },
+        { value = "cooling", text = "While it is only recharging" },
+        { value = "ready",   text = "While it is ready or working" },
     }, FxGet("hideWhen"), FxSet("hideWhen"), { apply = Apply })
     UI.Dropdown(grid:FullRow("Close the gap", { controlWidth = 150 }), {
         { value = "off",  text = "Leave it empty" },
         { value = "all",  text = "Close up" },
         { value = "line", text = "Close up in the row" },
     }, FxGet("reflow"), FxSet("reflow"), { apply = Apply })
-    grid:Note("|cffffd100Up to something|r means a buff that is running, or "
-        .. "an ability from the moment you press it until its cooldown ends - "
-        .. "first the buff, then the wait. Idle means sitting there ready. "
-        .. "Anything the client will not answer for stays where it is.")
+    grid:Note("An icon earns its square by being |cffffd100ready|r or by "
+        .. "|cffffd100working|r - press a defensive and it stays while its "
+        .. "buff runs, then goes for the rest of the cooldown. A tracked buff "
+        .. "counts as working while it is up. Anything the client will not "
+        .. "answer for stays where it is.")
 
     grid:Note("Leaving it empty keeps everything where you learned it. "
         .. "Closing up in the ROW keeps a grid's shape, so the second row "
