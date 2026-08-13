@@ -434,6 +434,30 @@ local function PaintAura(cell, active)
 
     aura.icon:SetVertexColor(1, 1, 1)
 
+    -- THE STATE RULE REACHES THE AURAS WE DRAW OURSELVES TOO.
+    --
+    -- Owner: "das funktioniert jetzt für spells, jetzt noch für auren rein."
+    -- A proc outside the Cooldown Manager's data set has no adopted frame at
+    -- all - Boiling Point reported cd=nil in /zs hide and stood there for
+    -- ever - so the branch that hides an ability never sees it.
+    --
+    -- Its "is it working" is the simplest of the three: the aura clock this
+    -- addon runs itself. There is no cooldown to wait out afterwards, so an
+    -- aura is either up or it is idle.
+    --
+    -- Never while unlocked, like everywhere else: an icon you cannot see is
+    -- an icon you cannot drag.
+    local hideRule = cell.hideWhen
+    if hideRule and hideRule ~= "never" and not cell.unlockedNow then
+        local hidden = (hideRule == "cooling" and not active)
+            or (hideRule == "ready" and active)
+        if hidden then
+            aura:SetAlpha(0)
+            aura:Hide()
+            return
+        end
+    end
+
     if active then
         aura.icon:SetDesaturated(false)
         aura:SetAlpha(1)
@@ -1622,9 +1646,14 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
     StyleAuraVisual(aura, style, slot.kind == "bar")
 
     -- Carried on the cell, because the glow events repaint it later and have
-    -- no style table in hand.
+    -- no style table in hand. The state rule rides along for the same reason:
+    -- a proc going up or down repaints through PaintAura, which never sees
+    -- the bar's config.
     cell.inactiveAlpha = style.inactiveAlpha
     cell.inactiveDesaturate = style.inactiveDesaturate
+    cell.hideWhen = cfg.effects and cfg.effects.hideWhen
+        or ns.EFFECT_DEFAULTS.hideWhen
+    cell.unlockedNow = self.unlocked and true or false
 
     aura.icon:SetTexture(ns.SpellTexture(spellID))
     aura.label:SetText(ns.SpellName(spellID) or "")
