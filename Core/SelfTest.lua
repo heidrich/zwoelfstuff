@@ -2399,14 +2399,16 @@ local function TestDesignSystem()
             Hidden({ hideWhen = "cooling" }, false)
             and not Hidden({ hideWhen = "cooling" }, true))
 
-        Check("And the other way round",
-            Hidden({ hideWhen = "ready" }, true)
+        -- The inverse was removed after it emptied a bar twice. A profile
+        -- that still carries the value must land on "hide nothing" - the
+        -- outcome that gives the bar back rather than leaving it empty.
+        Check("The value that was removed now hides nothing",
+            not Hidden({ hideWhen = "ready" }, true)
             and not Hidden({ hideWhen = "ready" }, false))
 
         -- THE ONE THAT KEEPS A READING FAILURE FROM LOOKING LIKE A BUG.
         Check("A state the client will not name never hides anything",
-            not Hidden({ hideWhen = "ready" }, nil)
-            and not Hidden({ hideWhen = "cooling" }, nil))
+            not Hidden({ hideWhen = "cooling" }, nil))
 
         Check("No settings at all hides nothing", not Hidden(nil, true))
 

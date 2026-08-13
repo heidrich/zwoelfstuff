@@ -450,7 +450,6 @@ local function PaintAura(cell, active)
     local hideRule = cell.hideWhen
     if hideRule and hideRule ~= "never" and not cell.unlockedNow then
         local hidden = (hideRule == "cooling" and not active)
-            or (hideRule == "ready" and active)
         if hidden then
             aura:SetAlpha(0)
             aura:Hide()
@@ -1251,8 +1250,17 @@ function Screen:Render()
             -- Never while unlocked: edit mode shows every place, so nothing
             -- may move out from under the cursor that is dragging it.
             if not self.unlocked then
-                place = ns.Layout.Compact(hidden, count, reflow,
-                    cfg.wrapAfter or 0)
+                -- HOW WIDE A LINE IS, and it is not cfg.wrapAfter - that
+                -- field belongs to the tracking groups, so a bar handed 0,
+                -- which became "one cell per line", which made "close up in
+                -- the row" close nothing. A row of five with two hidden kept
+                -- the two holes and the owner photographed them.
+                --
+                -- A bar's line is a ROW when it flows sideways and a COLUMN
+                -- when it flows down, which is exactly what the axis says.
+                local perLine = (cfg.axis == "vertical")
+                    and (cfg.rows or 1) or (cfg.columns or 1)
+                place = ns.Layout.Compact(hidden, count, reflow, perLine)
             end
         end
 

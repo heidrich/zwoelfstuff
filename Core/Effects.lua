@@ -98,15 +98,14 @@ ns.EFFECT_DEFAULTS = {
 
     -- TAKE IT OFF THE SCREEN ENTIRELY, by state.
     --
-    --   "never"    always there                       (the default)
-    --   "cooling"  gone while it is on cooldown  - a display of what you
-    --              can press RIGHT NOW and nothing else
-    --   "ready"    gone while it is ready        - a display of what you are
-    --              waiting for
+    --   "never"    always there                          (the default)
+    --   "cooling"  gone while it is ONLY recharging - it earns its square by
+    --              being usable, or by working (its own buff still running)
     --
-    -- Both readings are useful and they are opposites, which is why this is
-    -- one setting with three values rather than two switches that can
-    -- contradict each other.
+    -- There were three values for a while. The inverse - hide what is ready
+    -- or working - reads like the useful opposite and is not: it is almost
+    -- everything almost always, so picking it emptied the bar. Taken out
+    -- rather than left in and explained.
     --
     -- IT LEAVES THE GAP. The cell keeps its place and goes to nothing;
     -- everything else stays where it was. A display whose icons move around
@@ -476,11 +475,13 @@ end
 function Effects.HiddenByState(fxOpts, relevant)
     if not fxOpts or relevant == nil then return false end
     local rule = fxOpts.hideWhen
-    -- "cooling" is the name the setting has always had; what it MEANS is
-    -- "take away what is not worth looking at", which on a buff is one that
-    -- is down rather than one that is recharging.
+    -- ONE RULE, and the inverse was deliberately taken out rather than left
+    -- unlisted. "Hide what is ready or working" is almost everything almost
+    -- always, so it emptied the bar; the owner hit it twice and read it as a
+    -- fault, which it was. A profile that still carries the old value now
+    -- falls through to hiding nothing, which is the landing that gives the
+    -- bar back instead of leaving somebody with an empty one.
     if rule == "cooling" then return relevant == false end
-    if rule == "ready" then return relevant == true end
     return false
 end
 

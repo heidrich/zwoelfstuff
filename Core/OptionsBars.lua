@@ -1964,19 +1964,25 @@ function Workspace:BuildOptionsPane(parent, width)
     -- is an empty bar nobody meant to ask for.
     UI.Dropdown(grid:FullRow("Take off screen", { controlWidth = 150 }), {
         { value = "never",   text = "Nothing" },
-        { value = "cooling", text = "While it is only recharging" },
-        { value = "ready",   text = "While it is ready or working" },
+        -- Named after WHEN IT GOES, which is what somebody reading a menu
+        -- wants to know. Owner: "das müsste sein, while on CD - du willst ja
+        -- immer sehen wenn rdy." The two exceptions are in the note under it
+        -- rather than crammed into the name: ready is always there, and a
+        -- cooldown whose buff is still running counts as working.
+        { value = "cooling", text = "While on cooldown" },
+        -- Two values, and there is no third. See Effects.HiddenByState.
+
     }, FxGet("hideWhen"), FxSet("hideWhen"), { apply = Apply })
-    UI.Dropdown(grid:FullRow("Close the gap", { controlWidth = 150 }), {
+    UI.Dropdown(grid:FullRow("The empty place", { controlWidth = 150 }), {
         { value = "off",  text = "Leave it empty" },
         { value = "all",  text = "Close up" },
         { value = "line", text = "Close up in the row" },
     }, FxGet("reflow"), FxSet("reflow"), { apply = Apply })
-    grid:Note("An icon earns its square by being |cffffd100ready|r or by "
-        .. "|cffffd100working|r - press a defensive and it stays while its "
-        .. "buff runs, then goes for the rest of the cooldown. A tracked buff "
-        .. "counts as working while it is up. Anything the client will not "
-        .. "answer for stays where it is.")
+    grid:Note("|cffffd100Ready is always on screen.|r Press a defensive and "
+        .. "it stays while its buff is still running - Anti-Magic Shell, "
+        .. "Blood Shield - and goes for the rest of the cooldown. A tracked "
+        .. "buff counts as working while it is up. Anything the client will "
+        .. "not answer for stays where it is.")
 
     grid:Note("Leaving it empty keeps everything where you learned it. "
         .. "Closing up in the ROW keeps a grid's shape, so the second row "
