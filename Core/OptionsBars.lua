@@ -1964,12 +1964,13 @@ function Workspace:BuildOptionsPane(parent, width)
     -- is an empty bar nobody meant to ask for.
     UI.Dropdown(grid:FullRow("Take off screen", { controlWidth = 150 }), {
         { value = "never",   text = "Nothing" },
-        -- Named after WHEN IT GOES, which is what somebody reading a menu
-        -- wants to know. Owner: "das müsste sein, while on CD - du willst ja
-        -- immer sehen wenn rdy." The two exceptions are in the note under it
-        -- rather than crammed into the name: ready is always there, and a
-        -- cooldown whose buff is still running counts as working.
-        { value = "cooling", text = "While on cooldown" },
+        -- His words, and named after WHEN IT GOES: "wir brauchen nur nothing
+        -- und while recharging - das auch genau so nennen." RECHARGING rather
+        -- than "on cooldown", and the difference is the whole feature: a
+        -- defensive whose buff is still running is not recharging yet, it is
+        -- working. That exception and "ready is always there" live in the
+        -- note under it, where a sentence has room.
+        { value = "cooling", text = "While recharging" },
         -- Two values, and there is no third. See Effects.HiddenByState.
 
     }, FxGet("hideWhen"), FxSet("hideWhen"), { apply = Apply })
