@@ -2446,6 +2446,71 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- CLOSING THE GAPS A HIDDEN CELL LEAVES
+    --
+    -- An off-by-one here does not raise. It puts the wrong icon in the wrong
+    -- square and looks exactly like a working display - which is why the
+    -- arithmetic is separate from the drawing and checked on its own.
+    --
+    -- Two ways to close, and they are different answers rather than a better
+    -- and a worse: "all" repacks the lot, "line" closes each row within
+    -- itself so a grid keeps its shape and "the second row is my defensives"
+    -- stays true.
+    -----------------------------------------------------------------------
+    do
+        local Compact = ns.Layout.Compact
+
+        -- Off is the identity, so no caller needs a branch around it.
+        local place, used = Compact({ [2] = true }, 4, nil, 4)
+        Check("Switched off, every cell keeps its own slot",
+            place[1] == 1 and place[2] == 2 and place[3] == 3 and used == 4)
+
+        -- "all": everything shuffles down and the bar gets shorter.
+        place, used = Compact({ [2] = true }, 4, "all")
+        Check("Repacking moves everything after the gap down",
+            place[1] == 1 and place[2] == nil and place[3] == 2
+            and place[4] == 3)
+        Check("Repacking shortens the bar", used == 3)
+
+        place, used = Compact({ [1] = true, [2] = true }, 4, "all")
+        Check("Two gaps at the front pull the rest to the front",
+            place[3] == 1 and place[4] == 2 and used == 2)
+
+        Check("Everything hidden leaves nothing to draw",
+            select(2, Compact({ true, true, true }, 3, "all")) == 0)
+
+        -- "line": a 3x2 grid, one gone from the FIRST row. The second row
+        -- must not move up - that is the whole difference.
+        local grid = { [2] = true }
+        place, used = Compact(grid, 6, "line", 3)
+        Check("A row closes up within itself",
+            place[1] == 1 and place[2] == nil and place[3] == 2)
+        Check("The row below keeps its place",
+            place[4] == 4 and place[5] == 5 and place[6] == 6)
+        Check("The box still covers the furthest row", used == 6)
+
+        -- A gap in the LAST row shortens the box; a gap above it does not.
+        place, used = Compact({ [5] = true }, 6, "line", 3)
+        Check("A gap in the last row does shorten it",
+            place[6] == 5 and used == 5)
+
+        -- A whole row gone in the middle leaves its space empty rather than
+        -- pulling the row below up into it - the price of keeping the grid,
+        -- and it is the point of the mode rather than a defect.
+        place, used = Compact({ [4] = true, [5] = true, [6] = true }, 9, "line", 3)
+        Check("An empty middle row stays empty",
+            place[7] == 7 and place[8] == 8 and used == 9)
+
+        -- A line of one is every cell on its own line, which must not become
+        -- a division by zero or a silent repack.
+        place, used = Compact({ [1] = true }, 3, "line", 1)
+        Check("A line of one still answers", place[2] == 2 and used == 3)
+
+        Check("No cells at all is not an error",
+            select(2, Compact({}, 0, "all")) == 0)
+    end
+
+    -----------------------------------------------------------------------
     -- THE SQUARES THAT RUN ROUND THE OUTLINE
     --
     -- Motion is caught by the corner of your eye in a way a steady colour is

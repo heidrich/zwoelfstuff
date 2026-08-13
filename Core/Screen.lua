@@ -1197,6 +1197,40 @@ function Screen:Render()
         -- staggered, arc, diagonal or puzzle, per-cell sizes included.
         local slots, box = ns.Layout.Build(cfg, count, spacing, lineSpacing)
 
+        -- WHICH SLOT EACH CELL ACTUALLY TAKES, once the state rule has taken
+        -- some of them off the screen. Identity unless the player asked for
+        -- the gaps to close, and the work is skipped entirely when they did
+        -- not - this runs for every cell of every bar on every pass.
+        --
+        -- The lookup is READ-ONLY on purpose: CDM:ItemForSpell without the
+        -- `fresh` flag is a table read, where the paint pass below CLAIMS a
+        -- frame. Claiming twice for one cell would hand it out and take it
+        -- back inside a single render.
+        --
+        -- The slots keep their own geometry, so a cell with a size of its own
+        -- takes on the size of whatever slot it moves into. That is the price
+        -- of closing up rather than a defect: the alternative is a bar whose
+        -- squares change size as cooldowns run.
+        local reflow = cfg.effects and cfg.effects.reflow
+        local place = nil
+        if reflow == "all" or reflow == "line" then
+            local hidden = {}
+            for cellIndex = 1, count do
+                local spellID = cfg.cells[cellIndex]
+                local item = spellID and ns.CDM:ItemForSpell(spellID)
+                if item then
+                    hidden[cellIndex] = ns.Effects.HiddenByState(cfg.effects,
+                        ns.Effects.Ready(ns.CDM:ItemCooldownID(item)))
+                end
+            end
+            -- Never while unlocked: edit mode shows every place, so nothing
+            -- may move out from under the cursor that is dragging it.
+            if not self.unlocked then
+                place = ns.Layout.Compact(hidden, count, reflow,
+                    cfg.wrapAfter or 0)
+            end
+        end
+
         -- Auto text sizes follow the CELL, so a bar with one enlarged icon in
         -- it gets a bigger number on that one. Cached by height, because most
         -- bars have exactly one size and building the table per cell would be
@@ -1242,21 +1276,38 @@ function Screen:Render()
                 bar.cells[cellIndex] = cell
             end
 
-            local slot = slots[cellIndex]
-            cell:SetSize(slot.w, slot.h)
-            cell:ClearAllPoints()
-            -- By its CENTRE, against the bar's centre. A corner is no use
-            -- here: an arc has no corner to measure from, and a cell that is
-            -- scaled up should grow around itself rather than shove the row.
-            cell:SetPoint("CENTER", bar, "CENTER",
-                slot.x - box.centreX, slot.y - box.centreY)
-            cell:SetShown(not slot.hidden)
+            -- The slot this cell has MOVED into, when the gaps are closing.
+            -- `place` is nil for every bar that is not, so the ordinary case
+            -- costs one comparison.
+            local slot = slots[place and place[cellIndex] or cellIndex]
 
-            if slot.hidden then
+            -- Compacted away: it is drawn nowhere, and it must not be painted
+            -- either - painting claims a Cooldown Manager frame, and a frame
+            -- claimed by an invisible cell is one the visible cells cannot
+            -- have.
+            if place and not place[cellIndex] then
+                cell:Hide()
                 self:BlankCell(cell)
-            else
-                self:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell,
-                    StyleFor(slot.h, cellIndex), factor)
+                slot = nil
+            end
+
+            if slot then
+                cell:SetSize(slot.w, slot.h)
+                cell:ClearAllPoints()
+                -- By its CENTRE, against the bar's centre. A corner is no use
+                -- here: an arc has no corner to measure from, and a cell that
+                -- is scaled up should grow around itself rather than shove
+                -- the row.
+                cell:SetPoint("CENTER", bar, "CENTER",
+                    slot.x - box.centreX, slot.y - box.centreY)
+                cell:SetShown(not slot.hidden)
+
+                if slot.hidden then
+                    self:BlankCell(cell)
+                else
+                    self:PaintCell(bar, cell, cfg, slot, claimedNow,
+                        auraBySpell, StyleFor(slot.h, cellIndex), factor)
+                end
             end
         end
 

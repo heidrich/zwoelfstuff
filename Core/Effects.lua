@@ -116,6 +116,22 @@ ns.EFFECT_DEFAULTS = {
     -- separate setting, not a side effect of this one.
     hideWhen = "never",
 
+    -- AND WHETHER THE OTHERS CLOSE UP BEHIND IT.
+    --
+    --   "off"   the place stays empty. Nothing moves, ever, and "the third
+    --           one is my stun" keeps being true.
+    --   "all"   everything repacks from the front. What is left IS the list.
+    --   "line"  each row closes up within itself and the rows stay put -
+    --           right for a grid, where repacking would pull a defensive out
+    --           of the second row up into the first.
+    --
+    -- Off by default, because a display whose icons move has to be re-read
+    -- every time and muscle memory is worth more than the empty square costs.
+    -- The arithmetic is ns.Layout.Compact, kept apart from the drawing: an
+    -- off-by-one there puts the wrong icon in the wrong square and looks
+    -- exactly like a working display.
+    reflow = "off",
+
     -- How fast anything that pulses, pulses. One control for all of them, so
     -- a display does not end up with three different heartbeats.
     pulseSpeed   = 1.0,

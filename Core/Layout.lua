@@ -729,3 +729,77 @@ function Layout.LabelVertical(anchor)
     return anchor:find("TOP") and "TOP"
         or anchor:find("BOTTOM") and "BOTTOM" or ""
 end
+
+---------------------------------------------------------------------------
+-- CLOSING THE GAPS a hidden cell leaves
+--
+-- Owner: "aber das nachrücken wäre noch gut, das die plätze automatisch
+-- rücken, dann noch einstellungen wie die nachrücken können."
+--
+-- The hiding itself is Core/Effects.lua's state rule. This decides only WHICH
+-- SLOT each surviving cell lands in, and it is pure arithmetic on purpose:
+-- an off-by-one here does not raise an error, it puts the wrong icon in the
+-- wrong square and looks like a working display.
+--
+-- TWO WAYS TO CLOSE, and they are different answers to the same question
+-- rather than a better and a worse:
+--
+--   "all"   everything repacks from the first slot. The bar becomes as short
+--           as it needs to be. Right for a row of cooldowns you read left to
+--           right - what is left IS the list.
+--   "line"  each row closes up within itself and the rows keep their places.
+--           Right for a GRID, where "the second row is my defensives" is a
+--           thing you know without reading, and repacking would move a
+--           defensive up into the first row.
+--
+-- `hidden` is indexed by cell. Returns a table where place[cell] is the slot
+-- that cell takes, or nil when it is not drawn, plus how many slots ended up
+-- in use - which is what lets the caller ask Layout.Build for a smaller box.
+---------------------------------------------------------------------------
+function Layout.Compact(hidden, count, mode, perLine)
+    local place, used = {}, 0
+    count = math.max(0, count or 0)
+    hidden = hidden or {}
+
+    -- The whole feature switched off is the identity, and saying so here
+    -- means no caller needs a branch around it.
+    if mode ~= "all" and mode ~= "line" then
+        for cell = 1, count do
+            place[cell] = cell
+        end
+        return place, count
+    end
+
+    if mode == "all" then
+        for cell = 1, count do
+            if not hidden[cell] then
+                used = used + 1
+                place[cell] = used
+            end
+        end
+        return place, used
+    end
+
+    -- "line". A line of one or less is every cell on its own line, which is
+    -- the same as "all" and is answered rather than divided by.
+    perLine = math.max(1, math.floor(perLine or 1))
+    local lines = math.ceil(count / perLine)
+
+    for line = 0, lines - 1 do
+        local first = line * perLine
+        local taken = 0
+        for offset = 1, perLine do
+            local cell = first + offset
+            if cell <= count and not hidden[cell] then
+                taken = taken + 1
+                place[cell] = first + taken
+            end
+        end
+        -- The LAST slot any line reached, not the sum: a half-empty first row
+        -- still leaves the second row where it was, so the box has to cover
+        -- up to the furthest slot used rather than to the count of survivors.
+        if taken > 0 then used = math.max(used, first + taken) end
+    end
+
+    return place, used
+end

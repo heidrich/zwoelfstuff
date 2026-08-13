@@ -1938,8 +1938,16 @@ function Workspace:BuildOptionsPane(parent, width)
     }, FxGet("hideWhen"), function(value)
         FxSet("hideWhen")(value); Apply()
     end)
-    grid:Note("The place stays empty rather than closing up, so nothing "
-        .. "else moves. Edit mode always shows everything.")
+    UI.Dropdown(grid:FullRow("Close the gap", { controlWidth = 150 }), {
+        { value = "off",  label = "Leave it empty" },
+        { value = "all",  label = "Close up" },
+        { value = "line", label = "Close up in the row" },
+    }, FxGet("reflow"), function(value)
+        FxSet("reflow")(value); Apply()
+    end)
+    grid:Note("Leaving it empty keeps everything where you learned it. "
+        .. "Closing up in the ROW keeps a grid's shape, so the second row "
+        .. "stays the second row. Edit mode always shows everything.")
     FxSlide("Pulse speed", "pulseSpeed", 0.4, 2.5, 0.1,
         function(v) return string.format("%.1f", v) end)
 
