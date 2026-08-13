@@ -759,6 +759,21 @@ function Bars:ReshapeGrid(cfg, rows, columns)
     columns = math.max(1, math.min(20, columns or cfg.columns))
     if rows == cfg.rows and columns == cfg.columns then return false end
 
+    -- THE LATTICE GOES WHERE THE CELLS ARE, FIRST.
+    --
+    -- A bar whose cells have all been dragged the same way in build mode is
+    -- a bar whose lattice is somewhere nobody can see, and the only moment
+    -- that matters is this one: the new cells appear ON the lattice while
+    -- the old ones stay where they were dragged, and one bar draws as two
+    -- blocks. Reported as "error when I want to set more rows"; measured
+    -- afterwards off his own saved bars, where five icons carried the same
+    -- 156 and the preview came out 272 tall for a grid that measures 124.
+    --
+    -- Before the shape changes, because it is the OLD cells whose common
+    -- displacement is being read - and it moves nothing on screen, so a bar
+    -- that was already right is untouched. See Layout.Normalise.
+    ns.Layout.Normalise(cfg, self:CellCount(cfg))
+
     cfg.rows, cfg.columns = rows, columns
     self:Resized(cfg)
     return true

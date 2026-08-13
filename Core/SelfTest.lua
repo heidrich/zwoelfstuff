@@ -220,6 +220,97 @@ local function TestOffsets()
 end
 
 ---------------------------------------------------------------------------
+-- A nudge every cell shares
+--
+-- HIS BUG, WITH HIS OWN NUMBERS. Reported as "error when I want to set more
+-- rows", photographed as one bar drawn in two blocks: the icons where he had
+-- dragged them and the empty cells a long way below, on a lattice nobody
+-- could see. Read off his saved variables afterwards - five cells in a 1x5
+-- bar, every one of them carrying y = 156.
+--
+-- The first check is the fault itself and the second is the licence to fix
+-- it: taking a shared displacement off every cell must move NOTHING.
+---------------------------------------------------------------------------
+local function Drawn(cfg)
+    local slots, box = ns.Layout.Build(cfg, ns.Bars:CellCount(cfg),
+        cfg.spacing or 4, cfg.lineSpacing or 4)
+    local out = {}
+    for index, slot in ipairs(slots) do
+        out[index] = { x = slot.x - box.centreX, y = slot.y - box.centreY,
+            w = slot.w, h = slot.h }
+    end
+    return out, box
+end
+
+local function TestSharedNudge()
+    -- His bar: 36px icons, 2 across, five of them, all dragged 156 up.
+    local function His(rows, columns, nudge)
+        local cfg = Fresh({ layout = "grid", rows = rows, columns = columns,
+            iconSize = 36, spacing = 2, lineSpacing = 4 })
+        if nudge then
+            for cell = 1, 5 do ns.Layout.SetOffset(cfg, cell, 0, 156) end
+        end
+        return cfg
+    end
+
+    -- THE FAULT. A bar whose cells all carry the same nudge must measure the
+    -- same as one whose cells carry none - it is the same picture, drawn in
+    -- the same place, and only the lattice underneath it has moved. Before
+    -- the fix this came out 272 tall against 124.
+    local scattered = His(1, 5, true)
+    ns.Bars:ReshapeGrid(scattered, 3, 5)
+    local _, scatteredBox = Drawn(scattered)
+    local _, neatBox = Drawn(His(3, 5, false))
+    Check("Adding a row to a dragged bar does not split it in two",
+        Near(scatteredBox.height, neatBox.height)
+        and Near(scatteredBox.width, neatBox.width),
+        string.format("%.0fx%.0f, expected %.0fx%.0f", scatteredBox.width,
+            scatteredBox.height, neatBox.width, neatBox.height))
+
+    -- THE LICENCE. Nothing on screen may move, or this is not a tidy-up, it
+    -- is the editor rearranging a bar behind his back.
+    local still = His(1, 5, true)
+    local before = Drawn(still)
+    local dx, dy = ns.Layout.Normalise(still, 5)
+    local ok, why = SameGeometry(before, Drawn(still))
+    Check("Taking the shared nudge off moves nothing on screen", ok, why)
+    Check("...and it is the nudge they shared that came off",
+        Near(dx, 0) and Near(dy, 156), string.format("%.0f,%.0f", dx, dy))
+
+    -- A bar nobody has dragged is not written to at all. Otherwise every
+    -- reshape would stamp a cellOpts table onto a bar that had none.
+    local neat = His(2, 3, false)
+    local zeroX, zeroY = ns.Layout.Normalise(neat, 6)
+    Check("A bar nobody dragged is left alone",
+        Near(zeroX, 0) and Near(zeroY, 0) and not next(neat.cellOpts))
+
+    -- THE MEDIAN, NOT THE MEAN. Four cells sitting still and one dragged
+    -- out: the mean would invent a displacement none of them has and nudge
+    -- all four. The four must stay exactly where they are.
+    local one = Fresh({ layout = "grid", rows = 1, columns = 5 })
+    ns.Layout.SetOffset(one, 3, 90, -70)
+    local wasOne = Drawn(one)
+    ns.Layout.Normalise(one, 5)
+    local sameOne, whyOne = SameGeometry(wasOne, Drawn(one))
+    Check("One cell dragged out: the other four are not touched",
+        sameOne and not ns.Layout.CellOpts(one, 1), whyOne)
+    local keptX, keptY = ns.Layout.GetOffset(one, 3)
+    Check("...and the one that was dragged keeps its nudge",
+        Near(keptX, 90) and Near(keptY, -70),
+        string.format("%.0f,%.0f", keptX, keptY))
+
+    -- A puzzle has no lattice to be measured against, so it is not touched.
+    local puzzle = Fresh({ layout = "free", freeCount = 3 })
+    ns.Layout.SetOffset(puzzle, 1, 300, 300)
+    ns.Layout.SetOffset(puzzle, 2, 300, 300)
+    ns.Layout.SetOffset(puzzle, 3, 300, 300)
+    local puzzleX, puzzleY = ns.Layout.Normalise(puzzle, 3)
+    local stillThere = ns.Layout.GetOffset(puzzle, 1)
+    Check("A puzzle is left where it was built",
+        Near(puzzleX, 0) and Near(puzzleY, 0) and Near(stillThere, 300))
+end
+
+---------------------------------------------------------------------------
 -- Switching pattern, and switching back
 ---------------------------------------------------------------------------
 local function TestPatternRoundTrip()
@@ -6984,6 +7075,7 @@ function Test:Run()
         { "CD request",    TestExternals },
         { "Arrangements",  TestLayout },
         { "Coordinates",   TestOffsets },
+        { "Shared nudge",  TestSharedNudge },
         { "Pattern switch", TestPatternRoundTrip },
         { "Rows and columns", TestGridSliders },
         { "Sorting by drag", TestReorder },

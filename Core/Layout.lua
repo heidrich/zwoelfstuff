@@ -418,6 +418,69 @@ function Layout.SetOffset(cfg, index, x, y)
     return opts
 end
 
+---------------------------------------------------------------------------
+-- A NUDGE EVERY CELL SHARES IS NOT A NUDGE - IT IS WHERE THE BAR IS.
+--
+-- Build mode lets a cell be dragged off its slot, and the drag stores the
+-- distance from the slot. That is the right thing to store while the bar
+-- keeps its shape. It is the wrong thing to keep when the shape CHANGES,
+-- and the fault it caused was reported as "error when I want to set more
+-- rows": a five-icon row whose cells had all been dragged 156 up drew its
+-- icons where they were dragged and its new empty cells 156 below them, on
+-- the lattice nobody could see. Two blocks, one bar, and a preview frame
+-- 272 tall for a grid that measures 124. Measured off his own saved bars.
+--
+-- The whole displacement is shared here, so it says nothing about any cell
+-- and everything about the bar. Taking it off every cell at once TRANSLATES
+-- THE WHOLE ARRANGEMENT AND MOVES NOTHING ON SCREEN: a cell is drawn at
+-- (slot - box centre), and subtracting the same vector from every slot
+-- moves the centre by exactly as much, so the difference is unchanged. What
+-- does change is where the lattice sits - under the cells, where the next
+-- row will appear.
+--
+-- The MEDIAN rather than the mean, and the lower one of a pair so it is
+-- decided rather than rounded. The mean of a row where four cells sit still
+-- and one is dragged out invents a displacement none of the five has and
+-- nudges all four; the median leaves the four alone and names the one.
+local function Median(values)
+    if #values == 0 then return 0 end
+    table.sort(values)
+    return values[floor((#values + 1) / 2)]
+end
+
+function Layout.CommonOffset(cfg, count)
+    count = max(1, count or Layout.CellCount(cfg))
+    local xs, ys = {}, {}
+    for index = 1, count do
+        local x, y = Layout.GetOffset(cfg, index)
+        xs[#xs + 1], ys[#ys + 1] = x, y
+    end
+    return Median(xs), Median(ys)
+end
+
+-- Takes the shared displacement off every cell. Returns what it took, so a
+-- caller can say so; 0,0 means there was nothing to take and nothing was
+-- written - which is every bar nobody has ever dragged.
+--
+-- A PUZZLE IS LEFT ALONE. There the two numbers ARE the position rather than
+-- a distance from a slot, there is no lattice for them to be measured
+-- against, and sliding the whole puzzle onto a lattice it does not use would
+-- be a change with no meaning behind it.
+function Layout.Normalise(cfg, count)
+    if not Layout.UsesGrid(cfg) then return 0, 0 end
+
+    count = max(1, count or Layout.CellCount(cfg))
+    local dx, dy = Layout.CommonOffset(cfg, count)
+    if dx == 0 and dy == 0 then return 0, 0 end
+
+    for index = 1, count do
+        local x, y = Layout.GetOffset(cfg, index)
+        Layout.SetOffset(cfg, index, x - dx, y - dy)
+        Layout.TidyCellOpts(cfg, index)
+    end
+    return dx, dy
+end
+
 -- Is anything nudged off the lattice at all? Drives whether the way out of a
 -- scattered bar is offered, so it is not a button that does nothing on the
 -- ninety per cent of bars nobody has dragged.
