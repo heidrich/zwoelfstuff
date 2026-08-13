@@ -1256,6 +1256,23 @@ function CDM:ItemForSpell(spellID, fresh)
     return itemBySpell[spellID]
 end
 
+-- WHAT THIS ITEM IS ABOUT: "buff" or "cooldown".
+--
+-- The Cooldown Manager's four viewers split cleanly - Essential and Utility
+-- hold abilities, TrackedBuff and TrackedBar hold auras - and the difference
+-- decides which question about the item even has an answer. Owner: "die haben
+-- oft keinen cd", and he is right: an aura frequently has no cooldown at all,
+-- so asking the spell's cooldown about one returns "ready" for ever.
+--
+-- Falls back to "cooldown" for an item from no viewer we know, which is the
+-- reading that keeps such an item visible rather than hiding it on a guess.
+function CDM:ItemTracks(item)
+    local viewer = item and itemViewer[item]
+    local key = viewer and viewer.key
+    if key == "buffIcon" or key == "buffBar" then return "buff" end
+    return "cooldown"
+end
+
 -- Which of Blizzard's two templates a frame came out of: "icon" or "bar".
 function CDM:ItemShape(item)
     local viewer = itemViewer[item]

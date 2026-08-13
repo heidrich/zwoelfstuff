@@ -249,7 +249,38 @@ end
 --
 -- The GCD is explicitly not a cooldown here. Without that test every spell in
 -- the game "comes off cooldown" every 1.5 seconds and the flash is a strobe.
-local function OnCooldown(item, cooldownID)
+-- The spell's own cooldown, as the client reports it for the PLAYER.
+--
+--   nil    no answer, or a value we may not compute with
+--   false  ready, or only the global cooldown is spinning
+--   true   its own cooldown is running
+local function SpellOnCooldown(spellID)
+    if not (spellID and C_Spell and C_Spell.GetSpellCooldown) then return nil end
+
+    local ok, info = pcall(C_Spell.GetSpellCooldown, spellID)
+    if not (ok and type(info) == "table") then return nil end
+
+    local start, duration = info.startTime, info.duration
+    if not (ns.CanCompute(start) and ns.CanCompute(duration)) then return nil end
+    if type(start) ~= "number" or type(duration) ~= "number" then return nil end
+
+    if start <= 0 or duration <= 0 then return false end
+
+    -- THE GLOBAL COOLDOWN IS NOT A COOLDOWN. Every spell in the game reports
+    -- one for a second and a half after every cast, and counting it would
+    -- make the whole bar blink on each button press - the exact reason the
+    -- old route subtracted isOnGCD.
+    --
+    -- A threshold rather than the GCD spell's own id: that id would be a
+    -- number written from memory, which is how this project has already lost
+    -- a day twice. Haste only ever makes the GCD shorter, so the ceiling
+    -- holds. The cost is that a real cooldown of under 1.5s would read as
+    -- ready, and no cooldown worth putting on a bar is that short.
+    if duration <= 1.5 then return false end
+    return true
+end
+
+local function OnCooldown(spellID, cooldownID)
     local info = cooldownID and ns.CDM:GetInfo(cooldownID)
     local active = info and info.isActive
 
@@ -266,33 +297,86 @@ local function OnCooldown(item, cooldownID)
 
     -- THE INFO TABLE DOES NOT CARRY THESE FLAGS ON THIS CLIENT, and that is
     -- not secrecy - it is absence. Measured in game with /zs hide, on four
-    -- cooldowns that were visibly running:
-    --
-    --   isActive nil   isOnGCD nil   item:IsActive true
+    -- cooldowns that were visibly running: isActive nil, isOnGCD nil.
     --
     -- Everything driven by "is it on cooldown" had therefore been standing
     -- down on every adopted Cooldown Manager icon: the ready flash, the ready
-    -- edge, the reminder and the greying, not only the hiding the owner was
-    -- testing. It looked exactly like a feature switched off, which is the
-    -- shape this whole addon uses for a value it may not read - so nothing
-    -- ever complained.
+    -- edge, the reminder and the greying, not only the hiding this was found
+    -- by. It looked exactly like a feature switched off, which is the shape
+    -- this whole addon uses for a value it may not read - so nothing ever
+    -- complained.
     --
-    -- The FRAME answers for itself where the table does not. Same source
-    -- EllesmereUI reads for its buff bars, and the same caution applies: on a
-    -- tracked-BUFF item "active" means the buff is up rather than a cooldown
-    -- running, so a buff bar reads this switch as "while it is up".
-    local itemActive = ns.CDM:ItemIsActive(item)
-    if itemActive == nil then return nil end
-    return itemActive and true or false
+    -- NOT item:IsActive. The same dump showed it true on all four cooldowns
+    -- and false on three auras that were down, which reads like the answer
+    -- and is not: it stayed true once they were ready again, so it means
+    -- "this item is being tracked", not "it is running". One correlation, two
+    -- meanings, and picking the wrong one hid the whole bar for ever.
+    --
+    -- The spell's own cooldown is the source, and it is the one a shipping
+    -- 12.1 addon leans on hardest - C_Spell.GetSpellCooldown appears 59 times
+    -- in EllesmereUI's Cooldown Manager alone.
+    return SpellOnCooldown(spellID)
 end
 
 -- READY, as the rest of the addon asks it: true, false, or nil for "cannot
 -- tell". The render pass needs the same answer the ticker works from, and two
 -- readings of one state is how they end up disagreeing for a frame.
-function Effects.Ready(item, cooldownID)
-    local onCd = OnCooldown(item, cooldownID)
+-- Is one of the player's own auras carrying this exact spell id running?
+--
+--   nil    the client will not say - inside a dungeon it often will not
+--   false  no such aura
+--   true   it is up
+local function OwnBuffUp(spellID)
+    if not (spellID and ns.AurasReadable()) then return nil end
+    local get = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
+    if not get then return nil end
+
+    local ok, aura = pcall(get, spellID)
+    if not ok then return nil end
+    -- Comparing the TABLE against nil, never a field of it: whether an aura
+    -- exists is answerable, what is inside it may not be.
+    return aura ~= nil
+end
+
+-- IS SOMETHING HAPPENING WITH THIS RIGHT NOW - one question, and it means the
+-- same thing on both kinds of item, which is the whole point.
+--
+--   a buff       it is up
+--   an ability   its buff is up, OR its cooldown is running
+--
+-- Owner, in two goes, and the second one corrected me: "das darf erst
+-- ausgeblendet sein, sobald auch der buff weg ist" and then "und wenn der cd
+-- rennt, muss das sichtbar sein."
+--
+-- Together those are one rule, not two: an ability is DOING something from
+-- the moment it is pressed until its cooldown ends - first the buff, then the
+-- wait - and it is idle only when it is sitting there ready. I had built the
+-- opposite for abilities (relevant = ready) and it took both sentences to
+-- see that "worth looking at" and "usable" are not the same question.
+--
+-- A bar can hold both kinds, so this is also the only place the two can be
+-- reconciled: leaving it to whoever reads the menu means a setting that is
+-- right for half a bar.
+--
+-- nil means the client would not say, and nil never hides anything.
+function Effects.Relevant(item, spellID, cooldownID)
+    if ns.CDM:ItemTracks(item) == "buff" then
+        -- The frame's own answer, and for an aura it means exactly what it
+        -- says. Proven in game: false on three auras that were down, true on
+        -- the ones that were up. An aura often has no cooldown at all, so
+        -- asking the spell's cooldown about one answers "ready" for ever.
+        local up = ns.CDM:ItemIsActive(item)
+        if up == nil then return nil end
+        return up and true or false
+    end
+
+    -- Its own buff first: it answers even for an ability whose cooldown the
+    -- client will not talk about, and it is the half the owner named first.
+    if OwnBuffUp(spellID) == true then return true end
+
+    local onCd = OnCooldown(spellID, cooldownID)
     if onCd == nil then return nil end
-    return not onCd
+    return onCd
 end
 
 ---------------------------------------------------------------------------
@@ -376,11 +460,14 @@ end
 -- cooldown the client will not talk about must never disappear. An icon that
 -- vanishes because the addon could not read something is indistinguishable
 -- from a bug, and it takes the spell with it.
-function Effects.HiddenByState(fxOpts, ready)
-    if not fxOpts or ready == nil then return false end
+function Effects.HiddenByState(fxOpts, relevant)
+    if not fxOpts or relevant == nil then return false end
     local rule = fxOpts.hideWhen
-    if rule == "cooling" then return ready == false end
-    if rule == "ready" then return ready == true end
+    -- "cooling" is the name the setting has always had; what it MEANS is
+    -- "take away what is not worth looking at", which on a buff is one that
+    -- is down rather than one that is recharging.
+    if rule == "cooling" then return relevant == false end
+    if rule == "ready" then return relevant == true end
     return false
 end
 
@@ -488,8 +575,7 @@ local function TickCell(entry, inCombat, span)
             remaining = state.auraEnds - GetTime()
         end
     else
-        local onCd = OnCooldown(cell.item, entry.cooldownID)
-        if onCd ~= nil then ready = not onCd end
+        ready = Effects.Relevant(cell.item, entry.spellID, entry.cooldownID)
     end
 
     ---------------------------------------------------------------------
@@ -769,12 +855,18 @@ function Effects:Dump()
             local cooldownID = item and ns.CDM:ItemCooldownID(item)
             local info = cooldownID and ns.CDM:GetInfo(cooldownID)
 
-            local ready = Effects.Ready(item, cooldownID)
+            local ready = Effects.Relevant(item, spellID, cooldownID)
+            local okCd, cdInfo = pcall(C_Spell.GetSpellCooldown, spellID)
+            cdInfo = okCd and cdInfo or nil
             local parts = {
                 Say("isActive", info and info.isActive),
                 Say("isOnGCD", info and info.isOnGCD),
                 Say("item:IsActive", item and ns.CDM:ItemIsActive(item)),
-                Say("Ready", ready),
+                Say("start", cdInfo and cdInfo.startTime),
+                Say("duration", cdInfo and cdInfo.duration),
+                Say("tracks", ns.CDM:ItemTracks(item)),
+                Say("own buff up", OwnBuffUp(spellID)),
+                Say("relevant", ready),
                 Say("hidden", Effects.HiddenByState(cfg.effects, ready)),
             }
             ns.Print(string.format("   %d. %s  cd=%s  %s", cellIndex,

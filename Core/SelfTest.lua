@@ -2392,11 +2392,14 @@ local function TestDesignSystem()
             not Hidden({ hideWhen = "never" }, true)
             and not Hidden({ hideWhen = "never" }, false))
 
-        Check("Hiding what is cooling leaves what is ready",
+        -- The second argument is "is this worth looking at", NOT "is it
+        -- ready" - for an ability those are the same sentence and for a buff
+        -- they are opposites. See Effects.Relevant.
+        Check("Hiding what is not up to anything leaves what is",
             Hidden({ hideWhen = "cooling" }, false)
             and not Hidden({ hideWhen = "cooling" }, true))
 
-        Check("Hiding what is ready leaves what is cooling",
+        Check("And the other way round",
             Hidden({ hideWhen = "ready" }, true)
             and not Hidden({ hideWhen = "ready" }, false))
 
