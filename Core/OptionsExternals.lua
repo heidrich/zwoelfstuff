@@ -139,10 +139,17 @@ function Page:BuildPage(page, width)
 
         local slot = UI.SpellSlot(host, {
             size = SLOT,     -- re-sized by Fit; this is only the first guess
-            -- Its own kind: these hold a spell ID like a bar cell does, but a
-            -- panel place and a bar cell are not interchangeable - one asks
-            -- somebody else to press it, the other is yours to press.
-            kind = "external",
+            -- KIND IS THE TYPE OF THE THING, NOT THE NAME OF THE PAGE. These
+            -- hold a spell ID, so they are "spell" - the default - and the
+            -- list in the third column can fill them.
+            --
+            -- It said "external" for one commit, and that broke exactly what
+            -- it was meant to protect: the rows in the third column are
+            -- UI.SpellRow with no kind of their own, so every drop from the
+            -- list was refused and nothing lit up on the way. Kinds exist to
+            -- keep a marker KEY out of a place that holds a NUMBER; two pages
+            -- that both hold numbers are not a conflict, and they are never on
+            -- screen together anyway.
             get = function() return ns.Externals.SpellAt(index) end,
             -- Same gap the raid bar had: the slot answered a drag and had
             -- nothing to write with, so a drop here did nothing at all.

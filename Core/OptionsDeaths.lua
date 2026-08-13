@@ -66,7 +66,12 @@ function Page:BuildPage(page, width)
     for index = 1, SLOTS do
         local slot = UI.SpellSlot(slotHost, {
             size = SLOT,
-            kind = "defensive",
+            -- NO KIND OF ITS OWN: these hold a spell ID, so they are "spell"
+            -- like the list that fills them. Naming them "defensive" for one
+            -- commit refused every drop out of that list and lit nothing up on
+            -- the way - the kind is the type of the THING, not the name of the
+            -- page it is on.
+            --
             -- THESE SQUARES ARE NOT POSITIONS. `picked` is rebuilt sorted by
             -- name on every refresh, so which square a spell lands in is
             -- arithmetic rather than a choice - and swapping two of them would

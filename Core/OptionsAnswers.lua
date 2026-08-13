@@ -54,6 +54,18 @@ local function OfferCell(parent, spellID)
     UI.Fill(cell, "BACKGROUND", C.well)
     local edge = ns.CreateBorder(cell, 1, "BORDER")
 
+    -- THE HOVER RING, the same one the bar cells and the spell slots wear.
+    -- This cell answered a hover with a tooltip and nothing else: the one
+    -- square in the addon you press that never said it was under the cursor.
+    -- Owner: "wir brauchen da ueberall einen hoverindikator."
+    local hoverHost = CreateFrame("Frame", nil, cell)
+    hoverHost:SetPoint("TOPLEFT", cell, "TOPLEFT", -2, 2)
+    hoverHost:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 2, -2)
+    local hover = ns.CreateBorder(hoverHost, 2, "OVERLAY")
+    hover:SetColor(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+    hover:Hide()
+    cell.hover = hover
+
     cell.icon = cell:CreateTexture(nil, "ARTWORK")
     cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 2, -2)
     cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -2, 2)
@@ -79,6 +91,7 @@ local function OfferCell(parent, spellID)
     end)
 
     cell:SetScript("OnEnter", function(self)
+        self.hover:Show()
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         -- pcall for the reason every other tooltip here has one: a spell the
@@ -93,7 +106,8 @@ local function OfferCell(parent, spellID)
             GameTooltip:Hide()
         end
     end)
-    cell:SetScript("OnLeave", function()
+    cell:SetScript("OnLeave", function(self)
+        self.hover:Hide()
         if GameTooltip then GameTooltip:Hide() end
     end)
 

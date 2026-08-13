@@ -3009,6 +3009,21 @@ function UI.SpellSlot(parent, cfg)
     marker:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
     marker:Hide()
 
+    -- THE HOVER RING, and it is the bar cell's, not one of its own. Owner,
+    -- 2026-08-13: "wir brauchen da ueberall einen hoverindikator."
+    --
+    -- A slot answered a hover by recolouring its own 1px edge while a bar cell
+    -- put a 2px ring OUTSIDE itself - the same gesture, told two ways, and the
+    -- quieter of the two on exactly the squares you drag onto. Outside the
+    -- slot rather than on it, so it does not fight the resting edge or the
+    -- selection that has to stay visible underneath it.
+    local hoverHost = CreateFrame("Frame", nil, slot)
+    hoverHost:SetPoint("TOPLEFT", slot, "TOPLEFT", -2, 2)
+    hoverHost:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", 2, -2)
+    local hover = ns.CreateBorder(hoverHost, 2, "OVERLAY")
+    hover:SetColor(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+    hover:Hide()
+
     -- THE SELECTED SLOT, marked the way a selected bar cell is: an accent
     -- outline that STAYS. Owner: "wenn ich eine zelle anklicke, sollte die
     -- zelle markiert sein" - and it is not decoration, it is the answer to
@@ -3050,7 +3065,13 @@ function UI.SpellSlot(parent, cfg)
     -- drag machinery keeps one list of every grid in the window, so these two
     -- are what stop a raid bar place handing "mark3" to a cooldown bar. See
     -- UI.DragOutcome.
-    slot.dkKind = cfg.kind or "spell"
+    -- `dragKind`, NOT `kind`. The word was already taken three times over in
+    -- this addon - a raid bar action has kind = "marker", a bar has kind =
+    -- "icon", a raid check column has kind = "percent" - and none of them mean
+    -- what this one means. The check in the harness found the collision the
+    -- moment it was written; a field named for what it decides cannot be
+    -- confused with one named the same and meaning something else.
+    slot.dkKind = cfg.dragKind or "spell"
     slot.dkPayload = function() return cfg.get and cfg.get() end
     slot.dkTake = function() if cfg.onClear then cfg.onClear() end end
 
@@ -3127,15 +3148,19 @@ function UI.SpellSlot(parent, cfg)
             proxy:ClearAllPoints()
             proxy:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
 
-            local grid = UI.CellUnderCursor()
+            local grid, cell = UI.CellUnderCursor()
             if slot.dkMarked and slot.dkMarked ~= grid then
                 slot.dkMarked.HideMarker()
             end
             slot.dkMarked = grid
             -- Only a place that would ACTUALLY take it lights up. A marker
             -- over a grid that is about to refuse the drop is a promise.
+            --
+            -- `cell`, not 1: a slot is a grid of one and answers 1 either way,
+            -- but a bar card has forty and marking the first one while the
+            -- cursor is over the ninth points at the wrong square.
             if grid and grid ~= slot and grid.dkKind == slot.dkKind then
-                grid.ShowMarker(1)
+                grid.ShowMarker(cell)
             end
         end)
     end)
@@ -3146,7 +3171,7 @@ function UI.SpellSlot(parent, cfg)
         if slot.dkMarked then slot.dkMarked.HideMarker() end
         slot.dkMarked = nil
 
-        local target = UI.CellUnderCursor()
+        local target, cell = UI.CellUnderCursor()
         local carried = slot.dkPayload()
 
         local outcome = UI.DragOutcome(
@@ -3168,7 +3193,7 @@ function UI.SpellSlot(parent, cfg)
             -- to fill already free.
             local held = target.dkPayload and target.dkPayload() or nil
             slot.dkTake()
-            target.dkDrop(1, carried)
+            target.dkDrop(cell or 1, carried)
             if outcome == "swap" then slot.dkDrop(1, held) end
         end
     end)
@@ -3185,6 +3210,7 @@ function UI.SpellSlot(parent, cfg)
     end)
 
     slot:SetScript("OnEnter", function(self)
+        hover:Show()
         edge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
         local spellID = cfg.get and cfg.get()
         if not (GameTooltip and spellID) then return end
@@ -3203,6 +3229,7 @@ function UI.SpellSlot(parent, cfg)
     end)
 
     slot:SetScript("OnLeave", function()
+        hover:Hide()
         edge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
         if GameTooltip then GameTooltip:Hide() end
     end)
@@ -3247,7 +3274,7 @@ function UI.CellGrid(parent, cfg)
     -- A bar cell holds a spell ID. Stated rather than left nil, because the
     -- drag machinery matches kinds now and an unnamed grid would refuse every
     -- drop that used to work. See UI.DragOutcome.
-    grid.dkKind = cfg and cfg.kind or "spell"
+    grid.dkKind = cfg and cfg.dragKind or "spell"
 
     -- Where a dragged cell would land: an accent outline rather than a wash
     -- over the icon, so it can be fully opaque and still show what is under it.

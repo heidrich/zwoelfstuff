@@ -101,7 +101,7 @@ function Page:BuildPage(page, width)
             -- every grid in the window and a marker key written into a
             -- cooldown bar would draw an empty square for the rest of the
             -- session. See UI.DragOutcome.
-            kind = "raidbar",
+            dragKind = "raidbar",
             get = function() return ns.RaidBar.ActionAt(index) end,
             -- THIS PAGE COULD NOT BE DROPPED INTO AT ALL. The slot has
             -- answered a drag since it was written, but with no onPick behind
