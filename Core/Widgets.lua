@@ -1167,20 +1167,16 @@ local function BuildSlider(parent, cfg)
         slider.Refresh()
     end
 
-    -- A page-wide refresh is for a change that alters the SHAPE of the page.
-    -- Dragging does not - it changes one number many times a second - so the
-    -- two ways in are kept apart: the wheel and the keyboard settle on a value
-    -- and may redraw the page; the drag only repaints what it owns.
-    local function Settle(v)
-        Commit(v)
-        if not cfg.silent then ns.Options:Refresh() end
-    end
-
-    local function Step(delta)
-        local current = cfg.get()
-        if type(current) ~= "number" then current = cfg.min end
-        Settle(current + delta * cfg.step)
-    end
+    -- THE PAGE-WIDE REFRESH USED TO HANG HERE, on a Settle() that only the
+    -- wheel ever called: dragging deliberately did not do it (it changes one
+    -- number sixty times a second) and typing never did either. With the wheel
+    -- gone, Settle had exactly no callers and it is out.
+    --
+    -- Nothing was lost with it, and that is worth checking rather than
+    -- assuming: every setting that changes the SHAPE of the page passes its
+    -- own cfg.apply that refreshes - the raid bar's rows and columns hand in
+    -- Relayout, which is ns.Options:Refresh - and Commit runs cfg.apply on
+    -- every path, including typing.
 
     -- DRAGGING MUST NOT REPAINT WHAT IT HAS NOT CHANGED.
     --
@@ -1200,13 +1196,31 @@ local function BuildSlider(parent, cfg)
     end)
     track:SetPoint("LEFT", slider, "LEFT", 0, 0)
 
-    -- The wheel is the fast exact way: one step without moving the pointer off
-    -- the row. It sits on BOTH parts, because after a drag the pointer is on
-    -- the track and after typing it is on the box.
-    box:EnableMouseWheel(true)
-    box:SetScript("OnMouseWheel", function(_, delta) Step(delta) end)
-    track:EnableMouseWheel(true)
-    track:SetScript("OnMouseWheel", function(_, delta) Step(delta) end)
+    -- THE WHEEL DOES NOT SET VALUES. Owner, 2026-08-13: "schiebregler sollten
+    -- nicht mit dem mausrad gehen, auch werte eintragen sollten nicht mit dem
+    -- mausrad einstellbar sein."
+    --
+    -- It read as the fast exact way and it is the opposite: these rows live
+    -- inside a page you scroll with the wheel, and every control on that page
+    -- was a hole the scroll fell into. You roll to read further, the pointer
+    -- happens to be over a slider, and you have silently changed a setting
+    -- instead of moving the page - on a settings page, where the whole point
+    -- is that nothing changes unless you meant it.
+    --
+    -- NOTHING IS BOUND HERE ANY MORE, and that is the fix rather than a
+    -- handler that ignores the event: a frame with EnableMouseWheel(true)
+    -- SWALLOWS the gesture whether or not it does anything with it. Leaving it
+    -- enabled and empty would stop the value changing and stop the page
+    -- scrolling - the worst of both. Unbound, the wheel falls through to the
+    -- ScrollFrame underneath, which is what the player was aiming at.
+    --
+    -- The exact ways are still there and both are aimed: click the box and
+    -- type a number, or drag the rail. No arrow-key replacement was invented
+    -- for the wheel - OnArrowPressed only fires reliably on a MULTI-LINE edit
+    -- box, and a key binding nobody verified is not a feature, it is a line in
+    -- a changelog that turns out to be false.
+    box:EnableMouseWheel(false)
+    track:EnableMouseWheel(false)
 
     -- Typing. The unit and any decoration the format added are stripped, so
     -- "85%", "85" and " 85 s" all mean the same thing - people re-type over a
@@ -2980,6 +2994,16 @@ function UI.SpellSlot(parent, cfg)
     slot.mark = UI.Label(slot, "+", math.floor(size * 0.38), C.textFaint)
     slot.mark:SetPoint("CENTER", slot, "CENTER", 0, 0)
 
+    -- RESIZED, NOT JUST SET. The "+" takes its font size from the size the
+    -- slot was CREATED at, once, and a preview lattice re-sizes its slots
+    -- every time the rows, the columns or the icon size change - so a bar
+    -- rebuilt from 40 down to 26 kept a plus sign drawn for a 40 pixel box
+    -- and it was the only thing on the page that did not shrink.
+    slot.Resize = function(_, next_)
+        slot:SetSize(next_, next_)
+        ns.StyleUIFont(slot.mark, math.floor(next_ * 0.38))
+    end
+
     -- The drop marker, the same green ring the bar cards show.
     local marker = ns.CreateBorder(slot, 2, "OVERLAY")
     marker:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
@@ -4219,6 +4243,47 @@ end
 -- that vanished was Changelog.
 function UI.RailFits(railHeight, headHeight, footHeight, tailHeight, navHeight)
     return navHeight <= railHeight - headHeight - footHeight - tailHeight
+end
+
+---------------------------------------------------------------------------
+-- HOW BIG ONE SLOT IS DRAWN IN A PREVIEW LATTICE
+--
+-- Owner, with a picture of the raid bar page: "die icons sind einfach zu gross
+-- in der vorschau." He is right, and the reason is worth writing down because
+-- it is a whole class of mistake rather than one number:
+--
+-- THE RAID BAR PAGE COPIED THE EXTERNALS PAGE'S CONSTANT, NOT ITS CALIBRATION.
+-- On the externals page 40 is not a taste, it is the externals panel's own
+-- default cell size - preview 40, screen 40, and the two agree by accident of
+-- being the same number. The raid bar's real button is 26. So the same
+-- constant that was exactly right on one page drew every button 1.54 times too
+-- big on the other, with four times the gap, and it looked like a design
+-- decision because it was written like one.
+--
+-- The rule this replaces it with is the one the bar cards have used all along
+-- (see Core/Layout.lua and the fit factor in OptionsBars): A PREVIEW DRAWS
+-- WHAT THE THING IS, AND ONLY EVER SHRINKS. `wanted` is the size the player
+-- actually configured; the lattice may fall below it to fit the page, never
+-- above it.
+--
+-- The floor keeps a shrunk lattice clickable - these previews are edited in,
+-- not just looked at - and it may NOT push the preview back up past what the
+-- player asked for. Somebody who sets 16 gets 16 drawn, which is small and
+-- true; bumping it to 22 would be the same lie as the 40, in miniature.
+--
+-- Pure, because the alternative is finding out in game that twelve columns run
+-- off the edge of the page.
+---------------------------------------------------------------------------
+function UI.PreviewSize(wanted, rows, columns, availableWidth, availableHeight,
+    gap, floorSize)
+    gap = gap or 8
+    floorSize = floorSize or 22
+
+    local byWidth = (availableWidth - (columns - 1) * gap) / columns
+    local byHeight = (availableHeight - (rows - 1) * gap) / rows
+    local size = math.floor(math.min(wanted, byWidth, byHeight))
+
+    return math.max(math.min(wanted, floorSize), size)
 end
 
 ---------------------------------------------------------------------------

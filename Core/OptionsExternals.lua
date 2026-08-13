@@ -38,11 +38,21 @@ local function Apply() ns.Externals.Refresh() end
 -- see all of is not a preview of anything, and the shape - which is what you
 -- are actually deciding - survives being smaller. It never grows past the
 -- design's own 40.
+--
+-- THE ARITHMETIC ITSELF IS UI.PreviewSize NOW, and it is shared rather than
+-- copied. This function had been duplicated verbatim into two other pages, and
+-- one of them - the raid bar - carried the 40 across without carrying the
+-- reason for it: on THIS page 40 is the panel's own default cell size, so the
+-- preview and the screen agree. On that one the real button is 26, and the
+-- copy drew every one of them half again too big.
+--
+-- Why this page still passes a constant rather than Cfg().size: it is written
+-- on the Icon size row, in the player's own words - "The preview above keeps
+-- its own size - it has a page to fit into." Twelve columns at the panel's
+-- maximum 64 would not fit, and this band is what you arrange the SHAPE in.
 function Page.PreviewSize(rows, columns, availableWidth, availableHeight)
-    local byWidth = (availableWidth - (columns - 1) * GAP) / columns
-    local byHeight = (availableHeight - (rows - 1) * GAP) / rows
-    local size = math.floor(math.min(SLOT, byWidth, byHeight))
-    return math.max(MIN_SLOT, size)
+    return UI.PreviewSize(SLOT, rows, columns, availableWidth, availableHeight,
+        GAP, MIN_SLOT)
 end
 
 -- WHICH SLOT THE NEXT SPELL GOES INTO. The same idea the cooldown page runs
@@ -167,7 +177,10 @@ function Page:BuildPage(page, width)
         for index = 1, count do
             local slot = SlotAt(index)
             local column, line = ns.Externals.Cell(index, cfg.rows, cfg.columns, down)
-            slot:SetSize(size, size)
+            -- Resize, not SetSize: the empty "+" takes its font from the size
+            -- the slot was made at, so a lattice that shrinks to six rows kept
+            -- a plus drawn for a 40 pixel box.
+            slot:Resize(size)
             slot:ClearAllPoints()
             slot:SetPoint("TOPLEFT", host, "TOPLEFT",
                 column * (size + GAP), -line * (size + GAP))

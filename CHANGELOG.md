@@ -100,6 +100,35 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   0.45 MB, and the palette itself 50 KB. `memcheck.lua` now weighs the three
   separately, because a total that gets attributed to the wrong one of its
   parts sends the next session after the wrong file.
+- **The mouse wheel no longer sets values.** Owner: *"schiebregler sollten
+  nicht mit dem mausrad gehen, auch werte eintragen sollten nicht mit dem
+  mausrad einstellbar sein."* Every number in the addon is one control
+  (`BuildSlider`), and it bound the wheel on both the rail and the value box —
+  which on a page you scroll with the wheel is a hole the scroll falls into.
+  Unbound rather than swallowed: a frame with `EnableMouseWheel(true)` eats the
+  gesture whether or not it does anything with it, so an empty handler would
+  have stopped the value changing *and* the page scrolling. No arrow-key
+  replacement was invented — `OnArrowPressed` only fires reliably on a
+  multi-line edit box, and an unverified binding is a changelog line that turns
+  out to be false. The harness now reads the source and fails the build if any
+  control takes the wheel again; the eight places that legitimately take it —
+  scroll areas, the dropdown popup, paging between deaths, panning the replay,
+  capturing a key, and the edit-mode cell handle — are named there with the
+  reason each one moves you through something rather than setting something.
+- **The raid bar preview drew every button half again too big.** Owner, with a
+  screenshot: *"die icons sind einfach zu gross in der vorschau."* The page was
+  built as a copy of the externals page, and it copied the constant `SLOT = 40`
+  without the calibration behind it: on that page 40 *is* the panel's own
+  default cell size, so preview and screen agree by construction. The raid
+  bar's button is 26 and its gap 2, so the copy drew 1.54× the size with 4× the
+  air. `UI.PreviewSize` replaces the three verbatim copies of that arithmetic
+  with one shared, pure function, and the rule is now the one the bar cards
+  have always used: **a preview draws what the thing is and only ever shrinks**
+  — to fit the page, never past what was asked for. Its floor may not push a
+  deliberate 16 back up to 22 either; that would be the same lie in miniature.
+  `UI.SpellSlot` gained `Resize`, because the empty `+` took its font from the
+  size the slot was *created* at and was the one thing on the page that did not
+  shrink with it.
 - **The spell picker builds one row per line you can see, not per spell there
   is.** It held a `UI.SpellRow` for every catalogue entry and kept it for the
   session — around a hundred buttons, each with an icon, two strings and a

@@ -2245,6 +2245,95 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- A PREVIEW DRAWS WHAT THE THING IS
+    --
+    -- Owner, with a screenshot of the raid bar page: "die icons sind einfach
+    -- zu gross in der vorschau." The page had copied the externals page's
+    -- SLOT = 40 - a number that is exactly right THERE, because 40 is the
+    -- externals panel's own default cell size, and 54% too big here, because
+    -- the raid bar's button is 26.
+    --
+    -- So the rule is checked rather than the number: what the player set is
+    -- what gets drawn, the lattice may only ever shrink to fit the page, and
+    -- the floor that keeps a slot clickable may not push it back up past what
+    -- was asked for.
+    -----------------------------------------------------------------------
+    do
+        local Size = ns.UI.PreviewSize
+
+        -- The raid bar at its defaults: 26, one row of twelve, on the 722 the
+        -- page actually has. Nothing binds, so it draws what the bar draws.
+        Check("A preview draws the size the bar is set to",
+            Size(26, 1, 12, 722, 200, 2, 22) == 26,
+            tostring(Size(26, 1, 12, 722, 200, 2, 22)))
+
+        -- The externals page passes its own constant and must not move: this
+        -- is the case its four existing checks pin.
+        Check("A page that asks for 40 still gets 40",
+            Size(40, 1, 6, 722, 200, 8, 22) == 40,
+            tostring(Size(40, 1, 6, 722, 200, 8, 22)))
+
+        -- Sixteen columns of 48 need 16*48 + 15*2 = 798 and there are 722, so
+        -- it comes down to floor((722 - 30)/16) = 43.
+        Check("A lattice too wide for the page shrinks",
+            Size(48, 1, 16, 722, 200, 2, 22) == 43,
+            tostring(Size(48, 1, 16, 722, 200, 2, 22)))
+
+        -- The other axis, and it is the one the band cares about: four rows of
+        -- 48 in a band 120 tall is (120 - 3*2)/4 = 28.5, so 28.
+        Check("A lattice too tall for the band shrinks",
+            Size(48, 4, 4, 722, 120, 2, 22) == 28,
+            tostring(Size(48, 4, 4, 722, 120, 2, 22)))
+
+        -- ...and at the band's real 200 it does NOT shrink, which is worth
+        -- pinning too: (200 - 6)/4 = 48.5, so the four-row raid bar at maximum
+        -- icon size still draws true.
+        Check("Four rows at the band's real height still draw true",
+            Size(48, 4, 4, 722, 200, 2, 22) == 48,
+            tostring(Size(48, 4, 4, 722, 200, 2, 22)))
+
+        Check("It never shrinks past being clickable",
+            Size(48, 4, 12, 200, 60, 2, 22) >= 22,
+            tostring(Size(48, 4, 12, 200, 60, 2, 22)))
+
+        -- THE ONE THE OLD VERSION GOT WRONG IN THE OTHER DIRECTION. Somebody
+        -- who sets 16 gets 16 drawn - small and true. A floor of 22 applied to
+        -- a deliberate choice is the same lie as the 40, in miniature.
+        Check("A player who asks for smaller than the floor gets what they asked for",
+            Size(16, 1, 12, 722, 200, 2, 22) == 16,
+            tostring(Size(16, 1, 12, 722, 200, 2, 22)))
+
+        -- And it never grows: a page with room to spare does not get to make
+        -- the preview a nicer size than the thing it is previewing.
+        Check("A preview never grows past what was asked for",
+            Size(26, 1, 2, 722, 200, 2, 22) == 26,
+            tostring(Size(26, 1, 2, 722, 200, 2, 22)))
+
+        -- AND THE PAGE ITSELF IS ASKED, not just the arithmetic under it. The
+        -- fault was never in the sum: it was a page handing it a constant 40
+        -- over a bar drawn at 26, and a check that only exercises UI.PreviewSize
+        -- would have gone green through the whole mistake.
+        local Geometry = ns.OptionsRaidBar and ns.OptionsRaidBar.PreviewGeometry
+        if Geometry then
+            local cfg = ns.RaidBar.Config()
+            local keepSize, keepGap = cfg.size, cfg.gap
+
+            cfg.size, cfg.gap = 26, 2
+            local drawn, air = Geometry(750)
+            Check("The raid bar preview draws the bar's own size", drawn == 26,
+                tostring(drawn))
+            Check("...with the bar's own air between two buttons", air == 2,
+                tostring(air))
+
+            cfg.size = 48
+            Check("...and follows the icon size when it is changed",
+                (Geometry(750)) == 48, tostring((Geometry(750))))
+
+            cfg.size, cfg.gap = keepSize, keepGap
+        end
+    end
+
+    -----------------------------------------------------------------------
     -- WHICH LINES OF A LIST ARE IN THE COLUMN
     --
     -- The spell picker held one frame per spell for the session. It builds

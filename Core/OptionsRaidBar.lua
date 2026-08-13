@@ -18,21 +18,43 @@ local C = UI.C
 local Page = {}
 ns.OptionsRaidBar = Page
 
-local SLOT, GAP = 40, 8
+-- THE PREVIEW IS THE BAR, SO ITS NUMBERS COME FROM THE BAR.
+--
+-- This file used to carry `SLOT, GAP = 40, 8` - copied from the externals
+-- page, which is where this whole layout came from. On that page 40 is not a
+-- taste: it is the externals panel's own default cell size, so preview and
+-- screen agree. The raid bar's button is 26 and its gap is 2. The copied
+-- constant therefore drew every button HALF AGAIN TOO BIG with four times the
+-- air, and the owner saw it in one screenshot: "die icons sind einfach zu
+-- gross in der vorschau."
+--
+-- What is left here is the two limits that are genuinely about the PAGE and
+-- not about the bar: how small a slot may get before you cannot hit it, and
+-- how much of the window the band may take. The size itself is asked of the
+-- bar every time it is drawn. See UI.PreviewSize.
 local MIN_SLOT = 22
+
+-- How tall the preview is allowed to get. The band does not scroll - that is
+-- the point of it - so a four-row lattice at full size would push the settings
+-- it is a preview OF off the bottom of the window.
 local BAND_MAX_H = 200
 
 local function Cfg() return ns.RaidBar.Config() end
 local function Apply() ns.RaidBar.Refresh() end
 
--- The same rule the externals preview uses, and it is the same function's
--- worth of arithmetic - a preview that cannot fit its lattice shrinks it
--- rather than clipping, because the SHAPE is what is being decided.
-function Page.PreviewSize(rows, columns, availableWidth, availableHeight)
-    local byWidth = (availableWidth - (columns - 1) * GAP) / columns
-    local byHeight = (availableHeight - (rows - 1) * GAP) / rows
-    local size = math.floor(math.min(SLOT, byWidth, byHeight))
-    return math.max(MIN_SLOT, size)
+-- What one slot is drawn at, and what stands between two of them - both read
+-- from the bar's own settings, with the same defaults the bar itself falls
+-- back to. Two readers of one number beats two numbers.
+--
+-- On the module rather than a local, because this is the answer that was
+-- WRONG - a constant 40 over a bar drawn at 26 - and a check that cannot ask
+-- the page would only ever be re-checking the arithmetic underneath it.
+function Page.PreviewGeometry(width)
+    local cfg = Cfg()
+    local wanted = cfg.size or 26
+    local gap = cfg.gap or 2
+    return UI.PreviewSize(wanted, cfg.rows, cfg.columns, width - 28,
+        BAND_MAX_H, gap, MIN_SLOT), gap
 end
 
 Page.selected = nil
@@ -61,14 +83,19 @@ function Page:BuildPage(page, width)
     local host = CreateFrame("Frame", nil, band)
     host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -BAND_HEAD)
     host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, -BAND_HEAD)
-    host:SetHeight(SLOT)
+
+    -- What Fit worked out last, so a slot is CREATED at the size it is about
+    -- to be drawn at. It matters for one thing only and that thing is easy to
+    -- miss: UI.SpellSlot sizes its empty "+" from the size it is handed, once.
+    local previewSize = select(1, Page.PreviewGeometry(width))
+    host:SetHeight(previewSize)
 
     local slots = {}
     local function SlotAt(index)
         if slots[index] then return slots[index] end
 
         local slot = UI.SpellSlot(host, {
-            size = SLOT,
+            size = previewSize,
             get = function() return ns.RaidBar.ActionAt(index) end,
             texture = function(key)
                 local entry = ns.RaidBar.Get(key)
@@ -112,21 +139,24 @@ function Page:BuildPage(page, width)
         local cfg = Cfg()
         local count = ns.RaidBar.Count()
         local down = cfg.growth == "down"
-        local size = Page.PreviewSize(cfg.rows, cfg.columns, width - 28,
-            BAND_MAX_H)
+
+        -- THE SIZE AND THE AIR BOTH COME FROM THE BAR. Set before the first
+        -- SlotAt below, because a slot created now is created at this size.
+        local size, gap = Page.PreviewGeometry(width)
+        previewSize = size
 
         for index = 1, count do
             local slot = SlotAt(index)
             local column, line = ns.LatticeCell(index, cfg.rows, cfg.columns,
                 down)
-            slot:SetSize(size, size)
+            slot:Resize(size)
             slot:ClearAllPoints()
             slot:SetPoint("TOPLEFT", host, "TOPLEFT",
-                column * (size + GAP), -line * (size + GAP))
+                column * (size + gap), -line * (size + gap))
         end
         for index = count + 1, #slots do slots[index]:Hide() end
 
-        host:SetHeight(cfg.rows * size + (cfg.rows - 1) * GAP)
+        host:SetHeight(cfg.rows * size + (cfg.rows - 1) * gap)
         band:SetHeight(BAND_HEAD + host:GetHeight() + 10)
     end
     band.Fit()
