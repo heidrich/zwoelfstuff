@@ -249,26 +249,48 @@ end
 --
 -- The GCD is explicitly not a cooldown here. Without that test every spell in
 -- the game "comes off cooldown" every 1.5 seconds and the flash is a strobe.
-local function OnCooldown(cooldownID)
-    local info = ns.CDM:GetInfo(cooldownID)
-    if not info then return nil end
+local function OnCooldown(item, cooldownID)
+    local info = cooldownID and ns.CDM:GetInfo(cooldownID)
+    local active = info and info.isActive
 
-    local active, gcd = info.isActive, info.isOnGCD
-    if not ns.CanCompute(active) then return nil end
-    if active ~= true then return false end
+    if ns.CanCompute(active) then
+        if active ~= true then return false end
 
-    -- Active AND on the GCD is the global cooldown spinning, not the spell's
-    -- own. Unreadable GCD flag: treat the cooldown as real, which at worst
-    -- delays a flash by a GCD and never invents one.
-    if ns.CanCompute(gcd) and gcd == true then return false end
-    return true
+        -- Active AND on the GCD is the global cooldown spinning, not the
+        -- spell's own. Unreadable GCD flag: treat the cooldown as real, which
+        -- at worst delays a flash by a GCD and never invents one.
+        local gcd = info.isOnGCD
+        if ns.CanCompute(gcd) and gcd == true then return false end
+        return true
+    end
+
+    -- THE INFO TABLE DOES NOT CARRY THESE FLAGS ON THIS CLIENT, and that is
+    -- not secrecy - it is absence. Measured in game with /zs hide, on four
+    -- cooldowns that were visibly running:
+    --
+    --   isActive nil   isOnGCD nil   item:IsActive true
+    --
+    -- Everything driven by "is it on cooldown" had therefore been standing
+    -- down on every adopted Cooldown Manager icon: the ready flash, the ready
+    -- edge, the reminder and the greying, not only the hiding the owner was
+    -- testing. It looked exactly like a feature switched off, which is the
+    -- shape this whole addon uses for a value it may not read - so nothing
+    -- ever complained.
+    --
+    -- The FRAME answers for itself where the table does not. Same source
+    -- EllesmereUI reads for its buff bars, and the same caution applies: on a
+    -- tracked-BUFF item "active" means the buff is up rather than a cooldown
+    -- running, so a buff bar reads this switch as "while it is up".
+    local itemActive = ns.CDM:ItemIsActive(item)
+    if itemActive == nil then return nil end
+    return itemActive and true or false
 end
 
 -- READY, as the rest of the addon asks it: true, false, or nil for "cannot
 -- tell". The render pass needs the same answer the ticker works from, and two
 -- readings of one state is how they end up disagreeing for a frame.
-function Effects.Ready(cooldownID)
-    local onCd = OnCooldown(cooldownID)
+function Effects.Ready(item, cooldownID)
+    local onCd = OnCooldown(item, cooldownID)
     if onCd == nil then return nil end
     return not onCd
 end
@@ -466,7 +488,7 @@ local function TickCell(entry, inCombat, span)
             remaining = state.auraEnds - GetTime()
         end
     else
-        local onCd = OnCooldown(entry.cooldownID)
+        local onCd = OnCooldown(cell.item, entry.cooldownID)
         if onCd ~= nil then ready = not onCd end
     end
 
@@ -704,4 +726,60 @@ end
 function Effects.NoteAuraEnd(cell, endTime)
     cell.fxState = cell.fxState or {}
     cell.fxState.auraEnds = endTime
+end
+
+---------------------------------------------------------------------------
+-- WHY IS NOTHING HIDING
+--
+-- Owner set "take off screen: while on cooldown", photographed a bar with
+-- four running cooldowns still on it, and said "scheint noch nicht zu
+-- funktionieren."
+--
+-- Every reading in this chain is a value the client is allowed to withhold,
+-- and the whole addon answers a withheld value with "do what the feature
+-- switched off does" - so a rule that never fires and a rule that is never
+-- ASKED look identical from the outside. Reading further would have been the
+-- third guess in a row; this asks the client instead.
+--
+-- Run it while the cooldowns are actually running, which is the state that
+-- cannot be reproduced at a desk.
+---------------------------------------------------------------------------
+local function Say(label, value)
+    if value == nil then
+        return string.format("%s |cff888888nil|r", label)
+    end
+    if not ns.CanCompute(value) then
+        return string.format("%s |cffff7a3dSECRET|r", label)
+    end
+    return string.format("%s |cffffd100%s|r", label, tostring(value))
+end
+
+function Effects:Dump()
+    ns.Print("|cffffd100--- what the client will say about each cooldown ---|r")
+    ns.Print("|cff888888SECRET means the value exists and may not be read. "
+        .. "That is not a bug in itself - it is why a rule stands down.|r")
+
+    for index, cfg in ipairs(ns.db.bars) do
+        local rule = cfg.effects and cfg.effects.hideWhen or "never"
+        ns.Print(string.format("|cffffd100%d. %s|r  take off screen: %s",
+            index, cfg.name or "?", rule))
+
+        for cellIndex, spellID in pairs(cfg.cells or {}) do
+            local item = ns.CDM:ItemForSpell(spellID)
+            local cooldownID = item and ns.CDM:ItemCooldownID(item)
+            local info = cooldownID and ns.CDM:GetInfo(cooldownID)
+
+            local ready = Effects.Ready(item, cooldownID)
+            local parts = {
+                Say("isActive", info and info.isActive),
+                Say("isOnGCD", info and info.isOnGCD),
+                Say("item:IsActive", item and ns.CDM:ItemIsActive(item)),
+                Say("Ready", ready),
+                Say("hidden", Effects.HiddenByState(cfg.effects, ready)),
+            }
+            ns.Print(string.format("   %d. %s  cd=%s  %s", cellIndex,
+                ns.SpellName(spellID) or tostring(spellID),
+                tostring(cooldownID), table.concat(parts, "  ")))
+        end
+    end
 end

@@ -4007,6 +4007,25 @@ function Grid:ShowTab(name)
     if self.tab == name then return end
     self.tab = name
     self:Layout()
+
+    -- A NEW TAB IS A NEW PAGE, so it opens at ITS top.
+    --
+    -- The scroll offset used to survive the switch, and the result is the one
+    -- the owner photographed: leave Behaviour scrolled down a little, come
+    -- back to Look, and its first heading is sitting half above the visible
+    -- edge. It reads as a clipped or broken layout rather than as a page
+    -- scrolled by twenty pixels, because there is nothing on screen to say
+    -- you are not at the top.
+    --
+    -- AFTER the layout, never before: the new tab's height is what decides
+    -- the scroll range, and setting it first is a scroll into a range that is
+    -- about to change under it.
+    if self.scroll and self.scroll.SetVerticalScroll then
+        self.scroll:SetVerticalScroll(0)
+        -- The thumb is drawn from the offset, and it is not told by the
+        -- setter on every client.
+        if self.scroll.Update then self.scroll.Update() end
+    end
 end
 
 function Grid:Section(title, key)

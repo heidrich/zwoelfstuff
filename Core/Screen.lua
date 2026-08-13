@@ -1220,7 +1220,7 @@ function Screen:Render()
                 local item = spellID and ns.CDM:ItemForSpell(spellID)
                 if item then
                     hidden[cellIndex] = ns.Effects.HiddenByState(cfg.effects,
-                        ns.Effects.Ready(ns.CDM:ItemCooldownID(item)))
+                        ns.Effects.Ready(item, ns.CDM:ItemCooldownID(item)))
                 end
             end
             -- Never while unlocked: edit mode shows every place, so nothing
@@ -1554,7 +1554,7 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         -- Never while unlocked: an icon you cannot see is an icon you cannot
         -- drag, and edit mode is exactly when you need to see all of them.
         local stateHidden = not self.unlocked and ns.Effects.HiddenByState(
-            cfg.effects, ns.Effects.Ready(ns.CDM:ItemCooldownID(item)))
+            cfg.effects, ns.Effects.Ready(item, ns.CDM:ItemCooldownID(item)))
 
         ns.CDM:SetAlpha(item,
             (visible and not stateHidden)

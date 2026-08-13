@@ -1574,10 +1574,18 @@ function Workspace:BuildOptionsPane(parent, width)
         .. "cuts it off; at 0 you see the whole thing, frame and all.")
 
     Slide("While inactive", "inactiveAlpha", 0, 1, 0.05, Percent, 100)
-    Switch("Grey out while inactive", "inactiveDesaturate")
+    -- NAMED FOR THE CELL IT ACTS ON, not just for the state. There is a
+    -- second greying switch under Behaviour and the two never touch the same
+    -- cell: an aura cell has no cooldown and a Cooldown Manager icon has no
+    -- "down". Read as "grey out while inactive" and "grey out on cooldown"
+    -- they are the same sentence twice, and the owner reported them as one
+    -- feature duplicated.
+    Switch("Grey out while the aura is down", "inactiveDesaturate")
     grid:Note("Auras this addon draws itself stay in place while they are "
         .. "down, so the bar does not re-flow under your eye. At 0 they "
-        .. "disappear instead, the way Blizzard's own buff icons do.")
+        .. "disappear instead, the way Blizzard's own buff icons do. For "
+        .. "spells on a cooldown, see |cffffd100Behaviour - Fading and "
+        .. "hiding|r instead.")
 
     grid:Section("Border", "look-border")
 
@@ -1886,11 +1894,9 @@ function Workspace:BuildOptionsPane(parent, width)
     -- nobody can find is a control that does not work: the owner had this
     -- built for him and still had to ask where it was.
     UI.Dropdown(grid:FullRow("Edge style", { controlWidth = 150 }), {
-        { value = "edge",  label = "Soft edge" },
-        { value = "pixel", label = "Running squares" },
-    }, FxGet("glowStyle"), function(value)
-        FxSet("glowStyle")(value); Apply()
-    end)
+        { value = "edge",  text = "Soft edge" },
+        { value = "pixel", text = "Running squares" },
+    }, FxGet("glowStyle"), FxSet("glowStyle"), { apply = Apply })
     FxSlide("How many squares", "glowDots", 2, 24, 1,
         function(v) return string.format("%d", v) end)
 
@@ -1930,26 +1936,28 @@ function Workspace:BuildOptionsPane(parent, width)
     grid:Note("The tail of an aura where recasting it wastes nothing.")
     grid:Section("Fading and hiding", "fx-hide")
 
-    FxSwitch("Grey out on cooldown", "dimOnCooldown")
+    FxSwitch("Grey out while the cooldown runs", "dimOnCooldown")
     FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent, 100)
+    -- The dependency stated rather than discovered, the way the refresh glow
+    -- above states its own: "I switched it on and nothing happened" must have
+    -- an answer on this screen.
+    grid:Note("Applies to spells with a cooldown. An aura this addon draws "
+        .. "itself has none - its own greying is under |cffffd100Look - Grey "
+        .. "out while the aura is down|r.")
 
     -- One control with three values, not two switches: "hide what is ready"
     -- and "hide what is cooling" are opposites, and as two switches both on
     -- is an empty bar nobody meant to ask for.
     UI.Dropdown(grid:FullRow("Take off screen", { controlWidth = 150 }), {
-        { value = "never",   label = "Nothing" },
-        { value = "cooling", label = "While on cooldown" },
-        { value = "ready",   label = "While ready" },
-    }, FxGet("hideWhen"), function(value)
-        FxSet("hideWhen")(value); Apply()
-    end)
+        { value = "never",   text = "Nothing" },
+        { value = "cooling", text = "While on cooldown" },
+        { value = "ready",   text = "While ready" },
+    }, FxGet("hideWhen"), FxSet("hideWhen"), { apply = Apply })
     UI.Dropdown(grid:FullRow("Close the gap", { controlWidth = 150 }), {
-        { value = "off",  label = "Leave it empty" },
-        { value = "all",  label = "Close up" },
-        { value = "line", label = "Close up in the row" },
-    }, FxGet("reflow"), function(value)
-        FxSet("reflow")(value); Apply()
-    end)
+        { value = "off",  text = "Leave it empty" },
+        { value = "all",  text = "Close up" },
+        { value = "line", text = "Close up in the row" },
+    }, FxGet("reflow"), FxSet("reflow"), { apply = Apply })
     grid:Note("Leaving it empty keeps everything where you learned it. "
         .. "Closing up in the ROW keeps a grid's shape, so the second row "
         .. "stays the second row. Edit mode always shows everything.")

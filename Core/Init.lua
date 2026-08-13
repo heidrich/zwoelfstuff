@@ -1672,6 +1672,11 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "raidbar" or cmd == "raid" then
         ns.RaidBar:Dump()
 
+    elseif cmd == "hide" then
+        -- Every reading behind "take off screen", printed while the state
+        -- that cannot be reproduced at a desk is actually happening.
+        ns.Effects:Dump()
+
     elseif cmd == "check" then
         local sub = (rest or ""):match("^(%S*)"):lower()
         if sub == "ask" then
