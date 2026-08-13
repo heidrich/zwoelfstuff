@@ -1493,8 +1493,21 @@ function Screen:PaintCell(bar, cell, cfg, slot, claimedNow, auraBySpell, style, 
         end
         -- The visibility rule multiplies in HERE, not on the bar frame: an
         -- adopted icon is Blizzard's child and does not inherit our alpha.
+        --
+        -- AND SO DOES THE STATE RULE, in the same expression and for the same
+        -- reason: this is the one place a cell's alpha is decided. The
+        -- effects ticker only asks for a repaint when the state flips - see
+        -- "Taking it off the screen, by state" in Core/Effects.lua - so there
+        -- is never a second writer to disagree with.
+        --
+        -- Never while unlocked: an icon you cannot see is an icon you cannot
+        -- drag, and edit mode is exactly when you need to see all of them.
+        local stateHidden = not self.unlocked and ns.Effects.HiddenByState(
+            cfg.effects, ns.Effects.Ready(ns.CDM:ItemCooldownID(item)))
+
         ns.CDM:SetAlpha(item,
-            visible and (cfg.alpha or 1) * (self.unlocked and 1 or factor) or 0)
+            (visible and not stateHidden)
+                and (cfg.alpha or 1) * (self.unlocked and 1 or factor) or 0)
         ns.CDM:Skin(item, style, shape)
 
         -- A buff-bar frame writes its own name and timer along the bar. Ours

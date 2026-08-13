@@ -49,6 +49,14 @@ ns.EFFECT_DEFAULTS = {
     -- of glowing icons while you stand in the city is noise.
     readyGlow    = false,
     readyGlowCombatOnly = true,
+
+    -- READY AND AFFORDABLE ARE TWO DIFFERENT THINGS, and only one of them is
+    -- what "can I press this" means. A cooldown that has finished while you
+    -- are short of the rage, the runic power or the runes is an icon telling
+    -- you to press something that will not go off. Off by default, because
+    -- the plain reading - "the cooldown is back" - is the one people expect
+    -- from a cooldown display and the surprising one should be asked for.
+    readyGlowUsableOnly = false,
     glowColor    = { 1.00, 0.72, 0.25 },
     glowSize     = 2,
 
@@ -75,6 +83,26 @@ ns.EFFECT_DEFAULTS = {
     -- Classic and quiet: the art greys out while the cooldown runs.
     dimOnCooldown = false,
     dimAmount     = 0.55,
+
+    -- TAKE IT OFF THE SCREEN ENTIRELY, by state.
+    --
+    --   "never"    always there                       (the default)
+    --   "cooling"  gone while it is on cooldown  - a display of what you
+    --              can press RIGHT NOW and nothing else
+    --   "ready"    gone while it is ready        - a display of what you are
+    --              waiting for
+    --
+    -- Both readings are useful and they are opposites, which is why this is
+    -- one setting with three values rather than two switches that can
+    -- contradict each other.
+    --
+    -- IT LEAVES THE GAP. The cell keeps its place and goes to nothing;
+    -- everything else stays where it was. A display whose icons move around
+    -- as cooldowns come and go is one you have to re-read every time, and the
+    -- muscle memory of "the third one is my stun" is worth more than the
+    -- empty square costs. Closing the gap is a separate decision and a
+    -- separate setting, not a side effect of this one.
+    hideWhen = "never",
 
     -- How fast anything that pulses, pulses. One control for all of them, so
     -- a display does not end up with three different heartbeats.
@@ -198,6 +226,65 @@ local function OnCooldown(cooldownID)
     return true
 end
 
+-- READY, as the rest of the addon asks it: true, false, or nil for "cannot
+-- tell". The render pass needs the same answer the ticker works from, and two
+-- readings of one state is how they end up disagreeing for a frame.
+function Effects.Ready(cooldownID)
+    local onCd = OnCooldown(cooldownID)
+    if onCd == nil then return nil end
+    return not onCd
+end
+
+-- Can it actually be cast right now - not "is the cooldown back", but "will
+-- pressing it do something". nil when the client will not say.
+--
+-- IsSpellUsable answers two things at once and the second is the one that
+-- matters here: usable, and whether the reason it is not is resources. A
+-- spell out of range or without a target reports unusable too, and that is
+-- NOT what this is for - a defensive is unusable by that reading whenever
+-- nothing is targeted, and greying it out would be wrong every pull.
+function Effects.Affordable(spellID)
+    if not (spellID and C_Spell and C_Spell.IsSpellUsable) then return nil end
+    local ok, usable, noResource = pcall(C_Spell.IsSpellUsable, spellID)
+    if not ok then return nil end
+    if not ns.CanCompute(usable) or not ns.CanCompute(noResource) then
+        return nil
+    end
+    -- Unusable for any OTHER reason is left alone: only the resource answer
+    -- belongs to this feature.
+    if noResource == true then return false end
+    return true
+end
+
+-- PURE. Whether the ready glow may light this instant.
+--
+--   ready       the cooldown is back
+--   affordable  true / false / nil for "the client will not say"
+--
+-- Unknown lights it. Every unreadable value in this addon falls back to the
+-- behaviour of the feature switched off, because an effect that disappears
+-- when something could not be read is indistinguishable from a broken one.
+function Effects.GlowAllowed(fxOpts, ready, affordable)
+    if not (fxOpts and ready) then return false end
+    if not fxOpts.readyGlow then return false end
+    if fxOpts.readyGlowUsableOnly and affordable == false then return false end
+    return true
+end
+
+-- PURE. Whether this cell is currently hidden by its state rule.
+--
+-- `ready` is the three-valued answer above, and nil is the important one: a
+-- cooldown the client will not talk about must never disappear. An icon that
+-- vanishes because the addon could not read something is indistinguishable
+-- from a bug, and it takes the spell with it.
+function Effects.HiddenByState(fxOpts, ready)
+    if not fxOpts or ready == nil then return false end
+    local rule = fxOpts.hideWhen
+    if rule == "cooling" then return ready == false end
+    if rule == "ready" then return ready == true end
+    return false
+end
+
 ---------------------------------------------------------------------------
 -- The tick
 --
@@ -207,6 +294,11 @@ end
 ---------------------------------------------------------------------------
 local TICK = 0.06
 local elapsed = 0
+
+-- Set by any cell whose state rule changed what it should look like, cleared
+-- by the ticker after ONE repaint. A flag rather than a call per cell: twelve
+-- cooldowns coming back together is one render, not twelve.
+local repaintWanted = false
 
 local function Pulse(speed, phase)
     -- 0..1, smooth. phase keeps two different pulses on one cell from lining
@@ -294,7 +386,8 @@ local function TickCell(entry, inCombat, span)
         and (GetTime() - state.readySince) >= nagAfter then
         glowColour = fxOpts.reminderColor
         glowAlpha = 0.35 + 0.65 * Pulse(fxOpts.pulseSpeed)
-    elseif fxOpts.readyGlow and ready
+    elseif Effects.GlowAllowed(fxOpts, ready,
+            fxOpts.readyGlowUsableOnly and Effects.Affordable(entry.spellID) or nil)
         and (inCombat or not fxOpts.readyGlowCombatOnly) then
         glowColour = fxOpts.glowColor
         glowAlpha = 0.85
@@ -358,6 +451,26 @@ local function TickCell(entry, inCombat, span)
     if not glowColour and not state.flashLeft then fx:Hide() end
 
     ---------------------------------------------------------------------
+    -- Taking it off the screen, by state
+    --
+    -- NOT WRITTEN HERE, and that is the whole design. The render pass owns a
+    -- cell's alpha - it multiplies the bar's own alpha, the visibility fade
+    -- and the unlocked state into one number - and a ticker writing a second
+    -- alpha sixteen times a second would win until the next render and lose
+    -- on it, which is a flicker rather than a feature.
+    --
+    -- So this notices the FLIP and asks for one repaint. A cooldown starting
+    -- or ending is a handful of events a fight, not a per-frame job.
+    ---------------------------------------------------------------------
+    local wantsHidden = Effects.HiddenByState(fxOpts, ready)
+    if state.hidden == nil then
+        state.hidden = wantsHidden
+    elseif state.hidden ~= wantsHidden then
+        state.hidden = wantsHidden
+        repaintWanted = true
+    end
+
+    ---------------------------------------------------------------------
     -- Greying out while the cooldown runs
     ---------------------------------------------------------------------
     if not entry.SetDim then return end
@@ -399,6 +512,14 @@ ticker:SetScript("OnUpdate", function(_, delta)
             end
         end
     end
+
+    -- AFTER the walk, so a render triggered by the first cell does not run
+    -- while the other eleven are still being ticked - Render rebuilds the
+    -- very list being walked.
+    if repaintWanted then
+        repaintWanted = false
+        if ns.Screen and ns.Screen.Render then pcall(ns.Screen.Render, ns.Screen) end
+    end
 end)
 
 ---------------------------------------------------------------------------
@@ -414,6 +535,9 @@ function Effects.Wanted(fxOpts)
         or fxOpts.dimOnCooldown
         or (fxOpts.reminderAfter or 0) > 0
         or (fxOpts.lowWarn or 0) > 0
+        -- A bar that only hides things still needs the ticker: it is the
+        -- only thing watching for the state to flip.
+        or (fxOpts.hideWhen and fxOpts.hideWhen ~= "never")
 end
 
 -- Called by Screen for a cell that is showing something. `setDim` is how the

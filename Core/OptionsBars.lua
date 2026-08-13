@@ -1911,8 +1911,26 @@ function Workspace:BuildOptionsPane(parent, width)
     -- The dependency is stated rather than discovered. "I switched it on and
     -- nothing happens" is otherwise a question with no answer on this screen.
     grid:Note("The tail of an aura where recasting it wastes nothing.")
+    FxSwitch("Only when castable", "readyGlowUsableOnly")
+    grid:Note("Keeps the edge dark while you are short of the resource. "
+        .. "Range and target are ignored - a defensive with nothing targeted "
+        .. "is not the same as one you cannot pay for.")
+
     FxSwitch("Grey out on cooldown", "dimOnCooldown")
     FxSlide("How grey", "dimAmount", 0.2, 1, 0.05, Percent, 100)
+
+    -- One control with three values, not two switches: "hide what is ready"
+    -- and "hide what is cooling" are opposites, and as two switches both on
+    -- is an empty bar nobody meant to ask for.
+    UI.Dropdown(grid:FullRow("Take off screen", { controlWidth = 150 }), {
+        { value = "never",   label = "Nothing" },
+        { value = "cooling", label = "While on cooldown" },
+        { value = "ready",   label = "While ready" },
+    }, FxGet("hideWhen"), function(value)
+        FxSet("hideWhen")(value); Apply()
+    end)
+    grid:Note("The place stays empty rather than closing up, so nothing "
+        .. "else moves. Edit mode always shows everything.")
     FxSlide("Pulse speed", "pulseSpeed", 0.4, 2.5, 0.1,
         function(v) return string.format("%.1f", v) end)
 

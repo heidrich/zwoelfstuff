@@ -2372,6 +2372,80 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
+    -- TAKING AN ICON OFF THE SCREEN BY ITS STATE
+    --
+    -- A display of what you can press right now, or of what you are waiting
+    -- for. Two useful readings and they are opposites, so it is one setting
+    -- with three values rather than two switches that can contradict.
+    --
+    -- The case that matters most is the third answer: a cooldown the client
+    -- will not talk about. An icon that vanishes because something could not
+    -- be READ is indistinguishable from a bug, and it takes the spell with
+    -- it - so unknown always shows.
+    -----------------------------------------------------------------------
+    do
+        local Hidden = ns.Effects.HiddenByState
+
+        Check("Off by default, whatever the state",
+            not Hidden({}, true) and not Hidden({}, false))
+        Check("\"never\" means never",
+            not Hidden({ hideWhen = "never" }, true)
+            and not Hidden({ hideWhen = "never" }, false))
+
+        Check("Hiding what is cooling leaves what is ready",
+            Hidden({ hideWhen = "cooling" }, false)
+            and not Hidden({ hideWhen = "cooling" }, true))
+
+        Check("Hiding what is ready leaves what is cooling",
+            Hidden({ hideWhen = "ready" }, true)
+            and not Hidden({ hideWhen = "ready" }, false))
+
+        -- THE ONE THAT KEEPS A READING FAILURE FROM LOOKING LIKE A BUG.
+        Check("A state the client will not name never hides anything",
+            not Hidden({ hideWhen = "ready" }, nil)
+            and not Hidden({ hideWhen = "cooling" }, nil))
+
+        Check("No settings at all hides nothing", not Hidden(nil, true))
+
+        -- A bar that ONLY hides still has to be ticked - the ticker is the
+        -- only thing watching for the flip that puts the icon back.
+        Check("A bar that only hides is still watched",
+            ns.Effects.Wanted({ hideWhen = "cooling" }) and true or false)
+        Check("A bar with nothing on is still not watched",
+            not ns.Effects.Wanted({ hideWhen = "never" }))
+    end
+
+    -----------------------------------------------------------------------
+    -- READY AND AFFORDABLE ARE TWO DIFFERENT THINGS
+    --
+    -- A cooldown that has come back while you are short of the resource is
+    -- an icon telling you to press something that will not go off. Off by
+    -- default: "the cooldown is back" is what people expect a cooldown
+    -- display to mean, so the other reading has to be asked for.
+    -----------------------------------------------------------------------
+    do
+        local Allowed = ns.Effects.GlowAllowed
+
+        Check("No glow while it is still on cooldown",
+            not Allowed({ readyGlow = true }, false, true))
+        Check("No glow when the glow is switched off",
+            not Allowed({ readyGlow = false }, true, true))
+        Check("Ready and switched on lights it",
+            Allowed({ readyGlow = true }, true, nil))
+
+        local strict = { readyGlow = true, readyGlowUsableOnly = true }
+        Check("Ready but unaffordable stays dark", not Allowed(strict, true, false))
+        Check("Ready and affordable lights it", Allowed(strict, true, true))
+
+        -- THE FALLBACK THIS WHOLE ADDON USES. A value the client withheld
+        -- must behave like the feature switched off - an effect that
+        -- disappears because something could not be READ is
+        -- indistinguishable from a broken one.
+        Check("A resource the client will not name still lights it",
+            Allowed(strict, true, nil))
+    end
+
+    -----------------------------------------------------------------------
     -- THE AURA BINDS ITSELF
     --
     -- Owner: "das muss auch ohne mich gehen, die sachen sind doch alle im
