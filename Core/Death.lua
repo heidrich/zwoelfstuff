@@ -1118,6 +1118,22 @@ function Death.ReadRecap(recapID)
     end
     if not art and killer then art = artByWho[killer] end
 
+    -- THE ONE FIELD THAT `x and y or z` CANNOT CARRY, and it took a check
+    -- driving the real tooltip to notice. Written as
+    -- `(readable and type == "boolean") and ev.avoidable or nil`, a recorded
+    -- `avoidable = false` evaluates to false, falls through the `or`, and
+    -- comes out as nil - so "the game says this was NOT avoidable" was being
+    -- filed as "the game did not say". Every clean bill in the addon was
+    -- unreachable and nothing looked wrong.
+    --
+    -- Three answers need three branches. The idiom has room for two.
+    local function AvoidableOf(ev)
+        local flag = ev.avoidable
+        if not ns.CanCompute(flag) then return nil end
+        if type(flag) ~= "boolean" then return nil end
+        return flag
+    end
+
     local events = {}
     for i = #raw, 1, -1 do
         local ev = raw[i]
@@ -1160,8 +1176,7 @@ function Death.ReadRecap(recapID)
             -- withheld it would make every death look unavoidable, which is
             -- the flattering answer and therefore the dangerous one. nil
             -- means "the client did not say", and it says that out loud.
-            avoidable = (ns.CanCompute(ev.avoidable)
-                and type(ev.avoidable) == "boolean") and ev.avoidable or nil,
+            avoidable = AvoidableOf(ev),
         }
     end
     return events, maxHP, nil, killer, art
@@ -1375,6 +1390,230 @@ local COL_AMOUNT_R = -132
 local COL_LEFT_R = -6
 local COL_LEFT_W = 118
 
+---------------------------------------------------------------------------
+-- ONE EVENT ROW, BUILT AND PAINTED IN ONE PLACE
+--
+-- The group log shows a dead person's last seconds with these same four
+-- columns, because it is the same question asked about somebody else. Two
+-- copies of a table that is meant to look identical is the second-copy trap:
+-- one of them gets the next improvement and the other quietly becomes the
+-- old design. So the row, its header and its painter live here, and both
+-- windows call them.
+--
+-- Everything is measured off the width handed in rather than off LIST_W: the
+-- group log's column is wider than this one, and a row that hard-codes the
+-- window it was born in cannot move house.
+---------------------------------------------------------------------------
+
+-- The head over the columns. Same offsets as the cells below it, from the
+-- same constants, which is the only way a header stays over what it names.
+function Death.BuildEventHead(parent, width, whatLabel)
+    local UI, C = ns.UI, ns.UI.C
+    local head = CreateFrame("Frame", nil, parent)
+    head:SetSize(width, 16)
+
+    head.when = UI.Eyebrow(head, "When")
+    head.when:SetPoint("LEFT", head, "LEFT", 6, 0)
+    head.what = UI.Eyebrow(head, whatLabel or "What hit you")
+    head.what:SetPoint("LEFT", head, "LEFT", COL_WHAT, 0)
+    head.amount = UI.Eyebrow(head, "Damage")
+    head.amount:SetPoint("RIGHT", head, "RIGHT", COL_AMOUNT_R, 0)
+    head.left = UI.Eyebrow(head, "Health left")
+    head.left:SetPoint("RIGHT", head, "RIGHT", COL_LEFT_R, 0)
+
+    local rule = head:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    rule:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 0, -2)
+    rule:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, -2)
+    rule:SetHeight(1)
+
+    return head
+end
+
+-- The height of one of these rows, for a caller that has to stack them.
+Death.EVENT_ROW_H = ROW_H
+
+function Death.BuildEventRow(parent, width)
+    local UI, C = ns.UI, ns.UI.C
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(width, ROW_H)
+    -- The width the bars are drawn against, kept on the row: the painter is
+    -- shared and must not assume which window called it.
+    row.dkWidth = width
+
+    -- Two pieces of one health bar: what was left, and what the event
+    -- moved, drawn end to end. See Death.RowSpans.
+    row.fill = row:CreateTexture(nil, "BACKGROUND")
+    row.fill:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+
+    row.chunk = row:CreateTexture(nil, "BACKGROUND")
+    row.chunk:SetPoint("TOPLEFT", row.fill, "TOPRIGHT", 0, 0)
+    row.chunk:SetPoint("BOTTOMLEFT", row.fill, "BOTTOMRIGHT", 0, 0)
+
+    -- THE MARK ON THE EDGE: this hit is damage THE GAME ITSELF calls
+    -- avoidable. It was built for a press of your own and never shown once -
+    -- the row list holds hits, and your presses are drawn in the replay -
+    -- so it goes to the one flag in the whole recap worth marking down a
+    -- column: the swirl somebody stood in. Silence when the client did not
+    -- say, which is not the same as a clean bill.
+    row.tick = row:CreateTexture(nil, "ARTWORK")
+    row.tick:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.tick:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.tick:SetWidth(3)
+    row.tick:SetColorTexture(0.88, 0.42, 0.36, 1)
+    row.tick:Hide()
+
+    row.when = UI.Label(row, "", 11, C.textDim)
+    row.when:SetPoint("LEFT", row, "LEFT", 6, 0)
+
+    -- The spell's icon, when the recap names a readable id. EllesmereUI
+    -- resolves recap icons exactly this way in shipping code.
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(16, 16)
+    row.icon:SetPoint("LEFT", row, "LEFT", COL_ICON, 0)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    row.what = UI.Label(row, "", 12, C.text)
+    row.what:SetPoint("LEFT", row, "LEFT", COL_WHAT, 0)
+    row.what:SetWidth(COL_WHAT_W)
+    row.what:SetJustifyH("LEFT")
+    row.what:SetWordWrap(false)
+
+    row.amount = UI.Label(row, "", 12, C.text)
+    row.amount:SetPoint("RIGHT", row, "RIGHT", COL_AMOUNT_R, 0)
+    row.amount:SetJustifyH("RIGHT")
+
+    -- What was left afterwards, in its own column rather than only in the
+    -- hover: the row is read while the healer is asking, and a number you
+    -- have to point at is a number nobody quotes.
+    row.left = UI.Label(row, "", 12, C.textDim)
+    row.left:SetPoint("RIGHT", row, "RIGHT", COL_LEFT_R, 0)
+    row.left:SetWidth(COL_LEFT_W)
+    row.left:SetJustifyH("RIGHT")
+    row.left:SetWordWrap(false)
+
+    -- The client's own spell tooltip on hover, which is the whole point: a
+    -- name tells you what hit, the tooltip tells you what it does. A melee
+    -- swing has no spell to ask about, so the row says what it knows itself
+    -- rather than showing an empty frame.
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self)
+        local ev = self.ev
+        if not (ev and GameTooltip) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local shown = false
+        if ev.spellID then
+            shown = pcall(GameTooltip.SetSpellByID, GameTooltip, ev.spellID)
+        end
+        if not shown then
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine(ev.name or "", 1, 1, 1)
+        end
+        if ev.who then
+            GameTooltip:AddLine("from " .. ev.who, 0.61, 0.64, 0.69)
+        end
+        GameTooltip:AddLine(string.format("%s%s  -  %.1fs before the end",
+            ev.heal and "+" or "-", ns.ShortNumber(ev.amount), ev.t),
+            0.61, 0.64, 0.69)
+        if ev.overkill then
+            GameTooltip:AddLine(ns.ShortNumber(ev.overkill)
+                .. " of it was overkill", 0.61, 0.64, 0.69)
+        end
+        if ev.hp then
+            GameTooltip:AddLine("Health left afterwards: "
+                .. ns.ShortNumber(ev.hp), 0.61, 0.64, 0.69)
+        end
+        -- THE GAME'S OWN VERDICT, and only when the game gave one. A
+        -- withheld flag says nothing here rather than saying "clean".
+        if ev.avoidable == true then
+            GameTooltip:AddLine("The game calls this avoidable damage.",
+                0.88, 0.42, 0.36, true)
+        elseif ev.avoidable == false then
+            GameTooltip:AddLine("The game does not call this avoidable.",
+                0.61, 0.64, 0.69, true)
+        end
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+
+    row:Hide()
+    return row
+end
+
+-- One event drawn into one row. The row keeps the event it is showing,
+-- because these frames are pooled across every death in the list and a
+-- closure would answer for the one it was built with.
+function Death.PaintEventRow(row, ev, maxHP)
+    if not (row and ev) then return end
+    row.ev = ev
+    local width = row.dkWidth or row:GetWidth() or 0
+
+    row.when:SetText(string.format("-%.1fs", ev.t))
+
+    -- A melee hit carries no spell id, and Blizzard's own recap draws a
+    -- sword for it rather than a hole. 135274 is the fallback icon
+    -- EllesmereUI's recap tooltip ships with, for the same case.
+    local icon = ev.spellID and ns.SpellTexture(ev.spellID)
+    row.icon:SetTexture(icon or 135274)
+    row.icon:Show()
+
+    -- What, then who, in the quiet grey: "Melee - Heavyweight Golem". The
+    -- mob's name is part of the story and the owner asked for it by name;
+    -- inline and dimmed so the amounts stay the loudest column.
+    if ev.who then
+        row.what:SetText((ev.name or "") .. "  |cff9ba3af" .. ev.who .. "|r")
+    else
+        row.what:SetText(ev.name or "")
+    end
+
+    -- The damage, and what share of the whole health bar it was. The number
+    -- alone means nothing without the pool it came out of - "107.9k" is a
+    -- scratch on one tank and a third of another.
+    local sign = ev.heal and "+" or "-"
+    local share = (maxHP and maxHP > 0)
+        and string.format("  |cff9ba3af%d%%|r",
+            math.floor(ev.amount / maxHP * 100 + 0.5))
+        or ""
+    row.amount:SetText(sign .. ns.ShortNumber(ev.amount) .. share)
+
+    -- What was left afterwards. On the killing blow there is nothing left,
+    -- so the column says what went past zero instead - that is the number
+    -- worth knowing about a hit nobody was surviving.
+    if ev.overkill then
+        row.left:SetText("0  |cffe06c5e" .. ns.ShortNumber(ev.overkill)
+            .. " over|r")
+    elseif ev.hp then
+        local leftShare = (maxHP and maxHP > 0)
+            and string.format("  |cff626a76%d%%|r",
+                math.floor(ev.hp / maxHP * 100 + 0.5))
+            or ""
+        row.left:SetText(ns.ShortNumber(ev.hp) .. leftShare)
+    else
+        row.left:SetText("")
+    end
+
+    -- The bar IS a health bar: the slate piece is what was still there, the
+    -- coloured piece is what this event moved, and the two together are the
+    -- health before it landed. Read down the column and the slate shrinks -
+    -- that is the pull going wrong, drawn.
+    local left, chunk = Death.RowSpans(ev, maxHP)
+    row.fill:SetWidth(math.max(1, width * left))
+    row.fill:SetColorTexture(0.20, 0.26, 0.34, 0.85)
+    row.chunk:SetWidth(math.max(1, width * chunk))
+    if ev.heal then
+        row.chunk:SetColorTexture(0.12, 0.42, 0.16, 0.85)
+    else
+        row.chunk:SetColorTexture(0.55, 0.11, 0.11, 0.85)
+    end
+    row.chunk:SetShown(chunk > 0)
+
+    row.tick:SetShown(ev.avoidable == true)
+    row:Show()
+end
+
 local function BuildWindow()
     UI = ns.UI
     local C = UI.C
@@ -1497,96 +1736,7 @@ local function BuildWindow()
     -- messy one builds as many as it needs, once.
     frame.rows = {}
     frame.BuildRow = function()
-        local row = CreateFrame("Frame", nil, frame.listContent)
-        row:SetSize(LIST_W, ROW_H)
-
-        -- Two pieces of one health bar: what was left, and what the event
-        -- moved, drawn end to end. See Death.RowSpans.
-        row.fill = row:CreateTexture(nil, "BACKGROUND")
-        row.fill:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-        row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-
-        row.chunk = row:CreateTexture(nil, "BACKGROUND")
-        row.chunk:SetPoint("TOPLEFT", row.fill, "TOPRIGHT", 0, 0)
-        row.chunk:SetPoint("BOTTOMLEFT", row.fill, "BOTTOMRIGHT", 0, 0)
-
-        -- A press of your own is not damage and must not be drawn as a bar
-        -- of it. It gets a mark on the edge instead, the way the selected
-        -- death is marked in the list beside it.
-        row.tick = row:CreateTexture(nil, "ARTWORK")
-        row.tick:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-        row.tick:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-        row.tick:SetWidth(3)
-        row.tick:Hide()
-
-        row.when = UI.Label(row, "", 11, C.textDim)
-        row.when:SetPoint("LEFT", row, "LEFT", 6, 0)
-
-        -- The spell's icon, when the recap names a readable id. EllesmereUI
-        -- resolves recap icons exactly this way in shipping code.
-        row.icon = row:CreateTexture(nil, "ARTWORK")
-        row.icon:SetSize(16, 16)
-        row.icon:SetPoint("LEFT", row, "LEFT", 52, 0)
-        row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-        row.what = UI.Label(row, "", 12, C.text)
-        row.what:SetPoint("LEFT", row, "LEFT", COL_WHAT, 0)
-        row.what:SetWidth(COL_WHAT_W)
-        row.what:SetJustifyH("LEFT")
-        row.what:SetWordWrap(false)
-
-        row.amount = UI.Label(row, "", 12, C.text)
-        row.amount:SetPoint("RIGHT", row, "RIGHT", COL_AMOUNT_R, 0)
-        row.amount:SetJustifyH("RIGHT")
-
-        -- What you had left afterwards, in its own column rather than only
-        -- in the hover: the row is read while the healer is asking, and a
-        -- number you have to point at is a number nobody quotes.
-        row.left = UI.Label(row, "", 12, C.textDim)
-        row.left:SetPoint("RIGHT", row, "RIGHT", COL_LEFT_R, 0)
-        row.left:SetWidth(COL_LEFT_W)
-        row.left:SetJustifyH("RIGHT")
-        row.left:SetWordWrap(false)
-
-        -- The client's own spell tooltip on hover, which is the whole
-        -- point: a name tells you what hit, the tooltip tells you what it
-        -- does. A melee swing has no spell to ask about, so the row says
-        -- what it knows itself rather than showing an empty frame.
-        row:EnableMouse(true)
-        row:SetScript("OnEnter", function(self)
-            local ev = self.ev
-            if not (ev and GameTooltip) then return end
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            local shown = false
-            if ev.spellID then
-                shown = pcall(GameTooltip.SetSpellByID, GameTooltip, ev.spellID)
-            end
-            if not shown then
-                GameTooltip:ClearLines()
-                GameTooltip:AddLine(ev.name or "", 1, 1, 1)
-            end
-            if ev.who then
-                GameTooltip:AddLine("from " .. ev.who, 0.61, 0.64, 0.69)
-            end
-            GameTooltip:AddLine(string.format("%s%s  -  %.1fs before the end",
-                ev.heal and "+" or "-", ns.ShortNumber(ev.amount), ev.t),
-                0.61, 0.64, 0.69)
-            if ev.overkill then
-                GameTooltip:AddLine(ns.ShortNumber(ev.overkill)
-                    .. " of it was overkill", 0.61, 0.64, 0.69)
-            end
-            if ev.hp then
-                GameTooltip:AddLine("Health left afterwards: "
-                    .. ns.ShortNumber(ev.hp), 0.61, 0.64, 0.69)
-            end
-            GameTooltip:Show()
-        end)
-        row:SetScript("OnLeave", function()
-            if GameTooltip then GameTooltip:Hide() end
-        end)
-
-        row:Hide()
-        return row
+        return Death.BuildEventRow(frame.listContent, LIST_W)
     end
 
     -----------------------------------------------------------------------
@@ -1604,30 +1754,13 @@ local function BuildWindow()
     -- timeline with the incoming above it and your own presses below is a
     -- different picture and it needs the room.
 
-    frame.head = CreateFrame("Frame", nil, frame)
     -- The head is as wide as the ROWS, not as the column: its labels sit over
     -- their columns, and a head eight pixels wider puts every right-aligned
-    -- caption eight pixels off the number under it.
-    frame.head:SetSize(LIST_W, 16)
+    -- caption eight pixels off the number under it. Built by the same
+    -- function the group log's head comes out of, so the two tables cannot
+    -- drift apart a column at a time.
+    frame.head = Death.BuildEventHead(frame, LIST_W, "What hit you")
     frame.head:Hide()
-
-    local function HeadLabel(text)
-        return UI.Eyebrow(frame.head, text)
-    end
-    frame.headWhen = HeadLabel("When")
-    frame.headWhen:SetPoint("LEFT", frame.head, "LEFT", 6, 0)
-    frame.headWhat = HeadLabel("What hit you")
-    frame.headWhat:SetPoint("LEFT", frame.head, "LEFT", COL_WHAT, 0)
-    frame.headAmount = HeadLabel("Damage")
-    frame.headAmount:SetPoint("RIGHT", frame.head, "RIGHT", COL_AMOUNT_R, 0)
-    frame.headLeft = HeadLabel("Health left")
-    frame.headLeft:SetPoint("RIGHT", frame.head, "RIGHT", COL_LEFT_R, 0)
-
-    local headRule = frame.head:CreateTexture(nil, "ARTWORK")
-    headRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
-    headRule:SetPoint("BOTTOMLEFT", frame.head, "BOTTOMLEFT", 0, -2)
-    headRule:SetPoint("BOTTOMRIGHT", frame.head, "BOTTOMRIGHT", 0, -2)
-    headRule:SetHeight(1)
 
     -----------------------------------------------------------------------
     -- The list down the side: every death this session, newest first.
@@ -2159,70 +2292,9 @@ function Death:Show(index)
         row:SetPoint("TOPLEFT", frame.listContent, "TOPLEFT", 0,
             -((shown - 1) * (ROW_H + 2)))
 
-        -- What the hover reads. Kept on the row rather than closed over,
-        -- because these twelve frames are pooled across every death in the
-        -- list and a closure would answer for the one they were built with.
-        row.ev = ev
-
-        row.when:SetText(string.format("-%.1fs", ev.t))
-
-        -- A melee hit carries no spell id, and Blizzard's own recap draws a
-        -- sword for it rather than a hole. 135274 is the fallback icon
-        -- EllesmereUI's recap tooltip ships with, for the same case.
-        local icon = ev.spellID and ns.SpellTexture(ev.spellID)
-        row.icon:SetTexture(icon or 135274)
-        row.icon:Show()
-
-        -- What, then who, in the quiet grey: "Melee - Heavyweight Golem".
-        -- The mob's name is part of the story and the owner asked for it by
-        -- name; inline and dimmed so the amounts stay the loudest column.
-        if ev.who then
-            row.what:SetText((ev.name or "")
-                .. "  |cff9ba3af" .. ev.who .. "|r")
-        else
-            row.what:SetText(ev.name or "")
-        end
-        -- The damage, and what share of your whole health bar it was. The
-        -- number alone means nothing without the pool it came out of -
-        -- "107.9k" is a scratch on one tank and a third of another.
-        local sign = ev.heal and "+" or "-"
-        local share = (maxHP and maxHP > 0)
-            and string.format("  |cff9ba3af%d%%|r",
-                math.floor(ev.amount / maxHP * 100 + 0.5))
-            or ""
-        row.amount:SetText(sign .. ns.ShortNumber(ev.amount) .. share)
-
-        -- What was left afterwards. On the killing blow there is nothing
-        -- left, so the column says what went past zero instead - that is
-        -- the number worth knowing about a hit you were never surviving.
-        if ev.overkill then
-            row.left:SetText("0  |cffe06c5e" .. ns.ShortNumber(ev.overkill)
-                .. " over|r")
-        elseif ev.hp then
-            local leftShare = (maxHP and maxHP > 0)
-                and string.format("  |cff626a76%d%%|r",
-                    math.floor(ev.hp / maxHP * 100 + 0.5))
-                or ""
-            row.left:SetText(ns.ShortNumber(ev.hp) .. leftShare)
-        else
-            row.left:SetText("")
-        end
-
-        -- The bar IS a health bar: the slate piece is what you still had,
-        -- the coloured piece is what this event moved, and the two together
-        -- are the health you had before it landed. Read down the column and
-        -- the slate shrinks - that is the pull going wrong, drawn.
-        local left, chunk = Death.RowSpans(ev, maxHP)
-        row.fill:SetWidth(math.max(1, LIST_W * left))
-        row.fill:SetColorTexture(0.20, 0.26, 0.34, 0.85)
-        row.chunk:SetWidth(math.max(1, LIST_W * chunk))
-        if ev.heal then
-            row.chunk:SetColorTexture(0.12, 0.42, 0.16, 0.85)
-        else
-            row.chunk:SetColorTexture(0.55, 0.11, 0.11, 0.85)
-        end
-        row.chunk:SetShown(chunk > 0)
-        row:Show()
+        -- The row, its columns and its bars are all painted by the one
+        -- function the group log paints its rows with.
+        Death.PaintEventRow(row, ev, maxHP)
     end
     -- Rows the pool has and this death does not need. It is a POOL, so it
     -- is as long as the messiest death seen this session, not as long as

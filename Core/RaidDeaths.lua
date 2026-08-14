@@ -54,6 +54,13 @@ ns.RaidDeaths = RaidDeaths
 
 local floor, min = math.floor, math.min
 
+-- ONE FIELD, VERIFIED AND COPIED. Death's rule for everything that is held
+-- past the moment it was read: a value goes on only if it is readable and of
+-- the type it claims. Up here rather than beside the persistence, because
+-- the recap is trimmed to the same rule the second it arrives - a secret
+-- kept in memory for a minute is a secret this addon carried.
+local Plain = function(...) return ns.Death.Plain(...) end
+
 ---------------------------------------------------------------------------
 -- Reading a row - pure, and every field guarded on its own
 ---------------------------------------------------------------------------
@@ -330,6 +337,127 @@ function RaidDeaths.Read(me)
     return RaidDeaths.Rows(list, me), nil, duration, label
 end
 
+---------------------------------------------------------------------------
+-- ONE DEATH'S RECAP, READ ONCE AND KEPT WHOLE
+--
+-- His ask after the first live run: a death in the list should open the way
+-- his own does - the last ten seconds of the person who fell. The recap says
+-- all of it and always did; this file was keeping the last line and throwing
+-- the story away.
+--
+-- So the events are kept. Not because they might be useful later: BECAUSE
+-- THE RECAP IS GONE by the time anybody clicks the row. C_DeathRecap answers
+-- for a death of the current fight, and the window is read after the wipe,
+-- from a list that survived a reload. Whatever is not taken here cannot be
+-- asked for again.
+--
+-- One place, called from both roads in - the live read and the capture tick.
+-- Two copies of "what a recap has to say" is the one that grows a field and
+-- the one that does not.
+---------------------------------------------------------------------------
+
+-- How many hits of one death are kept. The 2026-08-14 probe handed over ten
+-- for a full death and the window shows the last ten seconds of them, so
+-- this is roughly double what has ever been seen - a ceiling, not a budget.
+-- Anything cut off is COUNTED and said out loud in the window; a list that
+-- quietly starts in the middle is a list that lies about where it starts.
+local EVENTS_KEPT = 24
+RaidDeaths.EVENTS_KEPT = EVENTS_KEPT
+
+-- A recap's events, reduced to what may be held and written to disk, newest
+-- END kept: the hits nearest the death are the ones the window is opened
+-- for. Returns the list and how many older ones were dropped.
+function RaidDeaths.PlainEvents(events)
+    if type(events) ~= "table" then return nil, 0 end
+    local out, dropped = {}, 0
+    local first = 1
+    if #events > EVENTS_KEPT then
+        first = #events - EVENTS_KEPT + 1
+        dropped = first - 1
+    end
+    for index = first, #events do
+        local ev = events[index]
+        if type(ev) == "table" then
+            local t = Plain(ev.t, "number")
+            local amount = Plain(ev.amount, "number")
+            if t and amount then
+                out[#out + 1] = {
+                    t = t,
+                    amount = amount,
+                    hp = Plain(ev.hp, "number"),
+                    overkill = Plain(ev.overkill, "number"),
+                    name = Plain(ev.name, "string"),
+                    who = Plain(ev.who, "string"),
+                    spellID = Plain(ev.spellID, "number"),
+                    heal = ev.heal == true,
+                    -- Strictly a boolean, so "the client did not say" comes
+                    -- back off the disk as itself and not as "not avoidable".
+                    avoidable = Plain(ev.avoidable, "boolean"),
+                }
+            end
+        end
+    end
+    if #out == 0 then return nil, 0 end
+    return out, dropped
+end
+
+-- HOW MANY OF THESE HITS THE GAME ITSELF CALLS AVOIDABLE. The same three
+-- answers the whole-pull verdict gives, for the reason: a person whose
+-- client withheld the flag must not read as a person who did nothing wrong.
+function RaidDeaths.AvoidableHits(events)
+    local yes, no, unknown = 0, 0, 0
+    for _, ev in ipairs(events or {}) do
+        if not ev.heal then
+            if ev.avoidable == true then yes = yes + 1
+            elseif ev.avoidable == false then no = no + 1
+            else unknown = unknown + 1 end
+        end
+    end
+    return yes, no, unknown
+end
+
+-- Everything one death's recap has to say, onto the entry. The fields it
+-- writes are the fields Reuse below carries forward and Persist writes out;
+-- all three are one list and are meant to be edited together.
+function RaidDeaths.Resolve(entry)
+    if not entry then return entry end
+    if not entry.recapID then
+        entry.blowWhy = "no recap id on this death"
+        return entry
+    end
+
+    local events, maxHP, readWhy, _, art = ns.Death.ReadRecap(entry.recapID)
+    entry.blow = events and RaidDeaths.Blow(events) or nil
+    if not entry.blow then
+        entry.blowWhy = readWhy or "the recap gave nothing"
+        return entry
+    end
+
+    -- The face belongs to whichever event carried one; the recap's own
+    -- answer is the fallback, never the row's own creature id, which is the
+    -- dead one - see the header.
+    entry.blow.art = entry.blow.art or art
+    entry.real = RaidDeaths.RealBlow(events)
+    -- Everything this thing did to THIS person, summed while the events are
+    -- still in hand.
+    entry.blow.summary = ns.Death.SourceSummary(events, entry.blow.who)
+    entry.maxHP = (type(maxHP) == "number" and maxHP > 0) and maxHP or nil
+    entry.events, entry.dropped = RaidDeaths.PlainEvents(events)
+    if entry.dropped == 0 then entry.dropped = nil end
+    return entry
+end
+
+-- What a settled answer hands to the next capture of the same pull. One list,
+-- next to Resolve, so a new field cannot be written by one and lost by the
+-- other two ticks later.
+local function Reuse(entry, was)
+    entry.blow, entry.blowWhy = was.blow, was.blowWhy
+    entry.real, entry.tries = was.real, was.tries
+    entry.events, entry.dropped, entry.maxHP =
+        was.events, was.dropped, was.maxHP
+    return entry
+end
+
 -- The whole picture: the timeline, each entry's killing blow, and what the
 -- fight adds up to. Kept apart from Read so the ordering can be exercised at
 -- a desk with no recap API in the room.
@@ -339,20 +467,7 @@ function RaidDeaths.Collect(me)
 
     local entries, timed = RaidDeaths.Timeline(rows)
     for _, entry in ipairs(entries) do
-        if entry.recapID then
-            local events, _, readWhy, _, art = ns.Death.ReadRecap(entry.recapID)
-            entry.blow = events and RaidDeaths.Blow(events) or nil
-            if entry.blow then
-                -- The face belongs to whichever event carried one; the recap's
-                -- own answer is the fallback, never the row's own creature id,
-                -- which is the dead one - see the header.
-                entry.blow.art = entry.blow.art or art
-            else
-                entry.blowWhy = readWhy or "the recap gave nothing"
-            end
-        else
-            entry.blowWhy = "no recap id on this death"
-        end
+        RaidDeaths.Resolve(entry)
     end
 
     return entries, nil, {
@@ -460,26 +575,12 @@ function RaidDeaths.Capture()
     for _, entry in ipairs(entries) do
         local was = entry.recapID and previous[entry.recapID]
         if RaidDeaths.Settled(was) then
-            entry.blow, entry.blowWhy = was.blow, was.blowWhy
-            entry.tries = was.tries
-        elseif entry.recapID then
-            local events, _, readWhy, _, art = ns.Death.ReadRecap(entry.recapID)
-            entry.blow = events and RaidDeaths.Blow(events) or nil
-            if entry.blow then
-                entry.blow.art = entry.blow.art or art
-                entry.real = RaidDeaths.RealBlow(events)
-                -- Everything this thing did to THIS person, summed while the
-                -- events are still in hand. The recap is gone by the time
-                -- somebody points at the row, so the answer has to be kept,
-                -- not looked up again.
-                entry.blow.summary =
-                    ns.Death.SourceSummary(events, entry.blow.who)
-            else
-                entry.blowWhy = readWhy or "the recap gave nothing"
-            end
-            entry.tries = ((was and was.tries) or 0) + 1
+            Reuse(entry, was)
         else
-            entry.blowWhy = "no recap id on this death"
+            RaidDeaths.Resolve(entry)
+            if entry.recapID then
+                entry.tries = ((was and was.tries) or 0) + 1
+            end
         end
     end
 
@@ -521,7 +622,6 @@ end
 -- kept. `at` is deliberately dropped - it is a GetTime stamp, and GetTime
 -- restarts with the client.
 ---------------------------------------------------------------------------
-local Plain = function(...) return ns.Death.Plain(...) end
 
 -- What a mob did, reduced to what may be written to disk. Same rule as every
 -- other field down here: copied by name, verified, never handed over whole -
@@ -564,7 +664,17 @@ function RaidDeaths.Persist(fight)
         local name = Plain(entry.name, "string")
         if name then
             local blow = type(entry.blow) == "table" and entry.blow or nil
+            -- The story of the last seconds, trimmed by the same function
+            -- that trimmed it on the way in. Running it twice drops nothing
+            -- the first pass kept, and the count of what WAS dropped is
+            -- carried rather than recomputed - a save and a load must not
+            -- quietly turn "6 older hits are not here" into silence.
+            local events, cut = RaidDeaths.PlainEvents(entry.events)
+            local dropped = (Plain(entry.dropped, "number") or 0) + cut
             out.entries[#out.entries + 1] = {
+                events = events,
+                dropped = dropped > 0 and dropped or nil,
+                maxHP = Plain(entry.maxHP, "number"),
                 name = name,
                 short = Plain(entry.short, "string") or name,
                 class = Plain(entry.class, "string"),
@@ -899,21 +1009,54 @@ local function HoverOver(row, label, onEnter)
     hit:SetAllPoints(label)
     hit:EnableMouse(true)
     hit:SetScript("OnEnter", function(self)
+        if row.Lit then row.Lit(true) end
         if not (GameTooltip and row.entry) then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         onEnter(row.entry)
         GameTooltip:Show()
     end)
     hit:SetScript("OnLeave", function()
+        if row.Lit then row.Lit(false) end
         if GameTooltip then GameTooltip:Hide() end
+    end)
+    -- The click belongs to the ROW; this frame is only sitting on top of it
+    -- for the sake of a tooltip.
+    hit:SetScript("OnMouseUp", function()
+        if row.Open then row.Open() end
     end)
     return hit
 end
 
 local function BuildRow(parent)
     local UI, C = ns.UI, ns.UI.C
-    local row = CreateFrame("Frame", nil, parent)
+    -- A BUTTON, because the row opens the story behind it. The three hover
+    -- targets that sit on top of it - the face, the killer, the ability -
+    -- take the mouse for their own tooltips, so each of them forwards the
+    -- click and the highlight rather than swallowing them. Without that,
+    -- two thirds of the row would be dead to a click and nothing would say
+    -- why.
+    local row = CreateFrame("Button", nil, parent)
     row:SetHeight(ROW_H)
+
+    row.hover = row:CreateTexture(nil, "BACKGROUND")
+    row.hover:SetAllPoints(row)
+    row.hover:SetColorTexture(C.control[1], C.control[2], C.control[3], 0.7)
+    row.hover:Hide()
+
+    -- Lit only when there is something behind the row to open.
+    local function Lit(on)
+        row.hover:SetShown(on and RaidDeaths.Openable(row.entry) or false)
+    end
+    row.Lit = Lit
+
+    local function Open()
+        if row.index then RaidDeaths:Open(row.index) end
+    end
+    row.Open = Open
+
+    row:SetScript("OnClick", Open)
+    row:SetScript("OnEnter", function() Lit(true) end)
+    row:SetScript("OnLeave", function() Lit(false) end)
 
     row.when = UI.Label(row, "", UI.FS.meta, C.textFaint)
     row.when:SetPoint("LEFT", row, "LEFT", 0, 0)
@@ -957,6 +1100,10 @@ local function BuildRow(parent)
     -- everything it did to this person in these seconds. The same tip the
     -- replay's marks and the death window's portrait show.
     local function ShowEnemy(self)
+        -- The row underneath stays lit while the mouse is over one of its
+        -- own hover targets: the highlight follows the ROW, not whichever
+        -- frame happens to be on top of it.
+        Lit(true)
         local entry = row.entry
         local blow = entry and entry.blow
         if not (blow and blow.who) then return end
@@ -971,6 +1118,7 @@ local function BuildRow(parent)
         })
     end
     local function HideEnemy()
+        Lit(false)
         ns.Death.HideEnemyTip()
     end
 
@@ -979,11 +1127,13 @@ local function BuildRow(parent)
     row.killerHit:EnableMouse(true)
     row.killerHit:SetScript("OnEnter", ShowEnemy)
     row.killerHit:SetScript("OnLeave", HideEnemy)
+    row.killerHit:SetScript("OnMouseUp", Open)
 
     -- And the face itself, which is the thing he actually points at.
     row.face:EnableMouse(true)
     row.face:SetScript("OnEnter", ShowEnemy)
     row.face:SetScript("OnLeave", HideEnemy)
+    row.face:SetScript("OnMouseUp", Open)
 
     -- THE ABILITY, through the client's own tooltip. A melee swing has no
     -- spell to ask about, so the row says what it knows itself rather than
@@ -1075,6 +1225,11 @@ local function BuildSideRow(parent, slot)
     row:SetScript("OnClick", function(self)
         if not self.index then return end
         RaidDeaths.showing = self.index
+        -- A death that was open belonged to the PULL that was open. Carrying
+        -- the index across would open whoever happens to be third in the
+        -- next pull, which is a different person's death under the name of
+        -- the one that was being read.
+        RaidDeaths.reading = nil
         RaidDeaths:Refresh()
     end)
     row.slot = slot
@@ -1203,12 +1358,63 @@ function RaidDeaths:Create()
     local listHost = CreateFrame("Frame", nil, frame)
     listHost:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -8)
     listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -18, 26)
+    frame.listHost = listHost
 
-    local _, content = UI.ScrollArea(listHost,
-        WIDTH - SIDE_W - UI.PAD * 2 - 18, 6)
+    local MAIN_W = WIDTH - SIDE_W - UI.PAD * 2 - 18
+    local _, content = UI.ScrollArea(listHost, MAIN_W, 6)
     frame.content = content
     frame.rows = {}
     head:SetPoint("TOPRIGHT", side, "TOPLEFT", -18, 0)
+
+    -----------------------------------------------------------------------
+    -- ONE DEATH, OPENED: the last ten seconds of whoever the row names.
+    --
+    -- It takes over the same rectangle the list sits in rather than opening
+    -- a second window: this is a step INTO a row, and a person reading a
+    -- pull should not end up with three windows on top of each other to say
+    -- one thing. The pull list down the right stays where it is, so the
+    -- other pulls are still one click away.
+    --
+    -- A MODE NEEDS A VISIBLE EXIT, which is what the button is for. Escape
+    -- closes the whole window, and a person who has just stepped into a row
+    -- is not looking to close the window.
+    -----------------------------------------------------------------------
+    local detail = CreateFrame("Frame", nil, frame)
+    detail:SetPoint("TOPLEFT", head, "TOPLEFT", 0, 14)
+    detail:SetPoint("BOTTOMRIGHT", listHost, "BOTTOMRIGHT", 0, 0)
+    detail:Hide()
+    frame.detail = detail
+
+    detail.back = UI.Button(detail, "Back to the pull", 140,
+        function() RaidDeaths:CloseReading() end)
+    detail.back:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, 0)
+
+    detail.title = UI.Label(detail, "", UI.FS.card, C.text)
+    detail.title:SetPoint("LEFT", detail.back, "RIGHT", 12, 0)
+
+    detail.sub = UI.Label(detail, "", UI.FS.meta, C.textDim)
+    detail.sub:SetPoint("TOPLEFT", detail.back, "BOTTOMLEFT", 0, -10)
+    detail.sub:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
+    detail.sub:SetJustifyH("LEFT")
+
+    detail.verdict = UI.Label(detail, "", UI.FS.meta, C.accentCool)
+    detail.verdict:SetPoint("TOPLEFT", detail.sub, "BOTTOMLEFT", 0, -4)
+
+    detail.note = UI.Label(detail, "", UI.FS.meta, C.textFaint)
+    detail.note:SetPoint("TOPLEFT", detail.verdict, "BOTTOMLEFT", 0, -4)
+
+    -- The same head the death window puts over its own last ten seconds,
+    -- out of the same function - one table in two windows.
+    detail.head = ns.Death.BuildEventHead(detail, MAIN_W - 8,
+        "What hit them")
+    detail.head:SetPoint("TOPLEFT", detail.note, "BOTTOMLEFT", 0, -12)
+
+    local detailHost = CreateFrame("Frame", nil, detail)
+    detailHost:SetPoint("TOPLEFT", detail.head, "BOTTOMLEFT", 0, -8)
+    detailHost:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", 0, 0)
+    local _, detailContent = UI.ScrollArea(detailHost, MAIN_W - 8, 8)
+    detail.content = detailContent
+    detail.rows = {}
 
     frame.foot = UI.Label(frame, "", UI.FS.meta, C.textFaint)
     frame.foot:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 46)
@@ -1291,24 +1497,122 @@ function RaidDeaths:Share()
     end
 end
 
--- The footer sentence, pure so the wording is checkable without a frame.
-function RaidDeaths.FootLine(culprits, count)
+-- The footer sentence, pure so the wording is checkable without a frame. The
+-- hint is only offered when there is something to open: an instruction for a
+-- click that does nothing is worse than no instruction.
+function RaidDeaths.FootLine(culprits, count, openable)
     if count == 0 then return "" end
+    local line
     if not RaidDeaths.WorthCounting(culprits) then
-        return string.format("%d deaths, each to something different.", count)
+        line = string.format("%d deaths, each to something different.", count)
+    else
+        local parts = {}
+        for index = 1, min(#culprits, CULPRITS_SHOWN) do
+            local culprit = culprits[index]
+            parts[#parts + 1] = string.format("%dx %s - %s",
+                culprit.count, culprit.who, culprit.spell)
+        end
+        line = "What did the killing: " .. table.concat(parts, ", ")
+        if #culprits > CULPRITS_SHOWN then
+            line = line .. string.format(", and %d more",
+                #culprits - CULPRITS_SHOWN)
+        end
     end
-    local parts = {}
-    for index = 1, min(#culprits, CULPRITS_SHOWN) do
-        local culprit = culprits[index]
-        parts[#parts + 1] = string.format("%dx %s - %s",
-            culprit.count, culprit.who, culprit.spell)
-    end
-    local line = "What did the killing: " .. table.concat(parts, ", ")
-    if #culprits > CULPRITS_SHOWN then
-        line = line .. string.format(", and %d more",
-            #culprits - CULPRITS_SHOWN)
+    if openable then
+        line = line .. "   -   click a death for their last ten seconds"
     end
     return line
+end
+
+---------------------------------------------------------------------------
+-- ONE DEATH, OPENED
+--
+-- His own death window answers "what happened to me"; this answers the same
+-- question about whoever the row names, out of the same recap and with the
+-- same four columns. The wording lives here, apart from the frame, so it can
+-- be read back in a check without a window in the room.
+---------------------------------------------------------------------------
+
+-- Whether this death has a story to open. Nothing kept means the recap said
+-- nothing - the row still shows who and when, and clicking it does nothing
+-- rather than opening an empty page.
+function RaidDeaths.Openable(entry)
+    return type(entry) == "table" and type(entry.events) == "table"
+        and #entry.events > 0
+end
+
+function RaidDeaths.DetailTitle(entry, timed)
+    if type(entry) ~= "table" then return "" end
+    local who = RaidDeaths.Coloured(entry.short or "?", entry.class)
+    if entry.you then who = who .. " |cffffd100(you)|r" end
+    if timed and entry.at then
+        return who .. "  -  fell at " .. RaidDeaths.Clock(entry.at)
+    end
+    return who
+end
+
+-- What ended them, and - when the killing blow was mostly wasted on a corpse
+-- - which hit actually did the work.
+function RaidDeaths.DetailLine(entry)
+    if type(entry) ~= "table" then return "" end
+    local blow = entry.blow
+    if not blow then return entry.blowWhy or "nothing readable" end
+
+    local line = string.format("Killed by %s - %s", blow.who or "?",
+        ns.Death.PlainText(blow.spell or "?"))
+    if type(blow.amount) == "number" and blow.amount > 0 then
+        line = line .. " for " .. ns.ShortNumber(blow.amount)
+    end
+    if type(blow.overkill) == "number" and blow.overkill > 0 then
+        line = line .. ", " .. ns.ShortNumber(blow.overkill) .. " of it overkill"
+    end
+    line = line .. "."
+
+    if type(entry.real) == "table" then
+        line = line .. string.format("  The hit that mattered: %s - %s for %s.",
+            entry.real.who or "?",
+            ns.Death.PlainText(entry.real.spell or "?"),
+            ns.ShortNumber(entry.real.landed or 0))
+    end
+    return line
+end
+
+-- THE GAME'S OWN VERDICT over these seconds. Three answers as everywhere
+-- else: how many it calls avoidable, a clean bill only when it answered
+-- EVERY time, and silence when it did not.
+function RaidDeaths.DetailVerdict(events)
+    local yes, no, unknown = RaidDeaths.AvoidableHits(events)
+    if yes > 0 then
+        return string.format("%d of these hits %s damage the game calls "
+            .. "avoidable.", yes, yes == 1 and "is" or "are")
+    end
+    if no > 0 and unknown == 0 then
+        return "None of this was damage the game calls avoidable."
+    end
+    return ""
+end
+
+-- WHAT THIS LIST IS NOT SHOWING, said out loud. Both halves are real: the
+-- recap hands over more history than ten seconds, and a very long death is
+-- trimmed on the way into memory. A list that quietly starts in the middle
+-- reads as the whole story.
+function RaidDeaths.DetailNote(entry, stale, window)
+    local parts = {}
+    if stale then
+        parts[#parts + 1] = string.format(
+            "Nothing here falls inside the last %d seconds, so this is all "
+            .. "the recap gave.", window or ns.Death.WINDOW)
+    else
+        parts[#parts + 1] = string.format("The last %d seconds.",
+            window or ns.Death.WINDOW)
+    end
+    local dropped = type(entry) == "table" and entry.dropped
+    if type(dropped) == "number" and dropped > 0 then
+        parts[#parts + 1] = string.format(
+            "%d older hit%s the recap gave %s not kept.",
+            dropped, dropped == 1 and "" or "s", dropped == 1 and "is" or "are")
+    end
+    return table.concat(parts, "  ")
 end
 
 function RaidDeaths:Refresh()
@@ -1371,8 +1675,11 @@ function RaidDeaths:Refresh()
 
         -- The row keeps the death it is drawing, because the two hover
         -- targets are built once and read it at the moment the mouse
-        -- arrives, not at the moment they were made.
+        -- arrives, not at the moment they were made. The index goes with it:
+        -- a click has to name WHICH death, and the pool's slot number is not
+        -- that once the list is repainted.
         row.entry = entry
+        row.index = index
 
         local blow = entry.blow
         if blow then
@@ -1400,13 +1707,98 @@ function RaidDeaths:Refresh()
     for index = #entries + 1, #frame.rows do
         frame.rows[index]:Hide()
         frame.rows[index].entry = nil
+        frame.rows[index].index = nil
     end
 
     frame.content:SetHeight(math.max(1, #entries * (ROW_H + 2)))
+
+    local anyOpenable = false
+    for _, entry in ipairs(entries) do
+        if RaidDeaths.Openable(entry) then anyOpenable = true break end
+    end
     frame.foot:SetText(RaidDeaths.FootLine(
-        (info and info.culprits) or {}, #entries))
+        (info and info.culprits) or {}, #entries, anyOpenable))
+
+    -- WHICH DEATH IS BEING READ, checked against the list that is actually
+    -- on screen. A kept index survives a repaint, and a repaint can come
+    -- from a capture two seconds later with one fewer readable death in it.
+    local reading = RaidDeaths.reading and entries[RaidDeaths.reading] or nil
+    if not RaidDeaths.Openable(reading) then
+        reading = nil
+        RaidDeaths.reading = nil
+    end
+    RaidDeaths.PaintDetail(reading, info)
 
     RaidDeaths.PaintSideList()
+end
+
+-- One person's last seconds, in the space the list was using. Nil closes it
+-- and gives the list its room back.
+function RaidDeaths.PaintDetail(entry, info)
+    if not (frame and frame.detail) then return end
+    local detail = frame.detail
+    local open = entry ~= nil
+
+    frame.head:SetShown(not open)
+    frame.listHost:SetShown(not open)
+    -- The footer counts the whole pull. Left standing under one person's
+    -- hits it reads as being about them.
+    frame.foot:SetShown(not open)
+    detail:SetShown(open)
+
+    if not open then
+        for _, row in ipairs(detail.rows) do
+            row.ev = nil
+            row:Hide()
+        end
+        return
+    end
+
+    local timed = info and info.timed
+    detail.title:SetText(RaidDeaths.DetailTitle(entry, timed))
+    detail.sub:SetText(RaidDeaths.DetailLine(entry))
+
+    -- The same ten seconds the death window promises, out of the same
+    -- function - including its answer for a recap that reaches back further
+    -- than that and has nothing inside the window.
+    local events, stale = ns.Death.RecentEvents(entry.events, ns.Death.WINDOW)
+    detail.verdict:SetText(RaidDeaths.DetailVerdict(events))
+    detail.note:SetText(RaidDeaths.DetailNote(entry, stale, ns.Death.WINDOW))
+
+    local width = detail.head:GetWidth()
+    local EVENT_H = ns.Death.EVENT_ROW_H
+    for index, ev in ipairs(events) do
+        local row = detail.rows[index]
+        if not row then
+            row = ns.Death.BuildEventRow(detail.content, width)
+            detail.rows[index] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", detail.content, "TOPLEFT", 0,
+            -((index - 1) * (EVENT_H + 2)))
+        ns.Death.PaintEventRow(row, ev, entry.maxHP)
+    end
+    for index = #events + 1, #detail.rows do
+        detail.rows[index].ev = nil
+        detail.rows[index]:Hide()
+    end
+
+    detail.content:SetHeight(math.max(1, #events * (EVENT_H + 2)))
+end
+
+-- STEPPING INTO A DEATH, and back out. Both go through Refresh rather than
+-- painting directly: the detail is one of two things the same rectangle can
+-- show, and only the painter knows which of them is on.
+function RaidDeaths:Open(index)
+    local entries = RaidDeaths.Best()
+    if not RaidDeaths.Openable(entries and entries[index]) then return end
+    RaidDeaths.reading = index
+    RaidDeaths:Refresh()
+end
+
+function RaidDeaths:CloseReading()
+    RaidDeaths.reading = nil
+    RaidDeaths:Refresh()
 end
 
 -- How many of the group each killer accounted for, keyed the way the rows
@@ -1494,6 +1886,9 @@ function RaidDeaths:Show()
     -- One read on the way in, so opening the window during a pull shows that
     -- pull rather than the state of the last tick.
     RaidDeaths.Capture()
+    -- And it opens on the PULL. A window that comes back on one person's
+    -- last seconds hides the list it is the list of.
+    RaidDeaths.reading = nil
     RaidDeaths:Create()
     frame:Show()
     RaidDeaths:Refresh()

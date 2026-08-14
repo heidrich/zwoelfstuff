@@ -2603,6 +2603,108 @@ local function TestRaidDeaths()
             :find("3x Shade", 1, true) ~= nil)
     Check("A fight nobody died in has no footer at all",
         R.FootLine({}, 0) == "")
+    Check("The footer offers the click only when something can be opened",
+        R.FootLine({}, 4, true):find("last ten seconds", 1, true) ~= nil
+        and R.FootLine({}, 4, false):find("last ten seconds", 1, true) == nil)
+
+    ---------------------------------------------------------------------
+    -- ONE DEATH, KEPT WHOLE AND OPENED
+    ---------------------------------------------------------------------
+    local story = {
+        { t = 8.2, amount = 4000, hp = 30000, name = "Melee",
+            who = "Grim Skirmisher", avoidable = false },
+        { t = 5.0, amount = 12000, hp = 18000, name = "Grim Ward",
+            who = "Grim Skirmisher", spellID = 1234, avoidable = true },
+        { t = 2.0, amount = 9000, hp = 27000, name = "Renew", heal = true },
+        { t = 0.0, amount = 31829, overkill = 28483, name = "Spirit Rend",
+            who = "Tormented Shade", spellID = 1259255 },
+    }
+
+    local kept, dropped = R.PlainEvents(story)
+    Check("A recap's hits are kept, field by field",
+        kept ~= nil and #kept == 4 and dropped == 0
+        and kept[4].overkill == 28483 and kept[2].spellID == 1234)
+    Check("...a heal stays marked as one",
+        kept[3].heal == true and kept[1].heal == false)
+    Check("...and avoidable survives as a boolean, nil included",
+        kept[2].avoidable == true and kept[1].avoidable == false
+        and kept[4].avoidable == nil)
+
+    -- The cap, and it must keep the END of the story: the hits nearest the
+    -- death are the ones the window is opened for.
+    local long = {}
+    for i = 1, R.EVENTS_KEPT + 6 do
+        long[i] = { t = 30 - i * 0.1, amount = i, name = "Hit " .. i }
+    end
+    local trimmed, cut = R.PlainEvents(long)
+    Check("A very long death is trimmed from the OLD end",
+        trimmed ~= nil and #trimmed == R.EVENTS_KEPT and cut == 6
+        and trimmed[#trimmed].name == "Hit " .. #long)
+    Check("...and nothing readable at all keeps nothing",
+        R.PlainEvents({ { t = "secret", amount = 1 } }) == nil
+        and R.PlainEvents("not a list") == nil)
+
+    -- THE GAME'S OWN VERDICT over the hits, three answers and never two.
+    local yes, no, unknown = R.AvoidableHits(kept)
+    Check("Avoidable hits are counted, and heals are not damage",
+        yes == 1 and no == 1 and unknown == 1)
+    local _, cleanNo, cleanUnknown = R.AvoidableHits({
+        { amount = 1, avoidable = false }, { amount = 2, avoidable = false } })
+    Check("...a clean bill needs the game to have answered every time",
+        R.DetailVerdict({ { amount = 1, avoidable = false } })
+            :find("None of this", 1, true) ~= nil
+        and cleanNo == 2 and cleanUnknown == 0)
+    Check("...and one unanswered hit takes the clean bill away",
+        R.DetailVerdict({ { amount = 1, avoidable = false },
+            { amount = 2 } }) == "")
+    Check("...while one it DID call avoidable is counted out loud",
+        R.DetailVerdict(kept):find("1 of these hits is", 1, true) ~= nil)
+
+    Check("A death with nothing kept cannot be opened",
+        not R.Openable(nil) and not R.Openable({ name = "X" })
+        and not R.Openable({ events = {} }) and R.Openable({ events = kept }))
+
+    local entry = {
+        name = "Meredy Huntswell", short = "Meredy",
+        class = "PRIEST", at = 87, you = false,
+        events = kept, maxHP = 41000, dropped = 6,
+        blow = { who = "Tormented Shade", spell = "Spirit Rend",
+            amount = 31829, overkill = 28483 },
+        real = { who = "Grim Skirmisher", spell = "Grim Ward", landed = 12000 },
+    }
+    Check("The opened death names who fell and when",
+        R.DetailTitle(entry, true):find("Meredy", 1, true) ~= nil
+        and R.DetailTitle(entry, true):find("1:27", 1, true) ~= nil)
+    Check("...and says nothing about a clock it does not have",
+        R.DetailTitle(entry, false):find(":", 1, true) == nil)
+    local line = R.DetailLine(entry)
+    Check("...what ended them, and what actually dropped them",
+        line:find("Tormented Shade", 1, true) ~= nil
+        and line:find("overkill", 1, true) ~= nil
+        and line:find("The hit that mattered", 1, true) ~= nil)
+    Check("...and a death whose recap said nothing says that instead",
+        R.DetailLine({ blowWhy = "the recap gave nothing" })
+            == "the recap gave nothing")
+    Check("What was cut off is said out loud, never silently",
+        R.DetailNote(entry, false, 10):find("6 older hits", 1, true) ~= nil
+        and R.DetailNote({}, false, 10):find("older", 1, true) == nil)
+    Check("...and so is a recap that reaches back past the window",
+        R.DetailNote({}, true, 10):find("all the recap gave", 1, true) ~= nil)
+
+    -- ACROSS THE DISK. The story is the whole point of the feature and it is
+    -- read after a reload more often than before one.
+    local rebuilt = R.Persist({ entries = { entry } })
+    local back = rebuilt and rebuilt.entries[1]
+    Check("The last seconds survive being written and read back",
+        back ~= nil and back.events ~= nil and #back.events == #kept
+        and back.maxHP == 41000
+        and back.events[4].overkill == 28483)
+    Check("...including the three-way avoidable answer",
+        back.events[2].avoidable == true
+        and back.events[1].avoidable == false
+        and back.events[4].avoidable == nil)
+    Check("...and the count of what was never kept is not lost on the way",
+        back.dropped == 6)
 
     ---------------------------------------------------------------------
     -- THE WIRING, not the rule. Everything above is arithmetic on tables
