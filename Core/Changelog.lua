@@ -11,7 +11,71 @@
 ---------------------------------------------------------------------------
 local _, ns = ...
 
+-- A LINE MAY CARRY A LINK, and most do not. A plain string is still a line -
+-- six hundred of them are - and one that wants a button under it is written
+-- as { text = "...", link = { label = "...", page = "deaths" } }. `page` is a
+-- key of the options window; `open` names a window that has no settings page
+-- of its own, out of News.OPENERS. See Core/News.lua.
 ns.CHANGELOG = {
+    {
+        version = "4.82.0",
+        date = "2026-08-14",
+        lines = {
+            {
+                text = "|cffffd100New: the group's deaths, as a log.|r Who "
+                    .. "fell, when, and what ended them - for everybody, not "
+                    .. "just you. A second icon with three skulls sits beside "
+                    .. "the death one and opens it. Down the right are the "
+                    .. "last pulls; click one to read it.",
+                link = { label = "Open the group death log", open = "raiddeaths" },
+            },
+            {
+                text = "|cffffd100Click a death and read their last ten "
+                    .. "seconds|r - the same table your own death window "
+                    .. "shows, for whoever the row names. A red mark down the "
+                    .. "left edge of a hit means the game itself calls that "
+                    .. "damage avoidable.",
+                link = { label = "Open the group death log", open = "raiddeaths" },
+            },
+            {
+                text = "|cffffd100Tonight, across pulls.|r At the top of the "
+                    .. "pull list: what keeps killing the group - with how "
+                    .. "many PULLS, which is what makes it a pattern rather "
+                    .. "than a moment - and who keeps falling. Share in chat "
+                    .. "sends whichever page you are reading.",
+                link = { label = "Open the group death log", open = "raiddeaths" },
+            },
+            {
+                text = "|cffffd100Power Infusion can be requested.|r It joins "
+                    .. "the external cooldown panel, and it asks ANY priest - "
+                    .. "all three specialisations have it, so the shadow "
+                    .. "priest is as good an answer as the healer.",
+                link = { label = "External CD request", page = "externals" },
+            },
+            "|cffffd100Fixed: a request whispered to a name that does not "
+                .. "exist.|r Across a realm border a group mate is "
+                .. "\"Name-Realm\", and the whisper was addressed to the "
+                .. "short name - so it reached nobody, and the game refused "
+                .. "the send. The message still reads the short name; the "
+                .. "envelope carries the full one. |cffffd100/zs chat|r says "
+                .. "what your client allows if one ever goes missing again.",
+            "|cffffd100Fixed: \"the game does not call this avoidable\" was "
+                .. "never said.|r A recorded answer of no was being filed as "
+                .. "\"the game did not say\", so no death could ever be given "
+                .. "a clean bill. Nothing on screen looked wrong.",
+            "|cffffd100Mob faces are portraits now,|r not tiny figures "
+                .. "standing in a box, and they sit in front of the mob's "
+                .. "name instead of in the clock column. Spec icons in front "
+                .. "of the dead. Orange marks anything you can point at or "
+                .. "click; red is what the row cost.",
+            {
+                text = "|cffffd100New: this window.|r What changed since you "
+                    .. "last played, once per update, with a way straight to "
+                    .. "each thing. The whole history is under Changelog.",
+                link = { label = "Changelog", page = "changelog" },
+            },
+        },
+    },
     {
         version = "4.81.0",
         date = "2026-08-13",

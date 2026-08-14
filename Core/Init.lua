@@ -1470,6 +1470,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- Last, and only if this character has never been asked which modules
         -- it wants - or an update brought one it has not been offered.
         Boot("Welcome", function() ns.Welcome:ShowIfDue() end)
+        -- AFTER the welcome, and News.Due is what keeps the two apart: a
+        -- fresh install stamps the version and says nothing, so nobody ever
+        -- gets both windows on one login.
+        Boot("News", function() ns.News:ShowIfDue() end)
     end
 end)
 
@@ -1550,6 +1554,8 @@ ns.COMMANDS = {
         .. "and which spec each slot is waiting for" },
     { cmd = "/zs chat", text = "why a request did not go out: which send the "
         .. "client allows, who it would address, and where it would land" },
+    { cmd = "/zs news", text = "what changed in the last few versions, with a "
+        .. "way straight to each thing" },
     { cmd = "/zs sounds", text = "every sound your addons have registered, "
         .. "and what each moment would play" },
     { cmd = "/zs taunt", text = "what your next taunt would say "
@@ -1798,6 +1804,12 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- which door it keeps shut, so it is asked rather than reasoned about.
     elseif cmd == "chat" then
         ns.Chat.Probe()
+
+    -- The update window, on purpose rather than on a login. It opens by
+    -- itself once per version; this is for looking at it again afterwards,
+    -- and it does NOT re-stamp anything you had not read.
+    elseif cmd == "news" or cmd == "whatsnew" then
+        ns.News:Toggle()
 
     elseif cmd == "test" then
         ns.SelfTest:Run()

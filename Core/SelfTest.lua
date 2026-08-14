@@ -693,7 +693,7 @@ local function TestCommandList()
         invites = true, loca = true, language = true,
         specs = true, spec = true,
         sounds = true, sound = true,
-        chat = true,
+        chat = true, news = true, whatsnew = true,
     }
 
     local unknown
@@ -2222,6 +2222,81 @@ end
 -- the case a made-up list would never have contained and the one where the
 -- ordering has to fall back on something other than the clock.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- WHAT CHANGED SINCE YOU LAST PLAYED
+--
+-- The two rules with teeth are the version comparison - "4.9.0" is newer
+-- than "4.81.0" as a STRING and older as a version - and the fresh install,
+-- which must be shown nothing at all rather than a year of history.
+---------------------------------------------------------------------------
+local function TestNews()
+    local N = ns.News
+
+    Check("A version is compared as numbers, not as text",
+        N.Newer("4.81.0", "4.9.0") and not N.Newer("4.9.0", "4.81.0"))
+    Check("...and a version is not newer than itself",
+        not N.Newer("4.81.0", "4.81.0"))
+    Check("...a missing part counts as zero",
+        N.Newer("4.81.1", "4.81") and not N.Newer("4.81", "4.81.0"))
+    Check("...and anything is news to somebody who has seen nothing",
+        N.Newer("1.0.0", nil) and N.Newer("1.0.0", ""))
+
+    local log = {
+        { version = "4.83.0", lines = { "c" } },
+        { version = "4.82.0", lines = { "b" } },
+        { version = "4.81.0", lines = { "a" } },
+    }
+    local shown, dropped = N.Since(log, "4.81.0", 4)
+    Check("Only what came after the version you last read is shown",
+        #shown == 2 and shown[1].version == "4.83.0" and dropped == 0)
+    Check("...and nothing at all when you are up to date",
+        #N.Since(log, "4.83.0", 4) == 0)
+    Check("...while a long absence is capped and SAYS how many it dropped",
+        select(1, N.Since(log, "0.0.0", 2)) ~= nil
+        and #(select(1, N.Since(log, "0.0.0", 2))) == 2
+        and select(2, N.Since(log, "0.0.0", 2)) == 1)
+    Check("...and the footer repeats that number rather than hiding it",
+        N.FootLine(shown, 1):find("1 older", 1, true) ~= nil
+        and N.FootLine(shown, 0):find("older", 1, true) == nil)
+    Check("A window with nothing to say has no footer",
+        N.FootLine({}, 0) == "")
+
+    -- A LINE IS STILL A PLAIN STRING. Six hundred of them are, and a
+    -- renderer that only understood the new shape would draw a blank for
+    -- every one of them.
+    Check("A plain changelog line still reads as a line",
+        N.LineText("just words") == "just words"
+        and N.LineLink("just words") == nil)
+    Check("...and one carrying a link answers both halves", (function()
+        local line = { text = "a thing", link = { label = "Open", page = "deaths" } }
+        return N.LineText(line) == "a thing"
+            and (N.LineLink(line) or {}).page == "deaths"
+    end)())
+    Check("...a link with nowhere to go is not a link",
+        N.LineLink({ text = "x", link = { label = "Open" } }) == nil
+        and N.LineLink({ text = "x", link = { page = "deaths" } }) == nil)
+
+    -- A BUTTON THAT OPENS NOTHING IS WORSE THAN NO BUTTON, so a link naming
+    -- something that has been renamed away is left off the window.
+    Check("A link is only drawn when it can be followed",
+        N.CanFollow({ label = "x", open = "raiddeaths" })
+        and not N.CanFollow({ label = "x", open = "nosuchwindow" }))
+
+    -- Every link the shipped changelog carries, checked. This is the one
+    -- that catches a page key renamed six months from now.
+    local broken
+    for _, entry in ipairs(ns.CHANGELOG or {}) do
+        for _, line in ipairs(entry.lines or {}) do
+            local link = N.LineLink(line)
+            if link and not N.CanFollow(link) then
+                broken = (entry.version or "?") .. ": " .. link.label
+            end
+        end
+    end
+    Check("Every hot link in the changelog goes somewhere", broken == nil,
+        tostring(broken))
+end
+
 local function TestRaidDeaths()
     local R = ns.RaidDeaths
     if not R then
@@ -8148,6 +8223,7 @@ function Test:Run()
         { "Cast history",  TestHistory },
         { "Death analysis", TestDeath },
         { "Raid deaths",   TestRaidDeaths },
+        { "What's new",   TestNews },
         { "Your bars",     TestLiveBars },
         { "Panel movers",  TestPanelMovers },
         { "Taunts",        TestTaunts },
