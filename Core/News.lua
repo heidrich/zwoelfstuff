@@ -479,9 +479,17 @@ function News:Paint(entries, dropped)
                     tops = tops + 1
                     local top = frame.tops[tops]
                     if not top then
-                        top = UI.Label(frame.content, "", UI.FS.row, C.warning)
+                        -- SECTION SIZE, not row size. It was 13 against a 12
+                        -- body - a point apart, which on screen is not a
+                        -- difference at all, and the owner has made this same
+                        -- point once before about section headings: "die
+                        -- ueberschriften sind genauso gross wie der rest".
+                        -- The scale already has a size for "this names what
+                        -- the block IS", so use that one.
+                        top = UI.Label(frame.content, "", UI.FS.section,
+                            C.warning)
                         top:SetJustifyH("LEFT")
-                        top:SetSpacing(3)
+                        top:SetSpacing(4)
                         frame.tops[tops] = top
                     end
                     top:SetParent(card)
@@ -491,8 +499,8 @@ function News:Paint(entries, dropped)
                     top:SetWidth(frame.width - CARD_PAD * 2 - indent)
                     top:SetText(headline)
                     top:Show()
-                    inner = inner + math.max(18,
-                        (top:GetStringHeight() or 0) + 4)
+                    inner = inner + math.max(22,
+                        (top:GetStringHeight() or 0) + 6)
                 end
 
                 lines = lines + 1
@@ -515,10 +523,14 @@ function News:Paint(entries, dropped)
                 label:SetText(body)
                 label:SetShown(body ~= "")
                 if body ~= "" then
-                    inner = inner + math.max(20,
-                        (label:GetStringHeight() or 0) + 8)
+                    -- The gap under a paragraph is what separates one entry
+                    -- from the next - there is no rule between them - so it
+                    -- has to be bigger than the gap between two lines of the
+                    -- same paragraph or the whole card reads as one block.
+                    inner = inner + math.max(26,
+                        (label:GetStringHeight() or 0) + 16)
                 else
-                    inner = inner + 6
+                    inner = inner + 10
                 end
 
                 -- THE HOT LINK, under the line it belongs to. Only when it

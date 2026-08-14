@@ -1567,8 +1567,6 @@ function Options:Create()
             frame:Hide()
             ns.EditMode:SetUnlocked(true)
         end },
-        { eyebrow = "Bars" },
-        { page = "cooldowns" },
         { eyebrow = "M+ and raid stuff" },
         { page = "cotanks" },
         { page = "reminders" },
