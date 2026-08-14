@@ -2282,6 +2282,41 @@ local function TestNews()
         N.CanFollow({ label = "x", open = "raiddeaths" })
         and not N.CanFollow({ label = "x", open = "nosuchwindow" }))
 
+    ---------------------------------------------------------------------
+    -- THE BOXES. Owner: "unterteil das mal schoen mit boxen zu features
+    -- und bug fixes und neuen zeug." Which box a line lands in is read off
+    -- its own opening word, and that is only allowed because this changelog
+    -- has opened every fix with "Fixed:" and every addition with "New:" for
+    -- its whole life. An explicit `kind` always wins.
+    ---------------------------------------------------------------------
+    Check("A fix sorts itself into the fixes",
+        N.KindOf("|cffffd100Fixed: something|r") == "fix"
+        and N.KindOf("Fixed: no colour on it either") == "fix")
+    Check("...an addition into the new things",
+        N.KindOf("|cffffd100New: a window|r") == "new")
+    Check("...and everything else is an improvement",
+        N.KindOf("|cffffd100A saved bar now holds the whole bar|r") == "change"
+        and N.KindOf("") == "change")
+    Check("A line that SAYS which it is wins over its opening word",
+        N.KindOf({ text = "Fixed: actually a feature", kind = "new" }) == "new")
+    Check("...and a kind nobody knows falls back rather than inventing a box",
+        N.KindOf({ text = "New: a thing", kind = "nonsense" }) == "new")
+
+    local sections = N.Sections({ lines = {
+        "|cffffd100New: one|r", "|cffffd100Fixed: two|r",
+        "Something better", "|cffffd100New: three|r",
+    } })
+    Check("The boxes come out new, improved, fixed - in that order",
+        #sections == 3 and sections[1].key == "new"
+        and sections[2].key == "change" and sections[3].key == "fix")
+    Check("...each holding its own lines, in the order they were written",
+        #sections[1].lines == 2
+        and N.LineText(sections[1].lines[1]):find("one", 1, true) ~= nil
+        and N.LineText(sections[1].lines[2]):find("three", 1, true) ~= nil)
+    Check("...and a box with nothing in it is not drawn at all",
+        #N.Sections({ lines = { "just an improvement" } }) == 1)
+    Check("A version with no lines has no boxes", #N.Sections({}) == 0)
+
     -- Every link the shipped changelog carries, checked. This is the one
     -- that catches a page key renamed six months from now.
     local broken

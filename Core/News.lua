@@ -99,6 +99,65 @@ function News.LineText(line)
     return ""
 end
 
+---------------------------------------------------------------------------
+-- WHAT KIND OF CHANGE A LINE IS
+--
+-- Owner, on the first screenshot of the window: "unterteil das mal schoen mit
+-- boxen zu features und bug fixes und neuen zeug." He is right - eleven
+-- paragraphs in one column all weigh the same, and the two things somebody
+-- actually looks for are "what is new" and "what did they fix".
+--
+-- READ OFF THE LINE'S OWN OPENING WORD, and that is not a guess: this
+-- changelog has opened every fix with "Fixed:" and every addition with "New:"
+-- for its whole life - counted, not remembered, across all 65 versions in the
+-- file. A line may also SAY which it is, and an explicit `kind` always wins;
+-- the prefix is the fallback that makes six hundred existing lines sort
+-- themselves without being rewritten.
+--
+-- Anything that is neither is an improvement to something that already
+-- existed, which is the biggest group and the one that needs no marker.
+---------------------------------------------------------------------------
+News.KINDS = {
+    { key = "new",    title = "New" },
+    { key = "change", title = "Improved" },
+    { key = "fix",    title = "Fixed" },
+}
+
+function News.KindOf(line)
+    if type(line) == "table" and type(line.kind) == "string" then
+        for _, kind in ipairs(News.KINDS) do
+            if kind.key == line.kind then return line.kind end
+        end
+    end
+
+    local text = News.LineText(line)
+    -- Past any colour escape, which every one of these opens with.
+    local words = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("^%s+", "")
+    local first = words:match("^(%a+)")
+    if not first then return "change" end
+    first = first:lower()
+    if first == "fixed" or first == "fix" then return "fix" end
+    if first == "new" then return "new" end
+    return "change"
+end
+
+-- One version's lines, split into the boxes they are drawn in. Pure, and it
+-- keeps the order the changelog wrote them in inside each box - the author
+-- put the most important one first and that is worth keeping.
+function News.Sections(entry)
+    local out = {}
+    for _, kind in ipairs(News.KINDS) do
+        local bucket = { key = kind.key, title = kind.title, lines = {} }
+        for _, line in ipairs((entry or {}).lines or {}) do
+            if News.KindOf(line) == kind.key then
+                bucket.lines[#bucket.lines + 1] = line
+            end
+        end
+        if #bucket.lines > 0 then out[#out + 1] = bucket end
+    end
+    return out
+end
+
 function News.LineLink(line)
     if type(line) ~= "table" then return nil end
     local link = line.link
@@ -259,7 +318,7 @@ local function BuildFrame()
     -- a paragraph, and a link button - and each is reused rather than rebuilt,
     -- because opening this window twice in one session must not leave a
     -- second set of frames behind the first.
-    frame.heads, frame.lines, frame.links = {}, {}, {}
+    frame.heads, frame.lines, frame.links, frame.cards = {}, {}, {}, {}
 
     frame.ok = UI.Button(frame, "OK", 120, function() News:Close() end,
         "primary")
@@ -285,6 +344,9 @@ end
 -- how the reminder movers went two versions without a cog and nothing noticed.
 function News.Window() return frame end
 
+-- The inside padding of a box, and the room its heading takes.
+local CARD_PAD, CARD_HEAD = 12, 22
+
 function News:Paint(entries, dropped)
     if not frame then return end
     local UI, C = ns.UI, ns.UI.C
@@ -293,7 +355,7 @@ function News:Paint(entries, dropped)
     frame.sub:SetText("Everything that changed since you last played.")
     frame.foot:SetText(News.FootLine(entries, dropped))
 
-    local heads, lines, links = 0, 0, 0
+    local heads, lines, links, cards = 0, 0, 0, 0
     local y = 0
 
     for _, entry in ipairs(entries or {}) do
@@ -310,51 +372,89 @@ function News:Paint(entries, dropped)
         head:Show()
         y = y + 24
 
-        for _, raw in ipairs(entry.lines or {}) do
-            lines = lines + 1
-            local label = frame.lines[lines]
-            if not label then
-                label = UI.Label(frame.content, "", UI.FS.meta, C.textBody)
-                label:SetJustifyH("LEFT")
-                label:SetSpacing(3)
-                frame.lines[lines] = label
-            end
-            label:ClearAllPoints()
-            label:SetPoint("TOPLEFT", frame.content, "TOPLEFT", 8, -y)
-            label:SetWidth(frame.width - 8)
-            label:SetText(News.LineText(raw))
-            label:Show()
-            y = y + math.max(20, (label:GetStringHeight() or 0) + 6)
+        -- ONE LINK PER VERSION PER DESTINATION. Three lines about the group
+        -- death log carried three identical buttons, one under the other,
+        -- which reads as an interface repeating itself rather than as three
+        -- ways into one thing.
+        local offered = {}
 
-            -- THE HOT LINK, under the line it belongs to. Only when it can
-            -- actually be followed: a button that opens nothing is worse
-            -- than no button, and a renamed page would leave exactly that.
-            local link = News.LineLink(raw)
-            if link and News.CanFollow(link) then
-                links = links + 1
-                local button = frame.links[links]
-                if not button then
-                    button = UI.Button(frame.content, "", 180, nil, "link")
-                    frame.links[links] = button
-                end
-                button.label:SetText(link.label)
-                button:SetScript("OnClick", function()
-                    News:Close()
-                    News.Follow(link)
-                end)
-                button:ClearAllPoints()
-                button:SetPoint("TOPLEFT", frame.content, "TOPLEFT", 4, -y)
-                button:Show()
-                y = y + 26
+        for _, section in ipairs(News.Sections(entry)) do
+            cards = cards + 1
+            local card = frame.cards[cards]
+            if not card then
+                card = CreateFrame("Frame", nil, frame.content)
+                UI.Fill(card, "BACKGROUND", C.surface)
+                local cardEdge = ns.CreateBorder(card, 1, "BORDER")
+                cardEdge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+                card.head = UI.Eyebrow(card, "")
+                card.head:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -8)
+                frame.cards[cards] = card
             end
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", frame.content, "TOPLEFT", 0, -y)
+            card:SetWidth(frame.width)
+            card.head:SetText(section.title)
+            card:Show()
+
+            -- The lines live INSIDE the box, so the box can be sized to them
+            -- afterwards. `inner` counts from the card's own top edge.
+            local inner = CARD_HEAD + 6
+
+            for _, raw in ipairs(section.lines) do
+                lines = lines + 1
+                local label = frame.lines[lines]
+                if not label then
+                    label = UI.Label(frame.content, "", UI.FS.meta, C.textBody)
+                    label:SetJustifyH("LEFT")
+                    label:SetSpacing(3)
+                    frame.lines[lines] = label
+                end
+                label:SetParent(card)
+                label:ClearAllPoints()
+                label:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -inner)
+                label:SetWidth(frame.width - CARD_PAD * 2)
+                label:SetText(News.LineText(raw))
+                label:Show()
+                inner = inner + math.max(20, (label:GetStringHeight() or 0) + 8)
+
+                -- THE HOT LINK, under the line it belongs to. Only when it
+                -- can actually be followed: a button that opens nothing is
+                -- worse than no button, and a renamed page would leave
+                -- exactly that.
+                local link = News.LineLink(raw)
+                if link and News.CanFollow(link) and not offered[link.label] then
+                    offered[link.label] = true
+                    links = links + 1
+                    local button = frame.links[links]
+                    if not button then
+                        button = UI.Button(frame.content, "", 200, nil, "link")
+                        frame.links[links] = button
+                    end
+                    button:SetParent(card)
+                    button.label:SetText(link.label)
+                    button:SetScript("OnClick", function()
+                        News:Close()
+                        News.Follow(link)
+                    end)
+                    button:ClearAllPoints()
+                    button:SetPoint("TOPLEFT", card, "TOPLEFT",
+                        CARD_PAD - 6, -inner)
+                    button:Show()
+                    inner = inner + 24
+                end
+            end
+
+            card:SetHeight(inner + CARD_PAD)
+            y = y + inner + CARD_PAD + 8
         end
 
-        y = y + 14
+        y = y + 10
     end
 
     for index = heads + 1, #frame.heads do frame.heads[index]:Hide() end
     for index = lines + 1, #frame.lines do frame.lines[index]:Hide() end
     for index = links + 1, #frame.links do frame.links[index]:Hide() end
+    for index = cards + 1, #frame.cards do frame.cards[index]:Hide() end
 
     frame.content:SetHeight(math.max(1, y))
 end
