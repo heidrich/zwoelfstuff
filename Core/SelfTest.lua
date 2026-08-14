@@ -13,14 +13,11 @@
 -- does the editor's explanation agree with the rule the renderer applies.
 -- Every one of those has been a real bug in this addon.
 --
--- IT NEVER TOUCHES YOUR BARS.
+-- IT NEVER TOUCHES YOUR SETTINGS.
 --
--- Every model test runs on a throwaway config built from BAR_DEFAULTS, which
--- is why Bars carries Reshape/Relayout next to SetGrid/SetLayout: the model
--- operation takes a config, and only the wrapper needs an index. A test that
--- has to create a real bar is a test that eventually leaves one behind.
---
--- The checks against YOUR data are read-only and say so.
+-- Every model test runs on a throwaway config it builds itself, so a suite
+-- cannot leave anything behind in your profile. The checks against YOUR
+-- data are read-only and say so.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -55,298 +52,29 @@ local function Finite(value)
         and value ~= math.huge and value ~= -math.huge
 end
 
--- A bar nobody owns. Filled from the same defaults a real one gets, so a
--- setting added tomorrow is in the test the same day.
+-- SOMETHING THAT CAN BE SHOWN OR HIDDEN, and nothing more than that.
+--
+-- It used to be a throwaway BAR, filled from the bar defaults. The rules
+-- outlived the bars: a reminder carries the same show block, which is why
+-- Visibility is still here at all. So the fixture is written out rather than
+-- taken from a defaults table - it says what the rule engine actually reads,
+-- and it cannot quietly gain a field the engine never asked about.
 local function Fresh(overrides)
-    local cfg = ns.ApplyDefaults({}, ns.BAR_DEFAULTS)
-    cfg.cellOpts = {}
-    -- Bound the way BindSpec binds a real one, so the throwaway bar has the
-    -- same shape as the thing under test rather than a simpler one.
-    cfg.cellsBySpec = { test = {} }
-    cfg.parkedBySpec = { test = {} }
-    cfg.cells = cfg.cellsBySpec.test
-    cfg.parked = cfg.parkedBySpec.test
+    local cfg = {
+        enabled = true,
+        show = {
+            mode    = "always",
+            combat  = "any",
+            target  = "any",
+            group   = "any",
+            resting = "any",
+            where   = { none = true, party = true, raid = true,
+                        scenario = true, pvp = true, arena = true },
+            specs   = {},
+        },
+    }
     for key, value in pairs(overrides or {}) do cfg[key] = value end
     return cfg
-end
-
-local function Slots(cfg)
-    return ns.Layout.Build(cfg, ns.Bars:CellCount(cfg),
-        cfg.spacing or 4, cfg.lineSpacing or 4)
-end
-
--- Two arrangements, compared cell by cell. The whole point of the round-trip
--- tests below, so it lives in one place.
-local function SameGeometry(a, b)
-    if #a ~= #b then return false, string.format("%d cells vs %d", #a, #b) end
-    for index = 1, #a do
-        if not (Near(a[index].x, b[index].x) and Near(a[index].y, b[index].y)
-            and Near(a[index].w, b[index].w) and Near(a[index].h, b[index].h)) then
-            return false, string.format("cell %d moved from %.1f,%.1f to %.1f,%.1f",
-                index, a[index].x, a[index].y, b[index].x, b[index].y)
-        end
-    end
-    return true
-end
-
----------------------------------------------------------------------------
--- The arrangements
----------------------------------------------------------------------------
-local function TestLayout()
-    for _, entry in ipairs(ns.LAYOUTS) do
-        local cfg = Fresh({ layout = entry.value, rows = 2, columns = 3,
-            freeCount = 6 })
-
-        local slots, box = Slots(cfg)
-        local count = ns.Bars:CellCount(cfg)
-
-        Check(entry.text .. ": returns one slot per cell", #slots == count,
-            string.format("%d slots for %d cells", #slots, count))
-
-        local sane, contained = true, true
-        for _, slot in ipairs(slots) do
-            if not (Finite(slot.x) and Finite(slot.y)
-                and Finite(slot.w) and Finite(slot.h)) then
-                sane = false
-            end
-            if not slot.hidden then
-                -- Every visible cell has to be inside the frame the renderer
-                -- is told to make. A cell outside it is drawn beyond the edge
-                -- of the thing you can grab in unlock mode.
-                if slot.x - slot.w / 2 < box.centreX - box.width / 2 - 0.01
-                    or slot.x + slot.w / 2 > box.centreX + box.width / 2 + 0.01
-                    or slot.y - slot.h / 2 < box.centreY - box.height / 2 - 0.01
-                    or slot.y + slot.h / 2 > box.centreY + box.height / 2 + 0.01 then
-                    contained = false
-                end
-            end
-        end
-
-        Check(entry.text .. ": every number is real", sane)
-        Check(entry.text .. ": the box holds every cell", contained)
-    end
-
-    -- Spacing, on the one arrangement where it is arithmetic anybody can
-    -- check by hand. Neighbours in a row sit exactly one cell plus one gap
-    -- apart - not "about", which is how an off-by-a-border creeps in.
-    local grid = Fresh({ layout = "grid", rows = 1, columns = 4,
-        iconSize = 40, spacing = 6, scale = 1 })
-    local slots = Slots(grid)
-    Check("Grid: neighbours are cell + spacing apart",
-        Near(slots[2].x - slots[1].x, 46),
-        string.format("%.1f, expected 46", slots[2].x - slots[1].x))
-
-    -- Scale multiplies the cell AND the gap, or a scaled bar is a bar with
-    -- the wrong spacing.
-    local scaled = Fresh({ layout = "grid", rows = 1, columns = 4,
-        iconSize = 40, spacing = 6, scale = 2 })
-    local scaledSlots = ns.Layout.Build(scaled, 4, (scaled.spacing or 4) * 2,
-        (scaled.lineSpacing or 4) * 2)
-    Check("Grid: scale multiplies cell and gap alike",
-        Near(scaledSlots[2].x - scaledSlots[1].x, 92),
-        string.format("%.1f, expected 92", scaledSlots[2].x - scaledSlots[1].x))
-
-    -- Staggered pushes every other LINE and leaves the first one alone.
-    local stagger = Fresh({ layout = "stagger", rows = 2, columns = 3,
-        iconSize = 40, spacing = 6, staggerOffset = 50 })
-    local staggerSlots = Slots(stagger)
-    Check("Staggered: the first line is not moved",
-        Near(staggerSlots[1].x, 20), string.format("%.1f", staggerSlots[1].x))
-    Check("Staggered: the second line is pushed by half a cell",
-        Near(staggerSlots[4].x - staggerSlots[1].x, 23),
-        string.format("%.1f, expected 23", staggerSlots[4].x - staggerSlots[1].x))
-
-    -- Arc and Diagonal are GONE, and a saved bar naming one must not quietly
-    -- come out as something with the right cell count and the wrong shape.
-    for _, dead in ipairs({ "arc", "diagonal" }) do
-        local gone = true
-        for _, entry in ipairs(ns.LAYOUTS) do
-            if entry.value == dead then gone = false end
-        end
-        Check("'" .. dead .. "' is no longer offered", gone)
-    end
-end
-
----------------------------------------------------------------------------
--- The two coordinate systems
---
--- This is the bug that was reported: entering the puzzle wrote positions into
--- the same fields a nudge uses, and every other arrangement then added them
--- for ever. These four checks are the guard on that never coming back.
----------------------------------------------------------------------------
-local function TestOffsets()
-    local grid = Fresh({ layout = "grid", rows = 1, columns = 3 })
-    local plain = Slots(grid)
-
-    -- A puzzle position must be invisible to a grid.
-    ns.Layout.EnsureCellOpts(grid, 2).px = 500
-    ns.Layout.EnsureCellOpts(grid, 2).py = -500
-    local withPuzzlePos = Slots(grid)
-    local clean, why = SameGeometry(plain, withPuzzlePos)
-    Check("A grid ignores the puzzle's positions", clean, why)
-
-    -- ...and a nudge must be invisible to a puzzle.
-    local puzzle = Fresh({ layout = "free", freeCount = 3 })
-    ns.Layout.EnsureCellOpts(puzzle, 2).x = 500
-    ns.Layout.EnsureCellOpts(puzzle, 2).y = -500
-    local puzzleSlots = Slots(puzzle)
-    Check("A puzzle ignores the lattice nudges",
-        Near(puzzleSlots[2].x, 0) and Near(puzzleSlots[2].y, 0),
-        string.format("%.1f,%.1f", puzzleSlots[2].x, puzzleSlots[2].y))
-
-    -- The nudge itself still works where it is supposed to.
-    local nudged = Fresh({ layout = "grid", rows = 1, columns = 3 })
-    ns.Layout.SetOffset(nudged, 2, 17, -9)
-    local nudgedSlots = Slots(nudged)
-    Check("A nudge moves its cell and only its cell",
-        Near(nudgedSlots[2].x, plain[2].x + 17)
-        and Near(nudgedSlots[2].y, plain[2].y - 9)
-        and Near(nudgedSlots[1].x, plain[1].x))
-
-    -- Straightening clears the pair in use and leaves the other one alone.
-    local both = Fresh({ layout = "grid", rows = 1, columns = 3 })
-    ns.Layout.SetOffset(both, 2, 17, -9)
-    both.layout = "free"
-    ns.Layout.SetOffset(both, 2, 40, 40)
-    both.layout = "grid"
-
-    Check("Straighten sees a scattered grid", ns.Layout.HasOffsets(both))
-    ns.Layout.ClearOffsets(both)
-    Check("Straighten clears the grid's nudges",
-        not ns.Layout.HasOffsets(both))
-    both.layout = "free"
-    Check("Straightening a grid leaves the puzzle alone",
-        ns.Layout.HasOffsets(both))
-end
-
----------------------------------------------------------------------------
--- A nudge every cell shares
---
--- HIS BUG, WITH HIS OWN NUMBERS. Reported as "error when I want to set more
--- rows", photographed as one bar drawn in two blocks: the icons where he had
--- dragged them and the empty cells a long way below, on a lattice nobody
--- could see. Read off his saved variables afterwards - five cells in a 1x5
--- bar, every one of them carrying y = 156.
---
--- The first check is the fault itself and the second is the licence to fix
--- it: taking a shared displacement off every cell must move NOTHING.
----------------------------------------------------------------------------
-local function Drawn(cfg)
-    local slots, box = ns.Layout.Build(cfg, ns.Bars:CellCount(cfg),
-        cfg.spacing or 4, cfg.lineSpacing or 4)
-    local out = {}
-    for index, slot in ipairs(slots) do
-        out[index] = { x = slot.x - box.centreX, y = slot.y - box.centreY,
-            w = slot.w, h = slot.h }
-    end
-    return out, box
-end
-
-local function TestSharedNudge()
-    -- His bar: 36px icons, 2 across, five of them, all dragged 156 up.
-    local function His(rows, columns, nudge)
-        local cfg = Fresh({ layout = "grid", rows = rows, columns = columns,
-            iconSize = 36, spacing = 2, lineSpacing = 4 })
-        if nudge then
-            for cell = 1, 5 do ns.Layout.SetOffset(cfg, cell, 0, 156) end
-        end
-        return cfg
-    end
-
-    -- THE FAULT. A bar whose cells all carry the same nudge must measure the
-    -- same as one whose cells carry none - it is the same picture, drawn in
-    -- the same place, and only the lattice underneath it has moved. Before
-    -- the fix this came out 272 tall against 124.
-    local scattered = His(1, 5, true)
-    ns.Bars:ReshapeGrid(scattered, 3, 5)
-    local _, scatteredBox = Drawn(scattered)
-    local _, neatBox = Drawn(His(3, 5, false))
-    Check("Adding a row to a dragged bar does not split it in two",
-        Near(scatteredBox.height, neatBox.height)
-        and Near(scatteredBox.width, neatBox.width),
-        string.format("%.0fx%.0f, expected %.0fx%.0f", scatteredBox.width,
-            scatteredBox.height, neatBox.width, neatBox.height))
-
-    -- THE LICENCE. Nothing on screen may move, or this is not a tidy-up, it
-    -- is the editor rearranging a bar behind his back.
-    local still = His(1, 5, true)
-    local before = Drawn(still)
-    local dx, dy = ns.Layout.Normalise(still, 5)
-    local ok, why = SameGeometry(before, Drawn(still))
-    Check("Taking the shared nudge off moves nothing on screen", ok, why)
-    Check("...and it is the nudge they shared that came off",
-        Near(dx, 0) and Near(dy, 156), string.format("%.0f,%.0f", dx, dy))
-
-    -- A bar nobody has dragged is not written to at all. Otherwise every
-    -- reshape would stamp a cellOpts table onto a bar that had none.
-    local neat = His(2, 3, false)
-    local zeroX, zeroY = ns.Layout.Normalise(neat, 6)
-    Check("A bar nobody dragged is left alone",
-        Near(zeroX, 0) and Near(zeroY, 0) and not next(neat.cellOpts))
-
-    -- THE MEDIAN, NOT THE MEAN. Four cells sitting still and one dragged
-    -- out: the mean would invent a displacement none of them has and nudge
-    -- all four. The four must stay exactly where they are.
-    local one = Fresh({ layout = "grid", rows = 1, columns = 5 })
-    ns.Layout.SetOffset(one, 3, 90, -70)
-    local wasOne = Drawn(one)
-    ns.Layout.Normalise(one, 5)
-    local sameOne, whyOne = SameGeometry(wasOne, Drawn(one))
-    Check("One cell dragged out: the other four are not touched",
-        sameOne and not ns.Layout.CellOpts(one, 1), whyOne)
-    local keptX, keptY = ns.Layout.GetOffset(one, 3)
-    Check("...and the one that was dragged keeps its nudge",
-        Near(keptX, 90) and Near(keptY, -70),
-        string.format("%.0f,%.0f", keptX, keptY))
-
-    -- A puzzle has no lattice to be measured against, so it is not touched.
-    local puzzle = Fresh({ layout = "free", freeCount = 3 })
-    ns.Layout.SetOffset(puzzle, 1, 300, 300)
-    ns.Layout.SetOffset(puzzle, 2, 300, 300)
-    ns.Layout.SetOffset(puzzle, 3, 300, 300)
-    local puzzleX, puzzleY = ns.Layout.Normalise(puzzle, 3)
-    local stillThere = ns.Layout.GetOffset(puzzle, 1)
-    Check("A puzzle is left where it was built",
-        Near(puzzleX, 0) and Near(puzzleY, 0) and Near(stillThere, 300))
-end
-
----------------------------------------------------------------------------
--- Switching pattern, and switching back
----------------------------------------------------------------------------
-local function TestPatternRoundTrip()
-    for _, entry in ipairs(ns.LAYOUTS) do
-        if entry.value ~= "free" then
-            local cfg = Fresh({ layout = entry.value, rows = 2, columns = 3,
-                freeCount = 6 })
-            local before = Slots(cfg)
-
-            ns.Bars:Relayout(cfg, "free")
-            ns.Bars:Relayout(cfg, entry.value)
-            local after = Slots(cfg)
-
-            local ok, why = SameGeometry(before, after)
-            Check(entry.text .. ": survives a trip through the puzzle", ok, why)
-        end
-    end
-
-    -- The puzzle starts as what you were just looking at, whatever that was.
-    -- Staggered, because it is the one left whose slots a rows-and-columns
-    -- loop would NOT reproduce - which is exactly the mistake this catches.
-    local shaped = Fresh({ layout = "stagger", rows = 2, columns = 3 })
-    local before = Slots(shaped)
-    ns.Bars:Relayout(shaped, "free")
-    local puzzleSlots = Slots(shaped)
-
-    local ok, why = SameGeometry(before, puzzleSlots)
-    Check("The puzzle opens on the arrangement you left", ok, why)
-
-    -- And coming back to a puzzle finds it as it was left, not re-seeded.
-    ns.Layout.SetOffset(shaped, 1, 123, 45)
-    ns.Bars:Relayout(shaped, "grid")
-    ns.Bars:Relayout(shaped, "free")
-    local x, y = ns.Layout.GetOffset(shaped, 1)
-    Check("A puzzle you already built is not re-seeded",
-        Near(x, 123) and Near(y, 45), string.format("%.0f,%.0f", x, y))
 end
 
 ---------------------------------------------------------------------------
@@ -506,11 +234,15 @@ local function TestSounds()
         S.Choice(book, "asked", nil) == "None")
 
     ---------------------------------------------------------------------
-    -- What ships. Three of four silent, and the fourth is the chime that
-    -- was already playing - an update that starts making a noise nobody
-    -- asked for is an update people switch off.
+    -- What ships. Two of three silent, and the third is the chime that was
+    -- already playing - an update that starts making a noise nobody asked
+    -- for is an update people switch off.
+    --
+    -- THREE, not four: "when a cooldown comes back" was played by the bars.
+    -- The number is asserted rather than left open because the failure it
+    -- catches is a row in the options that can never make a sound.
     ---------------------------------------------------------------------
-    Check("Four moments can make a noise", #S.EVENTS == 4,
+    Check("Three moments can make a noise", #S.EVENTS == 3,
         tostring(#S.EVENTS))
     for _, event in ipairs(S.EVENTS) do
         Check("'" .. tostring(event.key) .. "' is a known event",
@@ -768,386 +500,6 @@ local function TestCommandList()
 end
 
 ---------------------------------------------------------------------------
--- The rows and columns sliders
----------------------------------------------------------------------------
-local function TestGridSliders()
-    -- A hole in the middle is a deliberate arrangement, not a gap to close.
-    local cfg = Fresh({ layout = "grid", rows = 1, columns = 6 })
-    cfg.cells = { [1] = 101, [2] = 102, [4] = 104, [5] = 105, [6] = 106 }
-
-    ns.Bars:ReshapeGrid(cfg, 1, 12)
-    ns.Bars:ReshapeGrid(cfg, 1, 6)
-
-    local same = cfg.cells[1] == 101 and cfg.cells[2] == 102
-        and cfg.cells[3] == nil and cfg.cells[4] == 104
-        and cfg.cells[5] == 105 and cfg.cells[6] == 106
-    Check("Columns 6 -> 12 -> 6 gives back exactly what was there", same)
-
-    -- Shrinking below what is in the bar parks the rest instead of deleting
-    -- it, and growing again brings it home to its own index.
-    local full = Fresh({ layout = "grid", rows = 1, columns = 6 })
-    full.cells = { 201, 202, 203, 204, 205, 206 }
-
-    ns.Bars:ReshapeGrid(full, 1, 2)
-    Check("Shrinking keeps only what fits",
-        full.cells[1] == 201 and full.cells[2] == 202 and full.cells[3] == nil)
-
-    ns.Bars:ReshapeGrid(full, 1, 6)
-    local restored = true
-    for cell = 1, 6 do
-        if full.cells[cell] ~= 200 + cell then restored = false end
-    end
-    Check("Growing back restores every spell to its own slot", restored,
-        "nothing is deleted by a slider")
-end
-
----------------------------------------------------------------------------
--- What is shared between characters, and what is not
---
--- The layout is one user interface you built once; the spells are not
--- portable. Getting this backwards showed a Paladin a row of Death Knight
--- cooldowns, which is what prompted the split.
----------------------------------------------------------------------------
-local function TestPerSpec()
-    local cfg = Fresh()
-    cfg.cellsBySpec = { ["DEATHKNIGHT:250"] = { 101, 102 }, ["PALADIN:66"] = {} }
-    cfg.parkedBySpec = { ["DEATHKNIGHT:250"] = {}, ["PALADIN:66"] = {} }
-
-    cfg.cells = cfg.cellsBySpec["DEATHKNIGHT:250"]
-    Check("A spec sees its own spells", cfg.cells[1] == 101)
-
-    cfg.cells = cfg.cellsBySpec["PALADIN:66"]
-    Check("Another class sees none of them", cfg.cells[1] == nil)
-
-    -- The other half of the rule: the LOOK is shared, so it must not be
-    -- filed per spec and must not travel when a spell is dragged.
-    local layout = Fresh({ layout = "grid", rows = 1, columns = 3 })
-    ns.Layout.SetOffset(layout, 2, 17, -9)
-    layout.cells[1], layout.cells[2] = 201, 202
-
-    -- Asked of the real reorder rather than by swapping two fields here: a
-    -- test that performs the operation itself proves only that it can.
-    ns.Bars:Reorder(layout, 1, 2)
-    local x, y = ns.Layout.GetOffset(layout, 2)
-    Check("The per-cell look stays with the slot, not the spell",
-        Near(x, 17) and Near(y, -9))
-    Check("Nothing about the look is filed per spec",
-        layout.cellOptsBySpec == nil)
-end
-
----------------------------------------------------------------------------
--- One cell wearing its own look
---
--- Every setting follows the bar until the cell is given its own, and going
--- back has to be possible. The failure mode is silent in both directions: a
--- cell that stops following looks like the bar setting is broken, and a cell
--- that never starts looks like the cell setting is.
----------------------------------------------------------------------------
-local function TestCellLook()
-    local cfg = Fresh({ kind = "bar", fillColor = { 1, 0, 0 }, fillAlpha = 0.5 })
-
-    Check("A fresh cell wears nothing of its own",
-        not ns.Bars:CellHasLook(cfg, 2))
-    Check("It follows the bar's colour",
-        ns.Bars:CellStyle(cfg, 2, 24).fillColor[1] == 1)
-
-    ns.Bars:SetCellLook(cfg, 2, "fillColor", { 0, 0, 1 })
-    Check("A cell can wear its own colour", ns.Bars:CellHasLook(cfg, 2))
-    Check("Its own colour is what the renderer gets",
-        ns.Bars:CellStyle(cfg, 2, 24).fillColor[3] == 1)
-
-    -- The half that is easy to lose: everything NOT overridden still has to
-    -- follow, including settings changed after the override was made.
-    Check("Everything else still follows the bar",
-        Near(ns.Bars:CellStyle(cfg, 2, 24).fillAlpha, 0.5))
-    cfg.fillAlpha = 0.9
-    Check("A change to the bar reaches the cell that did not override it",
-        Near(ns.Bars:CellStyle(cfg, 2, 24).fillAlpha, 0.9))
-
-    Check("Its neighbours are untouched",
-        ns.Bars:CellStyle(cfg, 1, 24).fillColor[1] == 1
-        and not ns.Bars:CellHasLook(cfg, 1))
-    Check("And the bar itself is untouched", cfg.fillColor[1] == 1)
-
-    -- Nil means "follow again", which is how a control hands a setting back.
-    ns.Bars:SetCellLook(cfg, 2, "fillColor", nil)
-    Check("Clearing one override goes back to following",
-        ns.Bars:CellStyle(cfg, 2, 24).fillColor[1] == 1)
-    Check("A cell with nothing left is tidied away",
-        not ns.Bars:CellHasLook(cfg, 2) and cfg.cellOpts[2] == nil,
-        "an empty override table must not survive")
-
-    -- Reset, and the rule that a cell's look belongs to the SLOT: the scale
-    -- and the nudge live in the same table and must survive it.
-    ns.Bars:SetCellLook(cfg, 3, "fillColor", { 0, 1, 0 })
-    ns.Layout.EnsureCellOpts(cfg, 3).scale = 1.5
-    Check("Reset gives the look back", ns.Bars:ClearCellLook(cfg, 3))
-    Check("Reset keeps the size, which is not part of the look",
-        ns.Layout.CellOpts(cfg, 3) and ns.Layout.CellOpts(cfg, 3).scale == 1.5)
-    Check("Resetting a cell that wears nothing reports so",
-        ns.Bars:ClearCellLook(cfg, 1) == false)
-
-    -- Only the look travels. Rows and spacing describe the whole bar and
-    -- would mean something different per cell.
-    local allowed = {}
-    for _, key in ipairs(ns.CELL_LOOK_KEYS) do allowed[key] = true end
-    Check("A cell may not override the bar's shape",
-        not allowed.rows and not allowed.columns and not allowed.spacing
-        and not allowed.layout)
-    Check("A cell may override the things you can see",
-        allowed.fillColor and allowed.borderColor and allowed.fillGrow
-        and allowed.stackThresholds)
-end
-
----------------------------------------------------------------------------
--- Sorting a bar by dragging
---
--- Dragging a spell up a list has to leave the others in THEIR order. Swapping
--- cannot do that - every swap disturbs a second cell nobody pointed at - so
--- sorting four spells would take six drags and a plan.
----------------------------------------------------------------------------
-local function TestReorder()
-    local function Bar(...)
-        local cfg = Fresh({ layout = "grid", rows = 1, columns = 6 })
-        local ids = { ... }
-        for slot = 1, #ids do
-            if ids[slot] ~= 0 then cfg.cells[slot] = ids[slot] end
-        end
-        return cfg
-    end
-    local function Reads(cfg, count)
-        local out = {}
-        for slot = 1, count do out[slot] = cfg.cells[slot] or 0 end
-        return table.concat(out, ",")
-    end
-
-    -- The owner's case: three spells, drag the third to the front.
-    local cfg = Bar(101, 102, 103)
-    ns.Bars:Reorder(cfg, 3, 1)
-    Check("Dragging the last spell to the front keeps the others in order",
-        Reads(cfg, 3) == "103,101,102", Reads(cfg, 3))
-
-    cfg = Bar(101, 102, 103)
-    ns.Bars:Reorder(cfg, 1, 3)
-    Check("Dragging the first spell to the end keeps the others in order",
-        Reads(cfg, 3) == "102,103,101", Reads(cfg, 3))
-
-    cfg = Bar(101, 102, 103, 104)
-    ns.Bars:Reorder(cfg, 2, 3)
-    Check("A one-place move touches only those two",
-        Reads(cfg, 4) == "101,103,102,104", Reads(cfg, 4))
-
-    -- Nothing is ever lost, which is the property that matters most: a drag
-    -- that drops a spell is worse than a drag that does nothing.
-    cfg = Bar(101, 102, 103, 104, 105)
-    for _, move in ipairs({ { 5, 1 }, { 2, 4 }, { 1, 5 }, { 3, 2 } }) do
-        ns.Bars:Reorder(cfg, move[1], move[2])
-    end
-    local seen = {}
-    for slot = 1, 5 do if cfg.cells[slot] then seen[cfg.cells[slot]] = true end end
-    local all = true
-    for id = 101, 105 do if not seen[id] then all = false end end
-    Check("Four drags in a row lose nothing", all, Reads(cfg, 5))
-
-    -- A hole is a position like any other. It travels rather than being
-    -- silently filled, or a bar with a deliberate gap closes up by itself.
-    cfg = Bar(101, 0, 102)
-    ns.Bars:Reorder(cfg, 3, 1)
-    Check("A hole moves with the sequence instead of being filled",
-        Reads(cfg, 3) == "102,101,0", Reads(cfg, 3))
-
-    -- Out of bounds and no-ops report failure rather than corrupting the row.
-    cfg = Bar(101, 102, 103)
-    Check("A drag onto itself does nothing", ns.Bars:Reorder(cfg, 2, 2) == false)
-    Check("A drop outside the bar is refused",
-        ns.Bars:Reorder(cfg, 2, 99) == false and ns.Bars:Reorder(cfg, 0, 2) == false)
-    Check("Neither left the row disturbed", Reads(cfg, 3) == "101,102,103")
-
-    -- Swapping still exists, because "these two are in each other's places"
-    -- is a real thing to want. It is Shift on the drop, and it has to be a
-    -- DIFFERENT answer to the same drag or the modifier is decoration.
-    local sorted = Bar(101, 102, 103)
-    local swapped = Bar(101, 102, 103)
-    ns.Bars:Reorder(sorted, 3, 1)
-    ns.Bars:Swap(swapped, 3, 1)
-    Check("Sorting and swapping answer the same drag differently",
-        Reads(sorted, 3) == "103,101,102" and Reads(swapped, 3) == "103,102,101",
-        Reads(sorted, 3) .. "  vs  " .. Reads(swapped, 3))
-end
-
----------------------------------------------------------------------------
--- The bar fill
---
--- Which END the fill sits at and whether it GROWS are two different things.
--- They were one setting whose label described the half that was not
--- implemented, so turning on "fill up" moved the bar to the other side.
----------------------------------------------------------------------------
-local function TestFill()
-    local cfg = Fresh({ kind = "bar" })
-
-    cfg.fillSide, cfg.fillGrow = true, false
-    local side = ns.Bars:Style(cfg, 24)
-    Check("The side and the direction are separate settings",
-        side.fillSide == true and side.fillGrow == false)
-
-    cfg.fillSide, cfg.fillGrow = false, true
-    local grow = ns.Bars:Style(cfg, 24)
-    Check("Filling up does not move the bar to the other end",
-        grow.fillSide == false and grow.fillGrow == true)
-
-    -- An empty texture means "wear the backdrop's", so a default bar reads as
-    -- one object rather than two textures that happen to be adjacent.
-    cfg.fillTexture, cfg.backdropTexture = "", "ZS Smooth"
-    Check("An empty fill texture follows the backdrop",
-        ns.Bars:Style(cfg, 24).fillTexture == "ZS Smooth")
-
-    cfg.fillTexture = "ZS Neon"
-    Check("A chosen fill texture wins",
-        ns.Bars:Style(cfg, 24).fillTexture == "ZS Neon")
-
-    -- The spark and the charge marks are opposites on purpose: one is
-    -- anchored to the fill's TEXTURE so it rides the clock, the other to the
-    -- fill FRAME so it stays put. Nothing here can see a frame, so what is
-    -- checked is that both reach the renderer at all.
-    cfg.showSpark, cfg.chargeMarks = true, true
-    local look = ns.Bars:Style(cfg, 24)
-    Check("The spark and the charge marks reach the renderer",
-        look.showSpark == true and look.chargeMarks == true)
-
-    local travels = {}
-    for _, key in ipairs(ns.BAR_STYLE_KEYS) do travels[key] = true end
-    Check("Both travel with the look",
-        travels.showSpark and travels.chargeMarks and travels.chargeMarkColor)
-
-    -- N charges are divided by N-1 lines, not N. Off by one here draws a line
-    -- on the very end of the bar, where it reads as a border rather than as a
-    -- division. Asked of the renderer's own helper, not of a copy of the rule.
-    Check("Three charges are split by two lines", ns.Bars:ChargeDivisions(3) == 2)
-    Check("One charge is split by nothing", ns.Bars:ChargeDivisions(1) == 0)
-    Check("A nonsense charge count draws nothing",
-        ns.Bars:ChargeDivisions(nil) == 0 and ns.Bars:ChargeDivisions(0) == 0)
-end
-
----------------------------------------------------------------------------
--- Stack thresholds
---
--- The renderer stacks one overlay per threshold and lets DRAW ORDER decide
--- which colour wins, because the count may be a secret value and cannot be
--- compared in Lua. That makes ascending order a correctness requirement
--- rather than a tidiness one, and it is the kind of rule that fails by
--- looking slightly wrong rather than by throwing.
----------------------------------------------------------------------------
-local function TestStackThresholds()
-    local cfg = Fresh({ kind = "bar" })
-
-    Check("A bar with no thresholds has an empty list",
-        #ns.Bars:StackThresholds(cfg) == 0)
-
-    -- Deliberately out of order: the panel writes three fixed rows and the
-    -- user can put the big number in the first one.
-    cfg.stackThresholds = {
-        { value = 10, color = { 0, 1, 0 } },
-        { value = 3,  color = { 1, 0, 0 } },
-        { value = 7,  color = { 1, 1, 0 } },
-    }
-    local sorted = ns.Bars:StackThresholds(cfg)
-    Check("Thresholds come back in ascending order",
-        #sorted == 3 and sorted[1].value == 3
-        and sorted[2].value == 7 and sorted[3].value == 10,
-        #sorted == 3 and string.format("%d, %d, %d",
-            sorted[1].value, sorted[2].value, sorted[3].value) or nil)
-    Check("A threshold keeps its own colour through the sort",
-        sorted[1].color[1] == 1 and sorted[1].color[2] == 0
-        and sorted[3].color[2] == 1 and sorted[3].color[1] == 0)
-
-    -- 0 is how the panel switches a band off, and it has to mean off rather
-    -- than "a threshold every aura crosses just by existing".
-    cfg.stackThresholds = {
-        { value = 0, color = { 1, 0, 0 } },
-        { value = 5, color = { 0, 1, 0 } },
-    }
-    local live = ns.Bars:StackThresholds(cfg)
-    Check("A count of zero switches its band off",
-        #live == 1 and live[1].value == 5)
-
-    cfg.stackThresholds = { { value = 4.7, color = { 1, 0, 0 } } }
-    Check("A threshold is a whole number of stacks",
-        ns.Bars:StackThresholds(cfg)[1].value == 4)
-
-    cfg.stackThresholds = { { value = "nonsense" }, { value = 6 } }
-    Check("Nonsense in the saved list is dropped, not rendered",
-        #ns.Bars:StackThresholds(cfg) == 1)
-
-    -- The renderer styles frames from this list; a shared table would let one
-    -- bar's edit reach another's.
-    cfg.stackThresholds = { { value = 5, color = { 1, 0, 0 } } }
-    local first = ns.Bars:StackThresholds(cfg)
-    local second = ns.Bars:StackThresholds(cfg)
-    Check("Each read gets its own list", first ~= second
-        and first[1] ~= second[1] and first[1].color ~= second[1].color)
-
-    Check("The thresholds reach the style", #ns.Bars:Style(cfg, 24).stackThresholds == 1)
-
-    -- The look travels to another character; what the cells hold does not.
-    local travels = false
-    for _, key in ipairs(ns.BAR_STYLE_KEYS) do
-        if key == "stackThresholds" then travels = true end
-    end
-    Check("Stack colours count as part of the look", travels)
-end
-
----------------------------------------------------------------------------
--- Custom active states
---
--- A window the player declared, for the things Blizzard only shows as a
--- cooldown. Runs on the real account store and puts back what it found, so
--- it is safe against saved data.
----------------------------------------------------------------------------
-local function TestActiveStates()
-    if not (ns.Auras and ns.Auras.SetActiveState) then
-        Skip("Active states", "the aura layer is not loaded")
-        return
-    end
-
-    local store = ns.Auras:ActiveStates()
-    local restore = store[12345]
-
-    ns.Auras:SetActiveState(12345, 20)
-    Check("A declared window is remembered", ns.Auras:ActiveStateFor(12345) == 20)
-
-    Check("A spell with no window has none", ns.Auras:ActiveStateFor(12346) == nil
-        or ns.CDM:SameSpell(12345, 12346))
-
-    -- The whole reason the lookup is variant-aware: the game reports the form
-    -- you actually cast, which is not always the form you set the window on.
-    local other = ns.CDM:OverrideSpell(12345) or ns.CDM:BaseSpell(12345)
-    if other then
-        Check("The window follows the spell into its other form",
-            ns.Auras:ActiveStateFor(other) == 20)
-    else
-        Skip("The window follows the spell into its other form",
-            "this client reports no other form for the test ID")
-    end
-
-    ns.Auras:SetActiveState(12345, 0)
-    Check("Zero switches the window off",
-        ns.Auras:ActiveStateFor(12345) == nil and store[12345] == nil,
-        "an absent key, not a stored zero")
-
-    ns.Auras:SetActiveState(12345, 15)
-    ns.Auras:SetActiveState(12345, 30)
-    Check("Changing the number takes effect at once",
-        ns.Auras:ActiveStateFor(12345) == 30,
-        "the variant cache has to be dropped on every write")
-
-    Check("Nothing usable is never given a window",
-        ns.Auras:ActiveStateFor(nil) == nil)
-
-    store[12345] = restore
-    ns.ForgetActiveStates()
-end
-
----------------------------------------------------------------------------
 -- Which spell a frame stands for
 --
 -- Every one of these is a bug that was reported as "it tracks the wrong
@@ -1249,7 +601,7 @@ local function TestSpellIdentity()
     -- "the picker groups the viewers" has been going unchecked - so the one
     -- part of the answer that is a pure decision is asserted here, where it
     -- runs every time.
-    local GroupKeyFor = ns.OptionsBars and ns.OptionsBars.GroupKeyFor
+    local GroupKeyFor = ns.SpellPane and ns.SpellPane.GroupKeyFor
     if GroupKeyFor then
         -- The spells Blizzard's Cooldown Manager knows but is not currently
         -- displaying. They used to carry a heading of their own that called
@@ -1418,34 +770,6 @@ local function TestVisibility()
     ghost.show.hiddenAlpha = 0.3
     Check("A hidden bar uses its own faded alpha",
         Near(ns.Visibility:Factor(ghost), 0.3))
-end
-
----------------------------------------------------------------------------
--- Effects
----------------------------------------------------------------------------
-local function TestEffects()
-    Check("A bar with no effects registers nothing",
-        not ns.Effects.Wanted(ns.EFFECT_DEFAULTS))
-
-    local fx = ns.ApplyDefaults({}, ns.EFFECT_DEFAULTS)
-    fx.readyFlash = true
-    Check("Switching one effect on registers the bar", ns.Effects.Wanted(fx))
-
-    local nag = ns.ApplyDefaults({}, ns.EFFECT_DEFAULTS)
-    nag.reminderAfter = 5
-    Check("A reminder counts as an effect", ns.Effects.Wanted(nag))
-
-    -- The refresh window has no clock of its own to keep it alive, so a bar
-    -- that uses only this effect still has to be registered with the ticker.
-    local pandemic = ns.ApplyDefaults({}, ns.EFFECT_DEFAULTS)
-    pandemic.pandemicGlow = true
-    Check("The refresh glow alone registers the bar", ns.Effects.Wanted(pandemic))
-
-    -- Asked of nothing: a cell with no Blizzard frame behind it must answer
-    -- "no" rather than throw, because that is the everyday case for a proc
-    -- this addon draws itself.
-    local ok, answer = pcall(ns.CDM.InPandemic, ns.CDM, nil)
-    Check("Nothing is never in its refresh window", ok and answer == false)
 end
 
 ---------------------------------------------------------------------------
@@ -3068,49 +2392,6 @@ local function TestRaidDeaths()
     R.log = before
 end
 
-local function TestLiveBars()
-    if not (ns.db and ns.db.bars) then
-        Skip("Your bars", "no saved data yet")
-        return
-    end
-
-    local strays, doubles, broken = 0, 0, 0
-
-    for index, cfg in ipairs(ns.db.bars) do
-        local count = ns.Bars:CellCount(cfg)
-
-        for cell in pairs(cfg.cells) do
-            if cell > count then strays = strays + 1 end
-        end
-
-        local seen = {}
-        for _, spellID in pairs(cfg.cells) do
-            if seen[spellID] then doubles = doubles + 1 end
-            seen[spellID] = true
-        end
-
-        local ok, slots, box = pcall(ns.Layout.Build, cfg, count,
-            cfg.spacing or 4, cfg.lineSpacing or 4)
-        if not ok or #slots ~= count
-            or not (Finite(box.width) and Finite(box.height)) then
-            broken = broken + 1
-        end
-
-        local frame = ns.Screen:BarFrame(index)
-        if frame then
-            Check(string.format("Bar %d (%s) has a real size", index,
-                cfg.name or "?"),
-                (frame:GetWidth() or 0) > 0 and (frame:GetHeight() or 0) > 0)
-        end
-    end
-
-    Check("No spell sits outside its bar", strays == 0,
-        strays .. " beyond the last cell - they will be parked on the next resize")
-    Check("No spell is on the same bar twice", doubles == 0,
-        doubles .. " duplicated")
-    Check("Every one of your bars can be laid out", broken == 0)
-end
-
 ---------------------------------------------------------------------------
 -- Running it
 ---------------------------------------------------------------------------
@@ -3522,95 +2803,6 @@ local function TestDesignSystem()
     end
 
     -----------------------------------------------------------------------
-    -- TAKING AN ICON OFF THE SCREEN BY ITS STATE
-    --
-    -- A display of what you can press right now, or of what you are waiting
-    -- for. Two useful readings and they are opposites, so it is one setting
-    -- with three values rather than two switches that can contradict.
-    --
-    -- The case that matters most is the third answer: a cooldown the client
-    -- will not talk about. An icon that vanishes because something could not
-    -- be READ is indistinguishable from a bug, and it takes the spell with
-    -- it - so unknown always shows.
-    -----------------------------------------------------------------------
-    do
-        local Hidden = ns.Effects.HiddenByState
-
-        Check("Off by default, whatever the state",
-            not Hidden({}, true) and not Hidden({}, false))
-        Check("\"never\" means never",
-            not Hidden({ hideWhen = "never" }, true)
-            and not Hidden({ hideWhen = "never" }, false))
-
-        -- The second argument is "is this worth looking at", NOT "is it
-        -- ready" - for an ability those are the same sentence and for a buff
-        -- they are opposites. See Effects.Relevant.
-        Check("Hiding what is not up to anything leaves what is",
-            Hidden({ hideWhen = "cooling" }, false)
-            and not Hidden({ hideWhen = "cooling" }, true))
-
-        -- The inverse was removed after it emptied a bar twice. A profile
-        -- that still carries the value must land on "hide nothing" - the
-        -- outcome that gives the bar back rather than leaving it empty.
-        Check("The value that was removed now hides nothing",
-            not Hidden({ hideWhen = "ready" }, true)
-            and not Hidden({ hideWhen = "ready" }, false))
-
-        -- THE ONE THAT KEEPS A READING FAILURE FROM LOOKING LIKE A BUG.
-        Check("A state the client will not name never hides anything",
-            not Hidden({ hideWhen = "cooling" }, nil))
-
-        Check("No settings at all hides nothing", not Hidden(nil, true))
-
-        -- A PROFILE FROM BEFORE THE SETTING EXISTED. ns.DEFAULTS only reaches
-        -- a profile being created, so the key is simply absent from every
-        -- older one - and absent must read as "never", never as "hide it".
-        Check("A profile that predates the setting hides nothing",
-            not Hidden({ dimOnCooldown = true }, true)
-            and not Hidden({ dimOnCooldown = true }, false))
-        Check("And the default the page falls back to is 'never'",
-            ns.EFFECT_DEFAULTS.hideWhen == "never"
-            and ns.EFFECT_DEFAULTS.reflow == "off")
-
-        -- A bar that ONLY hides still has to be ticked - the ticker is the
-        -- only thing watching for the flip that puts the icon back.
-        Check("A bar that only hides is still watched",
-            ns.Effects.Wanted({ hideWhen = "cooling" }) and true or false)
-        Check("A bar with nothing on is still not watched",
-            not ns.Effects.Wanted({ hideWhen = "never" }))
-    end
-
-    -----------------------------------------------------------------------
-    -- READY AND AFFORDABLE ARE TWO DIFFERENT THINGS
-    --
-    -- A cooldown that has come back while you are short of the resource is
-    -- an icon telling you to press something that will not go off. Off by
-    -- default: "the cooldown is back" is what people expect a cooldown
-    -- display to mean, so the other reading has to be asked for.
-    -----------------------------------------------------------------------
-    do
-        local Allowed = ns.Effects.GlowAllowed
-
-        Check("No glow while it is still on cooldown",
-            not Allowed({ readyGlow = true }, false, true))
-        Check("No glow when the glow is switched off",
-            not Allowed({ readyGlow = false }, true, true))
-        Check("Ready and switched on lights it",
-            Allowed({ readyGlow = true }, true, nil))
-
-        local strict = { readyGlow = true, readyGlowUsableOnly = true }
-        Check("Ready but unaffordable stays dark", not Allowed(strict, true, false))
-        Check("Ready and affordable lights it", Allowed(strict, true, true))
-
-        -- THE FALLBACK THIS WHOLE ADDON USES. A value the client withheld
-        -- must behave like the feature switched off - an effect that
-        -- disappears because something could not be READ is
-        -- indistinguishable from a broken one.
-        Check("A resource the client will not name still lights it",
-            Allowed(strict, true, nil))
-    end
-
-    -----------------------------------------------------------------------
     -- CLOSING THE GAPS A HIDDEN CELL LEAVES
     --
     -- An off-by-one here does not raise. It puts the wrong icon in the wrong
@@ -3673,52 +2865,6 @@ local function TestDesignSystem()
 
         Check("No cells at all is not an error",
             select(2, Compact({}, 0, "all")) == 0)
-    end
-
-    -----------------------------------------------------------------------
-    -- THE SQUARES THAT RUN ROUND THE OUTLINE
-    --
-    -- Motion is caught by the corner of your eye in a way a steady colour is
-    -- not, which is the whole job of a proc marker. The harness has no screen
-    -- and does not need one: "where is dot 3 of 8 at this instant" is
-    -- arithmetic, and arithmetic is exactly what goes wrong here - an
-    -- off-by-one at a corner puts a dot inside the icon for a quarter of
-    -- every lap.
-    -----------------------------------------------------------------------
-    do
-        local At = ns.Effects.PerimeterPoint
-        local W, H = 40, 20                      -- perimeter 120
-
-        local function Same(progress, wantX, wantY)
-            local x, y = At(progress, W, H)
-            return math.abs(x - wantX) < 0.001 and math.abs(y - wantY) < 0.001
-        end
-
-        -- The four corners, walking clockwise from the top-left.
-        Check("It starts in the top-left corner", Same(0, 0, H))
-        Check("A third of the way round is the top-right", Same(40 / 120, W, H))
-        Check("Half way round is the bottom-right", Same(60 / 120, W, 0))
-        Check("Five sixths round is the bottom-left", Same(100 / 120, 0, 0))
-
-        -- Midpoints of each side, because a corner can be right while the
-        -- side between two corners runs the wrong way.
-        Check("The top runs left to right", Same(20 / 120, 20, H))
-        Check("The right side runs downwards", Same(50 / 120, W, 10))
-        Check("The bottom runs right to left", Same(80 / 120, 20, 0))
-        Check("The left side runs upwards", Same(110 / 120, 0, 10))
-
-        -- A caller adds an offset per dot and must not have to think about
-        -- the end of the lap.
-        Check("Past the end is back at the start", Same(1, 0, H))
-        -- A quarter of 120 is 30 along the top, and a whole lap further on is
-        -- the same place.
-        Check("A lap and a quarter is a quarter", Same(1.25, 30, H))
-        Check("Backwards wraps too", Same(-0.5, W, 0))
-
-        -- A cell that has not been laid out yet has no size, and dividing by
-        -- its perimeter would be a divide by zero on the very first pass.
-        Check("A rectangle with no size answers without dividing by zero",
-            select(1, At(0.5, 0, 0)) == 0 and select(2, At(0.5, 0, 0)) == 0)
     end
 
     -----------------------------------------------------------------------
@@ -3982,7 +3128,7 @@ local function TestDesignSystem()
         local host = CreateFrame("Frame", nil, UIParent)
         host:Hide()
 
-        local pane = ns.OptionsBars:BuildSpellPane(host, 380, {
+        local pane = ns.SpellPane:Build(host, 380, {
             Used = function() return {} end,
             Assign = function() end,
         })
@@ -4045,382 +3191,6 @@ local function TestDesignSystem()
     local perUnit = ns.UI.PixelsPerUnit()
     Check("Pixels per unit is a sane number",
         Finite(perUnit) and perUnit > 0 and perUnit < 8, tostring(perUnit))
-end
-
----------------------------------------------------------------------------
--- Snapping
---
--- It went wrong three times and every diagnosis was reading the code, because
--- the arithmetic was welded to live frames and saved variables and could not
--- be run. EditMode.SnapAxis is the pure half now: plain numbers in, plain
--- numbers out. These are the cases the owner actually reported.
---
--- Everything is an offset from the SCREEN CENTRE, which is how a bar's
--- position is stored. Our own bar is `half` wide either side of `value`.
----------------------------------------------------------------------------
-local function TestSnapping()
-    local SnapAxis = ns.EditMode.SnapAxis
-    local SCREEN = 960          -- half of a 1920 screen
-    local loose = { snapDistance = 10, snapToGrid = false }
-
-    -- Nothing near, nothing asked for: the value comes back untouched. A snap
-    -- function that always moves something is worse than none.
-    local free = SnapAxis(137, 50, SCREEN, {}, loose)
-    Check("Nothing near leaves it where it is", free == 137, tostring(free))
-
-    -- The screen centre, which is the one candidate that was always there.
-    local centred = SnapAxis(4, 50, SCREEN, {}, loose)
-    Check("Near the middle it centres", centred == 0, tostring(centred))
-
-    -- A second bar 200 wide sitting at +300. Its edges are 200 and 400.
-    local other = { { centre = 300, half = 100 } }
-
-    local aligned = SnapAxis(296, 50, SCREEN, other, loose)
-    Check("It lines up with another bar's middle", aligned == 300,
-        tostring(aligned))
-
-    -- Our left edge onto their left edge: our centre at 200 + our half.
-    local leftEdges = SnapAxis(248, 50, SCREEN, other, loose)
-    Check("Left edge lines up with their left edge", leftEdges == 250,
-        tostring(leftEdges))
-
-    -- FLUSH, the case that did not exist: our right edge against their left,
-    -- so our centre sits at 200 - 50. Two bars side by side, which is how a
-    -- row is built and what "snap to other elements" was asked for.
-    local flush = SnapAxis(146, 50, SCREEN, other, loose)
-    Check("It sits flush against another bar", flush == 150, tostring(flush))
-
-    -- The screen edge, with our edge on it rather than our centre.
-    local edge = SnapAxis(-905, 50, SCREEN, {}, loose)
-    Check("It sits flush against the screen edge", edge == -910,
-        tostring(edge))
-
-    -- Out of catch range on every one of them.
-    local far = SnapAxis(500, 50, SCREEN, other, loose)
-    Check("Beyond the catch distance nothing pulls", far == 500, tostring(far))
-
-    -- The grid is the FALLBACK: it fires from any distance, but never over a
-    -- bar that caught. Both halves of that are load-bearing.
-    local grid = { snapDistance = 10, snapToGrid = true, gridStep = 40 }
-
-    -- 490 rather than 500: 500 sits exactly between two lines and the answer
-    -- would be a statement about which way .5 rounds, not about snapping.
-    local onGrid, gridGuide = SnapAxis(490, 50, SCREEN, other, grid)
-    Check("The grid pulls from any distance", onGrid == 480, tostring(onGrid))
-    Check("The grid says which line caught", gridGuide == 480,
-        tostring(gridGuide))
-
-    local barWins = SnapAxis(296, 50, SCREEN, other, grid)
-    Check("A bar beats the grid", barWins == 300, tostring(barWins))
-
-    -- A grid step of zero is a division waiting to happen.
-    local noStep = SnapAxis(137, 50, SCREEN, {},
-        { snapDistance = 10, snapToGrid = true, gridStep = 0 })
-    Check("A zero grid step is ignored", noStep == 137, tostring(noStep))
-end
-
----------------------------------------------------------------------------
--- Which way the fill runs
---
--- Four names, and each one has to land on a DIFFERENT pair of (orientation,
--- reverse). Two of them are new: SetReverseFill only ever flips a horizontal
--- bar, so up and down were unreachable before and the obvious mistake is to
--- give one of them the same pair as an existing one - which looks like the
--- setting doing nothing.
----------------------------------------------------------------------------
-local function TestFillDirection()
-    local seen = {}
-    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
-        local key = entry.orientation .. ":" .. tostring(entry.reverse)
-        Check("Fill direction '" .. entry.value .. "' is its own pair",
-            not seen[key], key .. " already taken by " .. tostring(seen[key]))
-        seen[key] = entry.value
-
-        Check("Fill direction '" .. entry.value .. "' has a mark",
-            entry.icon and ns.UI.HasIcon(entry.icon), tostring(entry.icon))
-    end
-
-    Check("All four directions are offered", #ns.FILL_DIRECTIONS == 4,
-        tostring(#ns.FILL_DIRECTIONS))
-
-    -- Both axes are used. Four horizontal variants would pass the test above
-    -- and still mean the vertical fill was never built.
-    local vertical = false
-    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
-        if entry.orientation == "VERTICAL" then vertical = true end
-    end
-    Check("Two of them are vertical", vertical)
-
-    -- An unknown name must not return nil - the renderer reads .orientation
-    -- straight off whatever comes back.
-    local fallback = ns.Layout.FillDirection("sideways")
-    Check("An unknown direction falls back rather than returning nil",
-        fallback and fallback.orientation ~= nil)
-    Check("The fallback is left to right", fallback.value == "right",
-        tostring(fallback.value))
-
-    -- THE TWO AXES MUST NOT SOUND LIKE ONE.
-    --
-    -- Direction is space and "Over time" is the clock, and the owner asked
-    -- whether they were the same setting twice - because the second one was
-    -- called "Fill up", which is a direction word, sitting one row under a
-    -- control offering "Bottom to top". Both answers are written out now, and
-    -- no word may appear in both lists.
-    Check("There are two answers about the clock", #ns.FILL_CLOCKS == 2,
-        tostring(#ns.FILL_CLOCKS))
-
-    local sawFalse, sawTrue = false, false
-    for _, entry in ipairs(ns.FILL_CLOCKS) do
-        if entry.value == false then sawFalse = true end
-        if entry.value == true then sawTrue = true end
-        Check("The clock answer '" .. tostring(entry.value) .. "' is named",
-            type(entry.text) == "string" and entry.text ~= "")
-    end
-    Check("Draining is one of them", sawFalse)
-    Check("Filling is the other", sawTrue)
-
-    for _, clock in ipairs(ns.FILL_CLOCKS) do
-        for _, direction in ipairs(ns.FILL_DIRECTIONS) do
-            Check("'" .. clock.text .. "' is not also a direction",
-                clock.text ~= direction.text)
-        end
-    end
-
-    -- Driving a bar off a duration handle is asked about, never assumed. A
-    -- client without the method must fall back to the value mirror rather
-    -- than raise on the first cooldown that starts.
-    Check("Nothing cannot be driven by a timer",
-        ns.CDM:CanDriveTimer(nil) == false)
-    Check("A bar with no SetTimerDuration cannot be driven",
-        ns.CDM:CanDriveTimer({}) == false)
-
-    -- ASKING TWICE MUST NOT CHANGE THE ANSWER.
-    --
-    -- Bars:Style resolves this once and stores the entry, so a caller reading
-    -- from a style holds a TABLE while a caller reading raw config holds a
-    -- STRING. Handing the table back in used to compare it against a string,
-    -- miss every time, and return "left to right" - the preview card animated
-    -- every bar horizontally for a whole version because of it, and nothing
-    -- errored. Four directions, both shapes, same answer.
-    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
-        local once = ns.Layout.FillDirection(entry.value)
-        local twice = ns.Layout.FillDirection(once)
-        Check("Resolving '" .. entry.value .. "' twice keeps it",
-            twice == once, tostring(twice and twice.value))
-    end
-end
-
----------------------------------------------------------------------------
--- THE PREVIEW CARD MUST DRAW THE BAR THE SCREEN WOULD DRAW.
---
--- The card's bars RUN, so the fill is at every fraction in turn and where it
--- hangs from has to be right for all four directions. The harness cannot see
--- any of it - its frame stub answers GetWidth and GetHeight with fixed
--- numbers whatever was set - so the placement is a pure function and it is
--- checked here.
----------------------------------------------------------------------------
-local function TestPreviewBar()
-    local Layout = ns.Layout
-
-    -- Every direction the settings page offers must place the fill somewhere.
-    -- Left and right were once the whole of it, so up and down previewed lying
-    -- down while the bar on screen stood up.
-    local corners, axes = {}, {}
-    for _, entry in ipairs(ns.FILL_DIRECTIONS) do
-        local corner, pad, w, h = Layout.PreviewFill(entry, 20, 0, 100, 24, 0.5)
-        Check("Preview places the '" .. entry.value .. "' fill",
-            corner and w and h, tostring(corner))
-
-        -- The corner alone does not separate them and must not be asked to:
-        -- left-to-right and top-to-bottom BOTH hang off the top left, and
-        -- rightly so. What has to be its own is the corner together with the
-        -- axis the fraction goes on.
-        local key = corner .. ":" .. entry.orientation
-        Check("Preview '" .. entry.value .. "' draws unlike the others",
-            not corners[key], key .. " already used by "
-            .. tostring(corners[key]))
-        corners[key] = entry.value
-        axes[entry.orientation] = (axes[entry.orientation] or 0) + 1
-
-        -- The fraction goes on the axis the bar runs along and the other
-        -- dimension stays full. The wrong way round is a bar that drains
-        -- downwards while it is meant to be draining sideways.
-        if entry.orientation == "VERTICAL" then
-            Check("Preview '" .. entry.value .. "' shortens, not narrows",
-                w == 100 and h < 24, tostring(w) .. "x" .. tostring(h))
-        else
-            Check("Preview '" .. entry.value .. "' narrows, not shortens",
-                h == 24 and w < 100, tostring(w) .. "x" .. tostring(h))
-        end
-        Check("Preview '" .. entry.value .. "' clears the icon",
-            pad ~= nil, tostring(pad))
-    end
-    Check("Both axes are previewed", (axes.VERTICAL or 0) == 2
-        and (axes.HORIZONTAL or 0) == 2)
-
-    -- A right-hand icon is cleared from the right, and the reversed fill is
-    -- the one that has to know it.
-    local corner, pad = Layout.PreviewFill(Layout.FillDirection("left"),
-        0, -24, 100, 24, 0.5)
-    Check("A reversed fill starts at the right edge", corner == "TOPRIGHT",
-        tostring(corner))
-    Check("...inside the icon on that side", pad == -24, tostring(pad))
-
-    -- A bar at the very end of its run must still be a bar. A texture sized to
-    -- nothing is not drawn at all, and the last frame of every cooldown would
-    -- flicker out rather than finish.
-    local _, _, w = Layout.PreviewFill(Layout.FillDirection("right"),
-        0, 0, 100, 24, 0)
-    Check("An empty bar is still one pixel wide", w >= 1, tostring(w))
-
-    -- Full is the default, because the first paint happens before the clock
-    -- has ticked once.
-    local _, _, full = Layout.PreviewFill(Layout.FillDirection("right"),
-        0, 0, 100, 24)
-    Check("With no fraction the bar is full", full == 100, tostring(full))
-end
-
----------------------------------------------------------------------------
-
----------------------------------------------------------------------------
--- Gradients
---
--- The whole of "which way round do the two colours go" is four strings in and
--- two values out, so it is checked here rather than looked at on a bar - a
--- swapped pair is invisible on two similar colours and upside down on every
--- other one, which is the worst kind of bug to have to see.
----------------------------------------------------------------------------
--- THE PREVIEW CARD AND THE SCREEN MUST SPACE A BAR THE SAME WAY.
---
--- They did not, at any scale but 1: the screen multiplied its gaps by the
--- bar's scale and the card passed them raw, so a bar at 150% drew correctly
--- sized cells with unscaled spacing in the editor and measured short. One
--- exported rule now, and this is the check that keeps it one.
-local function TestGaps()
-    local cfg = {}
-    ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
-
-    cfg.spacing, cfg.lineSpacing, cfg.scale = 6, 8, 1
-    local across, down = ns.Layout.Gaps(cfg)
-    Check("At 100% the gaps are what was typed", across == 6 and down == 8,
-        across .. "," .. down)
-
-    cfg.scale = 1.5
-    across, down = ns.Layout.Gaps(cfg)
-    Check("At 150% both gaps scale with the cells",
-        across == 9 and down == 12, across .. "," .. down)
-
-    -- A bar with nothing set must still answer, because the card asks before
-    -- the user has touched anything.
-    across, down = ns.Layout.Gaps({})
-    Check("An empty bar still has gaps", across == 4 and down == 4,
-        across .. "," .. down)
-    across, down = ns.Layout.Gaps(nil)
-    Check("So does no bar at all", across == 4 and down == 4,
-        across .. "," .. down)
-end
-
-local function TestGradients()
-    local seen = {}
-    for _, entry in ipairs(ns.GRADIENT_DIRECTIONS) do
-        local key = entry.orientation .. ":" .. tostring(entry.swap)
-        Check("Gradient direction '" .. entry.value .. "' is its own pair",
-            not seen[key], key .. " already taken by " .. tostring(seen[key]))
-        seen[key] = entry.value
-
-        Check("Gradient direction '" .. entry.value .. "' has a mark",
-            entry.icon and ns.UI.HasIcon(entry.icon), tostring(entry.icon))
-    end
-    Check("All four gradient directions are offered",
-        #ns.GRADIENT_DIRECTIONS == 4, tostring(#ns.GRADIENT_DIRECTIONS))
-
-    -- The four the engine can actually draw: two orientations times a swap.
-    -- Anything else on this list would be a control that cannot be built.
-    local orientation, swap = ns.Layout.GradientOrder("right")
-    Check("Left to right is HORIZONTAL, unswapped",
-        orientation == "HORIZONTAL" and swap == false,
-        tostring(orientation) .. " swap=" .. tostring(swap))
-
-    orientation, swap = ns.Layout.GradientOrder("left")
-    Check("Right to left is HORIZONTAL, swapped",
-        orientation == "HORIZONTAL" and swap == true,
-        tostring(orientation) .. " swap=" .. tostring(swap))
-
-    -- VERTICAL takes (bottom, top) - so bottom-to-top is the UNSWAPPED one.
-    -- This is the assertion that catches the whole thing being upside down,
-    -- and the convention behind it is written out in ns.GRADIENT_DIRECTIONS.
-    orientation, swap = ns.Layout.GradientOrder("up")
-    Check("Bottom to top is VERTICAL, unswapped",
-        orientation == "VERTICAL" and swap == false,
-        tostring(orientation) .. " swap=" .. tostring(swap))
-
-    orientation, swap = ns.Layout.GradientOrder("down")
-    Check("Top to bottom is VERTICAL, swapped",
-        orientation == "VERTICAL" and swap == true,
-        tostring(orientation) .. " swap=" .. tostring(swap))
-
-    orientation, swap = ns.Layout.GradientOrder("diagonal")
-    Check("An unknown direction falls back rather than returning nil",
-        orientation ~= nil and swap ~= nil)
-    Check("The gradient fallback is left to right",
-        orientation == "HORIZONTAL" and swap == false)
-
-    -- The resolved style always hands the renderer a table. ns.Tint reads
-    -- .on and would take a nil as "off" today; the first line of code that
-    -- reads .direction off it would throw instead.
-    local cfg = {}
-    ns.ApplyDefaults(cfg, ns.BAR_DEFAULTS)
-    local style = ns.Bars:Style(cfg, 40)
-    for _, key in ipairs({ "fillGradient", "backdropGradient", "borderGradient" }) do
-        Check(key .. " is always a table", type(style[key]) == "table",
-            type(style[key]))
-        Check(key .. " starts switched off", style[key].on == false)
-        Check(key .. " always carries a direction",
-            type(style[key].direction) == "string")
-        Check(key .. " always carries a second colour",
-            type(style[key].color) == "table")
-    end
-
-    -- A profile written before gradients existed carries none of this, and
-    -- the renderer must still be handed the full shape.
-    local old = { fillGradient = nil, stackThresholds = { { value = 3 } } }
-    local oldStyle = ns.Bars:Style(old, 40)
-    Check("A profile with no gradient still resolves to one",
-        type(oldStyle.fillGradient) == "table" and oldStyle.fillGradient.on == false)
-    Check("A band with no gradient still resolves to one",
-        type(oldStyle.stackThresholds[1].gradient) == "table",
-        type(oldStyle.stackThresholds[1].gradient))
-
-    -- Every colour that CAN ramp travels when a look is copied. The three
-    -- that cannot must not be in the list, or a preset would carry a setting
-    -- with nothing to apply it to.
-    local styleKeys = {}
-    for _, key in ipairs(ns.BAR_STYLE_KEYS) do styleKeys[key] = true end
-    for _, key in ipairs({ "fillGradient", "backdropGradient", "borderGradient" }) do
-        Check(key .. " travels with a copied look", styleKeys[key] == true)
-    end
-    for _, key in ipairs({ "swipeGradient", "chargeMarkGradient" }) do
-        Check(key .. " does not exist - the engine cannot draw it",
-            styleKeys[key] == nil and ns.BAR_DEFAULTS[key] == nil)
-    end
-
-    -- A look that says nothing about a gradient leaves the last look's
-    -- ramping on a bar that is meant to be flat. Every built-in must declare
-    -- all three, which is the same rule as the empty `effects` table.
-    for _, look in ipairs(ns.BUILT_IN_LOOKS) do
-        for _, key in ipairs({ "fillGradient", "backdropGradient", "borderGradient" }) do
-            Check("Look '" .. look.name .. "' declares " .. key,
-                look.style[key] ~= nil)
-        end
-    end
-
-    -- And at least one of them turns a gradient on, or the capability ships
-    -- switched off everywhere and nobody finds it.
-    local anyOn = false
-    for _, look in ipairs(ns.BUILT_IN_LOOKS) do
-        if look.style.fillGradient and look.style.fillGradient.on then anyOn = true end
-    end
-    Check("One built-in look shows what a gradient does", anyOn)
 end
 
 ---------------------------------------------------------------------------
@@ -4974,110 +3744,6 @@ local function TestReminders()
 end
 
 ---------------------------------------------------------------------------
--- THE ROUTES.
---
--- Two pure rules decide everything this feature does, and both fail silently
--- if they are wrong - a badge on the wrong mob looks exactly like a badge on
--- the right one.
-local function TestTextElements()
-    local byKey = {}
-    for _, element in ipairs(ns.TEXT_ELEMENTS) do byKey[element.key] = element end
-
-    Check("Charges are their own text element", byKey.charges ~= nil)
-    Check("Stacks and charges are two entries, not one",
-        byKey.stacks ~= nil and byKey.charges ~= nil
-            and byKey.stacks ~= byKey.charges)
-
-    -- Every element in the list must be a real default, or the options panel
-    -- generates seven controls that read and write a table nothing renders.
-    for _, element in ipairs(ns.TEXT_ELEMENTS) do
-        Check("'" .. element.label .. "' has defaults to edit",
-            type(ns.BAR_DEFAULTS[element.key]) == "table")
-
-        local travels = false
-        for _, key in ipairs(ns.BAR_STYLE_KEYS) do
-            if key == element.key then travels = true end
-        end
-        Check("'" .. element.label .. "' travels with a saved look", travels)
-    end
-
-    -- And it has to reach the renderer with its size resolved. A size of 0
-    -- means "work it out from the cell", and an element that skipped that step
-    -- would be drawn at zero.
-    local style = ns.Bars:Style(Fresh({ kind = "bar" }), 24)
-    Check("The charge count reaches the renderer",
-        type(style.charges) == "table" and Finite(style.charges.size)
-            and style.charges.size > 0,
-        tostring(style.charges and style.charges.size))
-
-    -- THE MIGRATION. Both numbers used to be driven by `stacks`, so a bar that
-    -- had moved its stack count keeps that placement for its charges rather
-    -- than snapping back to the default on update.
-    local old = Fresh()
-    old.charges = nil
-    old.stacks = { show = true, font = "", size = 14, color = { 1, 0.5, 0 },
-        outline = "THICKOUTLINE", anchor = "TOPLEFT", x = 3, y = -2 }
-
-    local saved = ns.db.bars
-    ns.db.bars = { old }
-    ns.Bars:Prepare()
-    ns.db.bars = saved
-
-    Check("An older bar inherits its stack placement for charges",
-        old.charges ~= nil and old.charges.anchor == "TOPLEFT"
-            and old.charges.x == 3 and old.charges.size == 14,
-        old.charges and tostring(old.charges.anchor) or "nil")
-
-    -- A SHARED COLOUR TABLE would make the two settings one setting again, one
-    -- indirection further down where it is much harder to see: the panel would
-    -- write a colour into charges and the stack count would change with it.
-    Check("The two do not share one colour table",
-        old.charges.color ~= old.stacks.color
-            and old.charges.color[1] == old.stacks.color[1])
-
-    -- Replay-safe: a second Prepare must not undo a charge placement the user
-    -- has since moved. This is the failure the fillDirection migration was
-    -- moved out of Migrate to avoid, and it only shows on the NEXT login.
-    old.charges.anchor = "BOTTOM"
-    ns.db.bars = { old }
-    ns.Bars:Prepare()
-    ns.db.bars = saved
-    Check("Preparing twice does not undo the user's own placement",
-        old.charges.anchor == "BOTTOM", tostring(old.charges.anchor))
-
-    -- The nine positions. A corner insets itself so an outlined glyph is not
-    -- clipped by the border; the centre does not, because there is no edge to
-    -- be clipped by and an inset there would just be off centre.
-    local function At(anchor, x, y)
-        return ns.TextOffset({ anchor = anchor, x = x or 0, y = y or 0 })
-    end
-
-    local cx, cy = At("CENTER")
-    Check("The centre is not inset", cx == 0 and cy == 0)
-
-    local bx, by = At("BOTTOMRIGHT")
-    Check("Bottom right insets inwards on both axes", bx == -2 and by == 2,
-        bx .. "," .. by)
-
-    local tx, ty = At("TOPLEFT")
-    Check("Top left insets the other way", tx == 2 and ty == -2,
-        tx .. "," .. ty)
-
-    local nx, ny = At("CENTER", 5, -7)
-    Check("The nudge is added to the position", nx == 5 and ny == -7)
-
-    local mx, my = At("TOPLEFT", -2, 2)
-    Check("A nudge can cancel the inset", mx == 0 and my == 0)
-
-    -- What a font string's setter may be handed. CanDisplay is the opposite of
-    -- CanCompute on purpose: it says "this may be PRINTED and nothing else".
-    -- A secret cannot be made here, so what is checked is the plain half.
-    Check("A plain number may be displayed", ns.CanDisplay(3))
-    Check("Nothing at all may not", not ns.CanDisplay(nil))
-    Check("A string is not a count", not ns.CanDisplay("3"))
-end
-
----------------------------------------------------------------------------
 -- The game menu entry
 --
 -- Our button hangs under the LAST of Blizzard's, and both halves of working
@@ -5181,7 +3847,23 @@ local function TestAnchors()
     -- THE SPELL NAME. Nine positions, and the middle of the middle is the one
     -- that breaks: the vertical part is empty there, and an empty string is
     -- not a point - SetPoint("") is an error at layout time on every bar.
-    for _, entry in ipairs(ns.TEXT_ANCHORS) do
+    -- The nine, written out. They used to come from ns.TEXT_ANCHORS, which
+    -- the bars published; the co-tank page carries its own copy of the same
+    -- list, and neither is a place this file can reach. Nine values that have
+    -- not changed in the game's history are safe to name here - and if one
+    -- ever did, LabelAnchor would be the thing under test either way.
+    local TEXT_ANCHORS = {
+        { value = "TOPLEFT",     text = "Top left" },
+        { value = "TOP",         text = "Top" },
+        { value = "TOPRIGHT",    text = "Top right" },
+        { value = "LEFT",        text = "Left" },
+        { value = "CENTER",      text = "Centre" },
+        { value = "RIGHT",       text = "Right" },
+        { value = "BOTTOMLEFT",  text = "Bottom left" },
+        { value = "BOTTOM",      text = "Bottom" },
+        { value = "BOTTOMRIGHT", text = "Bottom right" },
+    }
+    for _, entry in ipairs(TEXT_ANCHORS) do
         local point, side, justify, vertical = ns.Layout.LabelAnchor(entry.value)
 
         -- The vertical half is a PREFIX, and the label hangs from both edges
@@ -5791,13 +4473,6 @@ local function TestModules()
             pageByModule[entry.key] ~= nil)
     end
 
-    -- Boot order is dependency order, and it is the LIST's order. A reminder
-    -- asks the Cooldown Manager whether a buff is up and the bars claim its
-    -- frames first, so this pair must not be swapped by a tidy-up.
-    local order = {}
-    for index, entry in ipairs(list) do order[entry.key] = index end
-    Check("The bars boot before the reminders",
-        (order.cooldowns or 99) < (order.reminders or 0))
 
     -- The defaults. Read from ns.DEFAULTS rather than from a live profile:
     -- this is the table an existing character gets filled in from.
@@ -6498,17 +5173,10 @@ local function TestExternals()
             return clamped >= 0
         end)())
 
-    -- Every one of these names is one a BAR uses. Spelled the same or the
-    -- two renderers are two vocabularies for one idea.
-    for _, key in ipairs({ "borderSize", "borderColor", "borderTexture",
-        "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
-        "iconZoom", "scale", "alpha" }) do
-        local found = false
-        for _, barKey in ipairs(ns.BAR_STYLE_KEYS) do
-            if barKey == key then found = true break end
-        end
-        Check("'" .. key .. "' is spelled the way a bar spells it", found)
-    end
+    -- The style-key spelling check went with the bars. It compared these
+    -- names against ns.BAR_STYLE_KEYS - two renderers, one vocabulary -
+    -- and there is no second renderer left to disagree with. The names
+    -- themselves are unchanged; nothing can cross-check them any more.
 
     ---------------------------------------------------------------------
     -- Slots
@@ -6854,16 +5522,10 @@ local function TestTaunts()
     -- exactly as the externals panel is. Renaming one here would leave the
     -- painters quietly using their defaults while the setting looks live.
     local style = T.Style()
-    for _, key in ipairs({ "borderSize", "borderColor", "borderTexture",
-        "backdrop", "backdropColor", "backdropAlpha", "backdropTexture",
-        "iconZoom" }) do
-        local found = false
-        for _, barKey in ipairs(ns.BAR_STYLE_KEYS) do
-            if barKey == key then found = true break end
-        end
-        Check("The taunt button's '" .. key .. "' is a bar's word", found)
-        Check("And it has a value", style[key] ~= nil)
-    end
+    -- The style-key spelling check went with the bars. It compared these
+    -- names against ns.BAR_STYLE_KEYS - two renderers, one vocabulary -
+    -- and there is no second renderer left to disagree with. The names
+    -- themselves are unchanged; nothing can cross-check them any more.
 
     -- THE ICON PICKER'S PAGING. Pure, and it is the pair of off-by-ones that
     -- only shows up on the last page of four thousand icons.
@@ -8303,33 +6965,15 @@ function Test:Run()
         { "Raid check",    TestRaidCheck },
         { "Invites",       TestInvites },
         { "CD request",    TestExternals },
-        { "Arrangements",  TestLayout },
-        { "Coordinates",   TestOffsets },
-        { "Shared nudge",  TestSharedNudge },
-        { "Pattern switch", TestPatternRoundTrip },
-        { "Rows and columns", TestGridSliders },
-        { "Sorting by drag", TestReorder },
-        { "One cell's look", TestCellLook },
-        { "Per character", TestPerSpec },
-        { "Bar fill",      TestFill },
-        { "Stack colours", TestStackThresholds },
-        { "Active states", TestActiveStates },
         { "Spell identity", TestSpellIdentity },
         { "Design system",  TestDesignSystem },
-        { "Snapping",      TestSnapping },
         { "Menu filter",   TestMenuFilter },
-        { "Fill direction", TestFillDirection },
-        { "Preview bar",   TestPreviewBar },
-        { "Gradients",     TestGradients },
-        { "Cell gaps",     TestGaps },
         { "Co-tanks",      TestCoTanks },
         { "Co-tank strips", TestCoTankStrips },
         { "Reminders",     TestReminders },
-        { "Text elements", TestTextElements },
         { "Game menu",     TestGameMenu },
         { "Anchors",       TestAnchors },
         { "Visibility",    TestVisibility },
-        { "Effects",       TestEffects },
         { "Media",         TestMedia },
         { "Profile migration", TestProfileMigration },
         { "Sharing",       TestShare },
@@ -8337,7 +6981,6 @@ function Test:Run()
         { "Death analysis", TestDeath },
         { "Raid deaths",   TestRaidDeaths },
         { "What's new",   TestNews },
-        { "Your bars",     TestLiveBars },
         { "Panel movers",  TestPanelMovers },
         { "Taunts",        TestTaunts },
         { "Addon channel", TestComm },
@@ -8350,6 +6993,9 @@ function Test:Run()
     for _, suite in ipairs(suites) do
         -- One suite that throws must not take the other seven with it. The
         -- throw is itself a failure and is reported as one.
+        -- xpcall rather than pcall: the message alone says "attempt to index
+        -- a nil value" and not WHERE, which is a whole afternoon of guessing
+        -- on a suite that spans three files.
         local ok, err = pcall(suite[2])
         if not ok then
             failed[#failed + 1] = suite[1] .. " threw  |cff888888"

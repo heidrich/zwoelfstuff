@@ -18,6 +18,44 @@ local _, ns = ...
 -- of its own, out of News.OPENERS. See Core/News.lua.
 ns.CHANGELOG = {
     {
+        version = "4.83.0",
+        date = "2026-08-15",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Wrench_01",
+                text = "|cffffd100The cooldown bars are gone, and that is "
+                    .. "deliberate.|r Blizzard's own Cooldown Manager does "
+                    .. "that job, and addons built for nothing else do it "
+                    .. "better than we could alongside everything else. What "
+                    .. "this addon is for is the group: who died and to what, "
+                    .. "asking for a cooldown and answering it, the co-tanks, "
+                    .. "the raid bar and the invites. That is where the work "
+                    .. "goes now.",
+            },
+            "|cffffd100Your bars are not deleted.|r Nothing touched what is "
+                .. "saved - the arrangements, the spells in them and their "
+                .. "looks are all still in your settings file. If this turns "
+                .. "out to be the wrong call, the version with them in is one "
+                .. "install away and finds everything where it was.",
+            "|cffffd100Blizzard's Cooldown Manager is untouched now.|r This "
+                .. "addon no longer claims its icons, so it looks and behaves "
+                .. "exactly as it does without us. It is still READ - the "
+                .. "death log builds its list of defensives out of it, and a "
+                .. "reminder asks it whether a buff is up. |cffffd100/zs cdm"
+                .. "|r prints what it is holding.",
+            "|cffffd100Edit Mode keeps everything that has somewhere to go:|r "
+                .. "the co-tank panel, the taunt button, the request and "
+                .. "answer panels, the raid bar and every reminder. What it "
+                .. "lost is build mode, which existed to fill a slot on a bar.",
+            "|cffffd100Gone with them|r - the Cooldowns page, the sound for "
+                .. "\"when a cooldown comes back\" (nothing raises that "
+                .. "moment any more), and |cffffd100/zs bars|r, "
+                .. "|cffffd100/zs build|r, |cffffd100/zs skin|r, "
+                .. "|cffffd100/zs text|r, |cffffd100/zs numbers|r and "
+                .. "|cffffd100/zs hide|r.",
+        },
+    },
+    {
         version = "4.82.0",
         date = "2026-08-14",
         lines = {

@@ -153,9 +153,9 @@ function Page:BuildPage(page, width)
             function() ns.Sounds.Preview(ns.Sounds.Get(key)) end)
     end
 
-    grid:Note(L["A sound belongs to the SPELL, not to the place it sits "
-        .. "in - so a cooldown you gave a sound of its own keeps it on the "
-        .. "reminder and on the request panel alike."])
+    grid:Note(L["A sound belongs to the SPELL, not to the place it sits in - so a "
+        .. "cooldown you gave a sound of its own keeps it on the reminder "
+        .. "and on the request panel alike."])
 
     ---------------------------------------------------------------------
     -- WHICH PACKS ARE IN THE LIST AT ALL

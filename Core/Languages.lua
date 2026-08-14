@@ -143,8 +143,8 @@ Register("enUS", {
         .. "here changes what you have already chosen - a sound you picked "
         .. "goes on playing even if its pack is switched off."] = true,
     ["A sound belongs to the SPELL, not to the place it sits in - so a "
-        .. "cooldown you gave a sound of its own keeps it wherever you move "
-        .. "it, and the key on that slot stays with the slot."] = true,
+        .. "cooldown you gave a sound of its own keeps it on the reminder "
+        .. "and on the request panel alike."] = true,
 
     ---------------------------------------------------------------------
     -- Raid Bar
@@ -398,11 +398,11 @@ Register("deDE", {
         .. "Listen oben. An deiner Auswahl ändert das nichts - ein bereits "
         .. "gewählter Ton spielt weiter, auch wenn sein Paket aus ist.",
     ["A sound belongs to the SPELL, not to the place it sits in - so a "
-        .. "cooldown you gave a sound of its own keeps it wherever you move "
-        .. "it, and the key on that slot stays with the slot."] =
+        .. "cooldown you gave a sound of its own keeps it on the reminder "
+        .. "and on the request panel alike."] =
         "Ein Ton gehört zum ZAUBER, nicht zu seinem Platz - ein Cooldown "
-        .. "mit eigenem Ton behält ihn also, wohin du ihn auch schiebst, "
-        .. "und die Taste bleibt beim Platz.",
+        .. "mit eigenem Ton behält ihn also auf der Erinnerung wie "
+        .. "im Anfrage-Fenster.",
 
     ["Markers"] = "Zeichen",
     ["World markers"] = "Weltmarkierungen",

@@ -1598,11 +1598,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "unlock" or cmd == "lock" then
         ns.EditMode:SetUnlocked(cmd == "unlock")
 
-    elseif cmd == "build" then
-        -- Unlocks first if it has to. "Build" names an intent, not a mode you
-        -- have to be in something else to reach.
-        ns.EditMode:OpenBuild()
-
     elseif cmd == "minimap" then
         local sub = rest:lower()
         if sub == "on" or sub == "show" then

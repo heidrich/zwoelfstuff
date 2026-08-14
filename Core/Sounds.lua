@@ -39,8 +39,14 @@ local _, ns = ...
 local Sounds = {}
 ns.Sounds = Sounds
 
--- The four moments. One list, so the options page and the resolver cannot
--- disagree about what exists - the same argument as ns.LAYOUTS.
+-- The three moments. One list, so the options page and the resolver cannot
+-- disagree about what exists.
+--
+-- THERE WERE FOUR. "When a cooldown comes back" was played by the bars, and
+-- the bars are gone - a moment nobody raises is a row in the options that
+-- can never make a sound, which is worse than one row fewer. The desk guard
+-- that counts declared moments against Sounds.Play callers is what caught
+-- it; the same guard is why this list may not grow an aspirational entry.
 --
 -- `text` is English on purpose and looked up through L at DRAW time, never
 -- here: at file scope the profile is not open yet and the answer would be
@@ -48,7 +54,6 @@ ns.Sounds = Sounds
 Sounds.EVENTS = {
     { key = "request",  text = "When you ask for a cooldown" },
     { key = "asked",    text = "When somebody asks you" },
-    { key = "ready",    text = "When a cooldown comes back" },
     { key = "reminder", text = "When a reminder appears" },
 }
 
