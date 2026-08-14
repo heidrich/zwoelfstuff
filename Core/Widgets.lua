@@ -2256,6 +2256,8 @@ end
 -- tint, when given, is a function returning r, g, b: the colour the preview
 -- strips are drawn in. You open this list to find out what THIS bar will look
 -- like, so the strips are in the bar's own fill colour and not in the accent.
+UI.mediaPickers = {}
+
 function UI.MediaPicker(row, kind, get, set, apply, inheritLabel, tint)
     local button = UI.MenuButton(row.slot, row.slot:GetWidth())
     button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
@@ -2342,6 +2344,21 @@ function UI.MediaPicker(row, kind, get, set, apply, inheritLabel, tint)
     button.Refresh = Paint
     row.control = button
     row.Refresh = Paint
+
+    -- EVERY PICKER BUILT, so something can prove the row's Refresh still
+    -- reaches this one.
+    --
+    -- A page that wants to repaint more than the control hangs its OWN
+    -- function on row.Refresh, and it has to call the one it found first. A
+    -- page that forgets paints a blank box for ever - which is not a
+    -- hypothetical: the externals page shipped exactly that, and every "who
+    -- to ask" dropdown on it was empty, including the line that says what
+    -- happens if you leave it alone. Nothing about the page looks wrong.
+    --
+    -- Kept the way UI.optionFaults is kept, and for the same reason: the
+    -- widget is the only thing that knows, and a list it fills while the
+    -- window is built is something a release can be stopped for.
+    UI.mediaPickers[#UI.mediaPickers + 1] = { row = row, paint = Paint }
     return row
 end
 

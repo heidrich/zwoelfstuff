@@ -312,6 +312,40 @@ function OptionsReminders:BuildPage(page, width)
             Apply()
         end))
 
+    -- ITS OWN SOUND, KEYED BY THE SPELL IT WATCHES. Beside the trigger
+    -- rather than down in "How it looks", because a noise is not a look -
+    -- it is the other half of "this reminder went up", and it belongs next
+    -- to the setting that decides when that happens.
+    --
+    -- A reminder with no spell in it has nothing to key a sound to and can
+    -- only use the one Settings chose for all of them; the row says so
+    -- rather than writing into a nil.
+    Body(UI.MediaPicker(grid:FullRow("Sound", { controlWidth = 190 }),
+        "sound",
+        function()
+            local _, cfg = OptionsReminders:Current()
+            return cfg and cfg.spellID
+                and ns.Sounds.Get("reminder", cfg.spellID) or ""
+        end,
+        function(value)
+            local _, cfg = OptionsReminders:Current()
+            if cfg and cfg.spellID then
+                ns.Sounds.Set("reminder", cfg.spellID, value)
+            end
+        end,
+        function()
+            local _, cfg = OptionsReminders:Current()
+            if cfg and cfg.spellID then
+                ns.Sounds.Preview(ns.Sounds.Get("reminder", cfg.spellID))
+            end
+        end,
+        "Settings"))
+
+    grid:Note("Played once when the message appears, not while it is up. "
+        .. "The sound follows the SPELL, so two reminders watching the same "
+        .. "one share it - a reminder with no spell picked uses whatever "
+        .. "|cffffd100Settings - Sounds|r chose.")
+
     ---------------------------------------------------------------------
     grid:Section("How it looks", "rm-look")
 

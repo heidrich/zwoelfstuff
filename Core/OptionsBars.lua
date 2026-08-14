@@ -2462,6 +2462,54 @@ function Workspace:BuildCellPane(parent, width)
         ns.Layout.TidyCellOpts(cfg, index)
     end, { apply = Apply })
 
+    -- THE ONE SETTING ON THIS PAGE THAT IS NOT ABOUT THIS CELL.
+    --
+    -- Everything above and below belongs to the CELL - its size, its shape,
+    -- its colour, and Reset hands all of it back. A sound does not: his rule
+    -- is "beim cmd auch" - per spell, not per slot - so this writes against
+    -- the spell in the cell and every bar holding that spell shares it.
+    --
+    -- It lives here anyway, and that is deliberate rather than convenient:
+    -- this is where you are looking at the spell. A separate page listing
+    -- every cooldown you own just to give one of them a noise would be a
+    -- second place to hunt through. What it owes the reader is to SAY that
+    -- it behaves differently, which the note does, and to disappear on an
+    -- empty cell rather than write into a nil.
+    local soundRow = UI.MediaPicker(
+        grid:FullRow("Sound", { controlWidth = 190 }), "sound",
+        function()
+            local cfg, index = Cell()
+            local spellID = cfg and index and cfg.cells and cfg.cells[index]
+            return spellID and ns.Sounds.Get("ready", spellID) or ""
+        end,
+        function(value)
+            local cfg, index = Cell()
+            local spellID = cfg and index and cfg.cells and cfg.cells[index]
+            if spellID then ns.Sounds.Set("ready", spellID, value) end
+        end,
+        function()
+            local cfg, index = Cell()
+            local spellID = cfg and index and cfg.cells and cfg.cells[index]
+            if spellID then
+                ns.Sounds.Preview(ns.Sounds.Get("ready", spellID))
+            end
+        end,
+        "Same as everywhere")
+
+    -- SECOND HOOK, NOT A REPLACEMENT - MediaPicker hangs its own Refresh on
+    -- the row, and taking it is how a picker paints a blank box for ever.
+    local paintSound = soundRow.Refresh
+    soundRow.Refresh = function()
+        if paintSound then paintSound() end
+        local cfg, index = Cell()
+        soundRow:SetRelevant((cfg and index and cfg.cells
+            and cfg.cells[index]) ~= nil)
+    end
+
+    grid:Note("Played when this cooldown comes back. It belongs to the "
+        .. "SPELL, so every bar holding it makes the same noise and "
+        .. "|cffffd100Reset|r below does not touch it.")
+
     grid:Section("Bar fill", "cell-fill")
     Colour("Colour", "fillColor")
     GradientRows("fillGradient")

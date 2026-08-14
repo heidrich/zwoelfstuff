@@ -321,6 +321,75 @@ function Page:BuildPage(page, width)
         .. "name somebody.")
 
     ---------------------------------------------------------------------
+    -- Sounds
+    --
+    -- DIRECTLY UNDER THE KEYS, because it is their mirror and the pair is
+    -- only obvious side by side. The note above says a key is bound to the
+    -- PLACE - "what sits in it changes as people come and go". A sound is
+    -- bound to the SPELL, and for the same reason read the other way:
+    -- asking for Pain Suppression and asking for a battle res have to sound
+    -- different, and where they happen to sit says nothing about that.
+    --
+    -- His words: "bei den requests auch je nach spell nicht slot."
+    --
+    -- ONE ROW PER SPELL THERE IS, the same shape as "Who to ask" above and
+    -- for the same reason - a spell lives in exactly one slot, so a row per
+    -- possible slot would be seventy-two pickers for a list that can never
+    -- be longer than the one on the right.
+    ---------------------------------------------------------------------
+    grid:Section("Sounds")
+
+    for index = 1, #ns.Externals.SPELLS do
+        local row = grid:FullRow("", { controlWidth = 220 })
+        local function SpellID() return ns.Externals.Picked()[index] end
+
+        UI.MediaPicker(row, "sound",
+            function()
+                local spellID = SpellID()
+                return spellID and ns.Sounds.Get("request", spellID) or ""
+            end,
+            function(value)
+                local spellID = SpellID()
+                if spellID then
+                    ns.Sounds.Set("request", spellID, value)
+                end
+            end,
+            -- Choosing one plays it, exactly as on the Settings page.
+            function()
+                local spellID = SpellID()
+                if spellID then
+                    ns.Sounds.Preview(ns.Sounds.Get("request", spellID))
+                end
+            end,
+            -- The top entry, and it is the honest name for what an empty
+            -- value does here: fall back to whatever Settings chose for
+            -- every request. "Same as everywhere" is the wording the font
+            -- pickers already use for exactly this.
+            "Same as everywhere")
+
+        -- SECOND HOOK, NOT A REPLACEMENT. MediaPicker hangs its own Refresh
+        -- on the row and the line below would take it - which is the fault
+        -- the dropdowns above this section shipped with once already, and
+        -- every one of those boxes was blank because of it.
+        local paintControl = row.Refresh
+
+        row.Refresh = function()
+            if paintControl then paintControl() end
+            local spellID = SpellID()
+            row:SetRelevant(spellID ~= nil)
+            if spellID then
+                UI.MakeRowASpell(row, spellID)
+                row.label:SetText(ns.Externals.Label(spellID))
+            end
+        end
+    end
+
+    grid:Note("A sound of its own for one request. Left alone, each one uses "
+        .. "whatever |cffffd100Settings - Sounds|r chose for all of them. "
+        .. "The sound follows the spell, so moving it to another place on "
+        .. "the panel keeps the noise and changes the key.")
+
+    ---------------------------------------------------------------------
     -- The message
     ---------------------------------------------------------------------
     grid:Section("What you say")
