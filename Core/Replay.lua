@@ -776,7 +776,6 @@ local function BuildWindow()
     local speedRow = UI.Row(frame, "Speed", { controlWidth = 116 })
     -- Sized to its own contents: the label was floating eighty pixels away
     -- from the control it names, because the row was wider than either.
-    speedRow:SetWidth(160)
     speedRow:SetPoint("LEFT", stop, "RIGHT", 16, 0)
     speedRow.rule:Hide()   -- a settings hairline has no business in a panel
     UI.Slider(speedRow, {
@@ -794,12 +793,12 @@ local function BuildWindow()
         silent = true,
         format = function(v) return Replay.SpeedLabel(v) end,
     })
+    UI.FitRow(speedRow)
     frame.speedRow = speedRow
 
     -- ZOOM. Six presses inside two tenths of a second cannot be drawn apart
     -- at any icon size; the plot has to be able to show less time instead.
     local zoomRow = UI.Row(frame, "Zoom", { controlWidth = 116 })
-    zoomRow:SetWidth(158)
     zoomRow:SetPoint("LEFT", speedRow, "RIGHT", 10, 0)
     zoomRow.rule:Hide()
     UI.Slider(zoomRow, {
@@ -813,6 +812,7 @@ local function BuildWindow()
         silent = true,
         format = function(v) return Replay.SpeedLabel(v) end,
     })
+    UI.FitRow(zoomRow)
     frame.zoomRow = zoomRow
 
     -- THE ONE SENTENCE THIS WINDOW EXISTS TO MAKE UNNECESSARY, said anyway.
@@ -833,10 +833,10 @@ local function BuildWindow()
     })
     frame.chips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 46)
 
-    local dismiss = UI.Button(frame, "Close", 90, function()
-        Replay:Close()
-    end)
-    dismiss:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PLOT_R, 12)
+    -- NO "CLOSE" BUTTON here either: the X closes it, and the two sliders
+    -- beside it needed the room. Both of them were unreadable - "1x" twice
+    -- with no way to tell speed from zoom, because each slider was drawing
+    -- over its own label. See UI.FitRow.
 end
 
 -- The legend, as a label and a row of spell chips beside it. Names alone

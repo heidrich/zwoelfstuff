@@ -1149,6 +1149,19 @@ function Death.ReadRecap(recapID)
                 and ev.spellId > 0) and ev.spellId or nil,
             overkill = (ns.CanCompute(overkill) and type(overkill) == "number"
                 and overkill > 0) and overkill or nil,
+
+            -- THE GAME'S OWN VERDICT, and it is the most valuable field in
+            -- the whole recap. Blizzard marks damage its own death recap
+            -- considers avoidable - a puddle you stood in, a swirl you did
+            -- not move out of - and it arrived readable in the 2026-08-14
+            -- probe dump, `avoidable = false` on a periodic tick.
+            --
+            -- Read strictly as a boolean, never as truthiness: a client that
+            -- withheld it would make every death look unavoidable, which is
+            -- the flattering answer and therefore the dangerous one. nil
+            -- means "the client did not say", and it says that out loud.
+            avoidable = (ns.CanCompute(ev.avoidable)
+                and type(ev.avoidable) == "boolean") and ev.avoidable or nil,
         }
     end
     return events, maxHP, nil, killer, art
@@ -1243,7 +1256,7 @@ end
 
 -- Which groups are around, as plain booleans - the state half of the rule
 -- above, kept apart from it so the rule itself stays testable on a desktop.
-local function GroupState()
+function Death.GroupState()
     return {
         inInstance = IsInGroup and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) or false,
         inRaid = IsInRaid and IsInRaid() or false,
@@ -1289,7 +1302,7 @@ function Death:Share()
     end
     local lines = Death.ShareLines(snapshot) or {}
     local channel, why = Death.ShareTarget(
-        ns.db and ns.db.death and ns.db.death.channel, GroupState())
+        ns.db and ns.db.death and ns.db.death.channel, Death.GroupState())
     -- C_ChatInfo is the living call on this client (BigWigs' Loader uses
     -- it); the bare global is deprecated and only kept as the fallback.
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
@@ -1736,7 +1749,6 @@ local function BuildWindow()
     -- rather than a button walking six steps - the owner asked, and he is
     -- right that dragging to a size beats clicking past four of them.
     local scaleRow = UI.Row(frame, "Size", { controlWidth = 110 })
-    scaleRow:SetWidth(170)
     scaleRow:SetPoint("LEFT", replay, "RIGHT", 12, 0)
     scaleRow.rule:Hide()
     UI.Slider(scaleRow, {
@@ -1755,12 +1767,17 @@ local function BuildWindow()
         end,
         apply = function() Death.ApplyScale() end,
     })
+    -- Sized to the slider that is actually in it. See UI.FitRow: the slot was
+    -- 110 and the slider is 156, so it hung out of the left of its own slot
+    -- and drew over the word "Size".
+    UI.FitRow(scaleRow)
     frame.scaleRow = scaleRow
 
-    local dismiss = UI.Button(frame, "Close", 90, function()
-        frame:Hide()
-    end)
-    dismiss:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16 + MAIN_W - 90, 12)
+    -- NO "CLOSE" BUTTON. The X in the corner already closes this window, and
+    -- so does Escape. Owner: "den close button kannsten auch bei allen
+    -- fenstern rausnehmen, wir haben ja das X" - and it is the right call
+    -- twice over, because the ninety pixels it took are what the slider
+    -- beside it needed.
 end
 
 -- The window the replay reads. It shows ONE death - whichever is on

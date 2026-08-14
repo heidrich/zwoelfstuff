@@ -509,6 +509,8 @@ local function ClaimRow(row, control)
     row.label:SetPoint("RIGHT", control, "LEFT", -UI.GAP, 0)
 end
 
+UI.rows = {}
+
 function UI.Row(parent, text, opts)
     opts = opts or {}
     local row = CreateFrame("Frame", nil, parent)
@@ -593,6 +595,39 @@ function UI.Row(parent, text, opts)
         self:SetShown(relevant)
     end
 
+    -- Every row ever built, so a check can walk them. A row is the one
+    -- widget in this addon that puts a caller's guess (controlWidth) and a
+    -- widget's real size in the same space, and nothing made the two agree -
+    -- see UI.FitRow. That is not findable without a list.
+    UI.rows[#UI.rows + 1] = row
+    return row
+end
+
+-- A ROW SIZED TO WHAT IS ACTUALLY IN IT.
+--
+-- `row.slot` is whatever width the caller asked for; the control inside it is
+-- whatever width the control actually is. Nothing made those two agree. A
+-- full slider is 96 + 8 + 52 = 156 wide, and the three rows that carry one on
+-- a window footer asked for 110 and 116 - so the slider hung forty-odd pixels
+-- out of the left of its own slot and drew straight over the label. On screen
+-- "Size" collapsed to a single dot and "Speed" and "Zoom" vanished, which
+-- reads as a rendering fault rather than as a layout one. The owner found all
+-- three: "beim regler fehlen die icons, zoom und speed, man weiss nicht was
+-- was ist."
+--
+-- Called after the control is in. It takes the control's REAL width, gives
+-- the slot exactly that, and makes the row wide enough to hold its label
+-- beside it. His rule, and it is the right one: "kein grund zu quetschen."
+function UI.FitRow(row)
+    if not (row and row.slot) then return row end
+    local width = (row.control and row.control:GetWidth()) or CONTROL_W
+    row.slot:SetWidth(width)
+
+    local label = math.ceil((row.label and row.label:GetStringWidth()) or 0)
+    if row.sub then
+        label = math.max(label, math.ceil(row.sub:GetStringWidth() or 0))
+    end
+    row:SetWidth(label + UI.GAP + width)
     return row
 end
 

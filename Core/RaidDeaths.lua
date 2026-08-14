@@ -196,10 +196,60 @@ function RaidDeaths.Blow(events)
                 amount = ev.amount,
                 overkill = ev.overkill,
                 art = ev.art,
+                avoidable = ev.avoidable,
             }
         end
     end
     return nil
+end
+
+-- WHAT ACTUALLY DROPPED THEM, which is a different question from what
+-- finished them and usually a more useful one. Meredy's killing blow was
+-- 31.8k with 28.5k of it wasted on a corpse: the hit that mattered landed
+-- earlier. The biggest hit of the last seconds is the one to talk about.
+--
+-- Returns nil when the killing blow IS the biggest, because then there is
+-- nothing extra to say and a line saying it anyway is noise.
+function RaidDeaths.RealBlow(events)
+    if type(events) ~= "table" or #events < 2 then return nil end
+
+    local biggest, last
+    for index = 1, #events do
+        local ev = events[index]
+        if type(ev) == "table" and not ev.heal and type(ev.amount) == "number" then
+            -- What the hit actually TOOK, not what it was rolled for.
+            local landed = ev.amount - (ev.overkill or 0)
+            if not biggest or landed > biggest.landed then
+                biggest = { ev = ev, landed = landed, index = index }
+            end
+            last = index
+        end
+    end
+
+    if not (biggest and last) or biggest.index == last then return nil end
+    return {
+        who = biggest.ev.who,
+        spell = biggest.ev.name,
+        spellID = biggest.ev.spellID,
+        amount = biggest.ev.amount,
+        landed = biggest.landed,
+        avoidable = biggest.ev.avoidable,
+    }
+end
+
+-- HOW MANY OF THEM WALKED INTO IT. Three answers, not two: yes, no, and the
+-- client did not say - because a client that withholds the flag would
+-- otherwise report a whole raid as blameless, which is the flattering
+-- reading and therefore the one to refuse.
+function RaidDeaths.Avoidable(entries)
+    local yes, no, unknown = 0, 0, 0
+    for _, entry in ipairs(entries or {}) do
+        local flag = entry.blow and entry.blow.avoidable
+        if flag == true then yes = yes + 1
+        elseif flag == false then no = no + 1
+        else unknown = unknown + 1 end
+    end
+    return yes, no, unknown
 end
 
 -- What did the killing, counted. This is the row of mobs and abilities he
@@ -417,6 +467,7 @@ function RaidDeaths.Capture()
             entry.blow = events and RaidDeaths.Blow(events) or nil
             if entry.blow then
                 entry.blow.art = entry.blow.art or art
+                entry.real = RaidDeaths.RealBlow(events)
             else
                 entry.blowWhy = readWhy or "the recap gave nothing"
             end
@@ -502,6 +553,18 @@ function RaidDeaths.Persist(fight)
                     amount = Plain(blow.amount, "number"),
                     overkill = Plain(blow.overkill, "number"),
                     art = ns.Death.PlainArt(blow.art),
+                    -- A boolean, and only a boolean: nil has to stay nil so
+                    -- "the client did not say" survives the disk as itself
+                    -- rather than coming back as "not avoidable".
+                    avoidable = Plain(blow.avoidable, "boolean"),
+                } or nil,
+                real = type(entry.real) == "table" and {
+                    who = Plain(entry.real.who, "string"),
+                    spell = Plain(entry.real.spell, "string"),
+                    spellID = Plain(entry.real.spellID, "number"),
+                    amount = Plain(entry.real.amount, "number"),
+                    landed = Plain(entry.real.landed, "number"),
+                    avoidable = Plain(entry.real.avoidable, "boolean"),
                 } or nil,
             }
         end
@@ -684,6 +747,51 @@ end
 -- How many culprits the summary prints before it says how many it left out.
 local CULPRITS_SHOWN = 5
 
+-- THE ONE SENTENCE A RAID LEADER WANTS, built from what the client itself
+-- says rather than from anything this addon guessed.
+--
+-- Three parts, each dropped when it has nothing to add: what the wipe was
+-- (something that killed more than one person), how fast it happened, and
+-- how many of them the GAME calls avoidable. The last one is the reason to
+-- open this window at all - it is Blizzard's own verdict on whether somebody
+-- stood in it, and it is worth more than every number beside it.
+--
+-- "The client did not say" is never rounded into "not avoidable". A window
+-- that reports a raid as blameless because a field was withheld is worse
+-- than one that says nothing.
+function RaidDeaths.Verdict(entries, culprits)
+    entries = entries or {}
+    if #entries == 0 then return "" end
+
+    local parts = {}
+
+    local worst = (culprits or {})[1]
+    if worst and worst.count > 1 then
+        parts[#parts + 1] = string.format("%s killed %d of them",
+            worst.spell or worst.who or "?", worst.count)
+    end
+
+    -- How long the dying took. Four in two seconds is a mechanic; four over
+    -- a minute is four separate stories.
+    local first, last = entries[1], entries[#entries]
+    if #entries > 1 and first.at and last.at then
+        local span = last.at - first.at
+        parts[#parts + 1] = string.format("%d deaths in %ds",
+            #entries, floor(span + 0.5))
+    end
+
+    local yes, no, unknown = RaidDeaths.Avoidable(entries)
+    if yes > 0 then
+        parts[#parts + 1] = string.format(
+            "%d of %d to damage the game calls avoidable", yes, #entries)
+    elseif no > 0 and unknown == 0 then
+        parts[#parts + 1] = "none of it was avoidable damage"
+    end
+
+    if #parts == 0 then return "" end
+    return table.concat(parts, ".  ") .. "."
+end
+
 -- WHETHER THE COUNT IS WORTH PRINTING. Four deaths to four different things
 -- listed four times as "1 x" is the same four lines again, one word shorter.
 -- The summary earns its space only when something killed more than one.
@@ -853,6 +961,30 @@ local function BuildRow(parent)
             GameTooltip:AddLine(ns.ShortNumber(blow.overkill)
                 .. " of it was overkill", 0.61, 0.64, 0.69)
         end
+
+        -- WHAT ACTUALLY DROPPED THEM. With most of the killing blow wasted
+        -- on a corpse, the hit worth talking about landed earlier, and this
+        -- is the line that says which one.
+        if entry.real then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(string.format(
+                "The hit that mattered: %s - %s for %s",
+                entry.real.who or "?",
+                ns.Death.PlainText(entry.real.spell or "?"),
+                ns.ShortNumber(entry.real.landed or 0)), 1, 0.82, 0, true)
+        end
+
+        -- THE GAME'S OWN VERDICT, and only when the game gave one. Silence
+        -- when it did not: "the client withheld it" must never be drawn as
+        -- "nobody stood in anything".
+        local flag = blow and blow.avoidable
+        if flag == true then
+            GameTooltip:AddLine("The game calls this avoidable damage.",
+                0.88, 0.42, 0.36, true)
+        elseif flag == false then
+            GameTooltip:AddLine("The game does not call this avoidable.",
+                0.61, 0.64, 0.69, true)
+        end
     end)
 
     return row
@@ -868,10 +1000,22 @@ local function BuildSideRow(parent, slot)
     row.bg:SetAllPoints(row)
     row.bg:Hide()
 
+    -- The accent bar on the left edge marks the one being read, exactly as
+    -- the death window's list does. A fill alone reads as hover on a list
+    -- you can also hover.
+    row.mark = row:CreateTexture(nil, "ARTWORK")
+    row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.mark:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.mark:SetWidth(2)
+    row.mark:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
+    row.mark:Hide()
+
     row.when = UI.Label(row, "", UI.FS.meta, C.text)
     row.when:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -3)
 
-    row.count = UI.Label(row, "", UI.FS.meta, C.textFaint)
+    -- Where, in the cool accent and on the right, which is where the death
+    -- window puts "M+18". The count moves down to the second line with it.
+    row.count = UI.Label(row, "", UI.FS.eyebrow, C.accentCool)
     row.count:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -3)
     row.count:SetJustifyH("RIGHT")
 
@@ -933,6 +1077,37 @@ function RaidDeaths:Create()
     frame.where:SetPoint("TOPLEFT", frame, "TOPLEFT", UI.PAD,
         -(UI.HEADER_H + 8))
 
+    -- THE VERDICT, where the death window puts its analysis: right under the
+    -- header, in body text, because it is the sentence somebody reads out
+    -- loud to the group.
+    frame.verdict = UI.Label(frame, "", UI.FS.row, C.text)
+    frame.verdict:SetPoint("TOPLEFT", frame.where, "BOTTOMLEFT", 0, -8)
+
+    -- THE COLUMN HEADS, in the death window's own language: upper case,
+    -- small, over a rule. Without them "39.9" at the end of a line is a
+    -- number nobody can name.
+    local head = CreateFrame("Frame", nil, frame)
+    head:SetPoint("TOPLEFT", frame.verdict, "BOTTOMLEFT", 0, -12)
+    head:SetHeight(14)
+    frame.head = head
+
+    frame.headWhen = UI.Eyebrow(head, "When")
+    frame.headWhen:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 0, 0)
+    frame.headWho = UI.Eyebrow(head, "Who died")
+    frame.headWho:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 80, 0)
+    frame.headKiller = UI.Eyebrow(head, "Killed by")
+    frame.headKiller:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 236, 0)
+    frame.headWhat = UI.Eyebrow(head, "With what")
+    frame.headWhat:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 392, 0)
+    frame.headAmount = UI.Eyebrow(head, "Damage")
+    frame.headAmount:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, 0)
+
+    local headRule = head:CreateTexture(nil, "ARTWORK")
+    headRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    headRule:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 0, -3)
+    headRule:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, -3)
+    headRule:SetHeight(1)
+
     -----------------------------------------------------------------------
     -- THE SIDE LIST: one line per pull, newest at the top, which is the one
     -- being asked about nine times in ten. Same shape as the death window's,
@@ -979,21 +1154,94 @@ function RaidDeaths:Create()
     end)
 
     local listHost = CreateFrame("Frame", nil, frame)
-    listHost:SetPoint("TOPLEFT", frame.where, "BOTTOMLEFT", 0, -8)
-    listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -18, 0)
+    listHost:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -8)
+    listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -18, 26)
 
     local _, content = UI.ScrollArea(listHost,
         WIDTH - SIDE_W - UI.PAD * 2 - 18, 6)
     frame.content = content
     frame.rows = {}
+    head:SetPoint("TOPRIGHT", side, "TOPLEFT", -18, 0)
 
     frame.foot = UI.Label(frame, "", UI.FS.meta, C.textFaint)
-    frame.foot:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 14)
-    frame.foot:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -UI.PAD, 14)
+    frame.foot:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 46)
+    frame.foot:SetPoint("RIGHT", side, "LEFT", -18, 0)
     frame.foot:SetJustifyH("LEFT")
+
+    -----------------------------------------------------------------------
+    -- The same two buttons the death window carries, in the same corner.
+    -----------------------------------------------------------------------
+    local share = UI.Button(frame, "Share in chat", 130,
+        function() RaidDeaths:Share() end, "primary")
+    share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 14)
+    frame.share = share
+
+    local clear = UI.Button(frame, "Clear list", 100, function()
+        RaidDeaths.log = {}
+        RaidDeaths.showing = nil
+        RaidDeaths.sideOffset = 0
+        RaidDeaths.Save()
+        RaidDeaths:Refresh()
+        RaidDeaths.RefreshIcon()
+    end)
+    clear:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -UI.PAD, 14)
+    frame.clear = clear
 
     table.insert(UISpecialFrames, "ZwoelfStuffRaidDeaths")
     return frame
+end
+
+-- The pull, in the four lines somebody would actually say out loud. Pure, so
+-- the wording is checkable and so the chat share and any later Discord post
+-- are one text rather than two that drift.
+function RaidDeaths.ShareLines(entries, info)
+    if not (entries and #entries > 0) then return nil end
+    local lines = {}
+    lines[#lines + 1] = string.format("%s - %d died%s",
+        (info and (info.where or info.label)) or "this pull", #entries,
+        (info and info.duration)
+            and (" in " .. RaidDeaths.Clock(info.duration)) or "")
+
+    local verdict = RaidDeaths.Verdict(entries, info and info.culprits)
+    if verdict ~= "" then lines[#lines + 1] = verdict end
+
+    for _, entry in ipairs(entries) do
+        local blow = entry.blow
+        lines[#lines + 1] = string.format("%s%s: %s",
+            (info and info.timed) and (RaidDeaths.Clock(entry.at) .. "  ") or "",
+            entry.short,
+            blow and ((blow.who or "?") .. " - "
+                .. ns.Death.PlainText(blow.spell or "?"))
+                or (entry.blowWhy or "nothing readable"))
+    end
+    return lines
+end
+
+function RaidDeaths:Share()
+    local entries, info = RaidDeaths.Best()
+    local lines = RaidDeaths.ShareLines(entries, info)
+    if not lines then
+        ns.Print("No pull with deaths in it yet.")
+        return
+    end
+
+    local channel, why = ns.Death.ShareTarget(
+        ns.db and ns.db.death and ns.db.death.channel, ns.Death.GroupState())
+    local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
+    for _, line in ipairs(lines) do
+        if channel then
+            send("ZwoelfStuff: " .. line, channel)
+        else
+            ns.Print(line)
+        end
+    end
+    if not channel then
+        -- Death's rule, and it is not negotiable: a chosen channel that is
+        -- not there must SAY so. Printing to your own frame while you believe
+        -- it went to the raid is the one failure a share is not allowed.
+        ns.Print("|cff888888" .. (why or "not in a group")
+            .. " - printed here instead.|r")
+    end
 end
 
 -- The footer sentence, pure so the wording is checkable without a frame.
@@ -1027,17 +1275,20 @@ function RaidDeaths:Refresh()
 
     if not info then
         frame.where:SetText(tostring(source))
+        frame.verdict:SetText("")
     else
-        local where = info.where or info.label or ""
+        -- The death window's header shape: the time and the killer on one
+        -- line, the place under it. Here the place carries the clock.
+        local where = info.when and (info.when .. "  -  ") or ""
+        where = where .. (info.where or info.label or "")
         if info.duration then
             where = where .. "  -  " .. RaidDeaths.Clock(info.duration)
         end
-        if source == "kept" then
-            where = where .. "  -  the last pull"
-        elseif source == "session" then
+        if source == "session" then
             where = where .. "  -  no clock left on these"
         end
         frame.where:SetText(where)
+        frame.verdict:SetText(RaidDeaths.Verdict(entries, info.culprits))
     end
 
     local timed = info and info.timed
@@ -1146,15 +1397,24 @@ function RaidDeaths.PaintSideList()
         else
             row.index = index
             row.when:SetText(fight.when or "")
-            row.count:SetText(string.format("%d", #(fight.entries or {})))
-            local where = fight.whereShort or "?"
-            if fight.duration then
-                where = where .. "  -  " .. RaidDeaths.Clock(fight.duration)
+            row.count:SetText(fight.whereShort or "")
+
+            -- The second line is what the pull WAS, the way the death
+            -- window's second line names the killer: how many fell and to
+            -- what, not a repeat of the header.
+            local dead = #(fight.entries or {})
+            local worst = (fight.culprits or {})[1]
+            local line = string.format("%d dead", dead)
+            if worst and worst.count > 1 then
+                line = line .. "  -  " .. (worst.spell or worst.who or "?")
+            elseif fight.duration then
+                line = line .. "  -  " .. RaidDeaths.Clock(fight.duration)
             end
-            row.where:SetText(where)
+            row.where:SetText(line)
 
             local isOn = index == selected
             row.bg:SetShown(isOn)
+            row.mark:SetShown(isOn)
             if isOn then
                 row.bg:SetColorTexture(C.control[1], C.control[2],
                     C.control[3], 1)
@@ -1163,14 +1423,15 @@ function RaidDeaths.PaintSideList()
         end
     end
 
+    -- The death window's own wording, so the two lists read as one idea.
     if total == 0 then
-        frame.sideTitle:SetText("No pull kept yet")
+        frame.sideTitle:SetText("This session - no pull kept yet")
     elseif total > SIDE_ROWS then
         frame.sideTitle:SetText(string.format("%d pulls - scroll for more",
             total))
     else
-        frame.sideTitle:SetText(total == 1 and "1 pull kept"
-            or string.format("%d pulls kept", total))
+        frame.sideTitle:SetText(total == 1 and "This session - 1 pull"
+            or string.format("This session - %d pulls", total))
     end
 end
 

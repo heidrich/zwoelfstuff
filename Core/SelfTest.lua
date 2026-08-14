@@ -2395,6 +2395,92 @@ local function TestRaidDeaths()
         string.format("%d kept, oldest %s", #log, tostring(log[1].key)))
 
     ---------------------------------------------------------------------
+    -- THE GAME'S OWN VERDICT
+    --
+    -- The recap marks damage the client itself considers avoidable. It is
+    -- the most valuable field in the whole thing and the easiest to report
+    -- dishonestly: a client that withholds it must not make a raid look
+    -- blameless. Three answers, never two.
+    ---------------------------------------------------------------------
+    local function Died(flag)
+        return { blow = { who = "A", spell = "B", avoidable = flag } }
+    end
+    local yes, no, unknown = R.Avoidable({ Died(true), Died(true),
+        Died(false), Died(nil), { blowWhy = "empty" } })
+    Check("Avoidable, not avoidable and NOT SAID are three answers",
+        yes == 2 and no == 1 and unknown == 2,
+        string.format("%d yes, %d no, %d not said", yes, no, unknown))
+
+    Check("A pull with an avoidable death says so and counts it",
+        R.Verdict({ { at = 0, blow = { avoidable = true } },
+                    { at = 4, blow = { avoidable = false } } }, {})
+            :find("1 of 2 to damage the game calls avoidable", 1, true) ~= nil)
+    Check("...and one where the client said nothing claims NOTHING",
+        R.Verdict({ { at = 0, blow = {} }, { at = 4, blow = {} } }, {})
+            :find("avoidable", 1, true) == nil)
+    Check("...while all-clear is only said when the client said it every time",
+        R.Verdict({ { at = 0, blow = { avoidable = false } },
+                    { at = 4, blow = { avoidable = false } } }, {})
+            :find("none of it was avoidable", 1, true) ~= nil)
+
+    Check("The verdict leads with the thing that killed more than one",
+        R.Verdict({ { at = 0 }, { at = 2 } },
+            { { who = "Shade", spell = "Grim Ward", count = 2 } })
+            :find("Grim Ward killed 2 of them", 1, true) == 1)
+    Check("...and says how long the dying took",
+        R.Verdict({ { at = 10 }, { at = 16 } }, {})
+            :find("2 deaths in 6s", 1, true) ~= nil)
+    Check("A pull nobody died in has no verdict at all",
+        R.Verdict({}, {}) == "")
+
+    ---------------------------------------------------------------------
+    -- The hit that mattered, which is rarely the one that finished them
+    ---------------------------------------------------------------------
+    -- Oldest first, the way ReadRecap hands them over. The last event is
+    -- 31829 with 28483 of it wasted on a corpse, so it only LANDED 3346 -
+    -- the 20000 two events earlier is the one worth talking about.
+    local story = {
+        { name = "Melee", who = "Shade", amount = 5000 },
+        { name = "Grim Ward", who = "Shade", amount = 20000, spellID = 7 },
+        { name = "a heal", who = "A Friend", amount = 90000, heal = true },
+        { name = "Spirit Rend", who = "Shade", amount = 31829,
+          overkill = 28483 },
+    }
+    local real = R.RealBlow(story)
+    Check("The hit that mattered is the one that TOOK the most",
+        real ~= nil and real.spell == "Grim Ward" and real.landed == 20000,
+        real and real.spell)
+    Check("...and a heal is never it", real ~= nil and real.who ~= "A Friend")
+    Check("...and when the killing blow IS the biggest, nothing is claimed",
+        R.RealBlow({ { name = "Small", who = "X", amount = 10 },
+                     { name = "Big", who = "X", amount = 900 } }) == nil)
+    Check("A recap of one event has no earlier hit to name",
+        R.RealBlow({ { name = "Only", who = "X", amount = 10 } }) == nil)
+
+    ---------------------------------------------------------------------
+    -- What goes to chat
+    ---------------------------------------------------------------------
+    local lines = R.ShareLines({
+        { short = "Shuja", at = 62,
+          blow = { who = "Grim Skirmisher", spell = "Melee" } },
+        { short = "Meredy", at = 87, blowWhy = "the recap is empty" },
+    }, { timed = true, where = "M+7 - Ara-Kara", duration = 121,
+         culprits = {} })
+    Check("A share names the place and the count first",
+        lines ~= nil and lines[1]:find("Ara-Kara", 1, true) ~= nil
+        and lines[1]:find("2 died", 1, true) ~= nil, lines and lines[1])
+    Check("...and one line per death, with the time on it",
+        #lines >= 3 and lines[#lines]:find("Meredy", 1, true) ~= nil
+        and lines[#lines - 1]:find("1:02", 1, true) ~= nil)
+    -- An inline icon is an escape sequence. It either arrives at the other
+    -- end as raw punctuation or not at all, so it is stripped - Death's rule
+    -- and Death's own function.
+    Check("...with no inline icons in it",
+        table.concat(lines, " "):find("|T", 1, true) == nil)
+    Check("A pull with nobody dead has nothing to share",
+        R.ShareLines({}, {}) == nil and R.ShareLines(nil, nil) == nil)
+
+    ---------------------------------------------------------------------
     -- Surviving a reload
     --
     -- A new saved-variable schema, so the two rules are checked rather than
