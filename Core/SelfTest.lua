@@ -2021,8 +2021,12 @@ local function TestDeath()
         Check("A face counts only what that source did",
             facts.hits == 2 and facts.total == 950000)
         Check("It names its biggest hit", facts.biggest == 900000)
+        -- Each ability is {spellID, name} rather than a bare name, so the
+        -- enemy tip can draw it with its icon - the rule everywhere else in
+        -- this addon. Still once each.
         Check("It lists what it used, once each",
-            #facts.spells == 2 and facts.spells[1] == "Scratch")
+            #facts.spells == 2 and facts.spells[1].name == "Scratch"
+            and facts.spells[2].name == "Melee")
         Check("A heal is never counted as something it did to you",
             facts.total == 950000)
         Check("No named source is an empty summary, not an error",
@@ -2458,6 +2462,43 @@ local function TestRaidDeaths()
         R.RealBlow({ { name = "Only", who = "X", amount = 10 } }) == nil)
 
     ---------------------------------------------------------------------
+    -- The enemy tip, which three windows share
+    ---------------------------------------------------------------------
+    local summary = ns.Death.SourceSummary({
+        { who = "Shade", name = "Melee", amount = 5000 },
+        { who = "Shade", name = "Spirit Rend", amount = 31829, spellID = 7 },
+        { who = "Shade", name = "Melee", amount = 4000 },
+        { who = "Somebody Else", name = "Cleave", amount = 999 },
+        { who = "Shade", name = "a heal", amount = 90000, heal = true },
+    }, "Shade")
+    Check("The tip counts only what THIS thing did",
+        summary.hits == 3 and summary.total == 40829
+        and summary.biggest == 31829,
+        string.format("%d hits, %d total", summary.hits, summary.total))
+    Check("...and names each ability once, with its id for the icon",
+        #summary.spells == 2 and summary.spells[1].name == "Melee"
+        and summary.spells[2].spellID == 7)
+
+    Check("What it did reads as a sentence",
+        ns.Death.EnemyFacts(summary):find("3 hits", 1, true) ~= nil)
+    Check("...and one hit is not \"1 hits\"",
+        ns.Death.EnemyFacts({ hits = 1, total = 500, spells = {} })
+            :find("One hit", 1, true) ~= nil)
+    Check("A source nothing is known about says nothing at all",
+        ns.Death.EnemyFacts(nil) == "" and ns.Death.EnemySpells(nil) == "")
+    Check("The ability line carries every ability",
+        ns.Death.EnemySpells(summary):find("Spirit Rend", 1, true) ~= nil)
+
+    -- It goes to disk with the pull, because the recap is gone by the time
+    -- anybody points at the row.
+    local stored = R.PlainSummary(summary)
+    Check("The tip's facts survive a reload",
+        stored ~= nil and stored.hits == 3 and #stored.spells == 2
+        and stored.spells[2].spellID == 7)
+    Check("...and a summary of nothing is not written",
+        R.PlainSummary(nil) == nil and R.PlainSummary({}) == nil)
+
+    ---------------------------------------------------------------------
     -- What goes to chat
     ---------------------------------------------------------------------
     local lines = R.ShareLines({
@@ -2495,7 +2536,9 @@ local function TestRaidDeaths()
               class = "SHAMAN", at = 62, seq = 1, recapID = 37, you = false,
               blow = { who = "Grim Skirmisher", spell = "Melee",
                        amount = 39900, overkill = 8300,
-                       art = { creatureID = 214390 } } },
+                       art = { creatureID = 214390 },
+                       summary = { hits = 2, total = 44000, biggest = 39900,
+                           spells = { { name = "Melee" } } } } },
             { name = "Meredy Huntswell", short = "Meredy Huntswell",
               class = "MAGE", at = 87, seq = 4, recapID = 40, you = false,
               blowWhy = "the recap is empty" },
@@ -2513,6 +2556,13 @@ local function TestRaidDeaths()
     Check("...and the killer's face travels with it",
         saved.entries[1].blow ~= nil
         and saved.entries[1].blow.art.creatureID == 214390)
+    -- The RULE for reducing a summary is checked on its own further up. This
+    -- checks that Persist actually CALLS it - the recap is gone after a
+    -- reload, so a tip with no facts on disk is a tip with no facts at all.
+    Check("...and so does what that mob did, for the enemy tip",
+        saved.entries[1].blow.summary ~= nil
+        and saved.entries[1].blow.summary.hits == 2
+        and #saved.entries[1].blow.summary.spells == 1)
     Check("...and a death whose recap said nothing keeps the reason",
         saved.entries[2].blowWhy == "the recap is empty"
         and saved.entries[2].blow == nil)

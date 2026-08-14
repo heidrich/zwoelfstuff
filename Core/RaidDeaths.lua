@@ -468,6 +468,12 @@ function RaidDeaths.Capture()
             if entry.blow then
                 entry.blow.art = entry.blow.art or art
                 entry.real = RaidDeaths.RealBlow(events)
+                -- Everything this thing did to THIS person, summed while the
+                -- events are still in hand. The recap is gone by the time
+                -- somebody points at the row, so the answer has to be kept,
+                -- not looked up again.
+                entry.blow.summary =
+                    ns.Death.SourceSummary(events, entry.blow.who)
             else
                 entry.blowWhy = readWhy or "the recap gave nothing"
             end
@@ -517,6 +523,28 @@ end
 ---------------------------------------------------------------------------
 local Plain = function(...) return ns.Death.Plain(...) end
 
+-- What a mob did, reduced to what may be written to disk. Same rule as every
+-- other field down here: copied by name, verified, never handed over whole -
+-- and the ability list is a list of TABLES, so each one is walked too.
+function RaidDeaths.PlainSummary(summary)
+    if type(summary) ~= "table" then return nil end
+    local out = {
+        hits = Plain(summary.hits, "number"),
+        total = Plain(summary.total, "number"),
+        biggest = Plain(summary.biggest, "number"),
+        spells = {},
+    }
+    if not out.hits then return nil end
+    for _, spell in ipairs(summary.spells or {}) do
+        local name = Plain(spell.name, "string")
+        if name then
+            out.spells[#out.spells + 1] =
+                { name = name, spellID = Plain(spell.spellID, "number") }
+        end
+    end
+    return out
+end
+
 function RaidDeaths.Persist(fight)
     if not (type(fight) == "table" and type(fight.entries) == "table"
         and #fight.entries > 0) then
@@ -557,6 +585,7 @@ function RaidDeaths.Persist(fight)
                     -- "the client did not say" survives the disk as itself
                     -- rather than coming back as "not avoidable".
                     avoidable = Plain(blow.avoidable, "boolean"),
+                    summary = RaidDeaths.PlainSummary(blow.summary),
                 } or nil,
                 real = type(entry.real) == "table" and {
                     who = Plain(entry.real.who, "string"),
@@ -924,19 +953,37 @@ local function BuildRow(parent)
     -- tooltip - SetUnit wants a unit token and the thing is long dead - so
     -- this says what we actually know about it, which is more than the row
     -- shows: what it did here, and how many of them it did it to.
-    row.killerHit = HoverOver(row, row.killer, function(entry)
-        local blow = entry.blow
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine((blow and blow.who) or "?", 1, 1, 1)
+    -- THE MOB, as the big tip: the picture at a size you can recognise, and
+    -- everything it did to this person in these seconds. The same tip the
+    -- replay's marks and the death window's portrait show.
+    local function ShowEnemy(self)
+        local entry = row.entry
+        local blow = entry and entry.blow
+        if not (blow and blow.who) then return end
         local killed = entry.killedHere or 1
-        GameTooltip:AddLine(killed == 1 and "Killed one of you this pull"
-            or string.format("Killed %d of you this pull", killed),
-            0.61, 0.64, 0.69)
-        if blow and blow.art and blow.art.creatureID then
-            GameTooltip:AddLine("The picture beside the row is this one.",
-                0.61, 0.64, 0.69, true)
-        end
-    end)
+        ns.Death.ShowEnemyTip(self, {
+            who = blow.who,
+            art = blow.art,
+            summary = blow.summary,
+            note = killed > 1
+                and string.format("It killed %d of the group on this pull.",
+                    killed) or nil,
+        })
+    end
+    local function HideEnemy()
+        ns.Death.HideEnemyTip()
+    end
+
+    row.killerHit = CreateFrame("Frame", nil, row)
+    row.killerHit:SetAllPoints(row.killer)
+    row.killerHit:EnableMouse(true)
+    row.killerHit:SetScript("OnEnter", ShowEnemy)
+    row.killerHit:SetScript("OnLeave", HideEnemy)
+
+    -- And the face itself, which is the thing he actually points at.
+    row.face:EnableMouse(true)
+    row.face:SetScript("OnEnter", ShowEnemy)
+    row.face:SetScript("OnLeave", HideEnemy)
 
     -- THE ABILITY, through the client's own tooltip. A melee swing has no
     -- spell to ask about, so the row says what it knows itself rather than

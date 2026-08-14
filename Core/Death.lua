@@ -1407,6 +1407,22 @@ local function BuildWindow()
     frame.portrait:SetSize(54, 54)
     frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -12)
     frame.portrait:Hide()
+
+    -- The killer's face at 54 pixels is a silhouette. Pointing at it gives
+    -- the big one, with everything it did to you in these seconds - the same
+    -- tip the replay's marks and the group log's rows show.
+    frame.portrait:EnableMouse(true)
+    frame.portrait:SetScript("OnEnter", function(self)
+        local snapshot = Death.Showing()
+        if not (snapshot and snapshot.killer) then return end
+        Death.ShowEnemyTip(self, {
+            who = snapshot.killer,
+            art = snapshot.killerArt,
+            summary = Death.SourceSummary(snapshot.events, snapshot.killer),
+        })
+    end)
+    frame.portrait:SetScript("OnLeave", Death.HideEnemyTip)
+
     local portraitEdge = ns.CreateBorder(frame.portrait, 1, "OVERLAY")
     portraitEdge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
@@ -1825,6 +1841,172 @@ end
 
 local function PaintPortrait(art)
     return Death.PaintArt(frame.portrait, art)
+end
+
+---------------------------------------------------------------------------
+-- THE ENEMY TIP - one big tooltip, everywhere a mob's face is drawn
+--
+-- His ask: "wenn ich mit der maus über den gegner fahre, bitte größeres
+-- tooltip mit größerem bild und fähigkeiten etc. das bitte überall in allen
+-- fenstern wo gegner bilder zu sehen sind."
+--
+-- WHAT IS HONESTLY IN IT, and the limit was measured months ago rather than
+-- assumed now: there is NO client call that lists an arbitrary NPC's
+-- abilities, and inside a dungeon a mob withholds its name, its health and
+-- its creature type outright. The Encounter Journal knows bosses and nothing
+-- about trash. So this cannot be a wiki page.
+--
+-- What it is instead is better for the question being asked: what this thing
+-- did HERE, in these seconds, with which abilities - summed from the recap
+-- events we have already read. "It hit you nine times for 416k, biggest 59.8k,
+-- with Curse of Torment and Melee" is what you want at the moment you are
+-- pointing at its face, and no database has it.
+--
+-- Its own frame rather than GameTooltip, because the whole point is the big
+-- picture and a 3D model inside the client's tooltip fights its autosizing.
+---------------------------------------------------------------------------
+local FACE = 116
+local TIP_W = 300
+
+local enemyTip
+
+local function BuildEnemyTip()
+    local UI, C = ns.UI, ns.UI.C
+
+    enemyTip = CreateFrame("Frame", "ZwoelfStuffEnemyTip", UIParent)
+    enemyTip:SetWidth(TIP_W)
+    enemyTip:SetFrameStrata("TOOLTIP")
+    enemyTip:SetClampedToScreen(true)
+    enemyTip:Hide()
+
+    UI.Fill(enemyTip, "BACKGROUND", C.well)
+    local edge = ns.CreateBorder(enemyTip, 1, "BORDER")
+    edge:SetColor(C.overlayEdge[1], C.overlayEdge[2], C.overlayEdge[3], 1)
+    UI.Shadow(enemyTip, 16, 0.6)
+
+    enemyTip.model = CreateFrame("PlayerModel", nil, enemyTip)
+    enemyTip.model:SetSize(FACE, FACE)
+    enemyTip.model:SetPoint("TOPLEFT", enemyTip, "TOPLEFT", 12, -12)
+
+    enemyTip.name = UI.Label(enemyTip, "", UI.FS.card, C.text)
+    enemyTip.name:SetPoint("TOPLEFT", enemyTip.model, "TOPRIGHT", 12, -2)
+    enemyTip.name:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
+    enemyTip.name:SetJustifyH("LEFT")
+
+    enemyTip.facts = UI.Label(enemyTip, "", UI.FS.meta, C.textDim)
+    enemyTip.facts:SetPoint("TOPLEFT", enemyTip.name, "BOTTOMLEFT", 0, -6)
+    enemyTip.facts:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
+    enemyTip.facts:SetJustifyH("LEFT")
+    enemyTip.facts:SetWordWrap(true)
+
+    -- The abilities, under the picture and across the full width - a long
+    -- name has the whole box rather than the column beside the model.
+    enemyTip.what = UI.Eyebrow(enemyTip, "What it used here")
+    enemyTip.what:SetPoint("TOPLEFT", enemyTip.model, "BOTTOMLEFT", 0, -10)
+
+    enemyTip.spells = UI.Label(enemyTip, "", UI.FS.meta, C.textBody)
+    enemyTip.spells:SetPoint("TOPLEFT", enemyTip.what, "BOTTOMLEFT", 0, -5)
+    enemyTip.spells:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
+    enemyTip.spells:SetJustifyH("LEFT")
+    enemyTip.spells:SetWordWrap(true)
+
+    enemyTip.note = UI.Label(enemyTip, "", UI.FS.meta, C.textFaint)
+    enemyTip.note:SetPoint("TOPLEFT", enemyTip.spells, "BOTTOMLEFT", 0, -8)
+    enemyTip.note:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
+    enemyTip.note:SetJustifyH("LEFT")
+    enemyTip.note:SetWordWrap(true)
+    return enemyTip
+end
+
+-- WHAT IT DID HERE, as one sentence. Pure and exported: three windows show
+-- this and one wording is the whole point.
+function Death.EnemyFacts(summary)
+    if not (summary and summary.hits and summary.hits > 0) then return "" end
+    if summary.hits == 1 then
+        return string.format("One hit, %s.", ns.ShortNumber(summary.total or 0))
+    end
+    return string.format("%d hits for %s, biggest %s.",
+        summary.hits, ns.ShortNumber(summary.total or 0),
+        ns.ShortNumber(summary.biggest or 0))
+end
+
+-- The abilities as one readable line, each with its icon, which is the rule
+-- everywhere in this addon.
+function Death.EnemySpells(summary)
+    local list = summary and summary.spells
+    if not (list and #list > 0) then return "" end
+    return Death.SpellList(list, "   ")
+end
+
+function Death.ShowEnemyTip(owner, spec)
+    if not (ns.UI and ns.UI.C and owner and spec and spec.who) then return end
+    if not enemyTip then BuildEnemyTip() end
+
+    enemyTip.name:SetText(spec.who)
+    enemyTip.facts:SetText(Death.EnemyFacts(spec.summary))
+
+    local spells = Death.EnemySpells(spec.summary)
+    enemyTip.spells:SetText(spells)
+    enemyTip.what:SetShown(spells ~= "")
+    enemyTip.note:SetText(spec.note or "")
+
+    local drawn = Death.PaintArt(enemyTip.model, spec.art)
+    -- No picture is not an empty box: the text slides up into its place.
+    enemyTip.name:ClearAllPoints()
+    enemyTip.name:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
+    if drawn then
+        enemyTip.name:SetPoint("TOPLEFT", enemyTip.model, "TOPRIGHT", 12, -2)
+        enemyTip.what:SetPoint("TOPLEFT", enemyTip.model, "BOTTOMLEFT", 0, -10)
+    else
+        enemyTip.name:SetPoint("TOPLEFT", enemyTip, "TOPLEFT", 12, -12)
+        enemyTip.what:SetPoint("TOPLEFT", enemyTip.facts, "BOTTOMLEFT", 0, -10)
+    end
+
+    -- As tall as what is in it. A fixed height leaves a mob with one ability
+    -- sitting in half a box of nothing.
+    local height = (drawn and (FACE + 24) or 56)
+        + (spells ~= "" and 40 or 0)
+        + ((spec.note and spec.note ~= "") and 34 or 0)
+    enemyTip:SetHeight(height)
+
+    enemyTip:ClearAllPoints()
+    enemyTip:SetPoint("BOTTOMLEFT", owner, "TOPRIGHT", 6, 6)
+    enemyTip:Show()
+end
+
+function Death.HideEnemyTip()
+    if enemyTip then enemyTip:Hide() end
+end
+
+-- For the checks: a local frame is invisible to every one of them.
+function Death.EnemyTipFrame()
+    return enemyTip
+end
+
+-- WHAT A SOURCE DID, summed out of the events we already hold. Lives here
+-- rather than in Replay because three windows ask it now and the recap is
+-- Death's to read; Replay keeps the name it has always called it by.
+--
+-- The spells are carried as {spellID, name} rather than as bare names, so
+-- the tip can draw each one with its icon.
+function Death.SourceSummary(events, who)
+    local out = { hits = 0, total = 0, biggest = 0, spells = {} }
+    if not who then return out end
+    local seen = {}
+    for _, ev in ipairs(events or {}) do
+        if ev.who == who and not ev.heal then
+            out.hits = out.hits + 1
+            out.total = out.total + (ev.amount or 0)
+            if (ev.amount or 0) > out.biggest then out.biggest = ev.amount end
+            local name = ev.name
+            if name and not seen[name] then
+                seen[name] = true
+                out.spells[#out.spells + 1] =
+                    { name = name, spellID = ev.spellID }
+            end
+        end
+    end
+    return out
 end
 
 -- The side list, repainted whole. Newest at the top, because that is the

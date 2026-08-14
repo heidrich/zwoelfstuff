@@ -179,24 +179,11 @@ end
 -- Asked for ANY source now, not only the killer: every face on the plot
 -- carries its own summary, which is the point of putting a face on every
 -- hit in the first place.
+-- Death owns the recap and three windows ask this now, so the body moved
+-- there. The name stays: this file has called it that since 4.60.0, and
+-- so do its checks.
 function Replay.SourceSummary(events, who)
-    local out = { hits = 0, total = 0, biggest = 0, spells = {} }
-    if not who then return out end
-    local killer = who
-    local seen = {}
-    for _, ev in ipairs(events or {}) do
-        if ev.who == killer and not ev.heal then
-            out.hits = out.hits + 1
-            out.total = out.total + (ev.amount or 0)
-            if (ev.amount or 0) > out.biggest then out.biggest = ev.amount end
-            local name = ev.name
-            if name and not seen[name] then
-                seen[name] = true
-                out.spells[#out.spells + 1] = name
-            end
-        end
-    end
-    return out
+    return ns.Death.SourceSummary(events, who)
 end
 
 -- How tall an incoming column stands: its share of the health bar, floored
@@ -506,10 +493,22 @@ local function BuildMark(parent, kind)
 
     mark:EnableMouse(true)
     mark:SetScript("OnEnter", function(self)
-        if self.item then Tooltip(self, self.item) end
+        if not self.item then return end
+        Tooltip(self, self.item)
+        -- AND THE BIG ONE, beside it, whenever this mark carries a mob's
+        -- face. The small tooltip answers "what was this hit"; the enemy tip
+        -- answers "what is this thing" - the picture at a size you can
+        -- recognise and everything it did in these seconds.
+        local item = self.item
+        if not item.cast and item.who then
+            ns.Death.ShowEnemyTip(self, {
+                who = item.who, art = item.art, summary = item.summary,
+            })
+        end
     end)
     mark:SetScript("OnLeave", function()
         if GameTooltip then GameTooltip:Hide() end
+        ns.Death.HideEnemyTip()
     end)
 
     mark:Hide()
