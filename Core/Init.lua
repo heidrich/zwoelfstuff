@@ -1555,6 +1555,8 @@ ns.COMMANDS = {
     { cmd = "/zs death", text = "the last death's analysis (|cffffd100share|r "
         .. "posts it, |cffffd100clear|r empties the list, |cffffd100cds|r says "
         .. "why a press has no bar)" },
+    { cmd = "/zs death raid", text = "everybody who died this fight, in the "
+        .. "order they fell, and what ended each one" },
 
     { group = "Housekeeping" },
     { cmd = "/zs test", text = "run the addon's own checks and report failures" },
@@ -1771,6 +1773,10 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Death:Share()
         elseif sub == "probe" then
             ns.Death:Probe()
+        -- Everybody else's, which is a different question from "what killed
+        -- me" and reads a different half of the same list.
+        elseif sub == "raid" or sub == "group" then
+            ns.RaidDeaths:Dump()
         -- Why a press has no bar under it. Four different causes wear the
         -- same symptom, and only the client can say which one it is.
         elseif sub == "cds" or sub == "cd" then

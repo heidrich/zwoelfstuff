@@ -620,11 +620,24 @@ end
 
 -- The realm half of a name, gone. The damage meter names people with realm,
 -- UnitName("player") answers without one.
+--
+-- A SPACE MEANS IT IS NOT A PLAYER, and that is the whole guard. A player's
+-- name is one word with no hyphen in it, so a hyphen in a name that has a
+-- space in it belongs to the name: "Crenna Earth-Daughter" is a creature,
+-- and cutting at her hyphen listed her as "Crenna Earth" in the raid death
+-- log. It read as a truncation bug rather than as this. The damage meter
+-- lists creatures as readily as people, so this function had never been
+-- handed one until that list stopped being thrown away.
 local function StripRealm(name)
     if type(name) ~= "string" then return name end
+    if name:find(" ", 1, true) then return name end
     local short = name:match("^(.-)%-")
     return short or name
 end
+
+-- Exported because the raid death log names EVERYBODY off the same list and
+-- has the same realm halves to drop. Two copies of this would be two rules.
+Death.StripRealm = StripRealm
 
 -- The deathRecapID of OUR latest death in the current fight, or nil and why.
 -- Read the way EllesmereUIDamageMeters reads it: the Deaths list of the

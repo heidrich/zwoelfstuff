@@ -2208,6 +2208,201 @@ local function TestDeath()
     end
 end
 
+---------------------------------------------------------------------------
+-- Everybody ELSE's deaths
+--
+-- The rows below are the four his client actually handed over on 2026-08-14,
+-- typed in as they came rather than rounded into tidy examples. That matters
+-- for exactly one reason: two of the four died in the SAME SECOND, which is
+-- the case a made-up list would never have contained and the one where the
+-- ordering has to fall back on something other than the clock.
+---------------------------------------------------------------------------
+local function TestRaidDeaths()
+    local R = ns.RaidDeaths
+    if not R then
+        Skip("Raid deaths", "the module is not loaded")
+        return
+    end
+
+    -- Newest first, which is the order the client hands them over.
+    local function Recorded()
+        return {
+            { name = "Meredy Huntswell", classFilename = "MAGE",
+              deathRecapID = 40, deathTimeSeconds = 87, isLocalPlayer = false },
+            { name = "Austin Huxworth", classFilename = "HUNTER",
+              deathRecapID = 39, deathTimeSeconds = 65, isLocalPlayer = false },
+            { name = "Crenna Earth-Daughter", classFilename = "DRUID",
+              deathRecapID = 38, deathTimeSeconds = 62, isLocalPlayer = false },
+            { name = "Shuja Grimaxe", classFilename = "SHAMAN",
+              deathRecapID = 37, deathTimeSeconds = 62, isLocalPlayer = false },
+        }
+    end
+
+    local rows = R.Rows(Recorded(), "Zwoelf")
+    Check("Every death in the list is read", #rows == 4,
+        string.format("%d of 4", #rows))
+
+    local order, timed = R.Timeline(rows)
+    Check("The Current session's clock is usable", timed)
+    Check("They come out in the order they fell",
+        order[1].short == "Shuja Grimaxe"
+        and order[2].short == "Crenna Earth-Daughter"
+        and order[3].short == "Austin Huxworth"
+        and order[4].short == "Meredy Huntswell",
+        order[1] and order[1].short)
+
+    -- The two at 62 are the whole reason there is a second sort key: the
+    -- clock cannot separate them and the recap id can, because it counts up.
+    Check("Two deaths in one second are split by the recap id",
+        order[1].recapID == 37 and order[2].recapID == 38)
+
+    Check("The gap to the one before is what tells a wipe from bad luck",
+        order[1].gap == nil and order[2].gap == 0
+        and order[3].gap == 3 and order[4].gap == 22,
+        tostring(order[4] and order[4].gap))
+
+    -- Overall answers -1 for every death. That is "there is no clock in
+    -- here", not "he died at second zero", and a timeline drawn off it would
+    -- put four people on the same tick.
+    local blind = Recorded()
+    for _, row in ipairs(blind) do row.deathTimeSeconds = -1 end
+    local noClock, stillTimed = R.Timeline(R.Rows(blind, "Zwoelf"))
+    Check("Overall's -1 is refused as a time", not stillTimed)
+    Check("...and they still come out oldest first, by recap id",
+        noClock[1].short == "Shuja Grimaxe"
+        and noClock[4].short == "Meredy Huntswell")
+
+    -- And with neither, the order the client listed them in is the last
+    -- thing left - reversed, because that list arrives newest first.
+    local bare = Recorded()
+    for _, row in ipairs(bare) do
+        row.deathTimeSeconds, row.deathRecapID = -1, nil
+    end
+    local reversed = R.Timeline(R.Rows(bare, "Zwoelf"))
+    Check("With no clock and no id the list order becomes the order",
+        reversed[1].short == "Shuja Grimaxe"
+        and reversed[4].short == "Meredy Huntswell")
+
+    local broken = Recorded()
+    broken[2].name = nil
+    Check("A row that cannot even be named is dropped, not drawn empty",
+        #R.Rows(broken, "Zwoelf") == 3)
+
+    -- The damage meter lists creatures as readily as people, and a creature's
+    -- own name may have a hyphen in it. Cutting at the first one listed her
+    -- as "Crenna Earth", which looks like a truncation bug and is not.
+    Check("A creature whose own name has a hyphen keeps all of it",
+        R.Rows({ { name = "Crenna Earth-Daughter", deathRecapID = 38 } },
+            "Zwoelf")[1].short == "Crenna Earth-Daughter")
+    Check("...and a player's realm half still comes off",
+        ns.Death.StripRealm("Zwoelf-Destromath") == "Zwoelf")
+
+    ---------------------------------------------------------------------
+    -- Whose row it is
+    ---------------------------------------------------------------------
+    Check("The client's own isLocalPlayer decides, name or no name",
+        R.IsYou({ isLocalPlayer = true, name = "Meredy Huntswell" }, "Zwoelf")
+        and not R.IsYou({ isLocalPlayer = false, name = "Zwoelf" }, "Zwoelf"))
+    Check("...and without the flag the name answers, realm half dropped",
+        R.IsYou({ name = "Zwoelf-Destromath" }, "Zwoelf")
+        and not R.IsYou({ name = "Meredy Huntswell" }, "Zwoelf"))
+
+    ---------------------------------------------------------------------
+    -- What ended each one
+    ---------------------------------------------------------------------
+    -- Death.ReadRecap hands events over OLDEST first, so the last one is the
+    -- one that landed last. The amounts are his: 31829 with 28483 of it
+    -- wasted on a corpse.
+    local events = {
+        { name = "Spirit Rend", who = "Tormented Shade", amount = 4000 },
+        { name = "Spirit Rend", who = "Tormented Shade", amount = 31829,
+          overkill = 28483, spellID = 1259255 },
+    }
+    local blow = R.Blow(events)
+    Check("The killing blow is the last event, not the first",
+        blow ~= nil and blow.amount == 31829 and blow.overkill == 28483)
+    Check("...and it names the source of the hit",
+        blow ~= nil and blow.who == "Tormented Shade"
+        and blow.spellID == 1259255)
+
+    -- A heal can be the newest thing in a recap - somebody was still trying.
+    -- Taking the newest event blindly would print the healer as the killer.
+    events[#events + 1] = { name = "a heal", who = "A Friend",
+        heal = true, amount = 9000 }
+    local past = R.Blow(events)
+    Check("A heal after the killing blow does not become the killer",
+        past ~= nil and past.who == "Tormented Shade" and past.amount == 31829)
+
+    Check("A recap with nothing in it has no killing blow",
+        R.Blow({}) == nil and R.Blow(nil) == nil)
+
+    local counted = R.Culprits({
+        { blow = { who = "Tormented Shade", spell = "Spirit Rend" } },
+        { blow = { who = "Tormented Shade", spell = "Spirit Rend" } },
+        { blow = { who = "Tormented Shade", spell = "Void Bolt" } },
+        { blowWhy = "the recap is empty" },
+    })
+    Check("What did the killing is counted per ABILITY, not per mob",
+        #counted == 2 and counted[1].count == 2
+        and counted[1].spell == "Spirit Rend",
+        string.format("%d kinds", #counted))
+    Check("A death whose recap said nothing counts towards nothing",
+        counted[1].count + counted[2].count == 3)
+
+    ---------------------------------------------------------------------
+    -- How the line reads
+    ---------------------------------------------------------------------
+    Check("A class the colour table knows is coloured",
+        R.Coloured("Zwoelf", "DEATHKNIGHT"):find("|cff", 1, true) == 1)
+    Check("...and one it has never heard of is still a readable name",
+        R.Coloured("Meredy", "SOMETHINGNEW") == "Meredy")
+    Check("The clock reads the way a fight is talked about",
+        R.Clock(121) == "2:01" and R.Clock(62) == "1:02"
+        and R.Clock(0) == "0:00" and R.Clock(nil) == "--:--")
+
+    local line = R.Line({ short = "Shuja Grimaxe", class = "SHAMAN", at = 62,
+        gap = 3, blow = { who = "Tormented Shade", spell = "Spirit Rend",
+            amount = 31829, overkill = 28483 } }, true)
+    Check("A line says when, who and to what",
+        line:find("1:02", 1, true) and line:find("Shuja", 1, true)
+        and line:find("Tormented Shade", 1, true)
+        and line:find("Spirit Rend", 1, true), line)
+    local silent = R.Line({ short = "Shuja Grimaxe",
+        blowWhy = "the recap is empty" }, false)
+    Check("...and a death whose recap refused says so instead of nothing",
+        silent:find("the recap is empty", 1, true) ~= nil, silent)
+
+    ---------------------------------------------------------------------
+    -- THE WIRING, not the rule. Everything above is arithmetic on tables
+    -- this file typed out. This asks the client the addon will actually ask,
+    -- and reports what came back rather than asserting a fight is running.
+    ---------------------------------------------------------------------
+    local entries, why, info = R.Collect()
+    if not (entries and info) then
+        Skip("Reading the deaths the client is holding", why or "?")
+        return
+    end
+
+    Check("The client's own list comes back ordered",
+        #entries > 0 and (not info.timed
+            or entries[1].at <= entries[#entries].at),
+        string.format("%d deaths, %s", #entries,
+            info.timed and "timed" or "no clock"))
+
+    local read, refused = 0, 0
+    for _, entry in ipairs(entries) do
+        if entry.blow then read = read + 1
+        elseif entry.blowWhy then refused = refused + 1 end
+    end
+    Check("Every death either read its recap or said why it could not",
+        read + refused == #entries,
+        string.format("%d read, %d refused", read, refused))
+
+    Skip("What the client is holding right now", string.format(
+        "%d deaths in %s%s, %d recaps read", #entries, info.label,
+        info.duration and (" of " .. R.Clock(info.duration)) or "", read))
+end
+
 local function TestLiveBars()
     if not (ns.db and ns.db.bars) then
         Skip("Your bars", "no saved data yet")
@@ -7443,6 +7638,7 @@ function Test:Run()
         { "Sharing",       TestShare },
         { "Cast history",  TestHistory },
         { "Death analysis", TestDeath },
+        { "Raid deaths",   TestRaidDeaths },
         { "Your bars",     TestLiveBars },
         { "Panel movers",  TestPanelMovers },
         { "Taunts",        TestTaunts },

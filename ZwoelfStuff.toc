@@ -151,6 +151,10 @@ Core\Answers.lua
 Core\Invites.lua
 Core\History.lua
 Core\Death.lua
+# Everybody ELSE's deaths, off the same damage-meter list Death already reads
+# and then discards. Below Death because it reads Death.ReadRecap and
+# Death.StripRealm; it owns no source of its own.
+Core\RaidDeaths.lua
 # The death, played back on a timeline: what came in above the axis, what
 # you pressed below it. Reads Death's own pure rules (Storyline, ReplayAt,
 # RecentEvents) and adds no source of its own.
