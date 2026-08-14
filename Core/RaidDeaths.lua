@@ -427,7 +427,7 @@ function RaidDeaths.Capture()
     end
 
     local where, whereShort = ns.Death.Where()
-    return RaidDeaths.Remember(RaidDeaths.log, {
+    local fight = RaidDeaths.Remember(RaidDeaths.log, {
         key = key,
         at = GetTime(),
         when = date("%H:%M:%S"),
@@ -437,33 +437,155 @@ function RaidDeaths.Capture()
         entries = entries,
         culprits = RaidDeaths.Culprits(entries),
     }, FIGHTS_KEPT)
+
+    -- Every tick rather than at the end of the pull. Saved variables only
+    -- reach the disk at logout, so this is not about crashes - it is about
+    -- the in-memory copy being CURRENT when he types /reload in the middle
+    -- of a fight, which is when he types it.
+    RaidDeaths.Save()
+    return fight
 end
 
 function RaidDeaths.Newest()
     return RaidDeaths.log[#RaidDeaths.log]
 end
 
--- WHAT TO SHOW, in the order a person means it: the fight running right now,
--- then the last one that was captured, then whatever the client still has
--- lying about with no clock on it. Returns entries, an info table and which
--- of the three answered, so the window and the chat line can both say where
--- their numbers came from rather than implying they are live.
-function RaidDeaths.Best()
-    local live, why, info = RaidDeaths.Collect()
-    if live and info and info.timed then return live, info, "live" end
+---------------------------------------------------------------------------
+-- Surviving a reload
+--
+-- The same argument the own-death log made, and it is stronger here: a
+-- reload happens after every settings change and every error, and the side
+-- list is a list of PULLS. One that empties itself every time he presses
+-- /reload is a list of one thing.
+--
+-- The two rules are Death's, and so are the two functions that enforce them:
+-- only what is READABLE goes in, copied field by field rather than the table
+-- being handed over whole, and a fight nothing could be read out of is not
+-- kept. `at` is deliberately dropped - it is a GetTime stamp, and GetTime
+-- restarts with the client.
+---------------------------------------------------------------------------
+local Plain = function(...) return ns.Death.Plain(...) end
 
-    local kept = RaidDeaths.Newest()
-    if kept then
-        return kept.entries, {
+function RaidDeaths.Persist(fight)
+    if not (type(fight) == "table" and type(fight.entries) == "table"
+        and #fight.entries > 0) then
+        return nil
+    end
+
+    local out = {
+        key = Plain(fight.key, "number"),
+        when = Plain(fight.when, "string"),
+        where = Plain(fight.where, "string"),
+        whereShort = Plain(fight.whereShort, "string"),
+        duration = Plain(fight.duration, "number"),
+        entries = {},
+    }
+
+    for _, entry in ipairs(fight.entries) do
+        local name = Plain(entry.name, "string")
+        if name then
+            local blow = type(entry.blow) == "table" and entry.blow or nil
+            out.entries[#out.entries + 1] = {
+                name = name,
+                short = Plain(entry.short, "string") or name,
+                class = Plain(entry.class, "string"),
+                at = Plain(entry.at, "number"),
+                gap = Plain(entry.gap, "number"),
+                recapID = Plain(entry.recapID, "number"),
+                you = entry.you == true,
+                seq = Plain(entry.seq, "number") or 0,
+                blowWhy = Plain(entry.blowWhy, "string"),
+                blow = blow and {
+                    who = Plain(blow.who, "string"),
+                    spell = Plain(blow.spell, "string"),
+                    spellID = Plain(blow.spellID, "number"),
+                    amount = Plain(blow.amount, "number"),
+                    overkill = Plain(blow.overkill, "number"),
+                    art = ns.Death.PlainArt(blow.art),
+                } or nil,
+            }
+        end
+    end
+
+    if #out.entries == 0 then return nil end
+    return out
+end
+
+function RaidDeaths.Restore(stored)
+    local log = {}
+    if type(stored) ~= "table" then return log end
+    for _, fight in ipairs(stored) do
+        local kept = RaidDeaths.Persist(fight)
+        if kept then
+            -- The count is DERIVED rather than stored, so a better rule
+            -- written next month applies to the fights already on disk. Same
+            -- reason Death.Restore re-runs its analysis.
+            kept.culprits = RaidDeaths.Culprits(kept.entries)
+            log[#log + 1] = kept
+        end
+    end
+    while #log > FIGHTS_KEPT do table.remove(log, 1) end
+    return log
+end
+
+local function Store()
+    if not ns.account then return nil end
+    ns.account.raidDeaths = ns.account.raidDeaths or {}
+    return ns.account.raidDeaths
+end
+
+function RaidDeaths.Save()
+    local store, key = Store(), ns.CharacterKey()
+    if not (store and key) then return end
+    local out = {}
+    for _, fight in ipairs(RaidDeaths.log) do
+        local kept = RaidDeaths.Persist(fight)
+        if kept then out[#out + 1] = kept end
+    end
+    store[key] = out
+end
+
+function RaidDeaths.Load()
+    local store, key = Store(), ns.CharacterKey()
+    if not (store and key) then return end
+    RaidDeaths.log = RaidDeaths.Restore(store[key])
+    RaidDeaths.showing = nil
+    RaidDeaths.RefreshIcon()
+end
+
+-- WHICH PULL IS BEING LOOKED AT. `showing` is an index into the log and nil
+-- means the newest, exactly like Death.showing. Clamped rather than wrapped:
+-- paging past the oldest and landing on the newest reads as the list
+-- jumping, not as an edge.
+function RaidDeaths.Selected()
+    local total = #RaidDeaths.log
+    if total == 0 then return nil end
+    local index = RaidDeaths.showing or total
+    if index < 1 then index = 1 end
+    if index > total then index = total end
+    RaidDeaths.showing = index
+    return RaidDeaths.log[index], index
+end
+
+-- WHAT TO SHOW: the pull that is selected, or - when nothing has been
+-- captured at all - whatever the client still has lying about with no clock
+-- on it. Returns entries, an info table and which of the two answered, so
+-- the window says where its numbers came from rather than implying.
+function RaidDeaths.Best()
+    local fight = RaidDeaths.Selected()
+    if fight then
+        return fight.entries, {
             timed = true,
-            duration = kept.duration,
-            label = kept.whereShort and (kept.whereShort .. ", " .. kept.when)
-                or kept.when,
-            culprits = kept.culprits,
-            where = kept.where,
+            duration = fight.duration,
+            label = fight.whereShort and (fight.whereShort .. ", " .. fight.when)
+                or fight.when,
+            where = fight.where,
+            when = fight.when,
+            culprits = fight.culprits or RaidDeaths.Culprits(fight.entries),
         }, "kept"
     end
 
+    local live, why, info = RaidDeaths.Collect()
     if live and info then return live, info, "session" end
     return nil, nil, why or "nothing has died yet"
 end
@@ -626,7 +748,30 @@ RaidDeaths.CULPRITS_SHOWN = CULPRITS_SHOWN
 ---------------------------------------------------------------------------
 local frame
 local ROW_H, FACE = 26, 22
-local WIDTH, HEIGHT = 470, 380
+-- 820 is the width of the options window, so two of this addon's windows
+-- open on top of each other rather than beside each other.
+local WIDTH, HEIGHT = 820, 470
+local SIDE_W, SIDE_ROW_H, SIDE_ROWS = 196, 34, 9
+
+-- A hover target over a font string. A string cannot take the mouse itself,
+-- and the two things worth asking about here - the mob and the ability - sit
+-- side by side in one line, so one tooltip for the whole row would have to
+-- guess which of them was meant.
+local function HoverOver(row, label, onEnter)
+    local hit = CreateFrame("Frame", nil, row)
+    hit:SetAllPoints(label)
+    hit:EnableMouse(true)
+    hit:SetScript("OnEnter", function(self)
+        if not (GameTooltip and row.entry) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        onEnter(row.entry)
+        GameTooltip:Show()
+    end)
+    hit:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    return hit
+end
 
 local function BuildRow(parent)
     local UI, C = ns.UI, ns.UI.C
@@ -647,18 +792,101 @@ local function BuildRow(parent)
 
     row.who = UI.Label(row, "", UI.FS.row, C.text)
     row.who:SetPoint("LEFT", row.face, "RIGHT", 6, 0)
-    row.who:SetWidth(140)
+    row.who:SetWidth(150)
     row.who:SetJustifyH("LEFT")
+    row.who:SetWordWrap(false)
 
-    row.what = UI.Label(row, "", UI.FS.meta, C.textDim)
-    row.what:SetPoint("LEFT", row.who, "RIGHT", 6, 0)
-    row.what:SetPoint("RIGHT", row, "RIGHT", -58, 0)
-    row.what:SetJustifyH("LEFT")
+    row.killer = UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.killer:SetPoint("LEFT", row.who, "RIGHT", 6, 0)
+    row.killer:SetWidth(150)
+    row.killer:SetJustifyH("LEFT")
+    row.killer:SetWordWrap(false)
+
+    row.spell = UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.spell:SetPoint("LEFT", row.killer, "RIGHT", 6, 0)
+    row.spell:SetPoint("RIGHT", row, "RIGHT", -62, 0)
+    row.spell:SetJustifyH("LEFT")
+    row.spell:SetWordWrap(false)
 
     row.amount = UI.Label(row, "", UI.FS.meta, C.textDim)
     row.amount:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     row.amount:SetJustifyH("RIGHT")
 
+    -- THE MOB. There is no client API that turns a creature id into a
+    -- tooltip - SetUnit wants a unit token and the thing is long dead - so
+    -- this says what we actually know about it, which is more than the row
+    -- shows: what it did here, and how many of them it did it to.
+    row.killerHit = HoverOver(row, row.killer, function(entry)
+        local blow = entry.blow
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine((blow and blow.who) or "?", 1, 1, 1)
+        local killed = entry.killedHere or 1
+        GameTooltip:AddLine(killed == 1 and "Killed one of you this pull"
+            or string.format("Killed %d of you this pull", killed),
+            0.61, 0.64, 0.69)
+        if blow and blow.art and blow.art.creatureID then
+            GameTooltip:AddLine("The picture beside the row is this one.",
+                0.61, 0.64, 0.69, true)
+        end
+    end)
+
+    -- THE ABILITY, through the client's own tooltip. A melee swing has no
+    -- spell to ask about, so the row says what it knows itself rather than
+    -- showing an empty frame - the death window's rule, and the same code
+    -- shape, because a tooltip that silently shows nothing is worse than no
+    -- tooltip at all.
+    row.spellHit = HoverOver(row, row.spell, function(entry)
+        local blow = entry.blow
+        local shown = false
+        if blow and blow.spellID then
+            shown = pcall(GameTooltip.SetSpellByID, GameTooltip, blow.spellID)
+        end
+        if not shown then
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine((blow and blow.spell) or "?", 1, 1, 1)
+        end
+        if blow and blow.amount then
+            GameTooltip:AddLine(ns.ShortNumber(blow.amount) .. " on the blow "
+                .. "that finished them", 0.61, 0.64, 0.69, true)
+        end
+        if blow and blow.overkill then
+            GameTooltip:AddLine(ns.ShortNumber(blow.overkill)
+                .. " of it was overkill", 0.61, 0.64, 0.69)
+        end
+    end)
+
+    return row
+end
+
+-- ONE PULL IN THE SIDE LIST: when it was, where, and how many fell.
+local function BuildSideRow(parent, slot)
+    local UI, C = ns.UI, ns.UI.C
+    local row = CreateFrame("Button", nil, parent)
+    row:SetHeight(SIDE_ROW_H)
+
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints(row)
+    row.bg:Hide()
+
+    row.when = UI.Label(row, "", UI.FS.meta, C.text)
+    row.when:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -3)
+
+    row.count = UI.Label(row, "", UI.FS.meta, C.textFaint)
+    row.count:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -3)
+    row.count:SetJustifyH("RIGHT")
+
+    row.where = UI.Label(row, "", UI.FS.meta, C.textFaint)
+    row.where:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 4)
+    row.where:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -8, 4)
+    row.where:SetJustifyH("LEFT")
+    row.where:SetWordWrap(false)
+
+    row:SetScript("OnClick", function(self)
+        if not self.index then return end
+        RaidDeaths.showing = self.index
+        RaidDeaths:Refresh()
+    end)
+    row.slot = slot
     return row
 end
 
@@ -705,11 +933,57 @@ function RaidDeaths:Create()
     frame.where:SetPoint("TOPLEFT", frame, "TOPLEFT", UI.PAD,
         -(UI.HEADER_H + 8))
 
+    -----------------------------------------------------------------------
+    -- THE SIDE LIST: one line per pull, newest at the top, which is the one
+    -- being asked about nine times in ten. Same shape as the death window's,
+    -- because they are the same question asked about two different things.
+    -----------------------------------------------------------------------
+    local side = CreateFrame("Frame", nil, frame)
+    side:SetWidth(SIDE_W)
+    side:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -UI.PAD,
+        -(UI.HEADER_H + 8))
+    side:SetPoint("BOTTOM", frame, "BOTTOM", 0, 40)
+    frame.side = side
+
+    frame.sideTitle = UI.Label(side, "", UI.FS.meta, C.textFaint)
+    frame.sideTitle:SetPoint("TOPLEFT", side, "TOPLEFT", 8, 0)
+
+    local sideRule = frame:CreateTexture(nil, "ARTWORK")
+    sideRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    sideRule:SetWidth(1)
+    sideRule:SetPoint("TOPRIGHT", side, "TOPLEFT", -8, 0)
+    sideRule:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -8, 0)
+
+    frame.sideRows = {}
+    for slot = 1, SIDE_ROWS do
+        local row = BuildSideRow(side, slot)
+        if slot == 1 then
+            row:SetPoint("TOPLEFT", frame.sideTitle, "BOTTOMLEFT", -8, -6)
+        else
+            row:SetPoint("TOPLEFT", frame.sideRows[slot - 1],
+                "BOTTOMLEFT", 0, -2)
+        end
+        row:SetPoint("RIGHT", side, "RIGHT", 0, 0)
+        frame.sideRows[slot] = row
+    end
+
+    -- The wheel pages the side list, the way the death window's does. A list
+    -- longer than nine with no way down is a list that lies about its length.
+    side:EnableMouseWheel(true)
+    side:SetScript("OnMouseWheel", function(_, delta)
+        local total = #RaidDeaths.log
+        if total <= SIDE_ROWS then return end
+        local offset = (RaidDeaths.sideOffset or 0) - delta
+        RaidDeaths.sideOffset = math.max(0, math.min(total - SIDE_ROWS, offset))
+        RaidDeaths:Refresh()
+    end)
+
     local listHost = CreateFrame("Frame", nil, frame)
     listHost:SetPoint("TOPLEFT", frame.where, "BOTTOMLEFT", 0, -8)
-    listHost:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -UI.PAD, 40)
+    listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -18, 0)
 
-    local _, content = UI.ScrollArea(listHost, WIDTH - UI.PAD * 2, 6)
+    local _, content = UI.ScrollArea(listHost,
+        WIDTH - SIDE_W - UI.PAD * 2 - 18, 6)
     frame.content = content
     frame.rows = {}
 
@@ -767,7 +1041,10 @@ function RaidDeaths:Refresh()
     end
 
     local timed = info and info.timed
+    local killCounts = RaidDeaths.KillCounts(info and info.culprits)
     for index, entry in ipairs(entries) do
+        entry.killedHere = entry.blow and entry.blow.who
+            and killCounts[entry.blow.who] or nil
         local row = frame.rows[index]
         if not row then
             row = BuildRow(frame.content)
@@ -794,18 +1071,29 @@ function RaidDeaths:Refresh()
             row.who:SetTextColor(C.text[1], C.text[2], C.text[3])
         end
 
+        -- The row keeps the death it is drawing, because the two hover
+        -- targets are built once and read it at the moment the mouse
+        -- arrives, not at the moment they were made.
+        row.entry = entry
+
         local blow = entry.blow
         if blow then
-            row.what:SetText((blow.who or "?") .. "  -  " .. (blow.spell or "?"))
-            row.what:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            row.killer:SetText(blow.who or "?")
+            row.killer:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            -- The ability gets its icon, which is the rule everywhere in this
+            -- addon: a name says what hit, a picture says which one it was.
+            row.spell:SetText(ns.Death.SpellText(blow.spellID, blow.spell))
+            row.spell:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
             if type(blow.amount) == "number" and blow.amount > 0 then
                 row.amount:SetText(ns.ShortNumber(blow.amount))
             else
                 row.amount:SetText("")
             end
         else
-            row.what:SetText(entry.blowWhy or "nothing readable")
-            row.what:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+            row.killer:SetText("")
+            row.spell:SetText(entry.blowWhy or "nothing readable")
+            row.spell:SetTextColor(C.textFaint[1], C.textFaint[2],
+                C.textFaint[3])
             row.amount:SetText("")
         end
         row:Show()
@@ -813,11 +1101,77 @@ function RaidDeaths:Refresh()
 
     for index = #entries + 1, #frame.rows do
         frame.rows[index]:Hide()
+        frame.rows[index].entry = nil
     end
 
     frame.content:SetHeight(math.max(1, #entries * (ROW_H + 2)))
     frame.foot:SetText(RaidDeaths.FootLine(
         (info and info.culprits) or {}, #entries))
+
+    RaidDeaths.PaintSideList()
+end
+
+-- How many of the group each killer accounted for, keyed the way the rows
+-- ask for it. Pure, so the tooltip's one number does not have to walk the
+-- culprit list every time the mouse moves.
+function RaidDeaths.KillCounts(culprits)
+    local counts = {}
+    for _, culprit in ipairs(culprits or {}) do
+        if culprit.who then
+            counts[culprit.who] = (counts[culprit.who] or 0) + culprit.count
+        end
+    end
+    return counts
+end
+
+-- The side list, repainted whole. Newest at the top.
+function RaidDeaths.PaintSideList()
+    if not frame then return end
+    local C = ns.UI.C
+    local log = RaidDeaths.log
+    local total = #log
+    local _, selected = RaidDeaths.Selected()
+
+    local offset = math.max(0, math.min(math.max(0, total - SIDE_ROWS),
+        RaidDeaths.sideOffset or 0))
+    RaidDeaths.sideOffset = offset
+
+    for slot = 1, SIDE_ROWS do
+        local row = frame.sideRows[slot]
+        local index = total - (offset + slot - 1)
+        local fight = index >= 1 and log[index] or nil
+        if not fight then
+            row.index = nil
+            row:Hide()
+        else
+            row.index = index
+            row.when:SetText(fight.when or "")
+            row.count:SetText(string.format("%d", #(fight.entries or {})))
+            local where = fight.whereShort or "?"
+            if fight.duration then
+                where = where .. "  -  " .. RaidDeaths.Clock(fight.duration)
+            end
+            row.where:SetText(where)
+
+            local isOn = index == selected
+            row.bg:SetShown(isOn)
+            if isOn then
+                row.bg:SetColorTexture(C.control[1], C.control[2],
+                    C.control[3], 1)
+            end
+            row:Show()
+        end
+    end
+
+    if total == 0 then
+        frame.sideTitle:SetText("No pull kept yet")
+    elseif total > SIDE_ROWS then
+        frame.sideTitle:SetText(string.format("%d pulls - scroll for more",
+            total))
+    else
+        frame.sideTitle:SetText(total == 1 and "1 pull kept"
+            or string.format("%d pulls kept", total))
+    end
 end
 
 -- The frame itself, for the checks. `frame` is a local, and a local is
@@ -829,6 +1183,9 @@ end
 
 function RaidDeaths:Show()
     if not ns.UI then return end
+    -- One read on the way in, so opening the window during a pull shows that
+    -- pull rather than the state of the last tick.
+    RaidDeaths.Capture()
     RaidDeaths:Create()
     frame:Show()
     RaidDeaths:Refresh()

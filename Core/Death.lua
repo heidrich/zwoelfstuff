@@ -206,21 +206,26 @@ end
 --      keeping it would let the recap hook mistake it for a fresh fall.
 ---------------------------------------------------------------------------
 
-local function Plain(value, kind)
+-- Exported: the raid death log writes its fights to the same disk under the
+-- same two rules, and a second copy of "is this safe to save" is how one of
+-- them ends up letting a secret through.
+function Death.Plain(value, kind)
     if value == nil or not ns.CanCompute(value) then return nil end
     if type(value) ~= kind then return nil end
     return value
 end
+local Plain = Death.Plain
 
 -- A face, reduced to the two numbers that can draw it. Same rule as every
 -- other field down here: copied by name, verified, never handed over whole.
-local function PlainArt(art)
+function Death.PlainArt(art)
     if type(art) ~= "table" then return nil end
     local creatureID = Plain(art.creatureID, "number")
     local displayID = Plain(art.displayID, "number")
     if not (creatureID or displayID) then return nil end
     return { creatureID = creatureID, displayID = displayID }
 end
+local PlainArt = Death.PlainArt
 
 -- The whitelist. The analysis is NOT stored: it is derived from the events
 -- and re-run on the way back in, so a better verdict written next month
@@ -2479,6 +2484,10 @@ watcher:SetScript("OnEvent", function(_, event, _, encounterName)
 
     if event == "PLAYER_LOGIN" then
         Death.Load()
+        -- The pulls of the group, off the same disk and the same key. Loaded
+        -- from here rather than from its own login handler so the order is
+        -- fixed: the raid log's icon docks to this one's frame.
+        if ns.RaidDeaths then ns.RaidDeaths.Load() end
         return
     end
 

@@ -2395,6 +2395,65 @@ local function TestRaidDeaths()
         string.format("%d kept, oldest %s", #log, tostring(log[1].key)))
 
     ---------------------------------------------------------------------
+    -- Surviving a reload
+    --
+    -- A new saved-variable schema, so the two rules are checked rather than
+    -- commented: only what is READABLE goes in, copied field by field, and a
+    -- fight nothing could be read out of is not kept.
+    ---------------------------------------------------------------------
+    local fight = {
+        key = 37, when = "21:14", where = "M+7 - Ara-Kara",
+        whereShort = "M+7", duration = 121, at = 99999,
+        entries = {
+            { name = "Shuja Grimaxe", short = "Shuja Grimaxe",
+              class = "SHAMAN", at = 62, seq = 1, recapID = 37, you = false,
+              blow = { who = "Grim Skirmisher", spell = "Melee",
+                       amount = 39900, overkill = 8300,
+                       art = { creatureID = 214390 } } },
+            { name = "Meredy Huntswell", short = "Meredy Huntswell",
+              class = "MAGE", at = 87, seq = 4, recapID = 40, you = false,
+              blowWhy = "the recap is empty" },
+        },
+    }
+
+    local saved = R.Persist(fight)
+    Check("A pull is written field by field",
+        saved ~= nil and saved.key == 37 and #saved.entries == 2
+            and saved.whereShort == "M+7")
+    -- `at` is a GetTime stamp and GetTime restarts with the client, so a
+    -- stored one would be a time in a clock that no longer exists.
+    Check("...and the GetTime stamp is deliberately NOT written",
+        saved.at == nil)
+    Check("...and the killer's face travels with it",
+        saved.entries[1].blow ~= nil
+        and saved.entries[1].blow.art.creatureID == 214390)
+    Check("...and a death whose recap said nothing keeps the reason",
+        saved.entries[2].blowWhy == "the recap is empty"
+        and saved.entries[2].blow == nil)
+
+    fight.entries[1].junk = { "a field nobody whitelisted" }
+    Check("A field nobody named never reaches the disk",
+        R.Persist(fight).entries[1].junk == nil)
+    fight.entries[1].junk = nil
+
+    local back = R.Restore({ saved })
+    Check("It reads back as one pull with both deaths",
+        #back == 1 and #back[1].entries == 2
+        and back[1].entries[1].short == "Shuja Grimaxe")
+    -- Derived on the way in, not stored: a better count written next month
+    -- applies to the pulls already on disk.
+    Check("...with the killing counted afresh rather than stored",
+        back[1].culprits ~= nil and #back[1].culprits == 1
+        and back[1].culprits[1].who == "Grim Skirmisher")
+
+    Check("A pull with nothing readable in it is not kept",
+        R.Persist({ entries = {} }) == nil and R.Persist(nil) == nil
+        and #R.Restore({ { entries = {} } }) == 0)
+    Check("...and neither is a death that cannot even be named",
+        #R.Persist({ entries = { { name = 5 },
+            { name = "Real Person" } } }).entries == 1)
+
+    ---------------------------------------------------------------------
     -- What the footer says
     ---------------------------------------------------------------------
     Check("A count where nothing repeats is not worth printing",
