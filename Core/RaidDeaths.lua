@@ -530,6 +530,217 @@ function RaidDeaths.Remember(log, fight, cap)
     return fight
 end
 
+---------------------------------------------------------------------------
+-- THE WHOLE EVENING, WHICH IS A DIFFERENT QUESTION FROM THE LAST PULL
+--
+-- "Third wipe to Grim Ward tonight" is the sentence that changes what a
+-- group does next, and no single pull can say it. Neither can the log above:
+-- it keeps five, because it keeps the WHOLE of each one - every hit of every
+-- death - and twenty of those on disk is a saved-variables file nobody
+-- asked for.
+--
+-- So the evening is kept SEPARATELY and thin. One line per death: who, what
+-- killed them, and whether the game called it avoidable. No hits, no
+-- portraits, no summaries - the things that make a pull heavy are exactly
+-- the things a tally does not read. Sixty pulls of that is smaller than one
+-- pull of the other list.
+--
+-- It follows the same replace-by-key rule, because the capture tick rewrites
+-- the running pull every two seconds and a tally that ADDED each time would
+-- report a two-minute fight as thirty wipes.
+---------------------------------------------------------------------------
+local SESSION_KEPT = 60
+RaidDeaths.SESSION_KEPT = SESSION_KEPT
+RaidDeaths.session = { fights = {} }
+
+-- A fight, reduced to what a tally reads. Pure.
+function RaidDeaths.Light(fight)
+    if type(fight) ~= "table" or type(fight.entries) ~= "table" then
+        return nil
+    end
+    local out = {
+        key = Plain(fight.key, "number"),
+        when = Plain(fight.when, "string"),
+        where = Plain(fight.where, "string"),
+        whereShort = Plain(fight.whereShort, "string"),
+        duration = Plain(fight.duration, "number"),
+        entries = {},
+    }
+    for _, entry in ipairs(fight.entries) do
+        local name = Plain(entry.name, "string")
+        if name then
+            local blow = type(entry.blow) == "table" and entry.blow or nil
+            -- WRITTEN OUT RATHER THAN GUARDED WITH `and ... or`, and this is
+            -- the second time in one evening: `blow and Plain(x) or nil`
+            -- turns a readable FALSE into nil, so "the game says this was not
+            -- avoidable" would be filed as "the game did not say" - and the
+            -- tally would then report a whole night as unanswered. The idiom
+            -- holds two answers and this field has three.
+            local who, spell, avoidable
+            if blow then
+                who = Plain(blow.who, "string")
+                spell = Plain(blow.spell, "string")
+                avoidable = Plain(blow.avoidable, "boolean")
+            end
+            out.entries[#out.entries + 1] = {
+                name = name,
+                short = Plain(entry.short, "string") or name,
+                class = Plain(entry.class, "string"),
+                you = entry.you == true,
+                who = who,
+                spell = spell,
+                avoidable = avoidable,
+            }
+        end
+    end
+    if #out.entries == 0 then return nil end
+    return out
+end
+
+-- A DAY IS THE UNIT. Yesterday's wipes are not tonight's, and a tally that
+-- carries them over answers "third wipe tonight" with a number from a raid
+-- two days ago. The client's own date, so it turns over when his does.
+function RaidDeaths.Today()
+    local ok, today = pcall(date, "%Y-%m-%d")
+    if ok and type(today) == "string" then return today end
+    return nil
+end
+
+function RaidDeaths.RememberSession(session, light, today, cap)
+    if not (type(session) == "table" and light) then return session end
+    if session.day ~= today then
+        session.day = today
+        session.fights = {}
+    end
+    local fights = session.fights
+    for index = #fights, 1, -1 do
+        if fights[index].key and fights[index].key == light.key then
+            fights[index] = light
+            return session
+        end
+    end
+    fights[#fights + 1] = light
+    while #fights > (cap or SESSION_KEPT) do table.remove(fights, 1) end
+    return session
+end
+
+-- WHAT KEEPS KILLING US. The same mob and ability across the evening, with
+-- the number of PULLS beside the number of deaths - because four deaths to
+-- one thing on one pull is a mechanic that went wrong once, and four deaths
+-- to it across four pulls is a mechanic nobody has learned.
+--
+-- Ties break by name so two readings of the same evening print the same
+-- order.
+function RaidDeaths.Repeat(session)
+    local byKey, out = {}, {}
+    for _, fight in ipairs((session and session.fights) or {}) do
+        local seenThisPull = {}
+        for _, entry in ipairs(fight.entries or {}) do
+            if entry.who then
+                local key = entry.who .. "\1" .. (entry.spell or "?")
+                local row = byKey[key]
+                if not row then
+                    row = { who = entry.who, spell = entry.spell or "?",
+                        deaths = 0, pulls = 0 }
+                    byKey[key] = row
+                    out[#out + 1] = row
+                end
+                row.deaths = row.deaths + 1
+                if not seenThisPull[key] then
+                    seenThisPull[key] = true
+                    row.pulls = row.pulls + 1
+                end
+            end
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.deaths ~= b.deaths then return a.deaths > b.deaths end
+        if a.pulls ~= b.pulls then return a.pulls > b.pulls end
+        if a.who ~= b.who then return a.who < b.who end
+        return a.spell < b.spell
+    end)
+    return out
+end
+
+-- WHO IS FALLING. Deaths, in how many pulls, and how many of them the game
+-- itself called avoidable - kept apart from the ones it said nothing about,
+-- because a person whose client withheld the flag must not read as a person
+-- who did nothing wrong.
+function RaidDeaths.Fallen(session)
+    local byName, out = {}, {}
+    for _, fight in ipairs((session and session.fights) or {}) do
+        local seenThisPull = {}
+        for _, entry in ipairs(fight.entries or {}) do
+            local row = byName[entry.name]
+            if not row then
+                row = { name = entry.name, short = entry.short or entry.name,
+                    class = entry.class, you = entry.you == true,
+                    deaths = 0, pulls = 0, avoidable = 0, unknown = 0 }
+                byName[entry.name] = row
+                out[#out + 1] = row
+            end
+            row.deaths = row.deaths + 1
+            if entry.avoidable == true then
+                row.avoidable = row.avoidable + 1
+            elseif entry.avoidable ~= false then
+                row.unknown = row.unknown + 1
+            end
+            if not seenThisPull[entry.name] then
+                seenThisPull[entry.name] = true
+                row.pulls = row.pulls + 1
+            end
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.deaths ~= b.deaths then return a.deaths > b.deaths end
+        return a.name < b.name
+    end)
+    return out
+end
+
+-- The one line at the top of the evening. Pure, so the wording is checkable.
+function RaidDeaths.SessionLine(session)
+    local fights = (session and session.fights) or {}
+    if #fights == 0 then return "" end
+    local deaths = 0
+    for _, fight in ipairs(fights) do
+        deaths = deaths + #(fight.entries or {})
+    end
+    local line = string.format("%d pull%s, %d death%s",
+        #fights, #fights == 1 and "" or "s",
+        deaths, deaths == 1 and "" or "s")
+    local first, last = fights[1], fights[#fights]
+    if first.when and last.when and first.when ~= last.when then
+        line = line .. string.format("  -  %s to %s", first.when, last.when)
+    end
+    return line
+end
+
+-- The sentence about one repeat offender, which is the whole reason for the
+-- page: the number of PULLS is what makes it a pattern rather than a moment.
+function RaidDeaths.RepeatLine(row)
+    if type(row) ~= "table" then return "" end
+    if (row.pulls or 0) > 1 then
+        return string.format("%d death%s across %d pulls",
+            row.deaths, row.deaths == 1 and "" or "s", row.pulls)
+    end
+    return string.format("%d death%s on one pull",
+        row.deaths, row.deaths == 1 and "" or "s")
+end
+
+-- And the one about a person. The avoidable count is only spoken when the
+-- game answered; "3 deaths" with nothing after it means it did not.
+function RaidDeaths.FallenLine(row)
+    if type(row) ~= "table" then return "" end
+    local line = string.format("%d death%s in %d pull%s",
+        row.deaths, row.deaths == 1 and "" or "s",
+        row.pulls, row.pulls == 1 and "" or "s")
+    if (row.avoidable or 0) > 0 then
+        line = line .. string.format(", %d to avoidable damage", row.avoidable)
+    end
+    return line
+end
+
 -- HOW OFTEN A RECAP THAT SAID NOTHING IS ASKED AGAIN.
 --
 -- Once more, and then never. A recap is written when the death happens, so
@@ -595,6 +806,12 @@ function RaidDeaths.Capture()
         entries = entries,
         culprits = RaidDeaths.Culprits(entries),
     }, FIGHTS_KEPT)
+
+    -- The evening's thin copy, by the same rule and in the same breath: a
+    -- pull that is in one list and not the other is the bug this would
+    -- otherwise grow.
+    RaidDeaths.RememberSession(RaidDeaths.session, RaidDeaths.Light(fight),
+        RaidDeaths.Today(), SESSION_KEPT)
 
     -- Every tick rather than at the end of the pull. Saved variables only
     -- reach the disk at logout, so this is not about crashes - it is about
@@ -730,27 +947,75 @@ function RaidDeaths.Restore(stored)
     return log
 end
 
+-- The evening, read back off the disk. Every fight goes through Light again
+-- rather than being trusted - it is the same function that put it there, and
+-- a saved-variables file is a text file anybody can edit. A tally from
+-- ANOTHER DAY is dropped here rather than shown under the word "tonight".
+function RaidDeaths.RestoreSession(stored, today)
+    local session = { day = today, fights = {} }
+    if type(stored) ~= "table" then return session end
+    if type(stored.day) ~= "string" or stored.day ~= today then return session end
+    for _, fight in ipairs(stored.fights or {}) do
+        local kept = RaidDeaths.Light(fight)
+        if kept then session.fights[#session.fights + 1] = kept end
+    end
+    while #session.fights > SESSION_KEPT do table.remove(session.fights, 1) end
+    return session
+end
+
+-- TWO STORES, because they are two different things. The log is a handful of
+-- pulls in full and is rewritten every two seconds during a fight; the tally
+-- is one thin line per pull for one day. Folding the second into the first
+-- would have meant a migration of everything already on his disk to add a
+-- field, for no gain.
 local function Store()
     if not ns.account then return nil end
     ns.account.raidDeaths = ns.account.raidDeaths or {}
     return ns.account.raidDeaths
 end
 
+local function SessionStore()
+    if not ns.account then return nil end
+    ns.account.raidSession = ns.account.raidSession or {}
+    return ns.account.raidSession
+end
+
 function RaidDeaths.Save()
-    local store, key = Store(), ns.CharacterKey()
-    if not (store and key) then return end
-    local out = {}
-    for _, fight in ipairs(RaidDeaths.log) do
-        local kept = RaidDeaths.Persist(fight)
-        if kept then out[#out + 1] = kept end
+    local key = ns.CharacterKey()
+    if not key then return end
+
+    local store = Store()
+    if store then
+        local out = {}
+        for _, fight in ipairs(RaidDeaths.log) do
+            local kept = RaidDeaths.Persist(fight)
+            if kept then out[#out + 1] = kept end
+        end
+        store[key] = out
     end
-    store[key] = out
+
+    local sessions = SessionStore()
+    if sessions then
+        local session = RaidDeaths.session or {}
+        local out = { day = Plain(session.day, "string"), fights = {} }
+        for _, fight in ipairs(session.fights or {}) do
+            local kept = RaidDeaths.Light(fight)
+            if kept then out.fights[#out.fights + 1] = kept end
+        end
+        sessions[key] = out
+    end
 end
 
 function RaidDeaths.Load()
-    local store, key = Store(), ns.CharacterKey()
-    if not (store and key) then return end
-    RaidDeaths.log = RaidDeaths.Restore(store[key])
+    local key = ns.CharacterKey()
+    if not key then return end
+    local store = Store()
+    if store then RaidDeaths.log = RaidDeaths.Restore(store[key]) end
+    local sessions = SessionStore()
+    if sessions then
+        RaidDeaths.session = RaidDeaths.RestoreSession(sessions[key],
+            RaidDeaths.Today())
+    end
     RaidDeaths.showing = nil
     RaidDeaths.RefreshIcon()
 end
@@ -998,7 +1263,16 @@ local ROW_H, FACE = 26, 22
 -- 820 is the width of the options window, so two of this addon's windows
 -- open on top of each other rather than beside each other.
 local WIDTH, HEIGHT = 820, 470
-local SIDE_W, SIDE_ROW_H, SIDE_ROWS = 196, 34, 9
+-- One row fewer than the nine that fitted, because the evening now sits at
+-- the top of the same column and takes a row's worth of room. The column is
+-- a fixed height; a tenth row would have been drawn through the buttons.
+local SIDE_W, SIDE_ROW_H, SIDE_ROWS = 196, 34, 8
+-- One line of the evening's two tables.
+local TALLY_ROW_H = 24
+-- How many of each are drawn before the page says how many it left out. No
+-- silent caps: a list that stops at eight and does not say so reads as a
+-- list of eight.
+local TALLY_SHOWN = 8
 
 -- A hover target over a font string. A string cannot take the mouse itself,
 -- and the two things worth asking about here - the mob and the ability - sit
@@ -1187,6 +1461,33 @@ local function BuildRow(parent)
     return row
 end
 
+-- ONE LINE OF THE EVENING'S TABLES: how many, of what, and the note that
+-- makes it a pattern rather than a moment.
+local function BuildTallyRow(parent, width)
+    local UI, C = ns.UI, ns.UI.C
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(width, TALLY_ROW_H)
+
+    row.count = UI.Label(row, "", UI.FS.row, C.accent)
+    row.count:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.count:SetWidth(44)
+    row.count:SetJustifyH("LEFT")
+
+    row.main = UI.Label(row, "", UI.FS.row, C.text)
+    row.main:SetPoint("LEFT", row, "LEFT", 56, 0)
+    row.main:SetPoint("RIGHT", row, "RIGHT", -220, 0)
+    row.main:SetJustifyH("LEFT")
+    row.main:SetWordWrap(false)
+
+    row.note = UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.note:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+    row.note:SetJustifyH("RIGHT")
+    row.note:SetWordWrap(false)
+
+    row:Hide()
+    return row
+end
+
 -- ONE PULL IN THE SIDE LIST: when it was, where, and how many fell.
 local function BuildSideRow(parent, slot)
     local UI, C = ns.UI, ns.UI.C
@@ -1225,6 +1526,9 @@ local function BuildSideRow(parent, slot)
     row:SetScript("OnClick", function(self)
         if not self.index then return end
         RaidDeaths.showing = self.index
+        -- Choosing a pull leaves the evening's page, or the click would
+        -- select something the window is not showing.
+        RaidDeaths.overview = false
         -- A death that was open belonged to the PULL that was open. Carrying
         -- the index across would open whoever happens to be third in the
         -- next pull, which is a different person's death under the name of
@@ -1331,11 +1635,24 @@ function RaidDeaths:Create()
     sideRule:SetPoint("TOPRIGHT", side, "TOPLEFT", -8, 0)
     sideRule:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -8, 0)
 
+    -- THE WHOLE EVENING, at the top of the list of pulls, where "all" belongs
+    -- in a list of parts. Same row shape as a pull, because it is the same
+    -- kind of choice - one of these is what the page shows.
+    local sessionRow = BuildSideRow(side, 0)
+    sessionRow:SetPoint("TOPLEFT", frame.sideTitle, "BOTTOMLEFT", -8, -6)
+    sessionRow:SetPoint("RIGHT", side, "RIGHT", 0, 0)
+    sessionRow:SetScript("OnClick", function()
+        RaidDeaths.overview = true
+        RaidDeaths.reading = nil
+        RaidDeaths:Refresh()
+    end)
+    frame.sessionRow = sessionRow
+
     frame.sideRows = {}
     for slot = 1, SIDE_ROWS do
         local row = BuildSideRow(side, slot)
         if slot == 1 then
-            row:SetPoint("TOPLEFT", frame.sideTitle, "BOTTOMLEFT", -8, -6)
+            row:SetPoint("TOPLEFT", sessionRow, "BOTTOMLEFT", 0, -2)
         else
             row:SetPoint("TOPLEFT", frame.sideRows[slot - 1],
                 "BOTTOMLEFT", 0, -2)
@@ -1416,6 +1733,39 @@ function RaidDeaths:Create()
     detail.content = detailContent
     detail.rows = {}
 
+    -----------------------------------------------------------------------
+    -- THE WHOLE EVENING, in the same rectangle again.
+    --
+    -- Two tables, and the order is the order the questions get asked: what
+    -- keeps killing us, and then who keeps falling. The second one names
+    -- people, so it goes UNDER the mechanic - a page that opens on a list of
+    -- who died most is a page about blame, and the useful answer is nearly
+    -- always the thing at the top of the other table.
+    -----------------------------------------------------------------------
+    local over = CreateFrame("Frame", nil, frame)
+    over:SetPoint("TOPLEFT", head, "TOPLEFT", 0, 14)
+    over:SetPoint("BOTTOMRIGHT", listHost, "BOTTOMRIGHT", 0, 0)
+    over:Hide()
+    frame.overviewFrame = over
+
+    over.title = UI.Label(over, "", UI.FS.card, C.text)
+    over.title:SetPoint("TOPLEFT", over, "TOPLEFT", 0, -4)
+
+    over.sub = UI.Label(over, "", UI.FS.meta, C.textFaint)
+    over.sub:SetPoint("TOPLEFT", over.title, "BOTTOMLEFT", 0, -4)
+
+    local overHost = CreateFrame("Frame", nil, over)
+    overHost:SetPoint("TOPLEFT", over.sub, "BOTTOMLEFT", 0, -14)
+    overHost:SetPoint("BOTTOMRIGHT", over, "BOTTOMRIGHT", 0, 0)
+    local _, overContent = UI.ScrollArea(overHost, MAIN_W - 8, 8)
+    over.content = overContent
+    over.rows = {}
+    over.width = MAIN_W - 8
+
+    over.headKill = UI.Eyebrow(overContent, "What keeps killing us")
+    over.headWho = UI.Eyebrow(overContent, "Who is falling")
+    over.empty = UI.Label(overContent, "", UI.FS.row, C.textFaint)
+
     frame.foot = UI.Label(frame, "", UI.FS.meta, C.textFaint)
     frame.foot:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 46)
     frame.foot:SetPoint("RIGHT", side, "LEFT", -18, 0)
@@ -1429,10 +1779,19 @@ function RaidDeaths:Create()
     share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 14)
     frame.share = share
 
-    local clear = UI.Button(frame, "Clear list", 100, function()
-        RaidDeaths.log = {}
-        RaidDeaths.showing = nil
-        RaidDeaths.sideOffset = 0
+    -- IT CLEARS WHAT IS ON THE SCREEN, and its label says which. One button
+    -- that empties the pulls while the evening's page is open would look
+    -- like it had done nothing, and one that emptied both would throw away
+    -- the tally somebody was reading.
+    local clear = UI.Button(frame, "Clear list", 110, function()
+        if RaidDeaths.overview then
+            RaidDeaths.session = { day = RaidDeaths.Today(), fights = {} }
+        else
+            RaidDeaths.log = {}
+            RaidDeaths.showing = nil
+            RaidDeaths.sideOffset = 0
+        end
+        RaidDeaths.reading = nil
         RaidDeaths.Save()
         RaidDeaths:Refresh()
         RaidDeaths.RefreshIcon()
@@ -1470,7 +1829,44 @@ function RaidDeaths.ShareLines(entries, info)
     return lines
 end
 
+-- The evening in the four lines somebody would read out. Pure, next to the
+-- pull's version, so the two say the same kind of thing in the same shape.
+function RaidDeaths.SessionShareLines(session)
+    local summary = RaidDeaths.SessionLine(session)
+    if summary == "" then return nil end
+
+    local lines = { "Tonight - " .. summary }
+    local killers = RaidDeaths.Repeat(session)
+    for index = 1, min(#killers, 3) do
+        local killer = killers[index]
+        lines[#lines + 1] = string.format("%s - %s: %s",
+            killer.who, ns.Death.PlainText(killer.spell),
+            RaidDeaths.RepeatLine(killer))
+    end
+
+    local fallen = RaidDeaths.Fallen(session)
+    local worst = fallen[1]
+    if worst and worst.deaths > 1 then
+        lines[#lines + 1] = string.format("%s: %s",
+            worst.short, RaidDeaths.FallenLine(worst))
+    end
+    return lines
+end
+
 function RaidDeaths:Share()
+    -- IT SENDS WHAT IS ON THE SCREEN. A button that shares the last pull
+    -- while somebody is reading the evening has sent the wrong thing to the
+    -- raid, and there is no taking that back.
+    if RaidDeaths.overview then
+        local evening = RaidDeaths.SessionShareLines(RaidDeaths.session)
+        if not evening then
+            ns.Print("Nothing has been kept today yet.")
+            return
+        end
+        RaidDeaths.Send(evening)
+        return
+    end
+
     local entries, info = RaidDeaths.Best()
     local lines = RaidDeaths.ShareLines(entries, info)
     if not lines then
@@ -1478,10 +1874,18 @@ function RaidDeaths:Share()
         return
     end
 
+    RaidDeaths.Send(lines)
+end
+
+-- Out of the window and into the chat, one place for both pages. Death's
+-- rule, and it is not negotiable: a chosen channel that is not there must
+-- SAY so. Printing to your own frame while you believe it went to the raid
+-- is the one failure a share is not allowed.
+function RaidDeaths.Send(lines)
     local channel, why = ns.Death.ShareTarget(
         ns.db and ns.db.death and ns.db.death.channel, ns.Death.GroupState())
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
-    for _, line in ipairs(lines) do
+    for _, line in ipairs(lines or {}) do
         if channel then
             send("ZwoelfStuff: " .. line, channel)
         else
@@ -1489,9 +1893,6 @@ function RaidDeaths:Share()
         end
     end
     if not channel then
-        -- Death's rule, and it is not negotiable: a chosen channel that is
-        -- not there must SAY so. Printing to your own frame while you believe
-        -- it went to the raid is the one failure a share is not allowed.
         ns.Print("|cff888888" .. (why or "not in a group")
             .. " - printed here instead.|r")
     end
@@ -1624,7 +2025,12 @@ function RaidDeaths:Refresh()
 
     frame.title:SetText("Deaths in the group")
 
-    if not info then
+    -- The evening's page carries its own head. The pull's would be answering
+    -- a question the page is not asking.
+    if RaidDeaths.overview then
+        frame.where:SetText("")
+        frame.verdict:SetText("")
+    elseif not info then
         frame.where:SetText(tostring(source))
         frame.verdict:SetText("")
     else
@@ -1729,6 +2135,11 @@ function RaidDeaths:Refresh()
     end
     RaidDeaths.PaintDetail(reading, info)
 
+    -- The button empties whichever of the two lists is being read, so it has
+    -- to say which - and the share sends whichever is being read as well.
+    frame.clear.label:SetText(RaidDeaths.overview and "Clear tonight"
+        or "Clear list")
+
     RaidDeaths.PaintSideList()
 end
 
@@ -1738,13 +2149,20 @@ function RaidDeaths.PaintDetail(entry, info)
     if not (frame and frame.detail) then return end
     local detail = frame.detail
     local open = entry ~= nil
+    -- THREE THINGS CAN BE IN THIS RECTANGLE and exactly one of them is: the
+    -- pull, one death out of it, or the whole evening. Decided here, in one
+    -- place, because two functions each hiding "their" frame is how two of
+    -- them end up drawn on top of each other.
+    local over = (not open) and RaidDeaths.overview == true
 
-    frame.head:SetShown(not open)
-    frame.listHost:SetShown(not open)
+    frame.head:SetShown(not open and not over)
+    frame.listHost:SetShown(not open and not over)
     -- The footer counts the whole pull. Left standing under one person's
     -- hits it reads as being about them.
-    frame.foot:SetShown(not open)
+    frame.foot:SetShown(not open and not over)
     detail:SetShown(open)
+    frame.overviewFrame:SetShown(over)
+    if over then RaidDeaths.PaintOverview() end
 
     if not open then
         for _, row in ipairs(detail.rows) do
@@ -1784,6 +2202,98 @@ function RaidDeaths.PaintDetail(entry, info)
     end
 
     detail.content:SetHeight(math.max(1, #events * (EVENT_H + 2)))
+end
+
+-- THE EVENING, DRAWN. Two tables in one scrolling area, laid out against a
+-- running cursor rather than anchored to each other: the first table's
+-- length is not known until it is drawn, and a second table anchored to a
+-- fixed row would sit on top of it the moment a ninth mob turned up.
+function RaidDeaths.PaintOverview()
+    if not (frame and frame.overviewFrame) then return end
+    local C = ns.UI.C
+    local over = frame.overviewFrame
+    local session = RaidDeaths.session
+
+    over.title:SetText("Tonight")
+    over.sub:SetText(RaidDeaths.SessionLine(session))
+
+    local killers = RaidDeaths.Repeat(session)
+    local fallen = RaidDeaths.Fallen(session)
+    local used, y = 0, 0
+
+    local function Row()
+        used = used + 1
+        local row = over.rows[used]
+        if not row then
+            row = BuildTallyRow(over.content, over.width)
+            over.rows[used] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", over.content, "TOPLEFT", 0, -y)
+        row:SetPoint("RIGHT", over.content, "RIGHT", 0, 0)
+        y = y + TALLY_ROW_H
+        row:Show()
+        return row
+    end
+
+    -- What was left out, in a row of its own. A table that stops at eight
+    -- and says nothing reads as a table of eight.
+    local function More(total)
+        if total <= TALLY_SHOWN then return end
+        local row = Row()
+        row.count:SetText("")
+        row.main:SetText(string.format("and %d more", total - TALLY_SHOWN))
+        row.main:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+        row.note:SetText("")
+    end
+
+    over.empty:Hide()
+    over.headKill:Hide()
+    over.headWho:Hide()
+
+    if #killers == 0 then
+        over.empty:ClearAllPoints()
+        over.empty:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, 0)
+        over.empty:SetText("Nothing has been kept today yet. A pull with "
+            .. "deaths in it turns up here on its own.")
+        over.empty:Show()
+    else
+        over.headKill:ClearAllPoints()
+        over.headKill:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, -y)
+        over.headKill:Show()
+        y = y + 20
+
+        for index = 1, min(#killers, TALLY_SHOWN) do
+            local killer = killers[index]
+            local row = Row()
+            row.count:SetText(killer.deaths .. "x")
+            row.main:SetText(string.format("%s  |cff9ba3af%s|r",
+                ns.Death.PlainText(killer.spell), killer.who))
+            row.main:SetTextColor(C.text[1], C.text[2], C.text[3])
+            row.note:SetText(RaidDeaths.RepeatLine(killer))
+        end
+        More(#killers)
+
+        y = y + 16
+        over.headWho:ClearAllPoints()
+        over.headWho:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, -y)
+        over.headWho:Show()
+        y = y + 20
+
+        for index = 1, min(#fallen, TALLY_SHOWN) do
+            local person = fallen[index]
+            local row = Row()
+            row.count:SetText(person.deaths .. "x")
+            row.main:SetText(RaidDeaths.Coloured(person.short, person.class)
+                .. (person.you and " |cffffd100(you)|r" or ""))
+            row.main:SetTextColor(C.text[1], C.text[2], C.text[3])
+            row.note:SetText(RaidDeaths.FallenLine(person))
+        end
+        More(#fallen)
+    end
+
+    for index = used + 1, #over.rows do over.rows[index]:Hide() end
+    over.content:SetHeight(math.max(1, y))
 end
 
 -- STEPPING INTO A DEATH, and back out. Both go through Refresh rather than
@@ -1826,6 +2336,24 @@ function RaidDeaths.PaintSideList()
         RaidDeaths.sideOffset or 0))
     RaidDeaths.sideOffset = offset
 
+    -- THE EVENING'S OWN ROW. It counts pulls this DAY, which is a bigger
+    -- number than the log beside it holds - and that difference is the whole
+    -- reason it exists, so it says both.
+    local over = RaidDeaths.overview == true
+    local sessionRow = frame.sessionRow
+    local pulls = #((RaidDeaths.session or {}).fights or {})
+    sessionRow.when:SetText("Tonight")
+    sessionRow.count:SetText(pulls > 0 and (pulls .. " pulls") or "")
+    sessionRow.where:SetText(pulls > 0
+        and RaidDeaths.SessionLine(RaidDeaths.session)
+        or "nothing kept today yet")
+    sessionRow.bg:SetShown(over)
+    sessionRow.mark:SetShown(over)
+    if over then
+        sessionRow.bg:SetColorTexture(C.control[1], C.control[2],
+            C.control[3], 1)
+    end
+
     for slot = 1, SIDE_ROWS do
         local row = frame.sideRows[slot]
         local index = total - (offset + slot - 1)
@@ -1851,7 +2379,9 @@ function RaidDeaths.PaintSideList()
             end
             row.where:SetText(line)
 
-            local isOn = index == selected
+            -- Nothing in this column is selected while the evening's page is
+            -- open: two accent bars would claim the window is showing both.
+            local isOn = (not over) and index == selected
             row.bg:SetShown(isOn)
             row.mark:SetShown(isOn)
             if isOn then

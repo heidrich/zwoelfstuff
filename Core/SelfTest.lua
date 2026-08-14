@@ -2707,6 +2707,108 @@ local function TestRaidDeaths()
         back.dropped == 6)
 
     ---------------------------------------------------------------------
+    -- THE WHOLE EVENING, which no single pull can answer
+    ---------------------------------------------------------------------
+    local function Pull(key, when, dead)
+        local fight = { key = key, when = when, whereShort = "M+7",
+            entries = {} }
+        for _, one in ipairs(dead) do
+            fight.entries[#fight.entries + 1] = {
+                name = one[1] .. "-Realm", short = one[1], class = "PRIEST",
+                blow = { who = one[2], spell = one[3], avoidable = one[4] },
+            }
+        end
+        return fight
+    end
+
+    local light = R.Light(Pull(10, "20:41", {
+        { "Ana", "Skirmisher", "Grim Ward", true },
+        { "Bo", "Skirmisher", "Grim Ward", false },
+    }))
+    Check("A pull is reduced to the line a tally reads",
+        light ~= nil and #light.entries == 2 and light.key == 10
+        and light.entries[1].who == "Skirmisher"
+        and light.entries[1].avoidable == true
+        and light.entries[2].avoidable == false)
+    Check("...and it carries no hits, which is the whole point",
+        light.entries[1].events == nil and light.entries[1].blow == nil)
+    Check("...a fight nothing could be named out of is not kept",
+        R.Light({ entries = { { name = 7 } } }) == nil
+        and R.Light(nil) == nil)
+
+    local session = { day = "2026-08-14", fights = {} }
+    R.RememberSession(session, light, "2026-08-14", 60)
+    R.RememberSession(session, R.Light(Pull(10, "20:42", {
+        { "Ana", "Skirmisher", "Grim Ward", true },
+        { "Bo", "Skirmisher", "Grim Ward", false },
+        { "Cy", "Shade", "Spirit Rend", nil },
+    })), "2026-08-14", 60)
+    Check("The same pull captured again REPLACES its line",
+        #session.fights == 1 and #session.fights[1].entries == 3)
+
+    R.RememberSession(session, R.Light(Pull(20, "21:05", {
+        { "Ana", "Skirmisher", "Grim Ward", true },
+        { "Cy", "Golem", "Slam", false },
+    })), "2026-08-14", 60)
+    Check("...and the next pull is a new line",
+        #session.fights == 2)
+
+    local killers = R.Repeat(session)
+    Check("What keeps killing us is counted across pulls",
+        #killers == 3 and killers[1].spell == "Grim Ward"
+        and killers[1].deaths == 3 and killers[1].pulls == 2)
+    Check("...and a thing that killed twice on ONE pull is not a pattern",
+        R.RepeatLine(killers[1]):find("across 2 pulls", 1, true) ~= nil
+        and R.RepeatLine({ deaths = 2, pulls = 1 })
+            :find("on one pull", 1, true) ~= nil)
+
+    local fallen = R.Fallen(session)
+    Check("Who is falling is counted, most first",
+        #fallen == 3 and fallen[1].short == "Ana" and fallen[1].deaths == 2
+        and fallen[1].pulls == 2 and fallen[1].avoidable == 2)
+    -- Cy fell twice as well, so the tie breaks on the name and Cy is second.
+    -- One of those deaths the game called not avoidable and about the other
+    -- it said nothing, and the two must not be added together.
+    Check("...and a death the game said nothing about is held apart",
+        fallen[2].short == "Cy" and fallen[2].deaths == 2
+        and fallen[2].avoidable == 0 and fallen[2].unknown == 1)
+    Check("...so the line about a person claims only what was answered",
+        R.FallenLine(fallen[1]):find("2 to avoidable", 1, true) ~= nil
+        and R.FallenLine(fallen[2]):find("avoidable", 1, true) == nil)
+
+    Check("The evening's one line counts pulls and deaths",
+        R.SessionLine(session):find("2 pulls, 5 deaths", 1, true) ~= nil
+        and R.SessionLine({ fights = {} }) == "")
+
+    local told = R.SessionShareLines(session)
+    Check("...and it can be said in chat, worst thing first",
+        told ~= nil and #told >= 2
+        and told[1]:find("Tonight", 1, true) ~= nil
+        and told[2]:find("Grim Ward", 1, true) ~= nil)
+    Check("...with nothing to say when nothing was kept",
+        R.SessionShareLines({ fights = {} }) == nil)
+
+    -- A NEW DAY IS A NEW EVENING, on both roads: the one that keeps a pull
+    -- and the one that reads the disk. "Third wipe tonight" must never be a
+    -- number from a raid two days ago.
+    R.RememberSession(session, light, "2026-08-15", 60)
+    Check("A pull on a new day starts the evening over",
+        #session.fights == 1 and session.day == "2026-08-15")
+    Check("...and yesterday's tally is not loaded under the word tonight",
+        #R.RestoreSession({ day = "2026-08-14",
+            fights = { light } }, "2026-08-15").fights == 0
+        and #R.RestoreSession({ day = "2026-08-15",
+            fights = { light } }, "2026-08-15").fights == 1)
+
+    local capped = { day = "d", fights = {} }
+    for i = 1, 8 do
+        R.RememberSession(capped, R.Light(Pull(i, "20:00",
+            { { "Ana", "X", "Y", nil } })), "d", 5)
+    end
+    Check("...and the evening does not grow without end",
+        #capped.fights == 5 and capped.fights[1].key == 4)
+
+    ---------------------------------------------------------------------
     -- THE WIRING, not the rule. Everything above is arithmetic on tables
     -- this file typed out. This asks the client the addon will actually ask,
     -- and reports what came back rather than asserting a fight is running.
