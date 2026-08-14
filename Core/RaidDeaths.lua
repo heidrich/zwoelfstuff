@@ -1345,7 +1345,10 @@ local function BuildRow(parent)
     row:SetScript("OnEnter", function() Lit(true) end)
     row:SetScript("OnLeave", function() Lit(false) end)
 
-    row.when = UI.Label(row, "", UI.FS.meta, C.textFaint)
+    -- THE TWO COLUMNS THAT SAY WHAT IT COST, both in the harm red: when it
+    -- happened and how much it was. The two in between say what to point at
+    -- and wear the orange. Nothing on the row is decoration.
+    row.when = UI.Label(row, "", UI.FS.meta, C.harm)
     row.when:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.when:SetWidth(52)
     row.when:SetJustifyH("LEFT")
@@ -1381,7 +1384,7 @@ local function BuildRow(parent)
     row.spell:SetJustifyH("LEFT")
     row.spell:SetWordWrap(false)
 
-    row.amount = UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.amount = UI.Label(row, "", UI.FS.meta, C.harm)
     row.amount:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     row.amount:SetJustifyH("RIGHT")
 
@@ -2096,6 +2099,23 @@ function RaidDeaths:Refresh()
 
         row.when:SetText(timed and RaidDeaths.Clock(entry.at) or "--:--")
 
+        -- ASKED AGAIN AT PAINT TIME, and his own run is why.
+        --
+        -- `/zs test` in game reported "0 of 17 had a readable spec". The
+        -- capture happens DURING the fight, and an inspect is throttled to
+        -- one question every two seconds and often refused outright in
+        -- combat - so the answer nearly always lands after the row that
+        -- wanted it. Read once and frozen, the icon could then never become
+        -- the right one, no matter how long the window stayed open.
+        --
+        -- So a row with no spec asks again while it is being drawn, and what
+        -- comes back is written onto the entry: by the time somebody opens
+        -- this window the inspects have long since answered. A spec already
+        -- captured WINS - that person may have left the group since, and the
+        -- answer taken while they were still here is the better one.
+        if not entry.spec and ns.Specs then
+            entry.spec = ns.Specs.OfName(entry.name)
+        end
         ns.UI.PaintSpecIcon(row.spec, entry.spec, entry.class)
         ns.Death.PaintFace(row.face, entry.blow and entry.blow.art)
 

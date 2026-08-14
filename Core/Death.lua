@@ -1464,7 +1464,11 @@ function Death.BuildEventRow(parent, width)
     row.tick:SetColorTexture(0.88, 0.42, 0.36, 1)
     row.tick:Hide()
 
-    row.when = UI.Label(row, "", 11, C.textDim)
+    -- WHEN AND HOW MUCH, both in the harm red - the two columns that say
+    -- what this row cost. A HEAL is painted back to the neutral text colour
+    -- in the painter below, because a heal drawn in the damage colour is the
+    -- one thing this table must never say.
+    row.when = UI.Label(row, "", 11, C.harm)
     row.when:SetPoint("LEFT", row, "LEFT", 6, 0)
 
     -- The spell's icon, when the recap names a readable id. EllesmereUI
@@ -1480,7 +1484,7 @@ function Death.BuildEventRow(parent, width)
     row.what:SetJustifyH("LEFT")
     row.what:SetWordWrap(false)
 
-    row.amount = UI.Label(row, "", 12, C.text)
+    row.amount = UI.Label(row, "", 12, C.harm)
     row.amount:SetPoint("RIGHT", row, "RIGHT", COL_AMOUNT_R, 0)
     row.amount:SetJustifyH("RIGHT")
 
@@ -1580,6 +1584,14 @@ function Death.PaintEventRow(row, ev, maxHP)
             math.floor(ev.amount / maxHP * 100 + 0.5))
         or ""
     row.amount:SetText(sign .. ns.ShortNumber(ev.amount) .. share)
+    -- The colour follows the DIRECTION, not the column: damage is the harm
+    -- red the whole table reads in, and a heal must not be painted as one.
+    local C2 = ns.UI.C
+    if ev.heal then
+        row.amount:SetTextColor(C2.text[1], C2.text[2], C2.text[3])
+    else
+        row.amount:SetTextColor(C2.harm[1], C2.harm[2], C2.harm[3])
+    end
 
     -- What was left afterwards. On the killing blow there is nothing left,
     -- so the column says what went past zero instead - that is the number

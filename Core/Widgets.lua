@@ -76,6 +76,17 @@ local C = {
     -- here and nowhere else.
     hot        = { 1.000, 0.478, 0.239 },  -- #FF7A3D  hoverable, clickable
 
+    -- THIS IS THE HARM. Owner, 2026-08-14: "dmg farben in rot. und zeit
+    -- auch." The two columns that say what the row COST - when it happened
+    -- and how much it was - against the two that say what to point at.
+    --
+    -- Its own name beside `danger`, which is the same value and means
+    -- something else entirely: danger is a BUTTON that will destroy
+    -- something, this is a number that already did. Sharing the value is not
+    -- sharing the meaning, and the day one of them needs to move it moves
+    -- alone.
+    harm       = { 0.898, 0.353, 0.318 },  -- #E5645A  damage taken, when
+
     -- Green means "this one is already on the bar you have selected". Only
     -- ever used for that, so it stays readable as a state rather than decoration.
     inUse      = { 0.404, 0.788, 0.443 },  -- #67C971
