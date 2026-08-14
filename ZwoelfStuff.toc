@@ -104,15 +104,12 @@ Core\Secrets.lua
 Core\CDM.lua
 # The shipped proc database. Data, and it grows with every export, so it loads
 # before the logic that reads it and stays a file you can paste into.
-Core\KnownProcs.lua
 Core\Auras.lua
 # The arrangement engine, the visibility rules and the effects. All three are
 # read by Bars.lua at file scope - BAR_DEFAULTS is built out of their default
 # tables - so all three load above it.
 Core\Layout.lua
 Core\Visibility.lua
-Core\Effects.lua
-Core\Bars.lua
 # The aura engine and the co-tank frames.
 #
 # Engine.lua probes for AuraContainer by BUILDING one and seeing, so it is
@@ -167,7 +164,6 @@ Core\GameMenu.lua
 # Widgets defines ns.UI, and EditMode reads it while it loads. Anything that
 # takes a reference to the design system at file scope belongs BELOW this line.
 Core\Widgets.lua
-Core\Screen.lua
 # The raid bar and the window it opens. BELOW Widgets - both are built from
 # the design system - and above Edit Mode, which drags the bar around the
 # screen with the other panels.
@@ -191,7 +187,6 @@ Core\Welcome.lua
 # it renders, and below Welcome - a fresh install gets the welcome window
 # and NOT a wall of history, and the rule that keeps them apart is in News.
 Core\News.lua
-Core\OptionsBars.lua
 Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
 # growing a second one, so BuildSpellPane has to exist by the time this loads.

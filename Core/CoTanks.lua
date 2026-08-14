@@ -262,10 +262,14 @@ end
 -- NEVER A HARDCODED SPELL ID. Two wrong ones have already cost this project a
 -- day, and the rule written in KnownProcs.lua applies just as much to a
 -- decoration as to a tracked aura. So the sample icons come from spells this
--- installation already resolved: whatever the user put on their own bars,
--- then whatever the Cooldown Manager is offering. If neither answers, the
--- strip draws flat squares - which still shows the size, the spacing, the
--- growth and the border, because those are what this strip is for.
+-- installation already resolved: whatever the Cooldown Manager is offering.
+-- If it does not answer, the strip draws flat squares - which still shows the
+-- size, the spacing, the growth and the border, because those are what this
+-- strip is for.
+--
+-- It used to read the user's own bars first. Those are gone with the bar
+-- machinery, and the Cooldown Manager was always the second half of this
+-- anyway - it is the same list the bars themselves were built out of.
 ---------------------------------------------------------------------------
 local sampleIcons, sampleStamp = {}, 0
 
@@ -287,11 +291,6 @@ local function SampleIcons()
         sampleIcons[#sampleIcons + 1] = texture
     end
 
-    for index = 1, ns.Bars:Count() do
-        local cfg = ns.Bars:Get(index)
-        for _, spellID in pairs(cfg and cfg.cells or {}) do Take(spellID) end
-    end
-
     -- CDM:Catalogue(), not ForEachCatalogued. The low-level walk hands over
     -- (cooldownID, viewerKey, order) - three numbers - and this asked it for
     -- `entry.spellID`, which raises on the first one. The pcall around it
@@ -299,7 +298,7 @@ local function SampleIcons()
     -- the exact shape of bug this addon keeps finding, one that succeeds at
     -- doing nothing. Catalogue is the assembled list and already carries the
     -- resolved icon.
-    if #sampleIcons < 6 and ns.CDM and ns.CDM.Catalogue then
+    if ns.CDM and ns.CDM.Catalogue then
         local ok, list = pcall(ns.CDM.Catalogue, ns.CDM)
         if ok and type(list) == "table" then
             for _, entry in ipairs(list) do Take(entry and entry.spellID) end
