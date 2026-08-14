@@ -2116,6 +2116,29 @@ function Death.PaintFace(face, art)
     return false
 end
 
+-- A PERSON'S FACE, which is a different question from a creature's: the
+-- client draws a portrait for a unit it can still see, and there is no id to
+-- look one up by. So it is a unit token or nothing, and "nothing" is honest -
+-- somebody who left the group is somebody we cannot picture.
+--
+-- One copy, because the replay's marks ask exactly the same question and its
+-- own version compared only the full name, so anybody on our own realm never
+-- matched it.
+function Death.PaintUnitFace(texture, name)
+    if not texture then return false end
+    local unit = ns.Specs and ns.Specs.UnitForName(name)
+    if not (unit and SetPortraitTexture) then
+        texture:Hide()
+        return false
+    end
+    -- The round crop Blizzard's own portraits use, so a face reads as a
+    -- portrait and not as a screenshot of one.
+    texture:SetTexCoord(0.15, 0.85, 0.15, 0.85)
+    local ok = pcall(SetPortraitTexture, texture, unit)
+    texture:SetShown(ok and true or false)
+    return ok and true or false
+end
+
 local function PaintPortrait(art)
     return Death.PaintFace(frame.portrait, art)
 end

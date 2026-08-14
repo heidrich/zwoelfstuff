@@ -1273,6 +1273,9 @@ local frame
 -- into 22 pixels was a smudge, and the whole reason for putting one beside a
 -- name is that you can tell it apart from the next one.
 local ROW_H, FACE, SPEC = 30, 26, 20
+-- The magnifier column in front of the clock: it is the only thing on the row
+-- that says "there is more behind this one".
+local GLASS, COL_WHEN = 14, 20
 -- 820 is the width of the options window, so two of this addon's windows
 -- open on top of each other rather than beside each other.
 local WIDTH, HEIGHT = 820, 470
@@ -1345,12 +1348,21 @@ local function BuildRow(parent)
     row:SetScript("OnEnter", function() Lit(true) end)
     row:SetScript("OnLeave", function() Lit(false) end)
 
+    -- THE MAGNIFIER, and it is the whole affordance. His ask: "damit man
+    -- sieht das es Details gibt." Shown ONLY on a row that can be opened,
+    -- so the column answers "which of these have a story" at a glance
+    -- instead of being a decoration in front of every line.
+    row.glass = row:CreateTexture(nil, "ARTWORK")
+    row.glass:SetSize(GLASS, GLASS)
+    row.glass:SetPoint("LEFT", row, "LEFT", 1, 0)
+    row.glass:Hide()
+
     -- THE TWO COLUMNS THAT SAY WHAT IT COST, both in the harm red: when it
     -- happened and how much it was. The two in between say what to point at
     -- and wear the orange. Nothing on the row is decoration.
     row.when = UI.Label(row, "", UI.FS.meta, C.harm)
-    row.when:SetPoint("LEFT", row, "LEFT", 0, 0)
-    row.when:SetWidth(52)
+    row.when:SetPoint("LEFT", row, "LEFT", COL_WHEN, 0)
+    row.when:SetWidth(46)
     row.when:SetJustifyH("LEFT")
 
     -- WHAT THEY WERE PLAYING, in front of their name. His ask, and it is the
@@ -1620,17 +1632,25 @@ function RaidDeaths:Create()
     head:SetHeight(14)
     frame.head = head
 
+    -- The same magnifier over the column of them, so the mark in the rows
+    -- has something naming it rather than being a mystery icon.
+    frame.headGlass = head:CreateTexture(nil, "ARTWORK")
+    frame.headGlass:SetSize(GLASS, GLASS)
+    frame.headGlass:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 1, 0)
+    UI.PaintSearchIcon(frame.headGlass)
+    frame.headGlass:SetAlpha(0.5)
+
     frame.headWhen = UI.Eyebrow(head, "When")
-    frame.headWhen:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 0, 0)
+    frame.headWhen:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", COL_WHEN, 0)
     frame.headWho = UI.Eyebrow(head, "Who died")
-    frame.headWho:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 80, 0)
+    frame.headWho:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 94, 0)
     -- 80 = when(52) + gap(2) + spec(20) + gap(6); 268 adds the name column
     -- and the mob's face; 414 adds the killer column. The head reads the same
     -- arithmetic the cells do or it is a decoration that drifts.
     frame.headKiller = UI.Eyebrow(head, "Killed by")
-    frame.headKiller:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 268, 0)
+    frame.headKiller:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 282, 0)
     frame.headWhat = UI.Eyebrow(head, "With what")
-    frame.headWhat:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 414, 0)
+    frame.headWhat:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 428, 0)
     frame.headAmount = UI.Eyebrow(head, "Damage")
     frame.headAmount:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, 0)
 
@@ -1732,8 +1752,27 @@ function RaidDeaths:Create()
         function() RaidDeaths:CloseReading() end)
     detail.back:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, 0)
 
+    -- WHOSE DEATH THIS IS, in a picture. His ask: the detail head should
+    -- carry their avatar and their spec icon again. A page about one person
+    -- that names them only in text makes you read the name to know who you
+    -- stepped into.
+    --
+    -- A person's portrait needs a UNIT, not an id - the client draws it for
+    -- somebody it can still see - so a group mate who has left since is
+    -- shown by name and spec alone. That is honest: we cannot picture
+    -- somebody who is not there.
+    detail.face = detail:CreateTexture(nil, "ARTWORK")
+    detail.face:SetSize(34, 34)
+    detail.face:SetPoint("LEFT", detail.back, "RIGHT", 14, 0)
+    detail.face:Hide()
+
+    detail.spec = detail:CreateTexture(nil, "ARTWORK")
+    detail.spec:SetSize(22, 22)
+    detail.spec:SetPoint("LEFT", detail.face, "RIGHT", 6, 0)
+    detail.spec:Hide()
+
     detail.title = UI.Label(detail, "", UI.FS.card, C.text)
-    detail.title:SetPoint("LEFT", detail.back, "RIGHT", 12, 0)
+    detail.title:SetPoint("LEFT", detail.spec, "RIGHT", 8, 0)
 
     detail.sub = UI.Label(detail, "", UI.FS.meta, C.textDim)
     detail.sub:SetPoint("TOPLEFT", detail.back, "BOTTOMLEFT", 0, -10)
@@ -2116,6 +2155,14 @@ function RaidDeaths:Refresh()
         if not entry.spec and ns.Specs then
             entry.spec = ns.Specs.OfName(entry.name)
         end
+        -- The hint only where it is true. A magnifier over a death whose
+        -- recap said nothing would promise a page that does not exist.
+        if RaidDeaths.Openable(entry) then
+            ns.UI.PaintSearchIcon(row.glass)
+        else
+            row.glass:Hide()
+        end
+
         ns.UI.PaintSpecIcon(row.spec, entry.spec, entry.class)
         ns.Death.PaintFace(row.face, entry.blow and entry.blow.art)
 
@@ -2226,6 +2273,14 @@ function RaidDeaths.PaintDetail(entry, info)
     end
 
     local timed = info and info.timed
+    -- The face is a maybe and the spec icon never is: the class is on the
+    -- row whatever happens, so the second picture is always there even when
+    -- the first one cannot be.
+    ns.Death.PaintUnitFace(detail.face, entry.name)
+    if not entry.spec and ns.Specs then
+        entry.spec = ns.Specs.OfName(entry.name)
+    end
+    ns.UI.PaintSpecIcon(detail.spec, entry.spec, entry.class)
     detail.title:SetText(RaidDeaths.DetailTitle(entry, timed))
     detail.sub:SetText(RaidDeaths.DetailLine(entry))
 

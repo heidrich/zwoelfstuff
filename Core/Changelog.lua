@@ -68,6 +68,9 @@ ns.CHANGELOG = {
                 .. "name instead of in the clock column. Spec icons in front "
                 .. "of the dead. Orange marks anything you can point at or "
                 .. "click; red is what the row cost.",
+            "|cffffd100A magnifier in front of a death|r marks the ones "
+                .. "you can open, and the page you land on carries their "
+                .. "portrait and their specialisation.",
             {
                 text = "|cffffd100New: this window.|r What changed since you "
                     .. "last played, once per update, with a way straight to "

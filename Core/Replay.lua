@@ -422,26 +422,16 @@ end
 -- is looked for among the units this client will still answer for. Outside
 -- the group there is no answer and the mark keeps its name and no face,
 -- which is honest: we do not know what that person looks like.
--- The walk from a name to a unit token lives in Specs.lua now - it is the
--- same walk the spec lookup needs, and the copy here compared only the full
--- name, so anybody on our own realm never matched.
-local function PaintFace(mark, name)
-    local unit = ns.Specs and ns.Specs.UnitForName(name)
-    if not (unit and SetPortraitTexture) then
-        if mark.face then mark.face:Hide() end
-        return false
-    end
-    if not mark.face then
-        mark.face = mark:CreateTexture(nil, "ARTWORK")
-        mark.face:SetSize(AVATAR, AVATAR)
-        -- The round crop Blizzard's own portraits use, so a healer's face
-        -- reads as a portrait and not as a screenshot of one.
-        mark.face:SetTexCoord(0.15, 0.85, 0.15, 0.85)
-    end
-    local ok = pcall(SetPortraitTexture, mark.face, unit)
-    mark.face:SetShown(ok and true or false)
-    return ok and true or false
-end
+-- A PERSON'S PORTRAIT USED TO BE PAINTED HERE and nothing has called it for
+-- some time - the plot draws creatures, and the one face on it belongs to
+-- whatever hit you. Pulling the creature painter out into Death made the
+-- dead one visible beside it, so it goes rather than being left as a
+-- function somebody will one day fix a bug in.
+--
+-- The question itself did not disappear: the group log's detail head asks it
+-- about the person who died, and Death.PaintUnitFace answers it there. This
+-- copy also compared only the full name, so anybody on our own realm never
+-- matched it - which is the other reason not to keep it around.
 
 -- One mark on the plot: a column, an icon and a number for the incoming
 -- side; an icon alone for a press of yours. Built once, re-pointed per

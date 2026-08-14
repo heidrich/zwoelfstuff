@@ -382,6 +382,47 @@ UI.BUTTON_MAX = 260
 -- which of the two it got: a spec icon is a file of its own and a class icon
 -- is one cell of a sheet.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- THE MAGNIFIER: "there is more behind this row"
+--
+-- Owner, 2026-08-14: "vor When sollte ein Lupen-Icon sein, damit man sieht
+-- das es Details gibt, oder aber das Wort Details."
+--
+-- Not one of our own glyphs: those are rectangles in a 12x12 box, and a
+-- circle with a handle is the one shape that cannot be drawn out of
+-- rectangles without looking like a lollipop.
+--
+-- BOTH DOORS ARE READ, NOT REMEMBERED, out of addons installed and
+-- maintained on this machine. The atlas is what Auctionator and Northern Sky
+-- use ("common-search-magnifyingglass"); the texture file is what MRT and
+-- ExwindCore use (Interface\Common\UI-Searchbox-Icon). The atlas scales
+-- properly and is tried first; the file answers on a client that has no such
+-- atlas, and neither answering hides the mark rather than drawing a blank
+-- square where a hint should be.
+---------------------------------------------------------------------------
+local SEARCH_ATLAS = "common-search-magnifyingglass"
+local SEARCH_FILE = "Interface\\Common\\UI-Searchbox-Icon"
+
+function UI.PaintSearchIcon(texture)
+    if not texture then return false end
+    if texture.SetAtlas then
+        local ok = pcall(texture.SetAtlas, texture, SEARCH_ATLAS, false)
+        if ok then
+            texture:Show()
+            return true
+        end
+    end
+    if texture.SetTexture then
+        local ok = pcall(texture.SetTexture, texture, SEARCH_FILE)
+        if ok then
+            texture:Show()
+            return true
+        end
+    end
+    texture:Hide()
+    return false
+end
+
 -- The same orange as C.hot, as an escape code, for the half of the rule that
 -- lands in the MIDDLE of a sentence: "21:07 - Voidscar Arena - 2:17" is one
 -- font string and only the place in it answers the mouse.
