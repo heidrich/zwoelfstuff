@@ -344,9 +344,25 @@ end
 -- The window
 ---------------------------------------------------------------------------
 
-local function Tooltip(owner, item)
+-- TWO TOOLTIPS, AND THEY MUST NOT SIT ON EACH OTHER.
+--
+-- Owner, with a photograph of it: "im replay die tooltips vom mobs und
+-- spells ueberlagern sich." Both were anchored to the same mark and both go
+-- to its right, so the big enemy tip and the client's spell tooltip were
+-- drawn in the same place - two readable things making one unreadable one.
+--
+-- When the big one is up, the small one hangs UNDER it instead. Not beside:
+-- the plot is wide and the mark can be anywhere along it, so a tip that
+-- grows sideways runs off the screen from half of them.
+local function Tooltip(owner, item, under)
     if not GameTooltip then return end
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    if under then
+        GameTooltip:SetOwner(under, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -6)
+    else
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    end
     local shown = false
     if item.spellID then
         shown = pcall(GameTooltip.SetSpellByID, GameTooltip, item.spellID)
@@ -469,17 +485,23 @@ local function BuildMark(parent, kind)
     mark:EnableMouse(true)
     mark:SetScript("OnEnter", function(self)
         if not self.item then return end
-        Tooltip(self, self.item)
-        -- AND THE BIG ONE, beside it, whenever this mark carries a mob's
-        -- face. The small tooltip answers "what was this hit"; the enemy tip
-        -- answers "what is this thing" - the picture at a size you can
-        -- recognise and everything it did in these seconds.
+        -- THE BIG ONE FIRST, whenever this mark carries a mob's face. The
+        -- small tooltip answers "what was this hit"; the enemy tip answers
+        -- "what is this thing" - the picture at a size you can recognise and
+        -- everything it did in these seconds.
+        --
+        -- First because the other one is hung UNDER it, and a frame cannot
+        -- be pointed at until it has been placed.
         local item = self.item
+        local under
         if not item.cast and item.who then
             ns.Death.ShowEnemyTip(self, {
                 who = item.who, art = item.art, summary = item.summary,
             })
+            local tip = ns.Death.EnemyTipFrame()
+            if tip and tip:IsShown() then under = tip end
         end
+        Tooltip(self, item, under)
     end)
     mark:SetScript("OnLeave", function()
         if GameTooltip then GameTooltip:Hide() end

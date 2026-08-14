@@ -1553,7 +1553,14 @@ end
 function Death.PaintEventRow(row, ev, maxHP)
     if not (row and ev) then return end
     row.ev = ev
-    local width = row.dkWidth or row:GetWidth() or 0
+    -- THE WIDTH IT REALLY HAS, not the one it was born with. A row anchored
+    -- on both sides follows the window it is in, and a bar drawn against the
+    -- build-time number would stop short of the row or run past it. The
+    -- birth width is the fallback for a row that has only one anchor.
+    local width = row:GetWidth()
+    if not (type(width) == "number" and width > 0) then
+        width = row.dkWidth or 0
+    end
 
     row.when:SetText(string.format("-%.1fs", ev.t))
 

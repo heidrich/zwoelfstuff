@@ -158,6 +158,51 @@ function News.Sections(entry)
     return out
 end
 
+---------------------------------------------------------------------------
+-- A HEADLINE AND A PARAGRAPH, out of one sentence
+--
+-- Owner, on the second screenshot: "was ich gut finden wuerde: GELB als
+-- Ueberschrift, darunter der text."
+--
+-- He is describing what the changelog already IS and the window was not
+-- drawing. Every line in that file opens with a yellow clause naming the
+-- change and then explains it - "New: the group's deaths, as a log." and
+-- then five sentences about it. Run together on one line the two read as one
+-- long sentence with a coloured start; split, the page can be skimmed by
+-- reading only the yellow.
+--
+-- SPLIT AT THE FIRST |r, never at the last: a body may carry colour of its
+-- own - "|cffffd100/zs chat|r says what your client allows" - and a greedy
+-- match would swallow the paragraph into the heading.
+---------------------------------------------------------------------------
+function News.Split(line)
+    local text = News.LineText(line)
+    if text == "" then return nil, "" end
+    local head, body = text:match("^|c%x%x%x%x%x%x%x%x(.-)|r%s*(.*)$")
+    if head and head ~= "" then
+        return head, body or ""
+    end
+    return nil, text
+end
+
+-- THE PICTURE FOR A LINE, when there is an honest one. Owner: "spells,
+-- monster oder so, alles was ein icon hat, sollte das da auch drin haben."
+--
+-- A number is a spell and the client owns the art; a string is a texture
+-- path for the things that have no spell id - a skull for the death log, the
+-- addon's own mark for the addon's own window. Anything else draws nothing,
+-- because an icon invented for a line is decoration and this window is a
+-- list of facts.
+function News.IconFor(line)
+    if type(line) ~= "table" then return nil end
+    local icon = line.icon
+    if type(icon) == "number" then
+        return ns.SpellTexture and ns.SpellTexture(icon) or nil
+    end
+    if type(icon) == "string" and icon ~= "" then return icon end
+    return nil
+end
+
 function News.LineLink(line)
     if type(line) ~= "table" then return nil end
     local link = line.link
@@ -319,6 +364,9 @@ local function BuildFrame()
     -- because opening this window twice in one session must not leave a
     -- second set of frames behind the first.
     frame.heads, frame.lines, frame.links, frame.cards = {}, {}, {}, {}
+    -- A headline and its icon are their own pools: a line may have a
+    -- headline and no icon, an icon and no headline, or neither.
+    frame.tops, frame.icons = {}, {}
 
     frame.ok = UI.Button(frame, "OK", 120, function() News:Close() end,
         "primary")
@@ -346,6 +394,9 @@ function News.Window() return frame end
 
 -- The inside padding of a box, and the room its heading takes.
 local CARD_PAD, CARD_HEAD = 12, 22
+-- The picture beside a headline. Big enough to recognise a spell by, small
+-- enough that a line without one is not left with a hole where it would be.
+local ICON = 22
 
 function News:Paint(entries, dropped)
     if not frame then return end
@@ -355,7 +406,7 @@ function News:Paint(entries, dropped)
     frame.sub:SetText("Everything that changed since you last played.")
     frame.foot:SetText(News.FootLine(entries, dropped))
 
-    local heads, lines, links, cards = 0, 0, 0, 0
+    local heads, lines, links, cards, tops, icons = 0, 0, 0, 0, 0, 0
     local y = 0
 
     for _, entry in ipairs(entries or {}) do
@@ -401,6 +452,49 @@ function News:Paint(entries, dropped)
             local inner = CARD_HEAD + 6
 
             for _, raw in ipairs(section.lines) do
+                local headline, body = News.Split(raw)
+                local art = News.IconFor(raw)
+                -- The text starts past the icon when there is one, so a
+                -- second line of the paragraph does not run under it.
+                local indent = art and (ICON + 8) or 0
+
+                if art then
+                    icons = icons + 1
+                    local picture = frame.icons[icons]
+                    if not picture then
+                        picture = frame.content:CreateTexture(nil, "ARTWORK")
+                        picture:SetSize(ICON, ICON)
+                        picture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                        frame.icons[icons] = picture
+                    end
+                    picture:SetParent(card)
+                    picture:ClearAllPoints()
+                    picture:SetPoint("TOPLEFT", card, "TOPLEFT",
+                        CARD_PAD, -inner)
+                    picture:SetTexture(art)
+                    picture:Show()
+                end
+
+                if headline then
+                    tops = tops + 1
+                    local top = frame.tops[tops]
+                    if not top then
+                        top = UI.Label(frame.content, "", UI.FS.row, C.warning)
+                        top:SetJustifyH("LEFT")
+                        top:SetSpacing(3)
+                        frame.tops[tops] = top
+                    end
+                    top:SetParent(card)
+                    top:ClearAllPoints()
+                    top:SetPoint("TOPLEFT", card, "TOPLEFT",
+                        CARD_PAD + indent, -inner)
+                    top:SetWidth(frame.width - CARD_PAD * 2 - indent)
+                    top:SetText(headline)
+                    top:Show()
+                    inner = inner + math.max(18,
+                        (top:GetStringHeight() or 0) + 4)
+                end
+
                 lines = lines + 1
                 local label = frame.lines[lines]
                 if not label then
@@ -411,11 +505,21 @@ function News:Paint(entries, dropped)
                 end
                 label:SetParent(card)
                 label:ClearAllPoints()
-                label:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -inner)
-                label:SetWidth(frame.width - CARD_PAD * 2)
-                label:SetText(News.LineText(raw))
-                label:Show()
-                inner = inner + math.max(20, (label:GetStringHeight() or 0) + 8)
+                -- The paragraph keeps the indent only while it is still
+                -- beside the icon; a headline above it has already taken
+                -- that row, so the body runs the full width under both.
+                local bodyIndent = headline and 0 or indent
+                label:SetPoint("TOPLEFT", card, "TOPLEFT",
+                    CARD_PAD + bodyIndent, -inner)
+                label:SetWidth(frame.width - CARD_PAD * 2 - bodyIndent)
+                label:SetText(body)
+                label:SetShown(body ~= "")
+                if body ~= "" then
+                    inner = inner + math.max(20,
+                        (label:GetStringHeight() or 0) + 8)
+                else
+                    inner = inner + 6
+                end
 
                 -- THE HOT LINK, under the line it belongs to. Only when it
                 -- can actually be followed: a button that opens nothing is
@@ -455,6 +559,8 @@ function News:Paint(entries, dropped)
     for index = lines + 1, #frame.lines do frame.lines[index]:Hide() end
     for index = links + 1, #frame.links do frame.links[index]:Hide() end
     for index = cards + 1, #frame.cards do frame.cards[index]:Hide() end
+    for index = tops + 1, #frame.tops do frame.tops[index]:Hide() end
+    for index = icons + 1, #frame.icons do frame.icons[index]:Hide() end
 
     frame.content:SetHeight(math.max(1, y))
 end

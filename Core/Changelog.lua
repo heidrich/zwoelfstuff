@@ -22,6 +22,7 @@ ns.CHANGELOG = {
         date = "2026-08-14",
         lines = {
             {
+                icon = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
                 text = "|cffffd100New: the group's deaths, as a log.|r Who "
                     .. "fell, when, and what ended them - for everybody, not "
                     .. "just you. A second icon with three skulls sits beside "
@@ -30,6 +31,7 @@ ns.CHANGELOG = {
                 link = { label = "Open the group death log", open = "raiddeaths" },
             },
             {
+                icon = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
                 text = "|cffffd100Click a death and read their last ten "
                     .. "seconds|r - the same table your own death window "
                     .. "shows, for whoever the row names. A red mark down the "
@@ -38,6 +40,7 @@ ns.CHANGELOG = {
                 link = { label = "Open the group death log", open = "raiddeaths" },
             },
             {
+                icon = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
                 text = "|cffffd100Tonight, across pulls.|r At the top of the "
                     .. "pull list: what keeps killing the group - with how "
                     .. "many PULLS, which is what makes it a pattern rather "
@@ -46,6 +49,7 @@ ns.CHANGELOG = {
                 link = { label = "Open the group death log", open = "raiddeaths" },
             },
             {
+                icon = 10060,
                 text = "|cffffd100Power Infusion can be requested.|r It joins "
                     .. "the external cooldown panel, and it asks ANY priest - "
                     .. "all three specialisations have it, so the shadow "
@@ -72,6 +76,7 @@ ns.CHANGELOG = {
                 .. "you can open, and the page you land on carries their "
                 .. "portrait and their specialisation.",
             {
+                icon = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo",
                 text = "|cffffd100New: this window.|r What changed since you "
                     .. "last played, once per update, with a way straight to "
                     .. "each thing. The whole history is under Changelog.",

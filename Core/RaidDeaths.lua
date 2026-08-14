@@ -1817,9 +1817,20 @@ function RaidDeaths:Create()
 
     -- The same head the death window puts over its own last ten seconds,
     -- out of the same function - one table in two windows.
+    -- ANCHORED ON BOTH SIDES, not given a width and hoped for.
+    --
+    -- His screenshot showed "Health left" drawn over the list of pulls. The
+    -- head was sized from an arithmetic - window minus side column minus two
+    -- pads minus a gutter - and an arithmetic that is out by anything at all
+    -- puts a right-aligned caption outside the window it belongs to. The
+    -- rectangle it has to fit is right there and can simply be pointed at.
+    --
+    -- The rows below get the same treatment, so the columns and their
+    -- captions cannot come out of two different sums.
     detail.head = ns.Death.BuildEventHead(detail, MAIN_W - 8,
         "What hit them")
     detail.head:SetPoint("TOPLEFT", detail.note, "BOTTOMLEFT", 0, -12)
+    detail.head:SetPoint("RIGHT", detail, "RIGHT", -8, 0)
 
     local detailHost = CreateFrame("Frame", nil, detail)
     detailHost:SetPoint("TOPLEFT", detail.head, "BOTTOMLEFT", 0, -8)
@@ -2338,6 +2349,7 @@ function RaidDeaths.PaintDetail(entry, info)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", detail.content, "TOPLEFT", 0,
             -((index - 1) * (EVENT_H + 2)))
+        row:SetPoint("RIGHT", detail.content, "RIGHT", 0, 0)
         ns.Death.PaintEventRow(row, ev, entry.maxHP)
     end
     for index = #events + 1, #detail.rows do

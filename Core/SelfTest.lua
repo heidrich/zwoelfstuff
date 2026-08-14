@@ -2317,6 +2317,62 @@ local function TestNews()
         #N.Sections({ lines = { "just an improvement" } }) == 1)
     Check("A version with no lines has no boxes", #N.Sections({}) == 0)
 
+    ---------------------------------------------------------------------
+    -- A HEADLINE AND A PARAGRAPH. Owner: "GELB als Ueberschrift, darunter
+    -- der text." The split is at the FIRST |r, never the last: a body may
+    -- carry colour of its own and a greedy match swallows the paragraph
+    -- into the heading.
+    ---------------------------------------------------------------------
+    local head, body = N.Split("|cffffd100New: a thing.|r And what it does.")
+    Check("The yellow clause becomes the heading",
+        head == "New: a thing." and body == "And what it does.")
+    local head2, body2 = N.Split(
+        "|cffffd100Fixed: one.|r See |cffffd100/zs chat|r for the rest.")
+    Check("...and colour inside the paragraph does not extend it",
+        head2 == "Fixed: one."
+        and body2 == "See |cffffd100/zs chat|r for the rest.")
+    local head3, body3 = N.Split("no colour at all")
+    Check("...a line with no yellow is all paragraph",
+        head3 == nil and body3 == "no colour at all")
+    local head4, body4 = N.Split("|cffffd100All of it is the heading.|r")
+    Check("...and one that is nothing but yellow has no paragraph",
+        head4 == "All of it is the heading." and body4 == "")
+
+    ---------------------------------------------------------------------
+    -- AND THE PICTURE, when there is an honest one. A number is a spell and
+    -- the client owns the art; a string is a path. Anything else draws
+    -- nothing - an icon invented for a line is decoration.
+    ---------------------------------------------------------------------
+    -- A NUMBER IS ASKED OF THE CLIENT, and whether the client ANSWERS is
+    -- the client's business - a desk with no spell art has none for any id,
+    -- and a check that demanded one would be asserting the world rather
+    -- than the code. So: does it delegate, and does it delegate to the
+    -- right place.
+    Check("A spell id is asked of the client, not invented",
+        N.IconFor({ text = "x", icon = 10060 }) == ns.SpellTexture(10060))
+    Check("...a path is taken as it is",
+        N.IconFor({ text = "x", icon = "Interface\\Icons\\thing" })
+            == "Interface\\Icons\\thing")
+    Check("...and a line with none draws none",
+        N.IconFor({ text = "x" }) == nil
+        and N.IconFor("a plain line") == nil
+        and N.IconFor({ text = "x", icon = {} }) == nil)
+
+    -- WHAT THE CLIENT ACTUALLY HAS ART FOR, reported rather than asserted.
+    -- A spell id that stops existing leaves a hole beside a headline, and
+    -- this is the line that would say so on a real client.
+    local named, drawn = 0, 0
+    for _, entry in ipairs(ns.CHANGELOG or {}) do
+        for _, line in ipairs(entry.lines or {}) do
+            if type(line) == "table" and line.icon ~= nil then
+                named = named + 1
+                if N.IconFor(line) then drawn = drawn + 1 end
+            end
+        end
+    end
+    Skip("Icons in the changelog the client can draw",
+        string.format("%d of %d named", drawn, named))
+
     -- Every link the shipped changelog carries, checked. This is the one
     -- that catches a page key renamed six months from now.
     local broken
