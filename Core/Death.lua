@@ -1769,14 +1769,18 @@ function Death.ApplyScale()
     frame:SetScale((ns.db and ns.db.death and ns.db.death.scale) or 1)
 end
 
--- The killer's face, or nothing at all. Two doors, both guarded: a creature
+-- A FACE ON A MODEL, or nothing at all. Two doors, both guarded: a creature
 -- id through SetCreature - MDT's enemy tooltip does exactly this with a raw
 -- npc id - and a display id through SetDisplayInfo. Neither answering means
--- the block stays hidden and the header slides back to the left margin.
-local function PaintPortrait(art)
-    local model = frame.portrait
-    if not (art and (art.creatureID or art.displayID)) then
-        model:Hide()
+-- the caller hides its block rather than showing an empty one.
+--
+-- Exported because there are three of these now: the death window's header,
+-- the replay's marks, and the raid death log's rows. It was copied once and
+-- about to be copied twice; the same six branches in three files is how one
+-- of them quietly stops matching the other two.
+function Death.PaintArt(model, art)
+    if not (model and art and (art.creatureID or art.displayID)) then
+        if model then model:Hide() end
         return false
     end
     local ok = false
@@ -1795,6 +1799,10 @@ local function PaintPortrait(art)
     pcall(model.SetCamDistanceScale, model, 1.35)
     model:Show()
     return true
+end
+
+local function PaintPortrait(art)
+    return Death.PaintArt(frame.portrait, art)
 end
 
 -- The side list, repainted whole. Newest at the top, because that is the
@@ -2160,21 +2168,8 @@ local function BuildIcon()
 
     iconButton:SetScript("OnClick", function() Death:Show() end)
 
-    iconButton:SetScript("OnDragStart", function(self)
-        if IconConfig().locked then return end
-        self:StartMoving()
-    end)
-    iconButton:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        -- Written back in CENTRE terms and reapplied, so the saved numbers
-        -- and the frame never disagree about what was just dragged.
-        local cfg = IconConfig()
-        local x, y = self:GetCenter()
-        local px, py = UIParent:GetCenter()
-        cfg.x = math.floor(x - px + 0.5)
-        cfg.y = math.floor(y - py + 0.5)
-        Death.RefreshIcon()
-    end)
+    iconButton:SetScript("OnDragStart", function() Death.DragIcon(true) end)
+    iconButton:SetScript("OnDragStop", function() Death.DragIcon(false) end)
 
     iconButton:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
@@ -2190,12 +2185,64 @@ local function BuildIcon()
     end)
 end
 
+---------------------------------------------------------------------------
+-- ONE POSITION, TWO ICONS.
+--
+-- The raid death log has a second icon docked to this one. There is still
+-- exactly ONE saved position, and whichever icon is leftmost sits on it -
+-- so dragging either of them moves the pair, and neither can be stranded.
+-- These four are what the other file needs to take part in that without
+-- knowing anything about this one's internals.
+---------------------------------------------------------------------------
+
+-- The frame, built but never shown from here. It is the anchor the docked
+-- icon hangs on, and it has to exist even on a character who has not died.
+function Death.EnsureIcon()
+    if not (ns.UI and ns.UI.C) then return nil end
+    if not iconButton then BuildIcon() end
+    return iconButton
+end
+
+function Death.IconShown()
+    return iconButton ~= nil and iconButton:IsShown()
+end
+
+function Death.IconLocked()
+    return IconConfig().locked == true
+end
+
+-- Where the pair lives, written back in CENTRE terms and reapplied, so the
+-- saved numbers and the frame never disagree about what was just dragged.
+function Death.SaveIconAt(frame)
+    local x, y = frame:GetCenter()
+    local px, py = UIParent:GetCenter()
+    if not (x and y and px and py) then return end
+    local cfg = IconConfig()
+    cfg.x = math.floor(x - px + 0.5)
+    cfg.y = math.floor(y - py + 0.5)
+end
+
+function Death.DragIcon(starting)
+    if not iconButton then return end
+    if starting then
+        if Death.IconLocked() then return end
+        iconButton:StartMoving()
+        return
+    end
+    iconButton:StopMovingOrSizing()
+    Death.SaveIconAt(iconButton)
+    Death.RefreshIcon()
+end
+
 function Death.RefreshIcon()
     if not ns.UI then return end
     local cfg = (ns.db and ns.db.death and ns.db.death.icon) or {}
     local moduleOff = ns.Modules and not ns.Modules:IsOn("deaths")
     if moduleOff or #Death.log == 0 or cfg.show == false then
         if iconButton then iconButton:Hide() end
+        -- Still refreshed: the group may have lost people on a pull this
+        -- character walked out of, and that log is worth an icon of its own.
+        if ns.RaidDeaths then ns.RaidDeaths.RefreshIcon() end
         return
     end
     if not iconButton then BuildIcon() end
@@ -2205,6 +2252,7 @@ function Death.RefreshIcon()
         cfg.x or 320, cfg.y or -180)
     iconButton.count:SetText(tostring(#Death.log))
     iconButton:Show()
+    if ns.RaidDeaths then ns.RaidDeaths.RefreshIcon() end
 end
 
 ---------------------------------------------------------------------------

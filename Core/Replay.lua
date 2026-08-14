@@ -425,23 +425,10 @@ local function PaintCreature(mark, art)
         if mark.model then mark.model:Hide() end
         return false
     end
-    local model = EnsureModel(mark)
-    local drawn = false
-    if art.creatureID and model.SetCreature then
-        drawn = pcall(model.SetCreature, model, art.creatureID)
-    end
-    if not drawn and art.displayID and model.SetDisplayInfo then
-        drawn = pcall(model.SetDisplayInfo, model, art.displayID)
-    end
-    if not drawn then
-        model:Hide()
-        return false
-    end
-    pcall(model.SetPosition, model, 0, 0, 0)
-    pcall(model.SetFacing, model, 0.4)
-    pcall(model.SetCamDistanceScale, model, 1.35)
-    model:Show()
-    return true
+    -- The six branches live in Death.PaintArt now. The early return above
+    -- stays here, because it is this file's own rule: no art means no model
+    -- gets BUILT, and a shared painter cannot know that.
+    return ns.Death.PaintArt(EnsureModel(mark), art)
 end
 
 -- A person is a portrait texture, which needs a unit token - so the name

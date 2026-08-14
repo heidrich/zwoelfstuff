@@ -1556,7 +1556,8 @@ ns.COMMANDS = {
         .. "posts it, |cffffd100clear|r empties the list, |cffffd100cds|r says "
         .. "why a press has no bar)" },
     { cmd = "/zs death raid", text = "everybody who died this fight, in the "
-        .. "order they fell, and what ended each one" },
+        .. "order they fell, and what ended each one (|cffffd100chat|r prints "
+        .. "it instead of opening the window)" },
 
     { group = "Housekeeping" },
     { cmd = "/zs test", text = "run the addon's own checks and report failures" },
@@ -1774,8 +1775,12 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         elseif sub == "probe" then
             ns.Death:Probe()
         -- Everybody else's, which is a different question from "what killed
-        -- me" and reads a different half of the same list.
+        -- me" and reads a different half of the same list. The window is the
+        -- answer; the chat version stays because a paste is how a number gets
+        -- checked, and a screenshot of a window is not.
         elseif sub == "raid" or sub == "group" then
+            ns.RaidDeaths:Toggle()
+        elseif sub == "raid chat" or sub == "raid text" then
             ns.RaidDeaths:Dump()
         -- Why a press has no bar under it. Four different causes wear the
         -- same symptom, and only the client can say which one it is.

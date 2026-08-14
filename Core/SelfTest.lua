@@ -2373,6 +2373,43 @@ local function TestRaidDeaths()
         silent:find("the recap is empty", 1, true) ~= nil, silent)
 
     ---------------------------------------------------------------------
+    -- Keeping the fight, because the Current session does not wait
+    ---------------------------------------------------------------------
+    Check("A pull is named by its FIRST death, which is its lowest id",
+        R.FightKey({ { recapID = 40 }, { recapID = 37 }, { recapID = 38 } })
+        == 37)
+    Check("...and a list with no ids in it has no name",
+        R.FightKey({}) == nil and R.FightKey({ {} }) == nil)
+
+    local log = {}
+    R.Remember(log, { key = 37, mark = "first read" }, 3)
+    R.Remember(log, { key = 37, mark = "second read" }, 3)
+    Check("The same pull read twice is one entry, not two",
+        #log == 1 and log[1].mark == "second read")
+    R.Remember(log, { key = 44 }, 3)
+    Check("A pull with a different first death is a new entry", #log == 2)
+    R.Remember(log, { key = 51 }, 3)
+    R.Remember(log, { key = 58 }, 3)
+    Check("The oldest drops out when the cap is reached",
+        #log == 3 and log[1].key == 44,
+        string.format("%d kept, oldest %s", #log, tostring(log[1].key)))
+
+    ---------------------------------------------------------------------
+    -- What the footer says
+    ---------------------------------------------------------------------
+    Check("A count where nothing repeats is not worth printing",
+        not R.WorthCounting({ { count = 1 }, { count = 1 } })
+        and R.WorthCounting({ { count = 1 }, { count = 2 } }))
+    Check("...so four deaths to four things say it in one sentence",
+        R.FootLine({ { who = "A", spell = "B", count = 1 } }, 4)
+            :find("each to something different", 1, true) ~= nil)
+    Check("...and something that killed three is named and counted",
+        R.FootLine({ { who = "Shade", spell = "Rend", count = 3 } }, 3)
+            :find("3x Shade", 1, true) ~= nil)
+    Check("A fight nobody died in has no footer at all",
+        R.FootLine({}, 0) == "")
+
+    ---------------------------------------------------------------------
     -- THE WIRING, not the rule. Everything above is arithmetic on tables
     -- this file typed out. This asks the client the addon will actually ask,
     -- and reports what came back rather than asserting a fight is running.
@@ -2401,6 +2438,27 @@ local function TestRaidDeaths()
     Skip("What the client is holding right now", string.format(
         "%d deaths in %s%s, %d recaps read", #entries, info.label,
         info.duration and (" of " .. R.Clock(info.duration)) or "", read))
+
+    -- And the capture, driven against whatever the client has. A fight with
+    -- no clock on it must NOT be kept: that is Overall, and keeping it would
+    -- overwrite a good capture with a worse one.
+    local before = R.log
+    R.log = {}
+    local fight = R.Capture()
+    if not fight then
+        Skip("Keeping the fight", info.timed
+            and "the client had a timed session but nothing was kept"
+            or "no timed session right now, so there is nothing to keep")
+    else
+        Check("A timed fight is kept whole",
+            #R.log == 1 and #fight.entries > 0 and fight.key ~= nil,
+            string.format("%d deaths, pull %s", #fight.entries,
+                tostring(fight.key)))
+        R.Capture()
+        Check("...and reading the same pull again replaces it",
+            #R.log == 1, string.format("%d fights kept", #R.log))
+    end
+    R.log = before
 end
 
 local function TestLiveBars()
