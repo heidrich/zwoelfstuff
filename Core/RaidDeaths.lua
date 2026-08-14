@@ -115,6 +115,14 @@ function RaidDeaths.Row(src, seq, me)
         name = name,
         short = ns.Death.StripRealm(name),
         class = class,
+        -- WHAT THEY WERE PLAYING, asked while they are still in the group.
+        -- The meter says "MAGE" and nothing more; the picture beside the name
+        -- should say Frost. It is read here rather than when the window
+        -- opens, because by then the pull is over and half the group may have
+        -- left - and an inspect answer is not something we can ask for about
+        -- somebody who is gone. nil stays nil: the class icon is the fallback
+        -- and it is never wrong, only less exact.
+        spec = ns.Specs and ns.Specs.OfName(name) or nil,
         at = at,
         recapID = recapID,
         you = RaidDeaths.IsYou(src, me),
@@ -586,6 +594,7 @@ function RaidDeaths.Light(fight)
                 name = name,
                 short = Plain(entry.short, "string") or name,
                 class = Plain(entry.class, "string"),
+                spec = Plain(entry.spec, "number"),
                 you = entry.you == true,
                 who = who,
                 spell = spell,
@@ -895,6 +904,7 @@ function RaidDeaths.Persist(fight)
                 name = name,
                 short = Plain(entry.short, "string") or name,
                 class = Plain(entry.class, "string"),
+                spec = Plain(entry.spec, "number"),
                 at = Plain(entry.at, "number"),
                 gap = Plain(entry.gap, "number"),
                 recapID = Plain(entry.recapID, "number"),
@@ -1259,7 +1269,10 @@ RaidDeaths.CULPRITS_SHOWN = CULPRITS_SHOWN
 -- the two answer different questions from different sides.
 ---------------------------------------------------------------------------
 local frame
-local ROW_H, FACE = 26, 22
+-- The row got taller because the two pictures on it got bigger: a face drawn
+-- into 22 pixels was a smudge, and the whole reason for putting one beside a
+-- name is that you can tell it apart from the next one.
+local ROW_H, FACE, SPEC = 30, 26, 20
 -- 820 is the width of the options window, so two of this addon's windows
 -- open on top of each other rather than beside each other.
 local WIDTH, HEIGHT = 820, 470
@@ -1337,26 +1350,32 @@ local function BuildRow(parent)
     row.when:SetWidth(52)
     row.when:SetJustifyH("LEFT")
 
-    -- A model frame is not free, so it is built with the row and simply
-    -- hidden when a death has no readable face - the rows are reused.
-    row.face = CreateFrame("PlayerModel", nil, row)
-    row.face:SetSize(FACE, FACE)
-    row.face:SetPoint("LEFT", row.when, "RIGHT", 2, 0)
-    row.face:Hide()
+    -- WHAT THEY WERE PLAYING, in front of their name. His ask, and it is the
+    -- one thing a name alone never says: "Grauertiger died" reads completely
+    -- differently depending on whether that was the tank.
+    row.spec = row:CreateTexture(nil, "ARTWORK")
+    row.spec:SetSize(SPEC, SPEC)
+    row.spec:SetPoint("LEFT", row.when, "RIGHT", 2, 0)
+    row.spec:Hide()
 
     row.who = UI.Label(row, "", UI.FS.row, C.text)
-    row.who:SetPoint("LEFT", row.face, "RIGHT", 6, 0)
+    row.who:SetPoint("LEFT", row.spec, "RIGHT", 6, 0)
     row.who:SetWidth(150)
     row.who:SetJustifyH("LEFT")
     row.who:SetWordWrap(false)
 
-    row.killer = UI.Label(row, "", UI.FS.meta, C.textDim)
-    row.killer:SetPoint("LEFT", row.who, "RIGHT", 6, 0)
-    row.killer:SetWidth(150)
+    -- AND THE MOB IN FRONT OF ITS OWN NAME, which is where he moved it: a
+    -- face sitting in the WHEN column belonged to nothing on the line.
+    row.face = ns.Death.CreateFace(row, FACE)
+    row.face:SetPoint("LEFT", row.who, "RIGHT", 6, 0)
+
+    row.killer = UI.Label(row, "", UI.FS.meta, C.hot)
+    row.killer:SetPoint("LEFT", row.face, "RIGHT", 6, 0)
+    row.killer:SetWidth(140)
     row.killer:SetJustifyH("LEFT")
     row.killer:SetWordWrap(false)
 
-    row.spell = UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.spell = UI.Label(row, "", UI.FS.meta, C.hot)
     row.spell:SetPoint("LEFT", row.killer, "RIGHT", 6, 0)
     row.spell:SetPoint("RIGHT", row, "RIGHT", -62, 0)
     row.spell:SetJustifyH("LEFT")
@@ -1511,9 +1530,10 @@ local function BuildSideRow(parent, slot)
     row.when = UI.Label(row, "", UI.FS.meta, C.text)
     row.when:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -3)
 
-    -- Where, in the cool accent and on the right, which is where the death
-    -- window puts "M+18". The count moves down to the second line with it.
-    row.count = UI.Label(row, "", UI.FS.eyebrow, C.accentCool)
+    -- Where, in the orange the whole addon now uses for a place, and on the
+    -- right, which is where the death window puts "M+18". The count moves
+    -- down to the second line with it.
+    row.count = UI.Label(row, "", UI.FS.eyebrow, C.hot)
     row.count:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -3)
     row.count:SetJustifyH("RIGHT")
 
@@ -1601,10 +1621,13 @@ function RaidDeaths:Create()
     frame.headWhen:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 0, 0)
     frame.headWho = UI.Eyebrow(head, "Who died")
     frame.headWho:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 80, 0)
+    -- 80 = when(52) + gap(2) + spec(20) + gap(6); 268 adds the name column
+    -- and the mob's face; 414 adds the killer column. The head reads the same
+    -- arithmetic the cells do or it is a decoration that drifts.
     frame.headKiller = UI.Eyebrow(head, "Killed by")
-    frame.headKiller:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 236, 0)
+    frame.headKiller:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 268, 0)
     frame.headWhat = UI.Eyebrow(head, "With what")
-    frame.headWhat:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 392, 0)
+    frame.headWhat:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 414, 0)
     frame.headAmount = UI.Eyebrow(head, "Damage")
     frame.headAmount:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, 0)
 
@@ -1959,8 +1982,11 @@ function RaidDeaths.DetailLine(entry)
     local blow = entry.blow
     if not blow then return entry.blowWhy or "nothing readable" end
 
-    local line = string.format("Killed by %s - %s", blow.who or "?",
-        ns.Death.PlainText(blow.spell or "?"))
+    -- The mob and the ability are the two words in this line that answer the
+    -- mouse on the row it came from, so they carry the same orange there.
+    local line = string.format("Killed by %s - %s",
+        ns.UI.HotText(blow.who or "?"),
+        ns.UI.HotText(ns.Death.PlainText(blow.spell or "?")))
     if type(blow.amount) == "number" and blow.amount > 0 then
         line = line .. " for " .. ns.ShortNumber(blow.amount)
     end
@@ -1971,8 +1997,8 @@ function RaidDeaths.DetailLine(entry)
 
     if type(entry.real) == "table" then
         line = line .. string.format("  The hit that mattered: %s - %s for %s.",
-            entry.real.who or "?",
-            ns.Death.PlainText(entry.real.spell or "?"),
+            ns.UI.HotText(entry.real.who or "?"),
+            ns.UI.HotText(ns.Death.PlainText(entry.real.spell or "?")),
             ns.ShortNumber(entry.real.landed or 0))
     end
     return line
@@ -2035,9 +2061,11 @@ function RaidDeaths:Refresh()
         frame.verdict:SetText("")
     else
         -- The death window's header shape: the time and the killer on one
-        -- line, the place under it. Here the place carries the clock.
+        -- line, the place under it. Here the place carries the clock - and
+        -- the PLACE is the orange half, because that is the part somebody
+        -- reads to know which run this was.
         local where = info.when and (info.when .. "  -  ") or ""
-        where = where .. (info.where or info.label or "")
+        where = where .. ns.UI.HotText(info.where or info.label or "")
         if info.duration then
             where = where .. "  -  " .. RaidDeaths.Clock(info.duration)
         end
@@ -2068,7 +2096,8 @@ function RaidDeaths:Refresh()
 
         row.when:SetText(timed and RaidDeaths.Clock(entry.at) or "--:--")
 
-        ns.Death.PaintArt(row.face, entry.blow and entry.blow.art)
+        ns.UI.PaintSpecIcon(row.spec, entry.spec, entry.class)
+        ns.Death.PaintFace(row.face, entry.blow and entry.blow.art)
 
         local colour = entry.class and RAID_CLASS_COLORS
             and RAID_CLASS_COLORS[entry.class]
@@ -2089,12 +2118,16 @@ function RaidDeaths:Refresh()
 
         local blow = entry.blow
         if blow then
+            -- ORANGE MEANS THIS ANSWERS THE MOUSE. Both of these open
+            -- something when you point at them - the mob its big tip, the
+            -- ability the client's own tooltip - and nothing else on the row
+            -- does.
             row.killer:SetText(blow.who or "?")
-            row.killer:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            row.killer:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
             -- The ability gets its icon, which is the rule everywhere in this
             -- addon: a name says what hit, a picture says which one it was.
             row.spell:SetText(ns.Death.SpellText(blow.spellID, blow.spell))
-            row.spell:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            row.spell:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
             if type(blow.amount) == "number" and blow.amount > 0 then
                 row.amount:SetText(ns.ShortNumber(blow.amount))
             else
@@ -2267,9 +2300,9 @@ function RaidDeaths.PaintOverview()
             local killer = killers[index]
             local row = Row()
             row.count:SetText(killer.deaths .. "x")
-            row.main:SetText(string.format("%s  |cff9ba3af%s|r",
+            row.main:SetText(string.format("%s  %s",
                 ns.Death.PlainText(killer.spell), killer.who))
-            row.main:SetTextColor(C.text[1], C.text[2], C.text[3])
+            row.main:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
             row.note:SetText(RaidDeaths.RepeatLine(killer))
         end
         More(#killers)
@@ -2373,7 +2406,8 @@ function RaidDeaths.PaintSideList()
             local worst = (fight.culprits or {})[1]
             local line = string.format("%d dead", dead)
             if worst and worst.count > 1 then
-                line = line .. "  -  " .. (worst.spell or worst.who or "?")
+                line = line .. "  -  "
+                    .. ns.UI.HotText(worst.spell or worst.who or "?")
             elseif fight.duration then
                 line = line .. "  -  " .. RaidDeaths.Clock(fight.duration)
             end

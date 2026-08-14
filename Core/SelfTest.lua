@@ -2838,6 +2838,25 @@ local function TestRaidDeaths()
         "%d deaths in %s%s, %d recaps read", #entries, info.label,
         info.duration and (" of " .. R.Clock(info.duration)) or "", read))
 
+    -- WHICH DOOR THE FACES TOOK, and this is REPORTED rather than asserted.
+    -- The flat portrait needs a display id, the recap hands over an npc id,
+    -- and the only route between them is a model saying so after it has
+    -- loaded. None of that can be proven at a desk with no game in it, so
+    -- the addon counts what actually happened and this line reads it back.
+    -- If `flat` is 0 after a window has been open, the 2D door never opened
+    -- on this client and the head-shot models are what is on screen.
+    local faces = ns.Death.faceStats or {}
+    Skip("How the mob faces were drawn", string.format(
+        "%d flat portraits, %d models, %d had no art at all",
+        faces.flat or 0, faces.model or 0, faces.none or 0))
+
+    local named = 0
+    for _, entry in ipairs(entries) do
+        if entry.spec then named = named + 1 end
+    end
+    Skip("How many of the dead had a readable spec", string.format(
+        "%d of %d - the rest wear their class icon", named, #entries))
+
     -- And the capture, driven against whatever the client has. A fight with
     -- no clock on it must NOT be kept: that is Overall, and keeping it would
     -- overwrite a good capture with a worse one.

@@ -1474,7 +1474,7 @@ function Death.BuildEventRow(parent, width)
     row.icon:SetPoint("LEFT", row, "LEFT", COL_ICON, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    row.what = UI.Label(row, "", 12, C.text)
+    row.what = UI.Label(row, "", 12, C.hot)
     row.what:SetPoint("LEFT", row, "LEFT", COL_WHAT, 0)
     row.what:SetWidth(COL_WHAT_W)
     row.what:SetJustifyH("LEFT")
@@ -1560,11 +1560,13 @@ function Death.PaintEventRow(row, ev, maxHP)
     row.icon:SetTexture(icon or 135274)
     row.icon:Show()
 
-    -- What, then who, in the quiet grey: "Melee - Heavyweight Golem". The
-    -- mob's name is part of the story and the owner asked for it by name;
-    -- inline and dimmed so the amounts stay the loudest column.
+    -- What, then who: "Melee  Heavyweight Golem". BOTH IN ORANGE, because
+    -- both are what this row answers about when the mouse arrives - the
+    -- ability through the client's own tooltip, the mob through the big tip
+    -- everywhere else in the addon. The numbers keep their own weight, so
+    -- the column still reads as a name beside an amount.
     if ev.who then
-        row.what:SetText((ev.name or "") .. "  |cff9ba3af" .. ev.who .. "|r")
+        row.what:SetText((ev.name or "") .. "  " .. ev.who)
     else
         row.what:SetText(ev.name or "")
     end
@@ -1642,10 +1644,8 @@ local function BuildWindow()
     -- is how MDT draws the mob in its enemy tooltips - the same call, on
     -- the same kind of id. It is Hidden until one actually renders: an
     -- empty black square where a face should be is worse than no square.
-    frame.portrait = CreateFrame("PlayerModel", nil, frame)
-    frame.portrait:SetSize(54, 54)
+    frame.portrait = Death.CreateFace(frame, 54)
     frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -12)
-    frame.portrait:Hide()
 
     -- The killer's face at 54 pixels is a silhouette. Pointing at it gives
     -- the big one, with everything it did to you in these seconds - the same
@@ -1813,13 +1813,16 @@ local function BuildWindow()
         row.when = UI.Label(row, "", 11, C.text)
         row.when:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -4)
 
-        row.where = UI.Label(row, "", 10, C.accentCool)
+        -- The place and the killer both in the orange this addon now uses
+        -- for a word that answers: the whole row is a button, and these two
+        -- are what it is a button ABOUT.
+        row.where = UI.Label(row, "", 10, C.hot)
         row.where:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -4)
         row.where:SetJustifyH("RIGHT")
         row.where:SetWidth(96)
         row.where:SetWordWrap(false)
 
-        row.who = UI.Label(row, "", 10, C.textFaint)
+        row.who = UI.Label(row, "", 10, C.hot)
         row.who:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
         row.who:SetWidth(SIDE_W - 16)
         row.who:SetWordWrap(false)
@@ -1967,13 +1970,142 @@ function Death.PaintArt(model, art)
     end
     pcall(model.SetPosition, model, 0, 0, 0)
     pcall(model.SetFacing, model, 0.4)
-    pcall(model.SetCamDistanceScale, model, 1.35)
+    -- A HEAD SHOT, not a figure standing in a box. This is what Blizzard's
+    -- own unit portraits do with the same widget, and it is the half of
+    -- "2d avatare head shots" that does not depend on a display id ever
+    -- being handed over: even when the flat portrait never happens, what is
+    -- on screen is a face rather than a silhouette in the middle distance.
+    if model.SetPortraitZoom then
+        pcall(model.SetPortraitZoom, model, 1)
+    else
+        pcall(model.SetCamDistanceScale, model, 1.35)
+    end
     model:Show()
     return true
 end
 
+---------------------------------------------------------------------------
+-- A CREATURE'S FACE AS A PICTURE, NOT A PUPPET
+--
+-- Owner, 2026-08-14: "mach statt die 3d model die 2d avatare head shots da
+-- rein! bei allen 3 fenstern ... dann werden die groesser und man kann das
+-- besser erkennen." He is right about the reason. A whole body drawn into
+-- twenty-two pixels is a dark smudge, and every smudge looks like every
+-- other one - which defeats the entire point of putting a face beside a name.
+--
+-- TWO DOORS, because the recap does not hand over what the 2D call wants.
+-- SetPortraitTextureFromCreatureDisplayID needs a DISPLAY id, and the probe
+-- dump of 2026-08-14 shows a recap event carries no id of any kind: the only
+-- one we ever get is an NPC id parsed out of the source GUID. So
+--
+--   1. a display id, if one is ever handed over - straight to the portrait.
+--   2. an npc id - the model is asked to load it and its display id read back
+--      off it with GetDisplayInfo, which is the only route the client offers
+--      from one to the other. It answers a frame or two later, so the model
+--      is what is on screen until it does. The answer is cached by npc id, so
+--      the second row with the same mob is free and instant.
+--
+-- AND THE MODEL IS A HEAD SHOT EITHER WAY. SetPortraitZoom is what Blizzard's
+-- own unit frames use, and it is the half of the ask that does not depend on
+-- any of the above working - so even a client that never answers (2) gets a
+-- face instead of a silhouette.
+--
+-- Which door answered is COUNTED and reported by the self test rather than
+-- assumed, because none of this can be proven at a desk with no game in it.
+---------------------------------------------------------------------------
+local displayOf = {}
+Death.faceStats = { flat = 0, model = 0, none = 0 }
+
+local function PortraitCall()
+    return SetPortraitTextureFromCreatureDisplayID
+end
+
+-- The display id for a creature, if it is already known. Pure lookup.
+function Death.DisplayFor(art)
+    if type(art) ~= "table" then return nil end
+    if art.displayID then return art.displayID end
+    return art.creatureID and displayOf[art.creatureID] or nil
+end
+
+-- Remembered so the next row showing the same mob takes the fast door. Its
+-- own function so a check can seed it without a model in the room.
+function Death.RememberDisplay(creatureID, displayID)
+    if type(creatureID) == "number" and type(displayID) == "number"
+        and displayID > 0 then
+        displayOf[creatureID] = displayID
+        return true
+    end
+    return false
+end
+
+-- A face: one texture and one model, and exactly one of them is ever shown.
+function Death.CreateFace(parent, size)
+    local face = CreateFrame("Frame", nil, parent)
+    face:SetSize(size, size)
+
+    face.flat = face:CreateTexture(nil, "ARTWORK")
+    face.flat:SetAllPoints(face)
+    face.flat:Hide()
+
+    face.model = CreateFrame("PlayerModel", nil, face)
+    face.model:SetAllPoints(face)
+    face.model:Hide()
+
+    -- The model answers with its display id once it has loaded, and that is
+    -- the moment the 2D door opens for every row after this one.
+    face.model:SetScript("OnModelLoaded", function(self)
+        local art = face.art
+        if not (art and art.creatureID and self.GetDisplayInfo) then return end
+        local ok, id = pcall(self.GetDisplayInfo, self)
+        if ok and Death.RememberDisplay(art.creatureID, id) then
+            Death.PaintFace(face, art)
+        end
+    end)
+
+    face:Hide()
+    return face
+end
+
+function Death.PaintFace(face, art)
+    if not face then return false end
+    face.art = art
+    if not (type(art) == "table" and (art.creatureID or art.displayID)) then
+        face.flat:Hide()
+        face.model:Hide()
+        face:Hide()
+        Death.faceStats.none = Death.faceStats.none + 1
+        return false
+    end
+
+    local display = Death.DisplayFor(art)
+    local paint = PortraitCall()
+    if display and type(paint) == "function" then
+        local ok = pcall(paint, face.flat, display)
+        if ok then
+            face.model:Hide()
+            face.flat:Show()
+            face:Show()
+            Death.faceStats.flat = Death.faceStats.flat + 1
+            return true
+        end
+    end
+
+    -- The older road, and it is not a failure - it is what is on screen while
+    -- the display id is still coming back, and forever on a client that never
+    -- answers with one.
+    face.flat:Hide()
+    if Death.PaintArt(face.model, art) then
+        face:Show()
+        Death.faceStats.model = Death.faceStats.model + 1
+        return true
+    end
+    face:Hide()
+    Death.faceStats.none = Death.faceStats.none + 1
+    return false
+end
+
 local function PaintPortrait(art)
-    return Death.PaintArt(frame.portrait, art)
+    return Death.PaintFace(frame.portrait, art)
 end
 
 ---------------------------------------------------------------------------
@@ -2208,14 +2340,19 @@ function Death:Show(index)
     -- through SafeName's door or it would not be in the snapshot.
     local when = Death.WhenLabel(snapshot, date("%Y-%m-%d"))
     if snapshot.killer then
+        -- ORANGE ON THE KILLER, because that word is the one the portrait
+        -- beside it answers for: point at the face and the big tip opens.
         frame.sub:SetText(string.format("%s  -  killed by %s  -  the last %d seconds",
-            when, snapshot.killer, WINDOW))
+            when, ns.UI.HotText(snapshot.killer), WINDOW))
     else
         frame.sub:SetText(string.format("%s  -  the last %d seconds",
             when, WINDOW))
     end
 
+    -- The place, in the same orange every instance name in the addon wears
+    -- now - it is the line somebody reads to know which run this was.
     frame.place:SetText(snapshot.where or "")
+    frame.place:SetTextColor(UI.C.hot[1], UI.C.hot[2], UI.C.hot[3])
 
     -- The portrait decides where the header starts: with a face, the text
     -- moves out of its way; without one, it keeps the left margin every

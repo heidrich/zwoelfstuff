@@ -64,6 +64,18 @@ local C = {
     accentSoft = { 0.180, 0.118, 0.082 },  -- #2E1E15  toggle track on, badge bed
     accentCool = { 0.494, 0.776, 0.831 },  -- #7EC6D4  references, category badges
 
+    -- THIS ONE ANSWERS THE MOUSE. Owner, 2026-08-14: "mach die instanz namen
+    -- orange, und die spell namen und boss namen. alles was man hovern bzw.
+    -- anklicken kann."
+    --
+    -- The same orange as the accent, and deliberately its OWN name: the
+    -- accent is a brand mark and there is at most one of it per column, while
+    -- this is a promise - point at this word and it will tell you more. A
+    -- window full of it is not the accent being overused, it is a window full
+    -- of things that answer. If the two ever have to part company, they part
+    -- here and nowhere else.
+    hot        = { 1.000, 0.478, 0.239 },  -- #FF7A3D  hoverable, clickable
+
     -- Green means "this one is already on the bar you have selected". Only
     -- ever used for that, so it stays readable as a state rather than decoration.
     inUse      = { 0.404, 0.788, 0.443 },  -- #67C971
@@ -341,6 +353,68 @@ end
 UI.BUTTON_PAD = 14
 UI.BUTTON_MIN = 84
 UI.BUTTON_MAX = 260
+
+---------------------------------------------------------------------------
+-- THE PICTURE FOR WHAT SOMEBODY IS PLAYING
+--
+-- Owner, 2026-08-14: "vor dem spieler namen muss das spec icon rein, also er
+-- ist frost mage zb."
+--
+-- TWO ANSWERS, because they arrive at different times. A specialisation is
+-- read over the wire and may never come - somebody out of range, an inspect
+-- the server drops. A class is on every damage-meter row from the first
+-- second. So the spec is used when it is known and the CLASS is used when it
+-- is not, rather than a hole sitting where a picture belongs for a whole
+-- pull.
+--
+-- Returns the texture and four coordinates, because the caller cannot know
+-- which of the two it got: a spec icon is a file of its own and a class icon
+-- is one cell of a sheet.
+---------------------------------------------------------------------------
+-- The same orange as C.hot, as an escape code, for the half of the rule that
+-- lands in the MIDDLE of a sentence: "21:07 - Voidscar Arena - 2:17" is one
+-- font string and only the place in it answers the mouse.
+UI.HOT = "|cffff7a3d"
+
+function UI.HotText(text)
+    if type(text) ~= "string" or text == "" then return text or "" end
+    return UI.HOT .. text .. "|r"
+end
+
+local CLASS_SHEET = "Interface\\TargetingFrame\\UI-Classes-Circles"
+
+function UI.SpecIcon(specID, classFile)
+    if type(specID) == "number" and specID > 0 then
+        local info = (C_SpecializationInfo
+                and C_SpecializationInfo.GetSpecializationInfoByID)
+            or GetSpecializationInfoByID
+        if type(info) == "function" then
+            local ok, _, _, _, icon = pcall(info, specID)
+            if ok and icon then return icon, 0, 1, 0, 1 end
+        end
+    end
+    local coords = type(classFile) == "string" and CLASS_ICON_TCOORDS
+        and CLASS_ICON_TCOORDS[classFile]
+    if type(coords) == "table" and #coords == 4 then
+        return CLASS_SHEET, coords[1], coords[2], coords[3], coords[4]
+    end
+    return nil
+end
+
+-- The same answer, painted. Hidden rather than left showing the last mob's
+-- face when there is nothing to say.
+function UI.PaintSpecIcon(texture, specID, classFile)
+    if not texture then return false end
+    local file, l, r, t, b = UI.SpecIcon(specID, classFile)
+    if not file then
+        texture:Hide()
+        return false
+    end
+    texture:SetTexture(file)
+    texture:SetTexCoord(l, r, t, b)
+    texture:Show()
+    return true
+end
 
 function UI.ButtonWidth(text)
     local ruler = UI.ruler

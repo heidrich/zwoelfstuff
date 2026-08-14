@@ -286,6 +286,55 @@ function Specs.Want(unit)
     StartTicker()
 end
 
+---------------------------------------------------------------------------
+-- FINDING SOMEBODY BY NAME
+--
+-- Every list this addon reads names people rather than handing over unit
+-- tokens: the damage meter says "Grauertiger-Destromath", the recap says
+-- "Meredy Huntswell". A unit token is what the client wants for nearly
+-- everything - a portrait, an inspect, a spec - so the walk from one to the
+-- other lives here once instead of in each window.
+--
+-- Both spellings are compared, because the meter says NAME-REALM and
+-- UnitName answers without a realm for anybody on ours.
+---------------------------------------------------------------------------
+function Specs.UnitForName(name)
+    if not (type(name) == "string" and name ~= "" and UnitName) then
+        return nil
+    end
+    local short = ns.Death and ns.Death.StripRealm and ns.Death.StripRealm(name)
+        or name
+
+    local function Is(unit)
+        local ok, found, realm = pcall(UnitName, unit)
+        if not (ok and type(found) == "string") then return false end
+        if found == name or found == short then return true end
+        if type(realm) == "string" and realm ~= "" then
+            return (found .. "-" .. realm) == name
+        end
+        return false
+    end
+
+    if Is("player") then return "player" end
+    for index = 1, 4 do
+        local unit = "party" .. index
+        if UnitExists and UnitExists(unit) and Is(unit) then return unit end
+    end
+    for index = 1, 40 do
+        local unit = "raid" .. index
+        if UnitExists and UnitExists(unit) and Is(unit) then return unit end
+    end
+    return nil
+end
+
+-- What that person is playing, by name. nil means "not known", never "no
+-- spec" - and it stays nil rather than guessing from the class, because a
+-- wrong spec icon beside a name is worse than a class icon that is right.
+function Specs.OfName(name)
+    local unit = Specs.UnitForName(name)
+    return unit and Specs.Of(unit) or nil
+end
+
 function Specs.Forget(guid)
     if guid then
         known[guid] = nil

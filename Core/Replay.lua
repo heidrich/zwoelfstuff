@@ -398,13 +398,13 @@ end
 -- portrait has been doing since 4.49.0. Built only when a mark actually
 -- has art behind it - a model frame is not free and most plots need a
 -- handful, not twenty-eight.
-local function EnsureModel(mark)
+local function EnsureFace(mark)
     if mark.model then return mark.model end
-    local model = CreateFrame("PlayerModel", nil, mark)
-    model:SetSize(AVATAR, AVATAR)
-    model:Hide()
-    mark.model = model
-    return model
+    -- One frame carrying a flat portrait and a model, and Death decides which
+    -- of the two is on screen. Still called `model` on the mark because every
+    -- position and every hover in this file already points at that name.
+    mark.model = ns.Death.CreateFace(mark, AVATAR)
+    return mark.model
 end
 
 local function PaintCreature(mark, art)
@@ -412,36 +412,21 @@ local function PaintCreature(mark, art)
         if mark.model then mark.model:Hide() end
         return false
     end
-    -- The six branches live in Death.PaintArt now. The early return above
-    -- stays here, because it is this file's own rule: no art means no model
-    -- gets BUILT, and a shared painter cannot know that.
-    return ns.Death.PaintArt(EnsureModel(mark), art)
+    -- The doors live in Death.PaintFace now. The early return above stays
+    -- here, because it is this file's own rule: no art means no frame gets
+    -- BUILT, and a shared painter cannot know that.
+    return ns.Death.PaintFace(EnsureFace(mark), art)
 end
 
 -- A person is a portrait texture, which needs a unit token - so the name
 -- is looked for among the units this client will still answer for. Outside
 -- the group there is no answer and the mark keeps its name and no face,
 -- which is honest: we do not know what that person looks like.
-local function UnitFor(name)
-    if not (name and UnitName) then return nil end
-    local function Is(unit)
-        local ok, found = pcall(UnitName, unit)
-        return ok and found == name
-    end
-    if Is("player") then return "player" end
-    for i = 1, 4 do
-        local unit = "party" .. i
-        if Is(unit) then return unit end
-    end
-    for i = 1, 40 do
-        local unit = "raid" .. i
-        if Is(unit) then return unit end
-    end
-    return nil
-end
-
+-- The walk from a name to a unit token lives in Specs.lua now - it is the
+-- same walk the spec lookup needs, and the copy here compared only the full
+-- name, so anybody on our own realm never matched.
 local function PaintFace(mark, name)
-    local unit = UnitFor(name)
+    local unit = ns.Specs and ns.Specs.UnitForName(name)
     if not (unit and SetPortraitTexture) then
         if mark.face then mark.face:Hide() end
         return false
@@ -1237,10 +1222,13 @@ function Replay:Open(snapshot)
         pan = nil,
     }
 
+    -- The mob and the place in orange, the addon's mark for a word that
+    -- answers: every face on the plot below opens a tip for that same mob.
     frame.title:SetText(snapshot.killer
-        and ("Replay - killed by " .. snapshot.killer) or "Replay")
+        and ("Replay - killed by " .. ns.UI.HotText(snapshot.killer))
+        or "Replay")
     frame.sub:SetText((snapshot.when or "")
-        .. (snapshot.where and ("  -  " .. snapshot.where) or ""))
+        .. (snapshot.where and ("  -  " .. ns.UI.HotText(snapshot.where)) or ""))
 
     -- The single portrait that used to sit in the corner of the damage lane
     -- is gone: every hit carries its own face now. One face for a death
