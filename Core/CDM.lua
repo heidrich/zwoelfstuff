@@ -1218,6 +1218,7 @@ local itemViewer  = {}   -- which viewer an item came from: it decides its shape
 function CDM:RebuildItemIndex()
     wipe(itemBySpell)
     wipe(itemViewer)
+    self.indexBuilt = true
 
     -- INDEXED UNDER EVERY FORM OF THE SPELL, not just the one the frame is
     -- reporting this second. A talent that replaces a spell changes the ID
@@ -1248,11 +1249,26 @@ function CDM:RebuildItemIndex()
     end
 end
 
--- The live frame for a spell, or nil. `fresh` rebuilds first, for a caller
--- that is not riding the screen's render pass.
+-- The live frame for a spell, or nil.
+--
+-- THE INDEX KEEPS ITSELF NOW, and that is not a tidy-up: it used to be
+-- rebuilt once per render pass by the bars, and when they went, its only
+-- writer went with them. Nothing threw. The table simply stayed empty for the
+-- whole session, so every reminder fell into "Blizzard is not showing this
+-- spell" - a surviving feature that silently never fires, blaming Blizzard's
+-- settings for a hole of ours. An audit found it; no test could have, because
+-- an empty index and a spell that really is untracked are the same answer.
+--
+-- Two ways it stays current, and both are needed:
+--   * NotifyChanged rebuilds it before the listeners run, so the pool churn
+--     that already fires on a talent change or a viewer edit carries it.
+--   * The first read builds it, for the case where nothing has churned yet -
+--     a reminder asking before the Cooldown Manager has drawn anything.
+-- `fresh` stays as the escape hatch for a caller that must not be one frame
+-- behind.
 function CDM:ItemForSpell(spellID, fresh)
     if not spellID then return nil end
-    if fresh then self:RebuildItemIndex() end
+    if fresh or not self.indexBuilt then self:RebuildItemIndex() end
     return itemBySpell[spellID]
 end
 
@@ -1784,6 +1800,12 @@ function CDM:OnChanged(fn)
 end
 
 function CDM:NotifyChanged()
+    -- BEFORE the listeners, not after: what changed is which item frames
+    -- exist, and every listener's first question is which frame belongs to a
+    -- spell. Answering that out of last minute's index is the same bug as
+    -- having no index at all, one frame later.
+    self:RebuildItemIndex()
+
     for _, fn in ipairs(listeners) do
         local ok, err = pcall(fn)
         if not ok then geterrorhandler()(err) end

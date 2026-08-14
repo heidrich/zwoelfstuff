@@ -717,21 +717,57 @@ end
 -- second list for "what was in the bags", which meant the same question got
 -- two answers in two places on one window.
 --
--- These three are only the SEED. `nil` means "this setting has never been
--- seen", which is NOT the same as a list somebody emptied on purpose, so it
--- is written once and after that the list belongs to the player.
+-- BOTH LISTS BELONG TO THE SPECIALISATION.
+--
+-- Owner: "die sachen muessen beide also auch die defensives pro spec und
+-- nicht pro klasse gespeichert werden". A protection warrior and a fury
+-- warrior share a profile and share almost none of their defensives; one
+-- list for both means half of it is spells the current spec cannot cast.
+--
+-- AND THEY START EMPTY. Owner: "auch sollte da per default alles leer sein,
+-- das verwirrt irgendwie die leute" - a slot that is already filled reads as
+-- a decision somebody made for you, and the first thing you do is work out
+-- whether you agree with it.
+--
+-- The pre-spec keys (db.defensives, db.rescueItems) are read once to carry
+-- what you already picked into the spec you are standing in, and then left
+-- exactly where they are: the version before this one still reads them.
 ---------------------------------------------------------------------------
-local RESCUE_SEED = { 5512, 244839, 211880 }
 
-function Death.PickedItems()
-    if not ns.db then return {} end
-    if ns.db.rescueItems == nil then
-        ns.db.rescueItems = {}
-        for _, itemID in ipairs(RESCUE_SEED) do
-            ns.db.rescueItems[itemID] = true
+-- Nil when the client has not answered which specialisation this is yet.
+-- Writing under "WARRIOR:0" would file your picks in a bin nobody reads, so
+-- the callers below hand back a throwaway table until the answer arrives.
+local function SpecStore(field, legacy)
+    if not ns.db then return nil end
+
+    local key, known = ns.SpecKey()
+    if not (key and known) then return nil end
+
+    ns.db[field] = ns.db[field] or {}
+    local store = ns.db[field]
+
+    if store[key] == nil then
+        store[key] = {}
+        -- CARRIED OVER ONCE, into whichever spec you happen to be in when
+        -- this first runs. It cannot know which spec the old list was meant
+        -- for - there was no such thing - and the alternative is throwing
+        -- away picks somebody made by hand.
+        for id in pairs((legacy and ns.db[legacy]) or {}) do
+            store[key][id] = true
         end
     end
-    return ns.db.rescueItems
+
+    return store[key]
+end
+
+function Death.PickedItems()
+    return SpecStore("rescueItemsBySpec", "rescueItems") or {}
+end
+
+-- The spells side of the same question, through one door for the same
+-- reason: two readers of one setting is how they end up disagreeing.
+function Death.Defensives()
+    return SpecStore("defensivesBySpec", "defensives") or {}
 end
 
 -- The name the client knows it by, or nothing. An item whose data has not
@@ -918,7 +954,7 @@ end
 -- the rotation row as an unnamed press instead of as the defensive it is.
 local function DefensiveSpells()
     local out = {}
-    for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+    for spellID in pairs(Death.Defensives()) do
         out[spellID] = true
     end
     if C_Item and C_Item.GetItemSpell then
@@ -971,7 +1007,7 @@ end
 -- window says "about" only where it has to.
 local function Availability(now)
     local out = {}
-    for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+    for spellID in pairs(Death.Defensives()) do
         local name = ns.SpellName(spellID) or ("Spell " .. spellID)
         local remaining, why = ns.History:Estimate(spellID, now)
         out[#out + 1] = {

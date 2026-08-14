@@ -1,40 +1,26 @@
 ﻿---------------------------------------------------------------------------
--- EditMode - unlock the screen and build the thing.
+-- EditMode - unlock the screen and put everything where you want it.
 --
--- Two modes, and the difference is the level you are working at:
+-- ONE MODE. There were two: one moved whole bars, the other took a bar apart
+-- cell by cell. Both went with the cooldown bars in 4.83.0, and what is left
+-- is the thing this file was always also doing - placing the surfaces this
+-- addon draws: the co-tank panel, the taunt button, the request and answer
+-- panels, the raid bar and every reminder.
 --
---   MOVE   the whole bar is one object. Drag it, snap it to the screen or to
---          another bar, attach it so it follows. This is what unlock mode has
---          always been.
+-- WHY A PANEL AND NOT THE SURFACE ITSELF.
 --
---   BUILD  every CELL is its own object. Drag one icon out of the row, scale
---          it, swap it for a tracking bar, drop a spell into an empty slot
---          from the palette, take one out. This is the puzzle: a grid you
---          pull apart by hand until the display is the shape you wanted
---          rather than the shape a row of icons happens to be.
---
--- One mode is not a lesser version of the other, and neither is a separate
--- feature: the arrangement engine adds a per-cell offset on top of whatever
--- the lattice worked out (Core/Layout.lua), so nudging one icon out of a neat
--- row and building a free-form layout are the SAME edit. There is no line to
--- cross between "a bar" and "a puzzle".
---
--- WHY A PANEL AND NOT THE BAR ITSELF.
---
--- Half of what a bar shows is a Blizzard frame we adopted, and those bring
--- their own mouse handling. Dragging the bar directly would fight tooltips
--- and clicks that are not ours to intercept. A panel above it at a higher
--- strata answers the mouse instead, and the bar never learns it is being
--- moved. The same argument makes every cell handle a panel of its own.
+-- Several of them answer the mouse already - a co-tank row is clickable, the
+-- request panel takes a press. Dragging them directly would fight clicks that
+-- are not ours to intercept. A panel above at a higher strata answers the
+-- mouse instead, and the surface never learns it is being moved.
 --
 -- POSITIONS ARE PINNED-POINT RELATIVE.
 --
--- A bar is placed by ONE of its nine points, offset from the screen centre.
--- The centre is the default and the readout means what it says; pin an edge
--- instead and the bar grows away from that edge when it gains a row. Snapping
--- still works in centre terms, because "line these two up" is about the shapes
--- and not about what each one happens to be pinned by - the translation
--- happens once, here.
+-- A surface is placed by ONE of its nine points, offset from the screen
+-- centre. The centre is the default and the readout means what it says; pin
+-- an edge instead and it grows away from that edge. Snapping still works in
+-- centre terms, because "line these two up" is about the shapes and not about
+-- what each one happens to be pinned by - the translation happens once, here.
 ---------------------------------------------------------------------------
 local _, ns = ...
 
@@ -67,7 +53,7 @@ local function Prefs()
 end
 
 local unlocked = false
-local overlay, toolbar, keyCatcher
+local overlay, toolbar, keyCatcher, inspector
 local movers = {}
 local selected = nil           -- the selected MOVER
 ---@type table|nil
@@ -77,7 +63,7 @@ local guideX, guideY, gridLines
 -- Forward declarations. A handle's script is written above the drag section
 -- that defines these, and without them the reference would silently be a
 -- global that is nil at call time.
-local StopDrag
+local StopDrag, RefreshInspector
 
 ---------------------------------------------------------------------------
 -- Geometry
@@ -1129,6 +1115,9 @@ local function BuildToolbar()
     rule:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", 0, -48)
 
     inspector = UI.Label(toolbar, "", 11, C.textDim)
+    -- Handed over the way the overlay button is, so the desk can read what
+    -- the band actually says rather than trusting that something wrote it.
+    EditMode.inspectorLabel = inspector
     inspector:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -58)
     inspector:SetWidth(toolbar:GetWidth() - 24)
     inspector:SetJustifyH("LEFT")
@@ -1237,6 +1226,12 @@ function EditMode:Refresh()
     RefreshPanelMovers()
     RefreshReminderMovers()
 
+    -- AND THE LINE THAT SAYS WHAT TO DO. It used to be refreshed from the
+    -- mode switch, and the mode switch went with the bars - so the panel
+    -- opened with an empty band where the instructions belong. Nothing threw
+    -- and no check noticed: an empty FontString looks exactly like a
+    -- FontString nobody has written to yet.
+    RefreshInspector()
 end
 
 -- The panel movers, by name, for the self test and for the harness.

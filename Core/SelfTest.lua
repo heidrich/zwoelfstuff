@@ -1014,23 +1014,56 @@ local function TestDeath()
             and avail.unknownDefensives[1].name == "Lichborne")
 
 
-    -- CONSUMABLES ARE PICKED, NOT SHIPPED. The three seeded ids are a
-    -- starting point; nil means the setting has never been seen, which is a
-    -- different thing from a list somebody emptied on purpose - and getting
-    -- that wrong would re-seed a potion he threw out, every login.
+    -- CONSUMABLES ARE PICKED, NOT SHIPPED - and this check used to prove it
+    -- by DELETING his list and leaving it deleted. Every /zs test threw away
+    -- what he had chosen, and the next look re-seeded the starter items, so
+    -- it read as "the addon does not save my consumables". The file's own
+    -- header promises it never touches your settings; now it does not.
+    --
+    -- Put back byte for byte, including the case where there was nothing
+    -- there: nil and an empty table are different answers.
     if ns.db then
-        ns.db.rescueItems = nil
-        local seeded = Death.PickedItems()
-        local count = 0
-        for _ in pairs(seeded) do count = count + 1 end
-        Check("An unseen list is seeded once", count > 0)
+        local keptItems = ns.db.rescueItemsBySpec
+        local keptLegacy = ns.db.rescueItems
+        ns.db.rescueItemsBySpec, ns.db.rescueItems = nil, nil
 
-        for id in pairs(seeded) do seeded[id] = nil end
-        local again = Death.PickedItems()
-        local emptied = 0
-        for _ in pairs(again) do emptied = emptied + 1 end
-        Check("A list emptied on purpose stays empty", emptied == 0)
-        ns.db.rescueItems = nil
+        local fresh = Death.PickedItems()
+        local count = 0
+        for _ in pairs(fresh) do count = count + 1 end
+        Check("A spec that has never picked anything starts empty", count == 0)
+
+        -- WITH A SPECIALISATION THE CLIENT WILL NAME. Faked, because out
+        -- here there is no character - and this is the half that matters:
+        -- the same call twice has to hand back the SAME table, or a pick
+        -- goes into a throwaway and the window looks like it forgot.
+        local realKey = ns.SpecKey
+        ns.SpecKey = function() return "WARRIOR:73", true end
+
+        local mine = Death.PickedItems()
+        mine[5512] = true
+        Check("And what it picks is there on the next look",
+            Death.PickedItems()[5512] == true)
+
+        -- The other spec of the same class is a different list.
+        ns.SpecKey = function() return "WARRIOR:71", true end
+        Check("The other spec of the same class has its own list",
+            Death.PickedItems()[5512] == nil)
+
+        -- AND AN UNANSWERED SPEC WRITES NOTHING. "WARRIOR:0" is a bin
+        -- nobody reads; a pick made in that second has to be dropped rather
+        -- than filed where it can never be found again.
+        ns.SpecKey = function() return "WARRIOR:0", false end
+        local limbo = Death.PickedItems()
+        limbo[5512] = true
+        Check("A pick made before the client names the spec is not filed",
+            Death.PickedItems()[5512] == nil)
+
+        ns.SpecKey = realKey
+
+        ns.db.rescueItemsBySpec, ns.db.rescueItems = keptItems, keptLegacy
+        Check("The self test gave his own list back untouched",
+            ns.db.rescueItemsBySpec == keptItems
+            and ns.db.rescueItems == keptLegacy)
     end
 
     -- Nothing readable at all still answers with a sentence.
@@ -3660,6 +3693,30 @@ end
 ---------------------------------------------------------------------------
 local function TestReminders()
     local Reminders = ns.Reminders
+
+    -----------------------------------------------------------------------
+    -- THE INDEX A REMINDER READS HAS TO BE FILLED BY SOMETHING.
+    --
+    -- It used to be rebuilt once per render pass by the cooldown bars. When
+    -- they were removed its only writer went with them, and nothing threw:
+    -- the table stayed empty all session, so every reminder answered
+    -- "Blizzard is not showing this spell" - our hole, blamed on Blizzard's
+    -- settings. An audit found it, no check did.
+    --
+    -- Asked as a WIRING question, because the model half is fine either way:
+    -- does a plain read - no `fresh` - come back with the index built.
+    -----------------------------------------------------------------------
+    if ns.CDM then
+        ns.CDM.indexBuilt = nil
+        ns.CDM:ItemForSpell(48792)
+        Check("A plain read builds the item index if nobody has",
+            ns.CDM.indexBuilt == true)
+
+        ns.CDM.indexBuilt = nil
+        ns.CDM:NotifyChanged()
+        Check("And the Cooldown Manager rebuilds it when it says it changed",
+            ns.CDM.indexBuilt == true)
+    end
 
     -- The trigger, all four combinations.
     Check("'Not active' fires when it is idle",

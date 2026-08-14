@@ -82,14 +82,13 @@ function Page:BuildPage(page, width)
             get = function() return picked[index] end,
             onPick = function(spellID)
                 if not spellID then return end
-                ns.db.defensives = ns.db.defensives or {}
-                ns.db.defensives[spellID] = true
+                ns.Death.Defensives()[spellID] = true
                 ns.Options:Refresh()
             end,
             onClear = function()
                 local spellID = picked[index]
-                if spellID and ns.db.defensives then
-                    ns.db.defensives[spellID] = nil
+                if spellID then
+                    ns.Death.Defensives()[spellID] = nil
                     ns.Options:Refresh()
                 end
             end,
@@ -291,7 +290,7 @@ function Page:BuildPage(page, width)
 
     page.Refresh = function()
         wipe(picked)
-        for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+        for spellID in pairs(ns.Death.Defensives()) do
             picked[#picked + 1] = spellID
         end
         table.sort(picked, function(a, b)
@@ -344,7 +343,7 @@ function Page:BuildSide(parent, pad)
     self.spellPane = ns.SpellPane:Build(host, width, {
         Used = function()
             local used = {}
-            for spellID in pairs((ns.db and ns.db.defensives) or {}) do
+            for spellID in pairs(ns.Death.Defensives()) do
                 used[spellID] = "Defensive"
             end
             return used
@@ -352,16 +351,12 @@ function Page:BuildSide(parent, pad)
         -- A click TOGGLES. Picking is done from this list, so unpicking
         -- from it too is the one place a person looks second.
         Assign = function(spellID)
-            ns.db.defensives = ns.db.defensives or {}
-            if ns.db.defensives[spellID] then
-                ns.db.defensives[spellID] = nil
-            else
-                ns.db.defensives[spellID] = true
-            end
+            local picked = ns.Death.Defensives()
+            picked[spellID] = not picked[spellID] or nil
             ns.Options:Refresh()
         end,
         Hint = function(spellID)
-            if ns.db and ns.db.defensives and ns.db.defensives[spellID] then
+            if ns.Death.Defensives()[spellID] then
                 return "Click to stop judging it as a defensive."
             end
             return "Click to judge it as a defensive."
