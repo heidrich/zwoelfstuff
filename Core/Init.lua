@@ -1548,6 +1548,8 @@ ns.COMMANDS = {
         .. "(|cffffd100test|r shows the panel)" },
     { cmd = "/zs specs", text = "what the game says each specialisation is, "
         .. "and which spec each slot is waiting for" },
+    { cmd = "/zs chat", text = "why a request did not go out: which send the "
+        .. "client allows, who it would address, and where it would land" },
     { cmd = "/zs sounds", text = "every sound your addons have registered, "
         .. "and what each moment would play" },
     { cmd = "/zs taunt", text = "what your next taunt would say "
@@ -1791,6 +1793,11 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         else
             ns.Death:Show()
         end
+
+    -- WHY A MESSAGE DID NOT GO OUT. The client is the only one who can say
+    -- which door it keeps shut, so it is asked rather than reasoned about.
+    elseif cmd == "chat" then
+        ns.Chat.Probe()
 
     elseif cmd == "test" then
         ns.SelfTest:Run()

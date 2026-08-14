@@ -677,9 +677,19 @@ function Externals.Ask(spellID)
     -- would mean deciding which lust the shaman has - which is his faction's
     -- business and none of ours. "Lust bitte!" is what people type anyway,
     -- and it is never the wrong spell.
+    -- THE SENTENCE READS THE SHORT NAME, THE WHISPER IS ADDRESSED TO THE FULL
+    -- ONE, and those are two different strings on purpose.
+    --
+    -- "Akui bitte!" is what a person wants to read. `SendChatMessage(...,
+    -- "WHISPER", nil, "Akui")` addresses somebody who, across a realm border,
+    -- is not there - which is the exact fault the roster already learned once
+    -- and why it computes `fullName` with GetUnitName(unit, true) in the
+    -- first place. This line was handing the short name to BOTH, so every
+    -- whisper to a cross-realm group mate went to nobody.
     local name = Externals.Label(spellID)
     local text = Externals.Message(name, target and target.name)
-    local ok, note = ns.Chat.Post(text, going, target and target.name)
+    local ok, note = ns.Chat.Post(text, going,
+        target and (target.fullName or target.name))
     if not ok then return false, note end
 
     -- AND THE SAME THING ON THE ADDON CHANNEL. Invisible, structured, and it

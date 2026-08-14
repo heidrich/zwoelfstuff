@@ -693,6 +693,7 @@ local function TestCommandList()
         invites = true, loca = true, language = true,
         specs = true, spec = true,
         sounds = true, sound = true,
+        chat = true,
     }
 
     local unknown

@@ -131,6 +131,7 @@
     "SECONDS_ABBR",
     "SendChatMessage",
     "SetBinding",
+    "issecurevariable",
     "SetPortraitTexture",
     "GetSpecializationInfoByID",
     "CLASS_ICON_TCOORDS",

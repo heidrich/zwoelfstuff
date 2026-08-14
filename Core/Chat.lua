@@ -157,6 +157,69 @@ function Chat.Sender()
     return send
 end
 
+---------------------------------------------------------------------------
+-- WHEN THE CLIENT REFUSES
+--
+-- 2026-08-14, out of his BugSack, twice:
+--
+--   [ADDON_ACTION_BLOCKED] AddOn 'ZwoelfStuff' tried to call the protected
+--   function 'UNKNOWN()'      ... Chat.lua:174 in function 'Post'
+--                             ... Externals.lua in function 'Ask'
+--
+-- A BLOCK IS NOT A LUA ERROR AND pcall CANNOT SEE IT. The client refuses the
+-- call and fires an event; the send returns as if nothing happened. So the
+-- addon listens for that event and says what it was doing when it arrived -
+-- otherwise the only account of it is a stack trace in somebody's error
+-- window, which is how a refused whisper reads as "the button does nothing".
+--
+-- WHAT IS KNOWN AND WHAT IS NOT, kept apart on purpose:
+--   * Known: his externals config has WHISPER on and nothing else, so it is
+--     not the SAY/YELL restriction. Read out of his saved variables, not
+--     guessed.
+--   * Known: the destination was the SHORT name. The roster computes a
+--     NAME-REALM `fullName` precisely because a short name addresses nobody
+--     across a realm border, and Externals.Ask was handing the short one to
+--     the whisper. That is a real defect and it is fixed - independently of
+--     whether it is THIS one.
+--   * A clue, not a fact: the client names a blocked GLOBAL, so a nameless
+--     `UNKNOWN()` points at a function inside a C_ namespace - which would be
+--     C_ChatInfo.SendChatMessage rather than the plain global. But BigWigs's
+--     loader and ChatThrottleLib both take that same namespaced door in
+--     shipping code, so it is not proof, and nothing here is flipped on it.
+--
+-- `/zs chat probe` is what settles it, and it asks HIS client rather than me.
+---------------------------------------------------------------------------
+local lastSend
+
+function Chat.LastSend() return lastSend end
+
+-- Pure: the sentence said when the client refuses a send it has already been
+-- handed. Its own function so the wording can be read back in a check.
+function Chat.BlockedLine(attempt)
+    if type(attempt) ~= "table" then
+        return "The game refused a chat message from this addon. Run "
+            .. "|cffffd100/zs chat probe|r and paste what it prints."
+    end
+    local where = attempt.channel or "?"
+    if attempt.to then where = where .. " to " .. attempt.to end
+    return string.format("The game REFUSED to send that message (%s). "
+        .. "Nothing was sent. Run |cffffd100/zs chat probe|r and paste what "
+        .. "it prints - that says which door this client keeps shut.", where)
+end
+
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("ADDON_ACTION_BLOCKED")
+watcher:SetScript("OnEvent", function(_, _, addon)
+    if addon ~= "ZwoelfStuff" then return end
+    -- Only when WE were mid-send. The same event fires for anything else the
+    -- client refuses us, and claiming every one of those was a chat message
+    -- would send the next person looking in the wrong file.
+    local attempt = lastSend
+    if not (attempt and GetTime and (GetTime() - attempt.at) < 1) then return end
+    lastSend = nil
+    ns.Print("|cffff8040" .. Chat.BlockedLine(attempt) .. "|r")
+end)
+
 -- One sentence, onto every channel in `going`. Answers whether anything went
 -- out, and the note the resolver left - "not lead or assist, sent to raid
 -- chat instead" is worth repeating to the person who pressed the button.
@@ -171,6 +234,13 @@ function Chat.Post(text, going, whisperTo)
             -- Nobody to whisper. Dropped rather than sent to nobody, and the
             -- other channels still carry it.
         else
+            -- Written down BEFORE the call, because a block arrives while the
+            -- call is still running and there is nothing to read afterwards.
+            lastSend = {
+                at = (GetTime and GetTime()) or 0,
+                channel = where.channel,
+                to = where.channel == "WHISPER" and whisperTo or nil,
+            }
             send(text, where.channel, nil,
                 where.channel == "WHISPER" and whisperTo or nil)
         end
@@ -178,4 +248,68 @@ function Chat.Post(text, going, whisperTo)
     end
 
     return true, note
+end
+
+---------------------------------------------------------------------------
+-- THE PROBE
+--
+-- The same move that unblocked the group death log: stop reasoning about
+-- what a client does and ask it. Everything here is READ - no message is
+-- sent, because a probe that spams his group to learn something is a worse
+-- probe than one that does not.
+---------------------------------------------------------------------------
+function Chat.Probe()
+    ns.Print("|cffffd100chat probe|r")
+
+    ---@diagnostic disable-next-line: deprecated
+    local plain = SendChatMessage
+    local spaced = C_ChatInfo and C_ChatInfo.SendChatMessage
+    ns.Print(string.format("  the two doors: global %s, C_ChatInfo %s",
+        type(plain) == "function" and "|cff40ff40there|r" or "|cffff4040gone|r",
+        type(spaced) == "function" and "|cff40ff40there|r" or "|cffff4040gone|r"))
+    ns.Print("  we take: " .. (spaced and "C_ChatInfo.SendChatMessage"
+        or "the global"))
+
+    -- WHETHER THE CLIENT CONSIDERS EITHER OF THEM TAINTED. This is the line
+    -- that decides it: a secure variable an addon may not call is exactly
+    -- what an ADDON_ACTION_BLOCKED is about.
+    if issecurevariable then
+        local okPlain = select(1, issecurevariable("SendChatMessage"))
+        ns.Print("  global secure: " .. tostring(okPlain))
+        if C_ChatInfo then
+            local okSpaced = select(1,
+                issecurevariable(C_ChatInfo, "SendChatMessage"))
+            ns.Print("  C_ChatInfo secure: " .. tostring(okSpaced))
+        end
+    end
+
+    -- WHO WE WOULD ADDRESS, in both spellings, because the short one is what
+    -- was being used and the full one is what a cross-realm whisper needs.
+    local roster = ns.Roster and ns.Roster() or {}
+    ns.Print(string.format("  group: %d readable", #roster))
+    for _, member in ipairs(roster) do
+        ns.Print(string.format("    %s  |cff888888full:|r %s  |cff888888%s|r",
+            tostring(member.name), tostring(member.fullName),
+            tostring(member.class)))
+    end
+
+    -- AND WHERE A REQUEST WOULD GO right now, resolved against the group he
+    -- is actually standing in.
+    local cfg = ns.Externals and ns.Externals.Config()
+    local chosen = (cfg and cfg.channels) or {}
+    local picked = {}
+    for value in pairs(chosen) do picked[#picked + 1] = value end
+    table.sort(picked)
+    ns.Print("  channels switched on: "
+        .. (#picked > 0 and table.concat(picked, ", ") or "none"))
+    for _, where in ipairs(Chat.Where(chosen)) do
+        ns.Print(string.format("    -> %s%s", where.channel,
+            where.note and ("  |cff888888" .. where.note .. "|r") or ""))
+    end
+
+    local last = Chat.LastSend()
+    if last then
+        ns.Print(string.format("  last attempt: %s%s", last.channel or "?",
+            last.to and (" to " .. last.to) or ""))
+    end
 end
