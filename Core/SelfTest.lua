@@ -7009,11 +7009,73 @@ local function TestRaidCheck()
     end
 
     if RaidCheck.AurasReadable() then
-        Check("Food is found by the Well Fed icon", mine.fo == 1)
-        Check("A flask is found by its id", mine.fl == 1)
-        Check("Buffs that are not up are not claimed",
-            mine.bf ~= nil and not RaidCheck.HasBuff(mine.bf,
-                RaidCheck.BUFFS[6]))
+        -- WHETHER YOU ARE FED IS NOT A PROPERTY OF THIS CODE.
+        --
+        -- These three lines used to read `mine.fo == 1`, `mine.fl == 1` and
+        -- "buff six is not up" - which is not a test of the reader, it is a
+        -- test of what the player happens to be carrying at the moment they
+        -- type /zs test. Written during a raid, they passed; run in the guild
+        -- city the next afternoon they reported TWO FAILURES against code
+        -- that was working perfectly. A check that fails on a true negative
+        -- teaches you to ignore the report, which costs more than the check
+        -- was ever worth.
+        --
+        -- The desk could not catch it either: out there AurasReadable() is
+        -- false and the whole block is skipped, so this only ever ran on a
+        -- client - and only ever agreed with whoever was holding a flask.
+        --
+        -- WHAT IS ACTUALLY OURS TO GET WRONG is the SHAPE of the reading,
+        -- and there are two real faults in here that the old lines could not
+        -- tell apart from an empty stomach:
+        --   the client says auras are readable and the read gives NOTHING
+        --   the read gives something that is not a flag
+        local flags = { fo = "food", fl = "flask", ru = "rune" }
+        local missing, malformed
+        for key, what in pairs(flags) do
+            if mine[key] == nil then
+                missing = missing or what
+            elseif mine[key] ~= 0 and mine[key] ~= 1 then
+                malformed = string.format("%s = %s", what, tostring(mine[key]))
+            end
+        end
+
+        Check("Your own auras can be read at all", missing == nil,
+            missing and ("no " .. missing .. " reading came back, though this "
+                .. "client says auras are readable"))
+        Check("Each consumable reads as a yes or a no", malformed == nil,
+            malformed)
+        Check("The buff mask is a number", type(mine.bf) == "number",
+            type(mine.bf))
+
+        -- Every bit in the mask has to belong to a buff we know. A stray one
+        -- means the mask and the BUFFS table have drifted apart, which IS
+        -- ours - and unlike "are you flasked", it is true whatever you are
+        -- standing in.
+        if type(mine.bf) == "number" then
+            local known = 0
+            for _, buff in ipairs(RaidCheck.BUFFS) do known = known + buff.bit end
+            Check("The mask claims no buff this addon does not know",
+                mine.bf >= 0 and mine.bf <= known
+                and math.floor(mine.bf) == mine.bf, tostring(mine.bf))
+        end
+
+        -- AND THEN SAY WHAT IT FOUND, rather than have an opinion about it.
+        -- This is the half that was worth having: if he is sitting there with
+        -- a flask up and this line says no, THAT is the bug - and now it is
+        -- one line to read instead of a red check that cries wolf every time
+        -- somebody tests outside a raid.
+        local carried = {}
+        for _, buff in ipairs(RaidCheck.BUFFS) do
+            if RaidCheck.HasBuff(mine.bf, buff) then
+                carried[#carried + 1] = buff.label
+            end
+        end
+        Skip("What you are carrying right now", string.format(
+            "food %s, flask %s, rune %s, buffs: %s",
+            mine.fo == 1 and "yes" or "no",
+            mine.fl == 1 and "yes" or "no",
+            mine.ru == 1 and "yes" or "no",
+            #carried > 0 and table.concat(carried, ", ") or "none"))
     else
         Skip("Reading your own consumables", "this client keeps auras secret")
     end
