@@ -1276,13 +1276,30 @@ local ROW_H, FACE, SPEC = 30, 26, 20
 -- The magnifier column in front of the clock: it is the only thing on the row
 -- that says "there is more behind this one".
 local GLASS, COL_WHEN = 14, 20
--- 820 is the width of the options window, so two of this addon's windows
--- open on top of each other rather than beside each other.
-local WIDTH, HEIGHT = 820, 470
--- One row fewer than the nine that fitted, because the evening now sits at
--- the top of the same column and takes a row's worth of room. The column is
--- a fixed height; a tenth row would have been drawn through the buttons.
-local SIDE_W, SIDE_ROW_H, SIDE_ROWS = 196, 34, 8
+-- BIGGER THAN THE OPTIONS WINDOW NOW. It used to be 820 to match it exactly,
+-- so two of this addon's windows would stack rather than sit beside each
+-- other - a tidy idea that cost the thing its room. Owner, with a photograph
+-- of the detail page: "paar layout fehler, mach das fenster ruhig groesser
+-- hoeher etc." This holds a table of ten hits with four columns and a list of
+-- pulls beside it; matching another window's width was never worth a squeeze.
+local WIDTH, HEIGHT = 920, 580
+-- And the taller window pays for three more pulls down the side.
+local SIDE_W, SIDE_ROW_H, SIDE_ROWS = 196, 34, 11
+
+-- THE NUMBERS THE COLUMN IS BUILT FROM, exported so the arithmetic can be
+-- checked without a screen. Raising SIDE_ROWS is a one-word change that runs
+-- the list off the bottom of the window and through the buttons, and nothing
+-- on a desk can see that happen - but the sum can be done.
+--
+--   top     where the column starts, under the window's header
+--   bottom  the room the two buttons keep for themselves
+--   title   the "This session - N pulls" line above the rows
+--   extra   the evening's own row, which is not one of SIDE_ROWS
+RaidDeaths.LAYOUT = {
+    width = WIDTH, height = HEIGHT,
+    sideRows = SIDE_ROWS, sideRowH = SIDE_ROW_H, sideGap = 2,
+    top = 8, bottom = 40, title = 18, extra = 1,
+}
 -- One line of the evening's two tables.
 local TALLY_ROW_H = 24
 -- How many of each are drawn before the page says how many it left out. No
@@ -1742,8 +1759,17 @@ function RaidDeaths:Create()
     -- closes the whole window, and a person who has just stepped into a row
     -- is not looking to close the window.
     -----------------------------------------------------------------------
+    -- ANCHORED UNDER THE PLACE LINE, not to the column head.
+    --
+    -- It hung off the head with fourteen pixels of lift, which put its first
+    -- row - a 34-pixel portrait centred on a 26-pixel button - straight
+    -- through the verdict sentence above it. That was visible in his
+    -- screenshot as a face sitting in the middle of a line of text.
+    --
+    -- The place line is the one thing above this that belongs to BOTH pages:
+    -- which pull, and when. Everything below it is the detail's own room.
     local detail = CreateFrame("Frame", nil, frame)
-    detail:SetPoint("TOPLEFT", head, "TOPLEFT", 0, 14)
+    detail:SetPoint("TOPLEFT", frame.where, "BOTTOMLEFT", 0, -12)
     detail:SetPoint("BOTTOMRIGHT", listHost, "BOTTOMRIGHT", 0, 0)
     detail:Hide()
     frame.detail = detail
@@ -1761,21 +1787,25 @@ function RaidDeaths:Create()
     -- somebody it can still see - so a group mate who has left since is
     -- shown by name and spec alone. That is honest: we cannot picture
     -- somebody who is not there.
+    -- The portrait is the tallest thing in this row, so IT sets the row's
+    -- height and everything else is centred on it. Hung off the button
+    -- instead, a picture taller than the button hangs out of the row at both
+    -- ends - which is what it did.
     detail.face = detail:CreateTexture(nil, "ARTWORK")
-    detail.face:SetSize(34, 34)
-    detail.face:SetPoint("LEFT", detail.back, "RIGHT", 14, 0)
+    detail.face:SetSize(38, 38)
+    detail.face:SetPoint("TOPLEFT", detail.back, "TOPRIGHT", 16, 6)
     detail.face:Hide()
 
     detail.spec = detail:CreateTexture(nil, "ARTWORK")
-    detail.spec:SetSize(22, 22)
-    detail.spec:SetPoint("LEFT", detail.face, "RIGHT", 6, 0)
+    detail.spec:SetSize(24, 24)
+    detail.spec:SetPoint("LEFT", detail.face, "RIGHT", 8, 0)
     detail.spec:Hide()
 
     detail.title = UI.Label(detail, "", UI.FS.card, C.text)
-    detail.title:SetPoint("LEFT", detail.spec, "RIGHT", 8, 0)
+    detail.title:SetPoint("LEFT", detail.spec, "RIGHT", 10, 0)
 
     detail.sub = UI.Label(detail, "", UI.FS.meta, C.textDim)
-    detail.sub:SetPoint("TOPLEFT", detail.back, "BOTTOMLEFT", 0, -10)
+    detail.sub:SetPoint("TOPLEFT", detail.face, "BOTTOMLEFT", -54, -12)
     detail.sub:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
     detail.sub:SetJustifyH("LEFT")
 
@@ -2260,6 +2290,12 @@ function RaidDeaths.PaintDetail(entry, info)
     -- The footer counts the whole pull. Left standing under one person's
     -- hits it reads as being about them.
     frame.foot:SetShown(not open and not over)
+    -- AND SO DOES THE VERDICT. "None of it was avoidable damage" is a
+    -- sentence about the PULL, and the detail carries its own about the
+    -- person - two verdicts one under the other, one of them answering a
+    -- question the page is not asking. It was also the line the portrait was
+    -- drawn through.
+    frame.verdict:SetShown(not open)
     detail:SetShown(open)
     frame.overviewFrame:SetShown(over)
     if over then RaidDeaths.PaintOverview() end

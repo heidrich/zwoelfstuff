@@ -2818,6 +2818,28 @@ local function TestRaidDeaths()
         back.dropped == 6)
 
     ---------------------------------------------------------------------
+    -- THE PULL COLUMN FITS THE WINDOW
+    --
+    -- Raising the row count is one word, and the rows that do not fit are
+    -- drawn straight through the buttons at the bottom - which nothing on a
+    -- desk can SEE. The sum can be done, though, and it is the whole of what
+    -- went wrong the first time the evening's row was added to the top of
+    -- that column.
+    ---------------------------------------------------------------------
+    local L = R.LAYOUT
+    local room = L.height - (ns.UI.HEADER_H + L.top) - L.bottom
+    local needed = L.title + (L.sideRows + L.extra) * (L.sideRowH + L.sideGap)
+    Check("Every row of the pull column fits inside the window",
+        needed <= room,
+        string.format("%d needed, %d there", needed, room))
+    -- And it is not wasting half a column either: a window with room for
+    -- four more rows than it draws is a list that was never re-counted after
+    -- the window grew.
+    Check("...and does not leave a row's worth of empty column",
+        room - needed < (L.sideRowH + L.sideGap),
+        string.format("%d spare", room - needed))
+
+    ---------------------------------------------------------------------
     -- THE WHOLE EVENING, which no single pull can answer
     ---------------------------------------------------------------------
     local function Pull(key, when, dead)
