@@ -182,6 +182,43 @@ function Page:BuildPage(page, width)
         .. "you move it, and the key on that slot stays with the slot."])
 
     ---------------------------------------------------------------------
+    -- WHICH PACKS ARE IN THE LIST AT ALL
+    --
+    -- Owner, the first time he opened the picker: "die exwind sounds
+    -- muessen alle raus oder geblockt werden, das sind 1000." Counted on
+    -- his machine: 188 from one pack, 188 from the pack beside it, 19 from
+    -- a third. Opening the shared registry was right - those are the sounds
+    -- he already has - but four hundred undifferentiated rows is a haystack.
+    --
+    -- BY THE ADDON, NOT BY THE NAME. The names in a pack happen to share a
+    -- bracketed prefix, and matching on that would work today and break the
+    -- moment somebody renames one. The folder cannot be spelt two ways.
+    --
+    -- Built at DRAW time from what is actually registered, so it lists the
+    -- packs this machine has rather than a hardcoded set - and a pack that
+    -- is uninstalled simply stops appearing instead of leaving a dead row.
+    local counts, order = ns.Media.Providers("sound")
+    if #order > 0 then
+        grid:Section(L["Where sounds come from"], "sound-packs")
+
+        grid:Note(L["Switch a pack off and its sounds leave the four lists "
+            .. "above. Nothing here changes what you have already chosen - "
+            .. "a sound you picked goes on playing even if its pack is "
+            .. "switched off."])
+
+        for _, provider in ipairs(order) do
+            local who = provider
+            UI.Toggle(grid:Row(who, {
+                sublabel = L("%d sounds", counts[who]),
+            }), function() return not ns.Sounds.IsMuted(who) end,
+                function(value)
+                    ns.Sounds.SetMuted(who, not value)
+                    ns.Options:Refresh()
+                end)
+        end
+    end
+
+    ---------------------------------------------------------------------
     -- This window
     ---------------------------------------------------------------------
     grid:Section(L["This window"])

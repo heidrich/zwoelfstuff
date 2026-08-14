@@ -99,6 +99,57 @@ function Sounds.Config()
     return cfg
 end
 
+---------------------------------------------------------------------------
+-- WHICH PACKS ARE OFFERED AT ALL
+--
+-- Owner, the first time he opened the picker: "die exwind sounds muessen
+-- alle raus oder geblockt werden vom addon, das sind 1000." Counted on his
+-- machine: one pack registers 188 entries, the pack beside it another 188,
+-- a third 19. Opening the whole shared registry was right - those are the
+-- sounds he already has and already knows - but handing him four hundred
+-- undifferentiated rows is not a picker, it is a haystack.
+--
+-- SO A WHOLE PACK CAN BE SWITCHED OFF, by the addon folder it came from,
+-- which is the one name for it that cannot be spelt two ways. Nothing is
+-- blocked by default: an addon deciding on its own that some other addon's
+-- work is not worth showing would be a rule nobody asked for, and the
+-- machine that finds 400 sounds too many is not the machine that has three.
+--
+-- STORED BY BEING PRESENT. `mute[folder] = true` means blocked, and absent
+-- means offered - so this table is deliberately NOT in ns.DEFAULTS, for the
+-- same reason the externals channels are not: ApplyDefaults fills in what is
+-- missing, and a seeded entry would come back every login.
+---------------------------------------------------------------------------
+function Sounds.Mute()
+    local cfg = Sounds.Config()
+    if not cfg then return {} end
+    if type(cfg.mute) ~= "table" then cfg.mute = {} end
+    return cfg.mute
+end
+
+function Sounds.IsMuted(provider)
+    if not provider then return false end
+    return Sounds.Mute()[provider] and true or false
+end
+
+function Sounds.SetMuted(provider, muted)
+    if not provider then return end
+    Sounds.Mute()[provider] = muted and true or nil
+end
+
+-- THE FILTER ITSELF, handed to Media at load. Media applies it and has no
+-- opinion about it; the opinion lives here, with the feature that has one.
+--
+-- A sound with no provider - Blizzard's own, and the library's "None" -
+-- is always offered. There is no folder to switch off, and "None" is the
+-- answer that means silence: losing it would take away the only way to say
+-- "not this one" once anything else is blocked.
+function Sounds.Offered(name)
+    local provider = ns.Media.Provider("sound", name)
+    if not provider then return true end
+    return not Sounds.IsMuted(provider)
+end
+
 function Sounds.IsEvent(event)
     for _, entry in ipairs(Sounds.EVENTS) do
         if entry.key == event then return true end
@@ -299,3 +350,17 @@ function Sounds.HasAny(event)
     if entry.any and entry.any ~= "" then return true end
     return next(entry.spells) ~= nil
 end
+
+---------------------------------------------------------------------------
+-- THE FILTER GOES IN AT LOAD, not on first use.
+--
+-- Media.List is asked by the picker the moment it opens, and by anything
+-- that counts the list before that - the Settings note says "your addons
+-- have not registered any sounds yet" off exactly that number. A filter
+-- installed lazily would mean the first reader gets the unfiltered list and
+-- every reader after it gets a different one.
+--
+-- It reads ns.db through Sounds.Config every time it is called, so it is
+-- correct before a profile is open (nothing muted) and correct after.
+---------------------------------------------------------------------------
+ns.Media.SetFilter("sound", Sounds.Offered)

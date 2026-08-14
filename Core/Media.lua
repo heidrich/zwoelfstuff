@@ -125,6 +125,63 @@ function Media.PlaySound(key, channel)
     return (ok and willPlay) and true or false
 end
 
+---------------------------------------------------------------------------
+-- WHICH ADDON PUT THIS HERE, and leaving some of it out
+--
+-- A registry is only useful while it can be read. One sound pack on this
+-- machine registers 188 entries, the pack beside it another 188, and the
+-- owner's words on opening the picker were "die exwind sounds muessen alle
+-- raus oder geblockt werden, das sind 1000". He is right: a list nobody can
+-- scroll to the end of is the same as no list.
+--
+-- BY THE FOLDER, NOT BY THE NAME. Those 188 all happen to share a bracketed
+-- prefix, and matching on it would work today and break the moment somebody
+-- renames a pack or another addon adopts the same habit. The PATH says which
+-- addon a file belongs to and cannot be spelt two ways.
+--
+-- THE FILTER IS NOT THIS FILE'S OPINION. Media answers what is available and
+-- never decides what anything should be - so whoever owns the policy hands a
+-- predicate in, and this only applies it. Core/Sounds.lua sets the one for
+-- sounds; nothing sets one for fonts or textures, and those lists are
+-- therefore exactly what they always were.
+---------------------------------------------------------------------------
+local filters = {}
+
+function Media.SetFilter(kind, fn)
+    filters[kind] = fn
+end
+
+-- The addon folder a media key lives in, lower case, or nil for anything
+-- that is not in an addon at all - Blizzard's own files, and the library's
+-- "None", which is a number rather than a path.
+function Media.Provider(kind, key)
+    if not (LSM and key) then return nil end
+    local path = LSM:Fetch(kind, key, true)
+    if type(path) ~= "string" then return nil end
+    return path:lower():match("addons[\\/]([^\\/]+)[\\/]")
+end
+
+-- Every provider that has put something into one kind, with how many. What
+-- the settings page needs in order to offer them as a list rather than
+-- asking somebody to type a folder name.
+function Media.Providers(kind)
+    local counts, order = {}, {}
+    if not LSM then return counts, order end
+
+    for _, name in ipairs(LSM:List(kind) or {}) do
+        local who = Media.Provider(kind, name)
+        if who then
+            if not counts[who] then order[#order + 1] = who end
+            counts[who] = (counts[who] or 0) + 1
+        end
+    end
+    table.sort(order, function(a, b)
+        if counts[a] ~= counts[b] then return counts[a] > counts[b] end
+        return a < b
+    end)
+    return counts, order
+end
+
 -- Sorted names, ready for a picker. An empty list is impossible in practice
 -- and handled anyway: the picker then shows the one default.
 function Media.List(kind)
@@ -135,8 +192,17 @@ function Media.List(kind)
 
     -- LSM keeps its own order; copied rather than returned directly, because
     -- the caller must not be able to sort the library's own table.
+    local allow = filters[kind]
     local out = {}
-    for index, name in ipairs(list) do out[index] = name end
+    for _, name in ipairs(list) do
+        if not allow or allow(name) then out[#out + 1] = name end
+    end
+
+    -- NEVER EMPTY, whatever was filtered out. Somebody who has switched off
+    -- every provider they have would otherwise be left with a dropdown of no
+    -- rows, which is the one state a control must never be in - and it would
+    -- take away the "None" that means silence.
+    if #out == 0 then return { Media.DEFAULT[kind] } end
     return out
 end
 

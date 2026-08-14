@@ -137,6 +137,11 @@ Register("enUS", {
         .. "from whatever else you have installed - BigWigs, Northern Sky "
         .. "and WeakAuras all bring their own. |cffffd100/zs sounds|r lists "
         .. "what is there."] = true,
+    ["Where sounds come from"] = true,
+    ["%d sounds"] = true,
+    ["Switch a pack off and its sounds leave the four lists above. Nothing "
+        .. "here changes what you have already chosen - a sound you picked "
+        .. "goes on playing even if its pack is switched off."] = true,
     ["A sound belongs to the SPELL, not to the place it sits in - so a "
         .. "cooldown you gave a sound of its own keeps it wherever you move "
         .. "it, and the key on that slot stays with the slot."] = true,
@@ -384,6 +389,14 @@ Register("deDE", {
         .. "Sie kommen aus allem anderen, was du installiert hast - BigWigs, "
         .. "Northern Sky und WeakAuras bringen eigene mit. "
         .. "|cffffd100/zs sounds|r zeigt, was da ist.",
+    ["Where sounds come from"] = "Woher die Töne kommen",
+    ["%d sounds"] = "%d Töne",
+    ["Switch a pack off and its sounds leave the four lists above. Nothing "
+        .. "here changes what you have already chosen - a sound you picked "
+        .. "goes on playing even if its pack is switched off."] =
+        "Schalte ein Paket ab und seine Töne verschwinden aus den vier "
+        .. "Listen oben. An deiner Auswahl ändert das nichts - ein bereits "
+        .. "gewählter Ton spielt weiter, auch wenn sein Paket aus ist.",
     ["A sound belongs to the SPELL, not to the place it sits in - so a "
         .. "cooldown you gave a sound of its own keeps it wherever you move "
         .. "it, and the key on that slot stays with the slot."] =

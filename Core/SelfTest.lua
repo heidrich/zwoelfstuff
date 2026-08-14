@@ -549,6 +549,51 @@ local function TestSounds()
             ns.Media.DEFAULT[kind] ~= nil)
     end
 
+    ---------------------------------------------------------------------
+    -- SWITCHING A WHOLE PACK OUT OF THE LIST
+    --
+    -- Owner: "die exwind sounds muessen alle raus oder geblockt werden, das
+    -- sind 1000." Two packs on his machine register 188 entries each. Driven
+    -- against whatever is really registered here rather than against a made
+    -- up one, because registering a fake pack would leave it in the shared
+    -- registry for every other addon for the rest of the session.
+    ---------------------------------------------------------------------
+    local counts, order = ns.Media.Providers("sound")
+    local before = #ns.Media.List("sound")
+
+    if #order > 0 then
+        local biggest = order[1]
+        ns.Sounds.SetMuted(biggest, true)
+        local after = #ns.Media.List("sound")
+        Check("Switching a pack off takes it out of the picker",
+            after == before - counts[biggest],
+            string.format("%d - %d gave %d", before, counts[biggest], after))
+        Check("...and the pack knows it is off", ns.Sounds.IsMuted(biggest))
+
+        -- EVERY PACK OFF STILL LEAVES SOMETHING TO CLICK. A dropdown with no
+        -- rows is the one state a control must never be in, and it would
+        -- take away the "None" that means silence.
+        for _, who in ipairs(order) do ns.Sounds.SetMuted(who, true) end
+        local bare = ns.Media.List("sound")
+        Check("With every pack off the picker is still not empty",
+            #bare > 0, tostring(#bare))
+
+        for _, who in ipairs(order) do ns.Sounds.SetMuted(who, false) end
+        Check("Switching them back on restores the list",
+            #ns.Media.List("sound") == before,
+            string.format("%d, expected %d", #ns.Media.List("sound"), before))
+    else
+        Skip("Switching a sound pack out of the picker",
+            "no addon here has registered any sounds")
+    end
+
+    -- A CHOICE OUTLIVES ITS PACK BEING HIDDEN. The filter decides what is
+    -- OFFERED; it must not reach into what was already chosen, or switching
+    -- a pack off would silently change what four moments sound like.
+    Check("A sound already chosen is not un-chosen by hiding its pack",
+        ns.Sounds.Choice({ ready = { any = "[Pack]One", spells = {} } },
+            "ready") == "[Pack]One")
+
     -- "None" is a name, and the sink has to refuse it rather than hand a
     -- number to the client and call it a path.
     Check("Silence is never played", ns.Media.PlaySound("None") == false)
@@ -6530,6 +6575,10 @@ local function TestPanelMovers()
         -- PINNED MEANS IT DOES NOT MOVE, and that is the whole feature. Run
         -- through the real handler rather than restating the rule: a test that
         -- re-implements what it is checking passes the day the rule changes.
+        --
+        -- The same block runs over the REMINDER movers below, because "it has
+        -- a padlock" and "the padlock does something" are two questions and
+        -- the reminders had neither answer for five days.
         local cfg = mover.spec.config()
         if cfg then
             local was = cfg.pinned
@@ -6551,6 +6600,64 @@ local function TestPanelMovers()
             mover.grab = nil
             cfg.pinned = was
             mover:RefreshLock()
+        end
+    end
+
+    ---------------------------------------------------------------------
+    -- AND THE REMINDERS, WHICH ARE MOVERS TOO
+    --
+    -- Owner, with a screenshot of one: "mein reminder hat kein zahnrad oder
+    -- lock". He had said the same sentence about the externals mover five
+    -- days earlier - and the answer then went into the PANEL builder, which
+    -- the reminders do not use. Nothing could see the difference, because
+    -- the reminder movers were a local nothing could reach.
+    ---------------------------------------------------------------------
+    local reminders = ns.EditMode.ReminderMovers
+        and ns.EditMode:ReminderMovers() or {}
+
+    -- SAY SO WHEN THERE IS NOTHING TO LOOK AT. A loop over an empty list is
+    -- a suite that reports green about nothing, and that is exactly how this
+    -- gap survived: nothing could reach the reminder movers, so nothing said
+    -- they were missing anything.
+    if #reminders == 0 then
+        Skip("Whether the reminder movers carry a cog and a padlock",
+            "no reminder is placed, so no mover was built")
+    else
+        for index, mover in ipairs(reminders) do
+            local who = "reminder " .. index
+            Check("The " .. who .. " mover has a cog", mover.cog ~= nil)
+            Check("The " .. who .. " mover has a padlock", mover.lock ~= nil)
+            Check("And it knows how to draw the padlock",
+                type(mover.RefreshLock) == "function")
+            Check("And it carries what its cog needs",
+                mover.spec ~= nil and mover.spec.page ~= nil
+                and type(mover.spec.apply) == "function"
+                and type(mover.spec.config) == "function")
+
+            -- THE PADLOCK HAS TO DO SOMETHING. It is not enough that it is
+            -- drawn: the reminder drag never read `pinned` at all until it
+            -- was given one, so a padlock there would have been a picture.
+            local cfg = mover.spec and mover.spec.config()
+            if cfg then
+                local was = cfg.pinned
+                local start = mover:GetScript("OnDragStart")
+
+                cfg.pinned = true
+                mover.grab = nil
+                if start then start(mover) end
+                Check("A pinned " .. who .. " refuses to be dragged",
+                    mover.grab == nil)
+
+                cfg.pinned = false
+                mover.grab = nil
+                if start then start(mover) end
+                Check("An unpinned " .. who .. " takes the drag",
+                    mover.grab ~= nil)
+
+                mover.grab = nil
+                cfg.pinned = was
+                mover:RefreshLock()
+            end
         end
     end
 
