@@ -91,12 +91,10 @@ end
 
 -- A changelog line is either a plain string or a table carrying a link.
 -- Both shapes answer this, so the renderer never has to ask which it got.
+-- One reader, in Core/Changelog.lua, next to the data it reads. This is the
+-- name the window has always called it by.
 function News.LineText(line)
-    if type(line) == "string" then return line end
-    if type(line) == "table" and type(line.text) == "string" then
-        return line.text
-    end
-    return ""
+    return ns.ChangelogText(line)
 end
 
 ---------------------------------------------------------------------------
@@ -396,7 +394,7 @@ function News.Window() return frame end
 local CARD_PAD, CARD_HEAD = 12, 22
 -- The picture beside a headline. Big enough to recognise a spell by, small
 -- enough that a line without one is not left with a hole where it would be.
-local ICON = 22
+local ICON = 16
 
 function News:Paint(entries, dropped)
     if not frame then return end

@@ -59,6 +59,21 @@ end
 -- Visibility is still here at all. So the fixture is written out rather than
 -- taken from a defaults table - it says what the rule engine actually reads,
 -- and it cannot quietly gain a field the engine never asked about.
+-- PRETENDING TO BE A SPECIALISATION, in one place.
+--
+-- Settings that belong to the spec are checked in three suites now, and every
+-- one of them has to answer the same three questions: this spec, another spec
+-- of the same class, and the moment after login where the client has not said
+-- yet. Written out eight times, the third case is the one that gets forgotten
+-- - and it is the case that loses data.
+--
+-- Returns what was there before, so a suite can put the real one back.
+local function PretendSpec(key, known)
+    local was = ns.SpecKey
+    ns.SpecKey = function() return key, known ~= false end
+    return was
+end
+
 local function Fresh(overrides)
     local cfg = {
         enabled = true,
@@ -1036,8 +1051,7 @@ local function TestDeath()
         -- here there is no character - and this is the half that matters:
         -- the same call twice has to hand back the SAME table, or a pick
         -- goes into a throwaway and the window looks like it forgot.
-        local realKey = ns.SpecKey
-        ns.SpecKey = function() return "WARRIOR:73", true end
+        local realKey = PretendSpec("WARRIOR:73")
 
         local mine = Death.PickedItems()
         mine[5512] = true
@@ -1045,14 +1059,14 @@ local function TestDeath()
             Death.PickedItems()[5512] == true)
 
         -- The other spec of the same class is a different list.
-        ns.SpecKey = function() return "WARRIOR:71", true end
+        PretendSpec("WARRIOR:71")
         Check("The other spec of the same class has its own list",
             Death.PickedItems()[5512] == nil)
 
         -- AND AN UNANSWERED SPEC WRITES NOTHING. "WARRIOR:0" is a bin
         -- nobody reads; a pick made in that second has to be dropped rather
         -- than filed where it can never be found again.
-        ns.SpecKey = function() return "WARRIOR:0", false end
+        PretendSpec("WARRIOR:0", false)
         local limbo = Death.PickedItems()
         limbo[5512] = true
         Check("A pick made before the client names the spec is not filed",
@@ -3695,6 +3709,36 @@ local function TestReminders()
     local Reminders = ns.Reminders
 
     -----------------------------------------------------------------------
+    -- ONE LIST PER SPECIALISATION, at the owner's word: "reminders auch".
+    --
+    -- Driven through the real store rather than through ns.SpecStore
+    -- directly, because the question is not whether the helper works - it is
+    -- whether the reminders ASK it. That is the half that was wrong when the
+    -- death log's own copy of this existed.
+    -----------------------------------------------------------------------
+    if ns.db then
+        local keptBySpec, keptFlat = ns.db.remindersBySpec, ns.db.reminders
+        local realKey = ns.SpecKey
+        ns.db.remindersBySpec, ns.db.reminders = nil, nil
+
+        PretendSpec("PALADIN:66")
+        local prot = Reminders:All()
+        prot[1] = { spellID = 31850 }
+        Check("A reminder list belongs to the spec that made it",
+            #Reminders:All() == 1)
+
+        PretendSpec("PALADIN:70")
+        Check("The other spec of the same character starts with none",
+            #Reminders:All() == 0)
+
+        ns.SpecKey = realKey
+        ns.db.remindersBySpec, ns.db.reminders = keptBySpec, keptFlat
+        Check("And the check put the real lists back",
+            ns.db.remindersBySpec == keptBySpec
+            and ns.db.reminders == keptFlat)
+    end
+
+    -----------------------------------------------------------------------
     -- THE INDEX A REMINDER READS HAS TO BE FILLED BY SOMETHING.
     --
     -- It used to be rebuilt once per render pass by the cooldown bars. When
@@ -4674,6 +4718,45 @@ end
 -- healer, is not something a self test can arrange in the game.
 ---------------------------------------------------------------------------
 local function TestExternals()
+    -----------------------------------------------------------------------
+    -- THE SLOTS BELONG TO THE SPEC, the panel does not.
+    --
+    -- Owner: "eigentlich requests auch". What a protection warrior asks other
+    -- people for is not what the same character asks for as fury. Where the
+    -- panel SITS, how many columns it has and which channels it uses stay on
+    -- the profile - a request panel that jumps across the screen on a spec
+    -- change would be a worse bug than the one this fixes.
+    -----------------------------------------------------------------------
+    if ns.db then
+        local kept = {
+            cells = ns.db.externalCellsBySpec,
+            assigned = ns.db.externalAssignedBySpec,
+        }
+        local realKey = ns.SpecKey
+        ns.db.externalCellsBySpec, ns.db.externalAssignedBySpec = nil, nil
+
+        PretendSpec("WARRIOR:73")
+        local mine = ns.Externals.Config()
+        mine.cells[1] = 97462
+        local wasX, wasColumns = mine.x, mine.columns
+
+        PretendSpec("WARRIOR:72")
+        local other = ns.Externals.Config()
+        Check("The other spec asks for its own cooldowns",
+            other.cells[1] == nil)
+        Check("And the panel itself did not move with the spec",
+            other.x == wasX and other.columns == wasColumns)
+
+        PretendSpec("WARRIOR:73")
+        Check("Coming back finds what this spec picked",
+            ns.Externals.Config().cells[1] == 97462)
+
+        ns.SpecKey = realKey
+        ns.db.externalCellsBySpec = kept.cells
+        ns.db.externalAssignedBySpec = kept.assigned
+        ns.Externals.Config()
+    end
+
     local X = ns.Externals
     Check("The externals list exists", X ~= nil)
     if not X then return end
@@ -5347,6 +5430,11 @@ local function TestExternals()
     cfg.rows, cfg.columns = nil, nil
     cfg.count, cfg.perLine = 6, 6
     cfg.cells = {}
+    -- A profile that old has no record of the pre-spec slots either, because
+    -- there were none: cellsWere is written the first time Config runs on a
+    -- profile that HAS slots. Leaving it set here would be a fixture that
+    -- could not exist, and it would hide the migration behind it.
+    cfg.cellsWere = nil
     cfg.picked = { 6940, 102342 }
     local ok = pcall(X.Config)
     Check("A profile from before the slots still opens", ok)

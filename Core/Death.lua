@@ -734,40 +734,19 @@ end
 -- exactly where they are: the version before this one still reads them.
 ---------------------------------------------------------------------------
 
--- Nil when the client has not answered which specialisation this is yet.
--- Writing under "WARRIOR:0" would file your picks in a bin nobody reads, so
--- the callers below hand back a throwaway table until the answer arrives.
-local function SpecStore(field, legacy)
-    if not ns.db then return nil end
-
-    local key, known = ns.SpecKey()
-    if not (key and known) then return nil end
-
-    ns.db[field] = ns.db[field] or {}
-    local store = ns.db[field]
-
-    if store[key] == nil then
-        store[key] = {}
-        -- CARRIED OVER ONCE, into whichever spec you happen to be in when
-        -- this first runs. It cannot know which spec the old list was meant
-        -- for - there was no such thing - and the alternative is throwing
-        -- away picks somebody made by hand.
-        for id in pairs((legacy and ns.db[legacy]) or {}) do
-            store[key][id] = true
-        end
-    end
-
-    return store[key]
-end
-
+-- Through ns.SpecStore, which is where this used to live in private before
+-- the request panel and the reminders wanted the same thing. It hands back
+-- nil while the client has not said which spec this is - writing under
+-- "WARRIOR:0" files a pick in a bin nobody reads - so both callers below
+-- fall back to a throwaway table for that moment.
 function Death.PickedItems()
-    return SpecStore("rescueItemsBySpec", "rescueItems") or {}
+    return ns.SpecStore("rescueItemsBySpec", "rescueItems") or {}
 end
 
 -- The spells side of the same question, through one door for the same
 -- reason: two readers of one setting is how they end up disagreeing.
 function Death.Defensives()
-    return SpecStore("defensivesBySpec", "defensives") or {}
+    return ns.SpecStore("defensivesBySpec", "defensives") or {}
 end
 
 -- The name the client knows it by, or nothing. An item whose data has not

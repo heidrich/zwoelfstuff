@@ -154,7 +154,22 @@ end
 ---------------------------------------------------------------------------
 -- The store
 ---------------------------------------------------------------------------
+-- PER SPEC, at the owner's word: "reminders auch". What you want reminding
+-- about is the most spec-shaped setting in the addon - a tank's reminders
+-- are about staying alive and the same character's damage spec is being
+-- reminded of something else entirely.
+--
+-- The whole LIST moves, not the individual reminders: a reminder carries its
+-- own position, and one that belongs to a spec you are not playing has
+-- nothing to show. ns.db.reminders is left where it is for the version
+-- before this one.
 function Reminders:All()
+    local mine = ns.SpecStore("remindersBySpec", "reminders")
+    if mine then return mine end
+
+    -- Only while the client has not named the spec. A throwaway rather than
+    -- the profile-wide list, because adding a reminder in that second would
+    -- otherwise write into a list that every spec then inherits.
     local list = ns.db and ns.db.reminders
     if type(list) ~= "table" then return {} end
     return list

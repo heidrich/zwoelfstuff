@@ -736,6 +736,66 @@ function ns.ForgetSpecKey()
 end
 
 ---------------------------------------------------------------------------
+-- SETTINGS THAT BELONG TO THE SPECIALISATION
+--
+-- Owner: "nach specs settings sind wichtig in wow", and he is right about
+-- which ones. A protection warrior and a fury warrior share a character and
+-- share almost nothing else: not the defensives they watch, not the
+-- cooldowns they ask other people for, not what they want reminding about.
+-- One list for both means half of it is about somebody who is not playing.
+--
+-- WHAT IS *NOT* IN HERE, deliberately: where a panel sits, how big it is,
+-- which channels it talks on. A window that jumps across the screen when you
+-- change spec is a bug in everybody's book, and the shape of a thing is not
+-- an opinion about the fight.
+--
+-- ONE IMPLEMENTATION, THREE CALLERS. This started as a private helper in the
+-- death log and was pulled up here the moment the second feature wanted it:
+-- three copies of "which table is mine" is three chances to get the
+-- unanswered-spec case wrong, and that case is the one that loses data.
+--
+--   field   the per-spec table on the profile, e.g. "remindersBySpec"
+--   legacy  what was there before, read ONCE to carry it into whichever spec
+--           is being played, and then left exactly where it is so an older
+--           version still finds it. A STRING names a key on the profile; a
+--           TABLE is that table - the request panel keeps its slots inside
+--           its own config, not at the top level.
+--
+-- Returns nil while the client has not said which spec this is. Writing
+-- under "WARRIOR:0" files a pick in a bin nothing will ever read again;
+-- callers hand back a throwaway table for that moment instead.
+---------------------------------------------------------------------------
+local function CarryOver(value)
+    if type(value) ~= "table" then return value end
+    local out = {}
+    for key, inner in pairs(value) do out[key] = CarryOver(inner) end
+    return out
+end
+
+function ns.SpecStore(field, legacy)
+    if not ns.db then return nil end
+
+    local key, known = ns.SpecKey()
+    if not (key and known) then return nil end
+
+    ns.db[field] = ns.db[field] or {}
+    local store = ns.db[field]
+
+    if store[key] == nil then
+        local was = legacy
+        if type(legacy) == "string" then was = ns.db[legacy] end
+
+        -- COPIED, not pointed at. Sharing the table would mean editing this
+        -- spec's list also edits what the old version reads back - and the
+        -- whole promise of leaving the legacy key alone is that it still
+        -- says what it said.
+        store[key] = CarryOver(type(was) == "table" and was or {})
+    end
+
+    return store[key]
+end
+
+---------------------------------------------------------------------------
 -- A KEY, SHORT ENOUGH FOR THE CORNER OF AN ICON
 --
 -- "SHIFT-CTRL-F1" in a forty-pixel square is a smear. Pure, and here rather

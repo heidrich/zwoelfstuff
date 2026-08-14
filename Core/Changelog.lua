@@ -16,6 +16,19 @@ local _, ns = ...
 -- as { text = "...", link = { label = "...", page = "deaths" } }. `page` is a
 -- key of the options window; `open` names a window that has no settings page
 -- of its own, out of News.OPENERS. See Core/News.lua.
+-- WHAT A LINE SAYS, whichever shape it is in. Two windows draw this list -
+-- the changelog page and the what's-new window - and each of them used to
+-- decide for itself what a line was. The one that was written first did not
+-- know about the table shape, so a single entry with an icon in it left the
+-- page blank.
+function ns.ChangelogText(line)
+    if type(line) == "string" then return line end
+    if type(line) == "table" and type(line.text) == "string" then
+        return line.text
+    end
+    return ""
+end
+
 ns.CHANGELOG = {
     {
         version = "4.83.0",
@@ -27,19 +40,6 @@ ns.CHANGELOG = {
                     .. "and group play features, and there are a lot of other "
                     .. "very good CDM addons that do the job better.",
             },
-            "|cffffd100Your bars are still saved.|r Nothing was deleted. If I "
-                .. "am wrong about this, the old version puts them all back.",
-            "|cffffd100Blizzard's Cooldown Manager is untouched now.|r This "
-                .. "addon no longer takes its icons. It still READS it - the "
-                .. "death log gets its defensives from there, and a reminder "
-                .. "asks it whether a buff is up.",
-            "|cffffd100Edit Mode stays|r for the co-tank panel, the taunt "
-                .. "button, the request and answer panels, the raid bar and "
-                .. "the reminders. Build mode is gone with the bars.",
-            "|cffffd100Also gone|r - the Cooldowns page and |cffffd100/zs "
-                .. "bars|r, |cffffd100/zs build|r, |cffffd100/zs skin|r, "
-                .. "|cffffd100/zs text|r, |cffffd100/zs numbers|r, "
-                .. "|cffffd100/zs hide|r.",
         },
     },
     {

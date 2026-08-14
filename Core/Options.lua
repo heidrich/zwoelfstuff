@@ -104,8 +104,7 @@ local CLOSE_ROOM = CLOSE_W + 10
 -- No good/warn colour on it. A threshold would be invented - what is "too
 -- much" depends on what you have open - and a tile that turns orange at a
 -- number somebody guessed teaches people to distrust the other four.
-local DIAG_STATS = { "Cooldowns held", "On your bars", "Pixels per unit",
-    "Another cooldown addon", "Memory" }
+local DIAG_STATS = { "Cooldowns tracked", "Pixels per unit", "Memory" }
 
 -- HOW MUCH OF THE CLIENT'S LUA HEAP IS OURS, in a form a tile can show.
 --
@@ -195,17 +194,6 @@ local function BuildDiagnosticsPage(page, width)
 
     grid:Section("This client")
 
-    local rivalRow = grid:FullRow("Another addon holding the same frames",
-        { controlWidth = 300 })
-    local rivalState = UI.Label(rivalRow.slot, "", 12, C.text)
-    rivalState:SetPoint("RIGHT", rivalRow.slot, "RIGHT", 0, 0)
-    rivalState:SetJustifyH("RIGHT")
-
-    local cdmRow = grid:FullRow("Cooldown Manager", { controlWidth = 260 })
-    local cdmState = UI.Label(cdmRow.slot, "", 12, C.text)
-    cdmState:SetPoint("RIGHT", cdmRow.slot, "RIGHT", 0, 0)
-    cdmState:SetJustifyH("RIGHT")
-
     -- HOW SHARP THE MARKS IN THIS WINDOW ARE, and it is a measurement rather
     -- than an opinion. Every icon here was soft for months because the rule
     -- that picks a file guessed at this number instead of reading it, and
@@ -225,19 +213,12 @@ local function BuildDiagnosticsPage(page, width)
     engineState:SetPoint("RIGHT", engineRow.slot, "RIGHT", 0, 0)
     engineState:SetJustifyH("RIGHT")
 
-    grid:Note("Run one cooldown addon at a time: two of them fight over the "
-        .. "same frames.")
-
     grid:Note("Procs are recognised by their spell overlay, and their length "
         .. "is measured while you play.")
 
     grid:Layout()
 
     page.Refresh = function()
-        local rival = ns.CDM:RivalName()
-        rivalState:SetText(rival and ("|cffff4040" .. rival .. "|r")
-            or "|cff40ff40none found|r")
-
         local perUnit = UI.PixelsPerUnit()
 
         ---------------------------------------------------------------
@@ -252,30 +233,17 @@ local function BuildDiagnosticsPage(page, width)
         if ns.CDM:IsAvailable() then
             ns.CDM:ForEachItemEverywhere(function() held = held + 1 end)
         end
+        -- What the Cooldown Manager is holding. Nothing of ours displays
+        -- it any more; the catalogue behind the death log's defensives and
+        -- the reminders is built out of exactly these items, so nought here
+        -- is why those two come up empty.
         stats[1]:Set(tostring(held), held > 0 and "good" or "warn")
-
-        -- What the Cooldown Manager is holding, which is now the only
-        -- interesting count: nothing of ours displays it any more, but the
-        -- catalogue behind the death log and the reminders is built out of
-        -- exactly these items.
-        stats[2]:Set(tostring(held))
-
-        stats[3]:Set(string.format("%.2f", perUnit))
-
-        -- A rival is the one reading here that is about something being
-        -- WRONG, and it is still a warning rather than a danger: this page
-        -- reports, it does not destroy anything.
-        stats[4]:Set(rival or "none", rival and "warn" or "good")
-
-        stats[5]:Set(MemoryReading())
+        stats[2]:Set(string.format("%.2f", perUnit))
+        stats[3]:Set(MemoryReading())
 
         sharpState:SetText(string.format(
             "%.2f px per unit - %dpx and %dpx files",
             perUnit, UI.IconCutFor(16, perUnit), UI.IconCutFor(32, perUnit)))
-
-        cdmState:SetText(ns.CDM:IsAvailable()
-            and "|cff40ff40available|r"
-            or ("|cffff4040" .. (ns.CDM:UnavailableReason() or "unavailable") .. "|r"))
 
         -- THIS COMMENT SAID "Engine.lua is parked on a 12.0 client, so
         -- ns.Engine is nil here" AND IT HAD BEEN FALSE FOR FIVE DAYS. It was
@@ -570,9 +538,6 @@ local function BuildAboutPage(page, width)
     grid:Section("Standing on other people's shoulders")
     for _, paragraph in ipairs(ABOUT_CREDIT) do grid:Note(paragraph) end
 
-    grid:Section("What it cannot do, and why")
-    for _, paragraph in ipairs(ABOUT_LIMITS) do grid:Note(paragraph) end
-
     ---------------------------------------------------------------------
     -- Commands
     --
@@ -676,7 +641,13 @@ local function BuildChangelogPage(page, width)
             dot:SetSize(3, 3)
             dot:SetPoint("TOPLEFT", content, "TOPLEFT", 3, y - 7)
 
-            local bullet = UI.Label(content, line, 12, C.text)
+            -- THROUGH THE SAME READER AS THE NEWS WINDOW. A line may be a
+            -- string or a table carrying an icon and a link, and this page
+            -- passed it straight to SetText - so the first entry with an
+            -- icon in it emptied the whole page. One list with two readers
+            -- is one reader too many; there is a shared one for this.
+            local bullet = UI.Label(content, ns.ChangelogText(line), 12,
+                C.text)
             bullet:SetPoint("TOPLEFT", content, "TOPLEFT", 14, y)
             bullet:SetWidth(textWidth - 14)
             bullet:SetJustifyV("TOP")

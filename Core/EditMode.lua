@@ -1096,7 +1096,7 @@ local function BuildToolbar()
     -- the right edge, started at 276 - so in BUILD mode the primary button sat
     -- on top of Spells and the two shared 56 pixels. It only showed up in build
     -- mode, because Spells is the button that is hidden the rest of the time.
-    toolbar:SetSize(544, 168)
+    toolbar:SetSize(544, 108)
     toolbar:SetPoint("TOP", UIParent, "TOP", 0, -120)
     toolbar:SetFrameLevel(overlay:GetFrameLevel() + 40)
     toolbar:EnableMouse(true)
@@ -1110,15 +1110,11 @@ local function BuildToolbar()
     local edge = ns.CreateBorder(toolbar, 1, "BORDER")
     edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
-    local rule = UI.Separator(toolbar, true)
-    rule:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, -48)
-    rule:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", 0, -48)
-
     inspector = UI.Label(toolbar, "", 11, C.textDim)
     -- Handed over the way the overlay button is, so the desk can read what
     -- the band actually says rather than trusting that something wrote it.
     EditMode.inspectorLabel = inspector
-    inspector:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -58)
+    inspector:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -14)
     inspector:SetWidth(toolbar:GetWidth() - 24)
     inspector:SetJustifyH("LEFT")
     inspector:SetJustifyV("TOP")

@@ -292,6 +292,22 @@ function Externals.Config()
     cfg.assigned = cfg.assigned or {}   -- [spellID] = "Name-Realm"
     cfg.channels = cfg.channels or {}
 
+    -- WHICH COOLDOWNS YOU ASK FOR IS ABOUT THE SPEC YOU ARE PLAYING.
+    --
+    -- Owner: "eigentlich requests auch". A protection warrior asks for the
+    -- externals that keep a tank alive; the same character as fury is asking
+    -- for something else entirely, and until now they shared one panel.
+    --
+    -- The SLOTS move and the panel does not: its place on screen, its rows
+    -- and columns and its channels stay on the profile. A request panel that
+    -- jumps across the screen on a spec change would be a worse bug than the
+    -- one this fixes.
+    --
+    -- The migrations below still run against cfg.cells, and they must: they
+    -- are about profiles older than the slots, and they have to finish before
+    -- anything is carried into a spec. So this is read AFTER them, at the
+    -- bottom of the function.
+
     -- THE OLDEST SHAPE FIRST, and the order is the whole point.
     --
     -- A profile written before the slots existed carries an ordered LIST.
@@ -336,6 +352,26 @@ function Externals.Config()
     -- A profile that has never been asked sends a whisper, which is what the
     -- feature was built around.
     if next(cfg.channels) == nil then cfg.channels.WHISPER = true end
+
+    -- AND NOW THE SLOTS, per spec.
+    --
+    -- THE OLD PAIR IS PUT BEYOND REACH FIRST. Handing cfg.cells straight to
+    -- SpecStore and then assigning the result back over it looks equivalent
+    -- and is not: the profile-wide list would then BE the last spec's list,
+    -- so the next spec to be played would inherit it instead of starting
+    -- empty - and the version before this one would read a list it never
+    -- wrote. Moved once, under its own name, and never written again.
+    if cfg.cellsWere == nil then cfg.cellsWere = cfg.cells end
+    if cfg.assignedWere == nil then cfg.assignedWere = cfg.assigned end
+
+    -- Falling back to cellsWere here would be wrong twice over: it throws
+    -- away a migration that has just run in this very call, and it hands an
+    -- unanswered spec somebody else's slots. While the client has not named
+    -- the spec, what is already in cfg.cells is the honest answer.
+    local mine = ns.SpecStore("externalCellsBySpec", cfg.cellsWere)
+    local theirs = ns.SpecStore("externalAssignedBySpec", cfg.assignedWere)
+    if mine then cfg.cells = mine end
+    if theirs then cfg.assigned = theirs end
 
     return cfg
 end
