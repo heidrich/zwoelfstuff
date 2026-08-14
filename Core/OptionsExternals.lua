@@ -295,6 +295,12 @@ function Page:BuildPage(page, width)
     -- are standing in, and this is the same answer in a form you can paste.
     -- It was in the band's button column, four sections away from the thing
     -- it is about.
+    -- A NOTE EXPLAINS THE ROW ABOVE IT, and this one had drifted three
+    -- sections down to sit under Keys, where it read as a claim about
+    -- keybinds. It is about the dropdowns directly above it.
+    grid:Note("Left alone, a click asks the healer of that class. In a raid, "
+        .. "name somebody.")
+
     grid:Buttons({
         { text = "Who would be asked",
           onClick = function() ns.Externals:Dump() end },
@@ -316,9 +322,6 @@ function Page:BuildPage(page, width)
         .. "over every place: click one, press the key. Bound to the "
         .. "place, not to the spell - what sits in it changes as people "
         .. "come and go.")
-
-    grid:Note("Left alone, a click asks the healer of that class. In a raid, "
-        .. "name somebody.")
 
     ---------------------------------------------------------------------
     -- Sounds

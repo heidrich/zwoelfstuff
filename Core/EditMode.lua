@@ -955,10 +955,22 @@ end
 -- list, and nil is not a bar. So the panel lines up on the bars and the bars
 -- line up on it, which is the whole point of snapping to something.
 ---------------------------------------------------------------------------
-local tankMover
-
+-- Two functions, not three: which frame it is and what moving it means.
+-- The module gate, building the mover on first sight, hiding it when the
+-- feature is off and drawing the coordinates are the same for all five and
+-- live once, in PANEL_MOVERS at the end of this run of surfaces.
 local function TankPanel()
     local panel = ns.CoTanks and ns.CoTanks.panel
+
+    -- HOSTED IS NOT ON SCREEN. The co-tank panel can be borrowed by the
+    -- options page as a live preview card, and while it is, CoTanks:
+    -- ApplyLayout does nothing (see the `hosted` guard there). A mover over
+    -- it would take a drag, write the new numbers into the profile and move
+    -- NOTHING - the one failure that looks like a bug in the drag rather
+    -- than in what it was pointed at. The reminder movers already asked
+    -- their equivalent of this question; this one did not.
+    if ns.CoTanks and ns.CoTanks.hosted then return nil end
+
     if panel and panel:IsShown() then return panel end
     return nil
 end
@@ -1211,12 +1223,11 @@ local function RefreshPanelMover(mover, getPanel, x, y)
     mover:Show()
 end
 
--- THE EXTERNALS PANEL, placed the same way the co-tank one is. Same three
--- functions, same rule about a module that is not running: its frame exists
--- once the module has booted, so "is there a panel" and "is this feature on"
--- are two different questions and both get asked.
-local externalMover
-
+-- THE EXTERNALS PANEL. Two functions now, not three: which frame it is and
+-- what moving it means. Everything else - the module gate, building the
+-- mover on first sight, hiding it when the feature is off, drawing the
+-- coordinates - is the same for all five and lives once, at the end of this
+-- run of surfaces. See PANEL_MOVERS.
 local function ExternalPanel()
     local panel = ns.Externals and ns.Externals.Frame()
     if panel and panel:IsShown() then return panel end
@@ -1229,28 +1240,6 @@ local function ApplyExternalMove(x, y)
     ns.Externals.Refresh()
 end
 
-local function RefreshExternalMover()
-    if not ns.Modules:IsOn("externals") then
-        if externalMover then externalMover:Hide() end
-        return
-    end
-    if not externalMover then
-        externalMover = CreatePanelMover({
-            label = "External CD request",
-            page = "externals",
-            module = "externals",
-            config = function() return ns.Externals.Config() end,
-            apply = function(x, y) ApplyExternalMove(x, y) end,
-            origin = function()
-                local cfg = ns.Externals.Config()
-                return cfg.x or 0, cfg.y or 0
-            end,
-        })
-    end
-    local cfg = ns.Externals.Config()
-    RefreshPanelMover(externalMover, ExternalPanel, cfg.x, cfg.y)
-end
-
 -- THE RAID BAR, placed the same way as the two above it.
 --
 -- ONE DIFFERENCE, AND IT IS THE WHOLE OF ITS BEHAVIOUR: the bar is made of
@@ -1258,8 +1247,6 @@ end
 -- Nothing special is needed here for that - RaidBar.Refresh parks the work and
 -- does it on the way out of combat - but a mover that appears to do nothing
 -- mid-pull is a mover somebody will report, so the bar says so itself.
-local raidBarMover
-
 local function RaidBarPanel()
     local panel = ns.RaidBar and ns.RaidBar.Frame()
     if panel and panel:IsShown() then return panel end
@@ -1272,34 +1259,10 @@ local function ApplyRaidBarMove(x, y)
     ns.RaidBar.Refresh()
 end
 
-local function RefreshRaidBarMover()
-    if not ns.Modules:IsOn("raidbar") then
-        if raidBarMover then raidBarMover:Hide() end
-        return
-    end
-    if not raidBarMover then
-        raidBarMover = CreatePanelMover({
-            label = "Raid Bar",
-            page = "raidbar",
-            module = "raidbar",
-            config = function() return ns.RaidBar.Config() end,
-            apply = function(x, y) ApplyRaidBarMove(x, y) end,
-            origin = function()
-                local cfg = ns.RaidBar.Config()
-                return cfg.x or 0, cfg.y or 0
-            end,
-        })
-    end
-    local cfg = ns.RaidBar.Config()
-    RefreshPanelMover(raidBarMover, RaidBarPanel, cfg.x, cfg.y)
-end
-
 -- THE TAUNT BUTTON, placed the same way. It belongs to the co-tank module, so
 -- that is the switch its mover reads and the page its cog opens - a third
 -- mover type for a forty-pixel square would be the drift this builder exists
 -- to prevent.
-local tauntMover
-
 local function TauntButton()
     local frame = ns.Taunts and ns.Taunts.Frame()
     if frame and frame:IsShown() then return frame end
@@ -1312,34 +1275,10 @@ local function ApplyTauntMove(x, y)
     ns.Taunts.Refresh()
 end
 
-local function RefreshTauntMover()
-    if not ns.Modules:IsOn("cotanks") then
-        if tauntMover then tauntMover:Hide() end
-        return
-    end
-    if not tauntMover then
-        tauntMover = CreatePanelMover({
-            label = "Taunt button",
-            page = "cotanks",
-            module = "cotanks",
-            config = function() return ns.Taunts.Config() end,
-            apply = function(x, y) ApplyTauntMove(x, y) end,
-            origin = function()
-                local cfg = ns.Taunts.Config()
-                return cfg.x or 0, cfg.y or 0
-            end,
-        })
-    end
-    local cfg = ns.Taunts.Config()
-    RefreshPanelMover(tauntMover, TauntButton, cfg.x, cfg.y)
-end
-
 -- THE ANSWER BAR, placed like the rest. Its cells are SECURE buttons, so the
 -- mover never touches them - it sits over the frame they live in, and every
 -- protected change (a size, an anchor, an attribute) happens in
 -- Answers.Rebuild, out of combat.
-local answerMover
-
 local function AnswerBar()
     local frame = ns.Answers and ns.Answers.Frame()
     if frame and frame:IsShown() then return frame end
@@ -1352,71 +1291,129 @@ local function ApplyAnswerMove(x, y)
     ns.Answers.Rebuild()
 end
 
-local function RefreshAnswerMover()
-    if not ns.Modules:IsOn("answers") then
-        if answerMover then answerMover:Hide() end
-        return
-    end
-    if not answerMover then
-        answerMover = CreatePanelMover({
-            label = "External CD answer",
-            page = "answers",
-            module = "answers",
-            config = function() return ns.Answers.Config() end,
-            apply = function(x, y) ApplyAnswerMove(x, y) end,
-            origin = function()
-                local cfg = ns.Answers.Config()
-                return cfg.x or 0, cfg.y or 0
-            end,
-        })
-    end
-    local cfg = ns.Answers.Config()
-    RefreshPanelMover(answerMover, AnswerBar, cfg.x, cfg.y)
-end
-
--- EVERY PANEL MOVER IN ONE LIST.
+---------------------------------------------------------------------------
+-- EVERY PLACED PANEL, IN ONE LIST, DESCRIBED ONCE.
 --
--- There are four of them now, and each one needs three things done to it: a
--- refresh, a drag, and a placing call. Keeping the list in one place is what
--- stops a fifth panel arriving with two of the three - which is exactly what
--- happened to the taunt button, built and shown and never dragged, because
--- OnUpdate had a hand-written pair of lines that nobody added to.
--- The movers themselves are made on the first refresh, so the list holds a
--- GETTER for each rather than the frame - a value here would be nil forever.
+-- THREE THINGS HAVE TO HAPPEN TO EACH OF THESE - a refresh, a drag and a
+-- placing call - and until now they were written down in two places: a
+-- Refresh<Name>Mover function per surface, and this list. Five functions of
+-- eleven lines that differed in a module key, a label and an accessor, and
+-- a list that had to REPEAT the frame getter and the apply function those
+-- functions had already named.
+--
+-- Two lists is the bug, and not a theoretical one: the taunt button shipped
+-- in 4.64.0 built, shown, wearing a cog and a padlock, and could not be
+-- moved - the drag was a hand-written pair of lines beside a hand-written
+-- list and nobody added the third thing. The comment that used to sit here
+-- said exactly that. It was still true of the REFRESH, which had five
+-- hand-written calls of its own further down this file.
+--
+-- So a surface is a ROW now, and adding a sixth is adding a row:
+--
+--   key      what the self test and the harness call it
+--   module   the switch that decides whether it is on screen at all
+--   panel    -> the live frame, or nil when there is nothing to place
+--   apply    (x, y) -> write it down and redraw
+--   label    what the box over it says
+--   page     which options page its cog opens
+--   config   -> the table `pinned` lives in
+--   origin   -> where it is now
+--
+-- `mover` is filled in on the first refresh and belongs to the row. It was
+-- five upvalues and five getters that returned them.
+--
+-- WHAT IS DELIBERATELY NOT IN HERE: the bars. A bar has anchors, a grow
+-- point, a selection, a nudge pad, keyboard nudging and a shape that changes
+-- with the mode. Flattening that into this row would mean a descriptor with
+-- eight fields nobody else fills in. Two kinds of movable thing is honest;
+-- eight nearly-identical ones was not, and one pretending to be general
+-- would be worse than either.
+---------------------------------------------------------------------------
 local PANEL_MOVERS = {
-    { key = "tanks", panel = TankPanel, apply = ApplyTankMove,
-      Mover = function() return tankMover end },
-    { key = "taunt", panel = TauntButton, apply = ApplyTauntMove,
-      Mover = function() return tauntMover end },
-    { key = "externals", panel = ExternalPanel, apply = ApplyExternalMove,
-      Mover = function() return externalMover end },
-    { key = "answers", panel = AnswerBar, apply = ApplyAnswerMove,
-      Mover = function() return answerMover end },
-    { key = "raidbar", panel = RaidBarPanel, apply = ApplyRaidBarMove,
-      Mover = function() return raidBarMover end },
+    { key = "tanks", module = "cotanks",
+      panel = TankPanel, apply = ApplyTankMove,
+      label = "Co-tanks", page = "cotanks",
+      -- RAW, not through an accessor, and it is the one thing this surface
+      -- does differently: ns.db.coTanks is filled in by ns.DEFAULTS rather
+      -- than seeded by a Config() call of its own.
+      config = function() return ns.db.coTanks end,
+      origin = function()
+          return ns.db.coTanks.x or 0, ns.db.coTanks.y or 0
+      end },
+
+    -- ITS MODULE AND ITS PAGE BELONG TO ANOTHER FEATURE, and that is not an
+    -- inconsistency to tidy away: the taunt button is part of the co-tank
+    -- module, so that is the switch it obeys and the page its cog opens. A
+    -- row can say so plainly; a function named after the surface could only
+    -- imply it.
+    { key = "taunt", module = "cotanks",
+      panel = TauntButton, apply = ApplyTauntMove,
+      label = "Taunt button", page = "cotanks",
+      config = function() return ns.Taunts.Config() end,
+      origin = function()
+          local cfg = ns.Taunts.Config()
+          return cfg.x or 0, cfg.y or 0
+      end },
+
+    { key = "externals", module = "externals",
+      panel = ExternalPanel, apply = ApplyExternalMove,
+      label = "External CD request", page = "externals",
+      config = function() return ns.Externals.Config() end,
+      origin = function()
+          local cfg = ns.Externals.Config()
+          return cfg.x or 0, cfg.y or 0
+      end },
+
+    { key = "answers", module = "answers",
+      panel = AnswerBar, apply = ApplyAnswerMove,
+      label = "External CD answer", page = "answers",
+      config = function() return ns.Answers.Config() end,
+      origin = function()
+          local cfg = ns.Answers.Config()
+          return cfg.x or 0, cfg.y or 0
+      end },
+
+    { key = "raidbar", module = "raidbar",
+      panel = RaidBarPanel, apply = ApplyRaidBarMove,
+      label = "Raid Bar", page = "raidbar",
+      config = function() return ns.RaidBar.Config() end,
+      origin = function()
+          local cfg = ns.RaidBar.Config()
+          return cfg.x or 0, cfg.y or 0
+      end },
 }
 
-local function RefreshTankMover()
-    -- A module that is not running has nothing on screen to place. Its frames
-    -- still EXIST once it has run at all, so "is there a panel" is not the
-    -- same question as "is this feature on" and both have to be asked.
-    if not ns.Modules:IsOn("cotanks") then
-        if tankMover then tankMover:Hide() end
-        return
+-- The spec CreatePanelMover is handed, built FROM the row so the two cannot
+-- drift apart. apply is wrapped rather than passed straight through because
+-- the row's version is a plain function and the cog calls spec.apply with no
+-- self - which is the shape the five hand-written specs already used.
+local function PanelSpec(entry)
+    return {
+        label = entry.label,
+        page = entry.page,
+        module = entry.module,
+        config = entry.config,
+        origin = entry.origin,
+        apply = function(x, y) entry.apply(x, y) end,
+    }
+end
+
+local function RefreshPanelMovers()
+    for _, entry in ipairs(PANEL_MOVERS) do
+        -- A module that is not running has nothing on screen to place. Its
+        -- frames still EXIST once it has run at all, so "is there a panel"
+        -- is not the same question as "is this feature on", and both have to
+        -- be asked - the second one here, the first inside RefreshPanelMover.
+        if not ns.Modules:IsOn(entry.module) then
+            if entry.mover then entry.mover:Hide() end
+        else
+            if not entry.mover then
+                entry.mover = CreatePanelMover(PanelSpec(entry))
+            end
+            local x, y = entry.origin()
+            RefreshPanelMover(entry.mover, entry.panel, x, y)
+        end
     end
-    if not tankMover then
-        tankMover = CreatePanelMover({
-            label = "Co-tanks",
-            page = "cotanks",
-            module = "cotanks",
-            config = function() return ns.db.coTanks end,
-            apply = function(x, y) ApplyTankMove(x, y) end,
-            origin = function()
-                return ns.db.coTanks.x or 0, ns.db.coTanks.y or 0
-            end,
-        })
-    end
-    RefreshPanelMover(tankMover, TankPanel, ns.db.coTanks.x, ns.db.coTanks.y)
 end
 
 ---------------------------------------------------------------------------
@@ -1563,7 +1560,7 @@ local function OnUpdate()
     -- and this line - and the second one is easy to forget because the first
     -- one looks finished. That is what PanelMovers() is for below.
     for _, entry in ipairs(PANEL_MOVERS) do
-        DragPanel(entry.Mover(), entry.panel, entry.apply)
+        DragPanel(entry.mover, entry.panel, entry.apply)
     end
     DragReminders()
     if not dragging then return end
@@ -2643,11 +2640,10 @@ function EditMode:Refresh()
         end
     end
 
-    RefreshTankMover()
-    RefreshTauntMover()
-    RefreshAnswerMover()
-    RefreshExternalMover()
-    RefreshRaidBarMover()
+    -- ONE CALL, NOT FIVE. These were five hand-written lines beside a
+    -- hand-written list, which is the exact shape that left the taunt button
+    -- unmovable for a whole release.
+    RefreshPanelMovers()
     RefreshReminderMovers()
 
     -- The selection can outlive what it pointed at: delete a bar, or shrink a
@@ -2675,7 +2671,7 @@ function EditMode:PanelMovers()
     -- the fix, and the self test walks this one.
     local out = {}
     for _, entry in ipairs(PANEL_MOVERS) do
-        out[entry.key] = entry.Mover()
+        out[entry.key] = entry.mover
     end
     return out
 end

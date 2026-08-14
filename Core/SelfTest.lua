@@ -6494,6 +6494,22 @@ local function TestPanelMovers()
             mover.spec ~= nil and mover.spec.page ~= nil
             and mover.spec.module ~= nil and type(mover.spec.apply) == "function")
 
+        -- EVERY FIELD A ROW OWES, and the reason this is a loop rather than
+        -- four lines about one panel: a surface is a ROW in PANEL_MOVERS now,
+        -- so adding a sixth is adding a row - and a row missing one field
+        -- fails in its own quiet way. No label draws a nameless box; no
+        -- origin means the coordinates read 0,0 for ever; no config means the
+        -- padlock cannot find `pinned` and every drag goes through.
+        Check("The " .. name .. " row says what to call it",
+            type(mover.spec.label) == "string" and mover.spec.label ~= "",
+            tostring(mover.spec and mover.spec.label))
+        Check("The " .. name .. " row can say where it is",
+            type(mover.spec.origin) == "function"
+            and select(1, mover.spec.origin()) ~= nil)
+        Check("The " .. name .. " row can find its own settings",
+            type(mover.spec.config) == "function"
+            and mover.spec.config() ~= nil)
+
         -- THE TWO KEYS HAVE TO NAME REAL THINGS. Both are strings handed to
         -- something that looks them up and quietly does nothing when it does
         -- not find them: Options:Open walks its page list and falls off the
