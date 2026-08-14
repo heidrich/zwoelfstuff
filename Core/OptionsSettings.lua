@@ -106,30 +106,6 @@ function Page:BuildPage(page, width)
         .. " " .. L["Missing lines are shown in English."])
 
     ---------------------------------------------------------------------
-    -- Every bar
-    ---------------------------------------------------------------------
-    grid:Section(L["Every bar"])
-
-    UI.Toggle(grid:Row(L["Take the display over"],
-        { sublabel = "Hide the cooldowns you have not placed on a bar" }),
-        function() return ns.db.takeOverCDM ~= false end,
-        function(value)
-            ns.db.takeOverCDM = value and true or false
-            if not value then ns.Screen:ReleaseAll() end
-            ns.Screen:Render()
-        end)
-
-    grid:Note(L["Every icon on your bars, and how they look."])
-
-    UI.MediaPicker(grid:FullRow(L["Bar text"], { controlWidth = 220 }), "font",
-        function() return ns.db.font end,
-        function(value) ns.db.font = value end,
-        function() ns.Screen:Render() end)
-
-    grid:Note(L["Every piece of text on every bar, unless a bar has its own "
-        .. "font."])
-
-    ---------------------------------------------------------------------
     -- Sounds
     --
     -- THE FOUR MOMENTS, AND THIS IS THE ANSWER FOR ALL OF THEM. A sound
@@ -177,9 +153,9 @@ function Page:BuildPage(page, width)
             function() ns.Sounds.Preview(ns.Sounds.Get(key)) end)
     end
 
-    grid:Note(L["A sound belongs to the SPELL, not to the place it sits in "
-        .. "- so a cooldown you gave a sound of its own keeps it wherever "
-        .. "you move it, and the key on that slot stays with the slot."])
+    grid:Note(L["A sound belongs to the SPELL, not to the place it sits "
+        .. "in - so a cooldown you gave a sound of its own keeps it on the "
+        .. "reminder and on the request panel alike."])
 
     ---------------------------------------------------------------------
     -- WHICH PACKS ARE IN THE LIST AT ALL

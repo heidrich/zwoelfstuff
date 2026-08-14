@@ -298,7 +298,6 @@ function Page:BuildPage(page, width)
                 end
 
                 local applied = Share.Apply(ns.db, pending, {
-                    nextID = function() return ns.Bars:NextID() end,
                     keepSpells = Share.SpellsFit(pending.stamp) == true,
                 })
                 ns.Profiles:Reload()

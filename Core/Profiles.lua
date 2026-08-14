@@ -350,13 +350,7 @@ end
 -- the short version was missing the reminder migration and both spec binds.
 ---------------------------------------------------------------------------
 function Profiles:Reload()
-    ns.Bars:Migrate()
-    ns.Bars:Prepare()
     if ns.Reminders and ns.Reminders.Migrate then ns.Reminders:Migrate() end
-
-    ns.Bars:BindSpec()
-    ns.Bars.boundSpec = nil
-    ns.Bars:BindSpec()
 
     ns.Auras:Invalidate()
     ns.Reminders:Rebuild()
@@ -367,6 +361,5 @@ function Profiles:Reload()
     ns.CoTanks:ApplyLayout()
     ns.CoTanks:Refresh()
 
-    ns.Bars:Changed()
     if ns.Options and ns.Options.Refresh then ns.Options:Refresh() end
 end

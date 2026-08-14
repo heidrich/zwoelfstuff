@@ -187,6 +187,10 @@ Core\Welcome.lua
 # it renders, and below Welcome - a fresh install gets the welcome window
 # and NOT a wall of history, and the rule that keeps them apart is in News.
 Core\News.lua
+# The spell chooser, lifted out of the cooldown workspace when the bars
+# went: the death log and the reminders both build theirs from it, so it
+# loads above them and below the two catalogues it reads.
+Core\SpellPane.lua
 Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
 # growing a second one, so BuildSpellPane has to exist by the time this loads.

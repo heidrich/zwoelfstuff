@@ -971,13 +971,6 @@ watcher:SetScript("OnEvent", function(_, event, arg1, _, arg3)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         if ns.CanCompute(arg3) then
             NoteCast(arg3)
-
-            -- The only trigger a custom active state has. There is no aura to
-            -- watch and no glow to wait for - the press IS the event.
-            local seconds = Auras:ActiveStateFor(arg3)
-            if seconds and ns.Screen then
-                ns.Screen:StartCustomActive(arg3, seconds)
-            end
         end
 
     elseif event == "SPELL_DATA_LOAD_RESULT" then

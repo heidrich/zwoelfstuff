@@ -64,18 +64,6 @@ Modules.GENERATION = 4
 
 local LIST = {
     {
-        key = "cooldowns", title = "Cooldowns", glyph = "grid", since = 1,
-        blurb = "Your own cooldown bars, built out of Blizzard's Cooldown Manager.",
-        -- Off, the bars are not merely hidden: every icon on them is one of
-        -- Blizzard's own frames, and Screen hands each one back. What you get
-        -- is the Cooldown Manager you would have had without this addon.
-        detail = "Off, Blizzard gets its own icons back.",
-        Boot = function() ns.Screen:Start() end,
-        -- One call for both directions. Render is the gate, so it draws the
-        -- bars when the module is on and puts them away when it is not.
-        Apply = function() ns.Screen:Render() end,
-    },
-    {
         key = "cotanks", title = "Co-Tanks", glyph = "tanks", since = 1,
         blurb = "Every other tank in the group, with their health and their cooldowns.",
         detail = "Off, the panel never appears and no taunt is announced.",

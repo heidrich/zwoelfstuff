@@ -577,7 +577,7 @@ end
 ---------------------------------------------------------------------------
 -- The right-hand column: the spell list, drag and all
 --
--- ns.OptionsBars:BuildSpellPane with three callbacks of ours. Not a copy -
+-- ns.SpellPane:Build with three callbacks of ours. Not a copy -
 -- the list, the search, the chips, the grouping, the sorting and the drag are
 -- one implementation, and this page only says what a click means here.
 ---------------------------------------------------------------------------
@@ -602,7 +602,7 @@ function OptionsReminders:BuildSide(parent, pad)
     host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
     host:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
 
-    self.spellPane = ns.OptionsBars:BuildSpellPane(host, width, {
+    self.spellPane = ns.SpellPane:Build(host, width, {
         -- The spell this reminder already watches, marked the way a spell
         -- already on a bar is. One entry at most, because a reminder watches
         -- one thing.

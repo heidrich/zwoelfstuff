@@ -1389,13 +1389,6 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         ZwoelfStuffDB = ZwoelfStuffDB or {}
         ns.OpenProfile()
 
-        -- Before Seed and before Prepare: everything below this line reads a
-        -- bar, and a migration that runs after the first read is a migration
-        -- that fixed nothing.
-        ns.Bars:Migrate()
-        ns.Bars:Seed()
-        ns.Bars:Prepare()
-
         -- Same reason, one line down: a reminder saved before a setting
         -- existed has to gain it before anything reads it.
         ns.Reminders:Migrate()
@@ -1509,18 +1502,16 @@ end
 ns.COMMANDS = {
     { group = "Getting around" },
     { cmd = "/zs", text = "open the window" },
-    { cmd = "/zs unlock / lock", text = "move the bars around the screen" },
-    { cmd = "/zs build", text = "take a bar apart slot by slot, on screen" },
+    { cmd = "/zs unlock / lock",
+      text = "move what this addon draws around the screen" },
     { cmd = "/zs modules", text = "which features are running "
         .. "(|cffffd100/zs modules <name>|r switches one)" },
     { cmd = "/zs welcome", text = "the window that asks which ones you want" },
 
-    { group = "Bars" },
-    { cmd = "/zs bars", text = "list them (|cffffd100add <name>|r / "
-        .. "|cffffd100remove <n>|r)" },
+    { group = "The Cooldown Manager" },
     { cmd = "/zs cdm",
-      text = "what Blizzard's Cooldown Manager currently holds" },
-    { cmd = "/zs skin", text = "what is actually drawn on one adopted icon" },
+      text = "what Blizzard's Cooldown Manager currently holds - the "
+        .. "catalogue the death log and the reminders read" },
 
     { group = "Auras" },
     { cmd = "/zs auras",
@@ -1628,22 +1619,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "cdm" then
         ns.CDM:Dump()
 
-    elseif cmd == "skin" then
-        ns.Screen:DumpCells()
-        ns.CDM:DumpSkin()
-
-    -- "Position does nothing" has now been answered three times by reading the
-    -- code, and been wrong three times. This asks the frames instead: what the
-    -- setting says against where the font string actually ended up.
-    elseif cmd == "text" then
-        ns.Screen:DumpText()
-
-    -- The third diagnostic of its kind, and written for the same reason as
-    -- the other two: a number appeared on a cell that nothing in the code
-    -- says should be there, and reading the code says which font string
-    -- SHOULD print what - not which one IS printing a nought.
-    elseif cmd == "numbers" then
-        ns.Screen:DumpNumbers()
 
     -- Co-tanks. The panel owns the settings; these three are the ones worth
     -- reaching without opening a window - move it, fake a raid, put it away.
@@ -1657,7 +1632,7 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         -- everything this addon draws is placed. Two ways to move one thing,
         -- with two different sets of rules, is one way too many.
         elseif sub == "unlock" or sub == "move" then
-            ns.EditMode:SetUnlocked(true, "bars")
+            ns.EditMode:SetUnlocked(true)
         elseif sub == "lock" then
             ns.EditMode:SetUnlocked(false)
         else
@@ -1722,11 +1697,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- one entry is a correct picker on a bare machine. See Sounds:Dump.
     elseif cmd == "sounds" or cmd == "sound" then
         ns.Sounds:Dump()
-
-    elseif cmd == "hide" then
-        -- Every reading behind "take off screen", printed while the state
-        -- that cannot be reproduced at a desk is actually happening.
-        ns.Effects:Dump()
 
     elseif cmd == "check" then
         local sub = (rest or ""):match("^(%S*)"):lower()
@@ -1868,35 +1838,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Auras:Dump()
         end
 
-    elseif cmd == "bars" then
-        local sub, arg = rest:match("^(%S*)%s*(.-)$")
-        sub = (sub or ""):lower()
-
-        if sub == "add" then
-            local index = ns.Bars:Add(arg ~= "" and arg or nil, "icon")
-            ns.Print("Added bar", index, "-", ns.Bars:Get(index).name)
-        elseif sub == "remove" or sub == "rem" then
-            local index = ToNumber(arg)
-            if index and ns.Bars:Remove(index) then
-                ns.Print("Removed bar", index)
-            else
-                ns.Print("Usage: |cffffd100/zs bars remove <number>|r")
-            end
-        else
-            if ns.Bars:Count() == 0 then
-                ns.Print("No bars yet - open |cffffd100/zs|r and press New icon bar.")
-            end
-            for i, cfg in ipairs(ns.Bars:All()) do
-                local filled = 0
-                for cell = 1, ns.Bars:CellCount(cfg) do
-                    if cfg.cells[cell] then filled = filled + 1 end
-                end
-                ns.Print(string.format("%d. %s |cff888888(%s, %dx%d, %d filled)|r%s",
-                    i, cfg.name, cfg.kind, cfg.rows, cfg.columns, filled,
-                    cfg.enabled and "" or " |cffff4040disabled|r"))
-            end
-        end
-
     elseif cmd == "reset" then
         -- Recorded procs survive. They are measurements that took hours of
         -- playing to collect and cannot be typed back in, so they are not
@@ -1913,7 +1854,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         store.profiles[ns.profileName] = {}
         ns.db = ns.ApplyDefaults(store.profiles[ns.profileName], ns.DEFAULTS)
 
-        ns.Bars:Seed()
         ns.Profiles:Reload()
         ns.Print(string.format("|cffffd100%s|r reset to defaults. Recorded "
             .. "procs kept, and no other profile was touched.", ns.profileName))

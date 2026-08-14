@@ -192,60 +192,6 @@ local function BuildDiagnosticsPage(page, width)
         end },
     })
 
-    -- Custom active states ---------------------------------------------------
-    --
-    -- The spells offered are the ones ON YOUR BARS, because that is the only
-    -- set where declaring a window changes anything you can see. A list of
-    -- every spell in the game would be a longer list and a worse one.
-    grid:Section("Active for")
-    grid:Note("Some cooldowns have no duration the game reports - a trinket, "
-        .. "a potion, a racial. Say how long it lasts and the cell runs "
-        .. "that window.")
-
-    local activeSpell
-
-    local function BarSpells()
-        local out, seen = {}, {}
-        for _, cfg in ipairs((ns.db and ns.db.bars) or {}) do
-            for _, spellID in pairs(cfg.cells or {}) do
-                if spellID and not seen[spellID] then
-                    seen[spellID] = true
-                    local seconds = ns.Auras:ActiveStates()[spellID]
-                    out[#out + 1] = {
-                        value = spellID,
-                        text = (ns.SpellName(spellID) or ("Spell " .. spellID))
-                            .. (seconds and ("  |cff7ec6d4" .. seconds .. "s|r") or ""),
-                        name = ns.SpellName(spellID) or "",
-                    }
-                end
-            end
-        end
-        table.sort(out, function(a, b) return a.name < b.name end)
-        return out
-    end
-
-    UI.Dropdown(grid:FullRow("Spell", { controlWidth = 260 }), BarSpells,
-        function() return activeSpell end,
-        function(value) activeSpell = value end,
-        { emptyText = "Pick a spell from your bars" })
-
-    UI.Slider(grid:FullRow("Lasts", { controlWidth = 200 }), {
-        get = function()
-            if not activeSpell then return 0 end
-            return ns.Auras:ActiveStates()[activeSpell] or 0
-        end,
-        set = function(value)
-            if activeSpell then ns.Auras:SetActiveState(activeSpell, value) end
-        end,
-        min = 0, max = 120, step = 1,
-        format = function(v)
-            if (v or 0) < 1 then return "off" end
-            return string.format("%ds", v)
-        end,
-        apply = function() ns.Options:Refresh() end,
-    })
-
-    grid:Note("Zero switches it off. Remembered for the whole account.")
 
     grid:Section("This client")
 
@@ -308,20 +254,11 @@ local function BuildDiagnosticsPage(page, width)
         end
         stats[1]:Set(tostring(held), held > 0 and "good" or "warn")
 
-        -- The same sum the Cooldowns page's subline shows, so two places in
-        -- the window cannot disagree about how full the bars are.
-        local slots, filled = 0, 0
-        for index = 1, ns.Bars:Count() do
-            local cfg = ns.Bars:Get(index)
-            if cfg then
-                local total = ns.Bars:CellCount(cfg)
-                slots = slots + total
-                for cell = 1, total do
-                    if cfg.cells and cfg.cells[cell] then filled = filled + 1 end
-                end
-            end
-        end
-        stats[2]:Set(string.format("%d / %d", filled, slots))
+        -- What the Cooldown Manager is holding, which is now the only
+        -- interesting count: nothing of ours displays it any more, but the
+        -- catalogue behind the death log and the reminders is built out of
+        -- exactly these items.
+        stats[2]:Set(tostring(held))
 
         stats[3]:Set(string.format("%.2f", perUnit))
 
@@ -771,15 +708,6 @@ local PAGES = {
     -- window whose names describe the same activity from two sides - "move
     -- them" and "take them apart" - and the marks separate them faster than
     -- the words do.
-    { key = "cooldowns", title = "Cooldowns", glyph = "grid", side = true,
-      status = true, module = "cooldowns",
-      actions = {
-          { text = "Move bars", icon = "action-move-bars",
-            onClick = function() ns.EditMode:SetUnlocked(true, "bars") end },
-          { text = "Build", icon = "action-build",
-            onClick = function() ns.EditMode:SetUnlocked(true, "build") end },
-      } },
-
     -- Through the namespace like the pages below it: the builder lives in
     -- Core/OptionsSettings.lua. What this page holds is the split its own
     -- header comment explains - every bar, this window, the ways in - and
@@ -1534,7 +1462,6 @@ function Options:Create()
 
 
 
-    local barList = ns.OptionsBars:BuildList(body, listWidth)
 
     -- THE THIRD COLUMN IS BUILT WHEN A PAGE FIRST ASKS FOR IT.
     --
@@ -1556,7 +1483,6 @@ function Options:Create()
     -- Built on first SHOW rather than on first page-visit, because that is
     -- the same question: a pane is shown by exactly one page.
     local SIDES = {
-        bars      = function() return ns.OptionsBars:BuildSide(sideHost, PAD) end,
         tanks     = function() return ns.OptionsCoTanks:BuildSide(sideHost, PAD) end,
         reminders = function() return ns.OptionsReminders:BuildSide(sideHost, PAD) end,
         deaths    = function() return ns.OptionsDeaths:BuildSide(sideHost, PAD) end,
@@ -1732,7 +1658,6 @@ function Options:Create()
         local moduleOn = not entry.module or ns.Modules:IsOn(entry.module)
         moduleGate:Update(not moduleOn and entry.module or nil)
 
-        local withSide = entry.side and moduleOn or false
         local withExplain = entry.explain and true or false
         local withTanks = entry.tanks and moduleOn or false
         local withReminders = entry.reminders and moduleOn or false
@@ -1747,11 +1672,10 @@ function Options:Create()
         -- leaving its spell palette live beside it would be half a state, and
         -- the half that is still live is the half that edits settings for
         -- something that is not running.
-        local third = withSide or withExplain or withTanks or withReminders
+        local third = withExplain or withTanks or withReminders
             or withDeaths or withExternals or withRaidBar
         SetStageWidth(third)
         sideHost:SetShown(third)
-        ShowPane("bars", withSide)
         explain:SetShown(withExplain)
         ShowPane("tanks", withTanks)
         ShowPane("reminders", withReminders)
@@ -1768,24 +1692,7 @@ function Options:Create()
         -- title has no translation gets its own English word back, which is
         -- the string that was there before this line existed.
         pageTitle:SetText(ns.L[entry.title])
-        if entry.status then
-            local count = ns.Bars:Count()
-            local slots, filled = 0, 0
-            for index = 1, count do
-                local cfg = ns.Bars:Get(index)
-                if cfg then
-                    local total = ns.Bars:CellCount(cfg)
-                    slots = slots + total
-                    for cell = 1, total do
-                        if cfg.cells and cfg.cells[cell] then filled = filled + 1 end
-                    end
-                end
-            end
-            pageSubtitle:SetText(string.format("%d bar%s - %d of %d cells filled",
-                count, count == 1 and "" or "s", filled, slots))
-        else
-            pageSubtitle:SetText(entry.subtitle and ns.L[entry.subtitle] or nil)
-        end
+        pageSubtitle:SetText(entry.subtitle and ns.L[entry.subtitle] or nil)
 
         -- WHATEVER THE LAST PAGE PUT IN THE BAND COMES OUT OF IT. Every
         -- page's pair is walked, not only this one's: the band is one strip
@@ -1834,7 +1741,6 @@ function Options:Create()
         end
         pageSubtitle:SetWidth(room)
 
-        barList:SetShown(withSide)
         for index, page in pairs(pageFrames) do
             page:SetShown(index == self.pageIndex)
         end
@@ -1849,12 +1755,7 @@ function Options:Create()
             item:SetActive(index == self.pageIndex)
         end
 
-        if withSide then
-            barList.Refresh()
-            -- ShowPane built it a few lines up, because withSide is the same
-            -- answer both times.
-            panes.bars.Refresh()
-        else
+        do
             local page = pageFrames[self.pageIndex]
             if page and page.Refresh then page.Refresh() end
         end

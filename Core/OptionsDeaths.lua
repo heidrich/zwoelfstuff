@@ -341,7 +341,7 @@ function Page:BuildSide(parent, pad)
     host:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
     host:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
 
-    self.spellPane = ns.OptionsBars:BuildSpellPane(host, width, {
+    self.spellPane = ns.SpellPane:Build(host, width, {
         Used = function()
             local used = {}
             for spellID in pairs((ns.db and ns.db.defensives) or {}) do
