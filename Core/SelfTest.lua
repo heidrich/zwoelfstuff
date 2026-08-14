@@ -455,6 +455,128 @@ local function TestSliderMaths()
 end
 
 ---------------------------------------------------------------------------
+-- Which noise, for which spell
+--
+-- HIS RULE: "bei den requests auch je nach spell nicht slot und beim cmd
+-- auch." A key belongs to the place, a sound belongs to the spell.
+--
+-- Four links in the chain and one check per link, in order, each naming the
+-- LINK rather than the value - the shape Locale.Resolve's suite uses. The
+-- default arm is checked twice on purpose: an unknown value and no value at
+-- all are different code paths, and a resolver that copied the default at
+-- write time passes the first and fails the second.
+---------------------------------------------------------------------------
+local function TestSounds()
+    local S = ns.Sounds
+    if not Check("There is a sound model", S ~= nil) then return end
+
+    ---------------------------------------------------------------------
+    -- The chain, driven on a book this test made itself
+    ---------------------------------------------------------------------
+    local book = {
+        request  = { any = "Whistle", spells = { [33206] = "Bell" } },
+        ready    = { any = nil,       spells = {} },
+        asked    = { any = "None",    spells = { [6940] = "" } },
+        reminder = { spells = {} },
+    }
+
+    Check("A spell's own sound wins",
+        S.Choice(book, "request", 33206) == "Bell",
+        tostring(S.Choice(book, "request", 33206)))
+    Check("A spell with none of its own follows the event",
+        S.Choice(book, "request", 47788) == "Whistle",
+        tostring(S.Choice(book, "request", 47788)))
+    Check("No spell at all follows the event",
+        S.Choice(book, "request", nil) == "Whistle")
+    Check("An event with nothing set answers nothing",
+        S.Choice(book, "ready", 12345) == nil,
+        tostring(S.Choice(book, "ready", 12345)))
+    Check("An event nobody has ever touched answers nothing",
+        S.Choice(book, "reminder", 12345) == nil)
+    Check("An event this addon does not have answers nothing",
+        S.Choice(book, "nonsense", 12345) == nil)
+
+    -- THE EMPTY STRING IS WHAT A PICKER WRITES FOR "no answer of my own", so
+    -- it has to fall THROUGH. "None" must not: it is the answer "silence",
+    -- and the two being confused is how a chime becomes unsilenceable.
+    Check("An empty choice falls through to the event",
+        S.Choice(book, "asked", 6940) == "None",
+        tostring(S.Choice(book, "asked", 6940)))
+    Check("'None' is an answer, not the absence of one",
+        S.Choice(book, "asked", nil) == "None")
+
+    ---------------------------------------------------------------------
+    -- What ships. Three of four silent, and the fourth is the chime that
+    -- was already playing - an update that starts making a noise nobody
+    -- asked for is an update people switch off.
+    ---------------------------------------------------------------------
+    Check("Four moments can make a noise", #S.EVENTS == 4,
+        tostring(#S.EVENTS))
+    for _, event in ipairs(S.EVENTS) do
+        Check("'" .. tostring(event.key) .. "' is a known event",
+            S.IsEvent(event.key))
+        Check("'" .. tostring(event.key) .. "' has something to call it",
+            type(event.text) == "string" and event.text ~= "")
+    end
+    Check("The answer chime is still the answer chime",
+        S.BuiltIn("asked") == 8959, tostring(S.BuiltIn("asked")))
+    for _, key in ipairs({ "request", "ready", "reminder" }) do
+        Check("Nothing new makes a noise on its own: " .. key,
+            S.BuiltIn(key) == nil, tostring(S.BuiltIn(key)))
+    end
+
+    ---------------------------------------------------------------------
+    -- The throttle. Pure, with its own clock, because the alternative is
+    -- a test that waits - and because a whole bar can come back at once.
+    ---------------------------------------------------------------------
+    Check("The first one always plays", S.MayPlay(100, nil))
+    Check("A second one in the same tick does not",
+        S.MayPlay(100.1, 100) == false)
+    Check("A moment later it plays again", S.MayPlay(101, 100))
+    Check("The gap can be asked for", S.MayPlay(100.2, 100, 0.1))
+
+    ---------------------------------------------------------------------
+    -- Reading and writing, against the real store
+    ---------------------------------------------------------------------
+    if ns.db then
+        local before = ns.db.sounds
+        ns.db.sounds = nil
+
+        Check("A profile with no sounds still answers",
+            S.Get("request", 33206) == "" and not S.HasAny("request"))
+
+        S.Set("request", nil, "Whistle")
+        Check("An event sound is written", S.Get("request") == "Whistle")
+        Check("...and the spell that has none reads it as its own nothing",
+            S.Get("request", 33206) == "",
+            "Get reports what is SET, the chain is Choice's job")
+        Check("Something is set now", S.HasAny("request"))
+
+        S.Set("request", 33206, "Bell")
+        Check("A spell sound is written", S.Get("request", 33206) == "Bell")
+        Check("...and its neighbour is untouched",
+            S.Get("request", 47788) == "")
+        Check("...and the event's own is untouched",
+            S.Get("request") == "Whistle")
+
+        -- Clearing means "follow again", which is how a picker hands a
+        -- setting back. The empty string must not survive as a value.
+        S.Set("request", 33206, "")
+        Check("Clearing a spell goes back to following",
+            S.Get("request", 33206) == ""
+            and S.Choice(S.Config(), "request", 33206) == "Whistle")
+
+        S.Set("request", nil, "")
+        Check("Clearing the event leaves nothing set",
+            not S.HasAny("request"))
+
+        ns.db.sounds = before
+    else
+        Skip("The sound store reads and writes", "no profile is open")
+    end
+end
+
+---------------------------------------------------------------------------
 -- The command list, which two readers share
 --
 -- The About page draws ns.COMMANDS and the chat help prints it. Before this
@@ -7112,6 +7234,7 @@ function Test:Run()
         { "CD answer",     TestAnswers },
         { "Slider maths",  TestSliderMaths },
         { "Lists with two readers", TestCommandList },
+        { "Sounds",        TestSounds },
     }
 
     for _, suite in ipairs(suites) do

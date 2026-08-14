@@ -666,6 +666,15 @@ function Externals.Ask(spellID)
     -- for everybody who does not.
     ns.Comm.Send(ns.Comm.REQUEST, ns.Comm.EXTERNAL, spellID)
 
+    -- BELOW THE SEND, NOT ABOVE IT. Every line above this one can still
+    -- refuse - no group, nowhere to send it - and a chime for a request that
+    -- never left would teach you to trust a noise that means nothing.
+    --
+    -- Keyed by the SPELL, which is what "je nach spell nicht slot" asks for:
+    -- move Pain Suppression to another place on the panel and it keeps its
+    -- sound and changes its key. See the header of Core/Sounds.lua.
+    if ns.Sounds then ns.Sounds.Play("request", spellID) end
+
     return true, target and target.name or going[1].channel, note or why
 end
 

@@ -94,6 +94,12 @@ Core\Media.lua
 # so they sit next to everything the user's other addons put there, and are
 # available to those addons in return.
 Core\MediaLibrary.lua
+# Which noise each of four moments makes. Directly below Media, whose registry
+# it reads and whose one sink it plays through, and above everything that can
+# make one: the externals panel, the answer buttons, the bars' effects and the
+# reminders. It holds no frame and plays nothing at load - a sound at file
+# scope would fire before the profile is even open.
+Core\Sounds.lua
 Core\Secrets.lua
 Core\CDM.lua
 # The shipped proc database. Data, and it grows with every export, so it loads

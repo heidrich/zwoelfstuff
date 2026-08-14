@@ -613,6 +613,20 @@ local function TickCell(entry, inCombat, span)
         state.flashLeft = (fxOpts.readyPulses or 2) * 0.35
     end
 
+    -- AND THE SAME EDGE MAKES THE NOISE. On `arrived` rather than on `ready`,
+    -- for the reason written above it: `ready` is true for as long as the
+    -- spell is up, and a sound on a state rather than on a change would play
+    -- sixty times a second. It is deliberately NOT behind readyFlash - a
+    -- sound instead of a flash is a reasonable thing to want, and one switch
+    -- for two senses is how a setting becomes unexplainable.
+    --
+    -- Keyed by the spell, so a cooldown that sits on three bars makes one
+    -- sound rather than three, and moving it does not lose it. The throttle
+    -- in Sounds.Play is what keeps a whole bar coming back at once to one.
+    if arrived and ns.Sounds then
+        ns.Sounds.Play("ready", entry.spellID)
+    end
+
     -- How long it has been sitting there ready, for the nag. Cooldowns only:
     -- an aura that is up is not something you are forgetting to press.
     if ready == false then

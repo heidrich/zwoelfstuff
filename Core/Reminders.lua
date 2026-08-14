@@ -459,6 +459,20 @@ function Reminders:Refresh()
                 -- that appears mid-fade looks like it was already there and
                 -- you missed it.
                 frame.flashFrom = phase
+
+                -- AND THE SOUND, ON THE SAME EDGE - the frame's own IsShown
+                -- is the "was it up a moment ago" flag, so there is nothing
+                -- to remember.
+                --
+                -- NOT WHILE YOU ARE SETTING IT UP. ShouldShow answers true
+                -- for `previewing` and `placing` BEFORE it reaches any of the
+                -- real rules, which is right for a picture and wrong for a
+                -- noise: dragging a reminder around the screen would chime at
+                -- every refresh, and the preview button would chime whether
+                -- or not the buff it watches is actually missing.
+                if ns.Sounds and not (self.placing or self.previewing) then
+                    ns.Sounds.Play("reminder", cfg.spellID)
+                end
             end
             frame:SetShown(show)
             if show and not cfg.flash then frame:SetAlpha(1) end

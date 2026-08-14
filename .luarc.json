@@ -123,6 +123,7 @@
     "NumberFontNormalLarge",
     "OpenDeathRecapUI",
     "PlaySound",
+    "PlaySoundFile",
     "PromoteToAssistant",
     "RAID_CLASS_COLORS",
     "ReloadUI",

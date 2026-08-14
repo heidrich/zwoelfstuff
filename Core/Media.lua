@@ -33,6 +33,12 @@ Media.lib = LSM
 
 -- What a missing key falls back to. Blizzard's own, so they exist on every
 -- client whether or not a single other addon is installed.
+-- SOUND IS NOT LISTED, AND THAT IS THE HONEST ANSWER RATHER THAN A GAP.
+-- The four below are file paths because Blizzard ships those as files. Its
+-- sounds are SoundKit ids and FileDataIDs, so there is no path to name here -
+-- and inventing one would hand every caller a string that plays nothing. A
+-- sound lookup that finds nothing therefore returns nil, and exactly one
+-- place in this file knows that: Media.PlaySound.
 local FALLBACK = {
     font      = "Fonts\\FRIZQT__.TTF",
     statusbar = "Interface\\TargetingFrame\\UI-StatusBar",
@@ -42,10 +48,19 @@ local FALLBACK = {
 
 -- The names our own defaults use. Registered by LibSharedMedia itself, so
 -- they are present the moment the library loads.
+--
+-- EVERY KIND A PICKER CAN OPEN NEEDS AN ENTRY HERE, and that is not tidiness:
+-- Media.List falls back to `{ Media.DEFAULT[kind] }` when the library is
+-- absent or its list is empty, and for a kind that is missing here that is
+-- `{ nil }` - a table of length zero, and a dropdown with no rows. `sound`
+-- and `background` were both missing; the second was a latent one nobody had
+-- opened a picker on yet.
 Media.DEFAULT = {
-    font      = "Friz Quadrata TT",
-    statusbar = "Blizzard",
-    border    = "None",
+    font       = "Friz Quadrata TT",
+    statusbar  = "Blizzard",
+    border     = "None",
+    background = "None",
+    sound      = "None",
 }
 
 -- The panel wants a NARROW GROTESK, and Arial Narrow is it.
@@ -84,6 +99,31 @@ function Media.Font(key)      return Fetch("font", key) end
 function Media.Statusbar(key) return Fetch("statusbar", key) end
 function Media.Border(key)    return Fetch("border", key) end
 function Media.Background(key) return Fetch("background", key) end
+
+-- THE ONE THAT IS NOT ALWAYS A STRING. The library stores the NUMBER 1 for
+-- its own "None" entry, and every other kind here always answers with a path.
+-- So this is the one lookup whose result must not be handed to string:find or
+-- string:lower - and the one caller allowed to hold it is directly below.
+function Media.Sound(key)     return Fetch("sound", key) end
+
+-- THE ONE SINK, for the same reason ns.Tint is one: a sound that can be a
+-- path, a number, a name for silence or nothing at all is four cases, and
+-- four callers would each get a different three of them right.
+--
+-- Answers with whether a noise actually went out, which is what lets the
+-- throttle above it start its clock on a sound that played rather than on one
+-- that was asked for. A name left behind by an addon somebody has since
+-- uninstalled fetches nothing and says so.
+function Media.PlaySound(key, channel)
+    if not key or key == "" or key == "None" then return false end
+
+    local path = Media.Sound(key)
+    if not path then return false end
+
+    if not PlaySoundFile then return false end
+    local ok, willPlay = pcall(PlaySoundFile, path, channel or "Master")
+    return (ok and willPlay) and true or false
+end
 
 -- Sorted names, ready for a picker. An empty list is impossible in practice
 -- and handled anyway: the picker then shows the one default.

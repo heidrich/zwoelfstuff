@@ -961,8 +961,14 @@ function Answers:Start()
             GetTime and GetTime() or 0)
         Answers.Repaint()
 
-        if Answers.Config().sound ~= false and PlaySound then
-            pcall(PlaySound, 8959)   -- the raid-warning chime
+        -- THE CHIME MOVED, IT DID NOT CHANGE. 8959 is now named in
+        -- Core/Sounds.lua as this event's built-in, so a profile that has
+        -- never opened the sound page sounds exactly as it did before - and
+        -- one that picks a sound of its own gets that instead, per SPELL.
+        -- Picking "None" silences it without switching the answers off, which
+        -- the toggle below could never do on its own.
+        if Answers.Config().sound ~= false and ns.Sounds then
+            ns.Sounds.Play("asked", ask.spellID)
         end
     end)
 
