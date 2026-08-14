@@ -1621,6 +1621,23 @@ function RaidDeaths:Create()
     local cross = UI.Glyph(close, "ui-close", 12, C.textDim)
     cross:SetPoint("CENTER", close, "CENTER", 0, 0)
     close:SetScript("OnClick", function() frame:Hide() end)
+    frame.close = close
+
+    -- THE WAY OUT OF A ROW, in the window's header rather than inside the
+    -- page it leaves. His ask, and it is the right corner: this is a WINDOW
+    -- action - it changes which page the window shows - and it now sits
+    -- beside the other one, which closes the window entirely.
+    --
+    -- Inside the page it also cost the first line its left edge: the head
+    -- was hung off the BUTTON, and every line under the head off the head,
+    -- so the whole page lined up on a control instead of on the window.
+    --
+    -- It belongs to the frame now, so hiding the detail no longer hides it
+    -- with it. The painter is the one place that says when it is on screen.
+    frame.back = UI.Button(frame, "Back to the pull", 140,
+        function() RaidDeaths:CloseReading() end)
+    frame.back:SetPoint("RIGHT", close, "LEFT", -10, 0)
+    frame.back:Hide()
 
     local rule = frame:CreateTexture(nil, "ARTWORK")
     rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
@@ -1774,10 +1791,6 @@ function RaidDeaths:Create()
     detail:Hide()
     frame.detail = detail
 
-    detail.back = UI.Button(detail, "Back to the pull", 140,
-        function() RaidDeaths:CloseReading() end)
-    detail.back:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, 0)
-
     -- WHOSE DEATH THIS IS, in a picture. His ask: the detail head should
     -- carry their avatar and their spec icon again. A page about one person
     -- that names them only in text makes you read the name to know who you
@@ -1787,25 +1800,36 @@ function RaidDeaths:Create()
     -- somebody it can still see - so a group mate who has left since is
     -- shown by name and spec alone. That is honest: we cannot picture
     -- somebody who is not there.
-    -- The portrait is the tallest thing in this row, so IT sets the row's
-    -- height and everything else is centred on it. Hung off the button
-    -- instead, a picture taller than the button hangs out of the row at both
-    -- ends - which is what it did.
-    detail.face = detail:CreateTexture(nil, "ARTWORK")
+    --
+    -- ONE ROW, PINNED TO THE PAGE, and everything in it hung off that row.
+    -- It used to be a chain that started at the button - portrait off the
+    -- button, icon off the portrait, name off the icon, and the sentence
+    -- below reaching back left by a HAND-COUNTED fifty-four to find the
+    -- edge again. The count was wrong by the width of the button, so the
+    -- whole page stood indented and the table with it. The edge everything
+    -- has to line up on is this frame; it can simply be pointed at.
+    local who = CreateFrame("Frame", nil, detail)
+    who:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, 0)
+    who:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
+    who:SetHeight(38)
+    detail.who = who
+
+    detail.face = who:CreateTexture(nil, "ARTWORK")
     detail.face:SetSize(38, 38)
-    detail.face:SetPoint("TOPLEFT", detail.back, "TOPRIGHT", 16, 6)
+    detail.face:SetPoint("LEFT", who, "LEFT", 0, 0)
     detail.face:Hide()
 
-    detail.spec = detail:CreateTexture(nil, "ARTWORK")
+    -- Placed by LayoutWho, because where they go depends on what is
+    -- actually there to draw: a portrait the client cannot give us must
+    -- cost nothing rather than leave a hole with the name pushed out of it.
+    detail.spec = who:CreateTexture(nil, "ARTWORK")
     detail.spec:SetSize(24, 24)
-    detail.spec:SetPoint("LEFT", detail.face, "RIGHT", 8, 0)
     detail.spec:Hide()
 
-    detail.title = UI.Label(detail, "", UI.FS.card, C.text)
-    detail.title:SetPoint("LEFT", detail.spec, "RIGHT", 10, 0)
+    detail.title = UI.Label(who, "", UI.FS.card, C.text)
 
     detail.sub = UI.Label(detail, "", UI.FS.meta, C.textDim)
-    detail.sub:SetPoint("TOPLEFT", detail.face, "BOTTOMLEFT", -54, -12)
+    detail.sub:SetPoint("TOPLEFT", who, "BOTTOMLEFT", 0, -12)
     detail.sub:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
     detail.sub:SetJustifyH("LEFT")
 
@@ -2284,6 +2308,30 @@ function RaidDeaths:Refresh()
     RaidDeaths.PaintSideList()
 end
 
+-- THE HEAD OF THE PAGE, ordered by what is actually there to draw.
+--
+-- The portrait is a maybe: the client only draws a face for somebody it can
+-- still see, so a group mate who has since left is name and spec alone. A
+-- missing picture must cost its own width and nothing else - laid out
+-- blind, it leaves a 46-pixel hole with the name shunted out of line, which
+-- is exactly what his screenshot showed.
+--
+-- Anchors rather than a running x: each thing sits on the last thing that
+-- IS there, and the first of them sits on the row itself.
+function RaidDeaths.LayoutWho(detail, hasFace, hasSpec)
+    if not (detail and detail.who) then return end
+    local left, edge, gap = detail.who, "LEFT", 0
+
+    if hasFace then left, edge, gap = detail.face, "RIGHT", 8 end
+
+    detail.spec:ClearAllPoints()
+    detail.spec:SetPoint("LEFT", left, edge, gap, 0)
+    if hasSpec then left, edge, gap = detail.spec, "RIGHT", 10 end
+
+    detail.title:ClearAllPoints()
+    detail.title:SetPoint("LEFT", left, edge, gap, 0)
+end
+
 -- One person's last seconds, in the space the list was using. Nil closes it
 -- and gives the list its room back.
 function RaidDeaths.PaintDetail(entry, info)
@@ -2308,6 +2356,9 @@ function RaidDeaths.PaintDetail(entry, info)
     -- drawn through.
     frame.verdict:SetShown(not open)
     detail:SetShown(open)
+    -- The way out lives in the header now, so it is no longer hidden along
+    -- with the page it leaves. Said here, where the page is chosen.
+    frame.back:SetShown(open)
     frame.overviewFrame:SetShown(over)
     if over then RaidDeaths.PaintOverview() end
 
@@ -2323,11 +2374,12 @@ function RaidDeaths.PaintDetail(entry, info)
     -- The face is a maybe and the spec icon never is: the class is on the
     -- row whatever happens, so the second picture is always there even when
     -- the first one cannot be.
-    ns.Death.PaintUnitFace(detail.face, entry.name)
+    local hasFace = ns.Death.PaintUnitFace(detail.face, entry.name)
     if not entry.spec and ns.Specs then
         entry.spec = ns.Specs.OfName(entry.name)
     end
-    ns.UI.PaintSpecIcon(detail.spec, entry.spec, entry.class)
+    local hasSpec = ns.UI.PaintSpecIcon(detail.spec, entry.spec, entry.class)
+    RaidDeaths.LayoutWho(detail, hasFace, hasSpec)
     detail.title:SetText(RaidDeaths.DetailTitle(entry, timed))
     detail.sub:SetText(RaidDeaths.DetailLine(entry))
 

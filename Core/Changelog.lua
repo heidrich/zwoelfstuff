@@ -75,6 +75,12 @@ ns.CHANGELOG = {
             "|cffffd100A magnifier in front of a death|r marks the ones "
                 .. "you can open, and the page you land on carries their "
                 .. "portrait and their specialisation.",
+            "|cffffd100Fixed: an opened death stood indented from its own "
+                .. "window.|r Its sentences and its table began a button's "
+                .. "width right of everything above them. |cffffd100Back to "
+                .. "the pull|r has moved up into the window's header beside "
+                .. "the close button - it changes which page you are on, so "
+                .. "it belongs with the other window controls.",
             {
                 icon = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo",
                 text = "|cffffd100New: this window.|r What changed since you "
