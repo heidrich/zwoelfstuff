@@ -232,6 +232,64 @@ function Sounds.Set(event, spellID, name)
     return true
 end
 
+---------------------------------------------------------------------------
+-- WHAT IS ACTUALLY IN THE REGISTRY, and what each moment resolves to.
+--
+-- Worth a command of its own, because the answer is not knowable from here:
+-- LibSharedMedia registers exactly ONE sound by itself - "None" - and
+-- everything else in the list arrives from whatever OTHER addons are
+-- installed. So a picker that looks empty is usually a correct picker on a
+-- machine with nothing in it, and telling those two apart by looking at the
+-- dropdown is impossible. Measured at a desk: a client with only this addon
+-- offers one entry.
+--
+-- This addon deliberately ships no sound files of its own. The argument is
+-- the one at the top of Core/Media.lua: a registry is not a design, and a
+-- second unfamiliar set of noises is not what somebody who already has
+-- BigWigs wants. What it owes them instead is to SAY so.
+---------------------------------------------------------------------------
+function Sounds:Dump()
+    local say = ns.Print or print
+    local list = ns.Media.List("sound")
+
+    say(string.format("|cffffd100%d sounds|r in the shared registry.",
+        #list))
+    for _, name in ipairs(list) do
+        local path = ns.Media.Sound(name)
+        say(string.format("   %s  |cff888888%s|r", tostring(name),
+            type(path) == "string" and path or "the game's own"))
+    end
+
+    if #list <= 1 then
+        say("|cffffd100Only the empty one.|r Sounds come from whatever other "
+            .. "addons you have - BigWigs, Northern Sky and WeakAuras all "
+            .. "register theirs. This addon ships none on purpose.")
+    end
+
+    say(" ")
+    for _, event in ipairs(Sounds.EVENTS) do
+        local chosen = Sounds.Choice(Sounds.Config(), event.key)
+        local kit = BUILT_IN[event.key]
+        local answer
+        if chosen == "None" then
+            answer = "|cff888888silent, on purpose|r"
+        elseif chosen then
+            answer = "|cff40ff40" .. chosen .. "|r"
+        elseif kit then
+            answer = string.format("the built-in chime (%d)", kit)
+        else
+            answer = "|cff888888nothing|r"
+        end
+        say(string.format("%-34s %s", event.text, answer))
+
+        local entry = Sounds.Config() and Sounds.Config()[event.key]
+        for spellID, name in pairs(entry and entry.spells or {}) do
+            say(string.format("     %s |cff888888(%d)|r -> %s",
+                ns.SpellName(spellID) or "?", spellID, tostring(name)))
+        end
+    end
+end
+
 -- Is anything set at all? Drives whether a page offers "clear them all",
 -- so it is not a button that does nothing on a profile nobody has touched.
 function Sounds.HasAny(event)

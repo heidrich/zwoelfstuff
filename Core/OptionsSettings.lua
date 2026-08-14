@@ -130,6 +130,58 @@ function Page:BuildPage(page, width)
         .. "font."])
 
     ---------------------------------------------------------------------
+    -- Sounds
+    --
+    -- THE FOUR MOMENTS, AND THIS IS THE ANSWER FOR ALL OF THEM. A sound
+    -- picked for one SPELL is set where that spell already lives - on the
+    -- panel it is requested from, on the reminder that watches it, on the
+    -- cell it sits in - because that is where you are when you have an
+    -- opinion about it. What belongs here is the answer for everything
+    -- else, which is what nearly everybody will actually set.
+    --
+    -- CHOOSING ONE PLAYS IT. The picker's apply callback is the whole
+    -- preview: nobody can pick a sound from a list of names, and a
+    -- separate "test" button beside every row is three more controls for
+    -- something the act of choosing can do on its own.
+    ---------------------------------------------------------------------
+    grid:Section(L["Sounds"])
+
+    -- WHAT THE LIST WILL ACTUALLY HOLD, said out loud rather than left to be
+    -- discovered. LibSharedMedia registers exactly one sound by itself -
+    -- "None" - so on a machine with nothing else installed these four
+    -- pickers offer one entry, and there is no way to tell that apart from a
+    -- broken control by looking at it. Measured at a desk.
+    --
+    -- This addon ships no sounds on purpose; the argument is at the top of
+    -- Core/Media.lua, and it is the same one that made us use the registry
+    -- rather than our own list. What it owes anybody in that case is to say
+    -- where sounds come from.
+    if #ns.Media.List("sound") <= 1 then
+        grid:Note(L["|cffffd100Your addons have not registered any sounds "
+            .. "yet.|r They come from whatever else you have installed - "
+            .. "BigWigs, Northern Sky and WeakAuras all bring their own. "
+            .. "|cffffd100/zs sounds|r lists what is there."])
+    else
+        grid:Note(L["The list is every sound your other addons have "
+            .. "registered - pick one and you will hear it. "
+            .. "|cffffd100None|r is a real answer and silences that moment "
+            .. "completely."])
+    end
+
+    for _, event in ipairs(ns.Sounds.EVENTS) do
+        local key = event.key
+        UI.MediaPicker(grid:FullRow(L[event.text], { controlWidth = 220 }),
+            "sound",
+            function() return ns.Sounds.Get(key) end,
+            function(value) ns.Sounds.Set(key, nil, value) end,
+            function() ns.Sounds.Preview(ns.Sounds.Get(key)) end)
+    end
+
+    grid:Note(L["A sound belongs to the SPELL, not to the place it sits in "
+        .. "- so a cooldown you gave a sound of its own keeps it wherever "
+        .. "you move it, and the key on that slot stays with the slot."])
+
+    ---------------------------------------------------------------------
     -- This window
     ---------------------------------------------------------------------
     grid:Section(L["This window"])

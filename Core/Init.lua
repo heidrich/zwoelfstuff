@@ -1548,6 +1548,8 @@ ns.COMMANDS = {
         .. "(|cffffd100test|r shows the panel)" },
     { cmd = "/zs specs", text = "what the game says each specialisation is, "
         .. "and which spec each slot is waiting for" },
+    { cmd = "/zs sounds", text = "every sound your addons have registered, "
+        .. "and what each moment would play" },
     { cmd = "/zs taunt", text = "what your next taunt would say "
         .. "(|cffffd100ask|r tells the other tank to take it)" },
     { cmd = "/zs death", text = "the last death's analysis (|cffffd100share|r "
@@ -1703,6 +1705,12 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- a panel that is working.
     elseif cmd == "specs" or cmd == "spec" then
         ns.Specs:Dump()
+
+    -- WHICH SOUNDS EXIST AT ALL. Not knowable from here: the registry is
+    -- filled by whatever OTHER addons are installed, and a picker showing
+    -- one entry is a correct picker on a bare machine. See Sounds:Dump.
+    elseif cmd == "sounds" or cmd == "sound" then
+        ns.Sounds:Dump()
 
     elseif cmd == "hide" then
         -- Every reading behind "take off screen", printed while the state

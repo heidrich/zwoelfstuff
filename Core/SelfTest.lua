@@ -526,6 +526,36 @@ local function TestSounds()
     end
 
     ---------------------------------------------------------------------
+    -- THE PICKER HAS SOMETHING TO OFFER.
+    --
+    -- A MediaPicker builds its menu when it is CLICKED, so the check that
+    -- every menu on every page can be drawn cannot see this one - it would
+    -- open blank on the page and nowhere else. That is the failure the
+    -- widget's own header calls the worst kind: a control that is silently
+    -- unusable. Media.List falls back to { Media.DEFAULT[kind] }, so this
+    -- is really asking whether that entry exists at all.
+    ---------------------------------------------------------------------
+    local list = ns.Media.List("sound")
+    Check("The sound picker has something in it", #list > 0,
+        string.format("%d entries", #list))
+    Check("...and silence is one of the answers",
+        ns.Media.DEFAULT.sound == "None", tostring(ns.Media.DEFAULT.sound))
+
+    -- The same hole existed for backgrounds and nobody had opened that
+    -- picker yet. Every kind a picker can be pointed at, in one loop.
+    for _, kind in ipairs({ "font", "statusbar", "border", "background",
+        "sound" }) do
+        Check("The " .. kind .. " picker has a floor to fall back to",
+            ns.Media.DEFAULT[kind] ~= nil)
+    end
+
+    -- "None" is a name, and the sink has to refuse it rather than hand a
+    -- number to the client and call it a path.
+    Check("Silence is never played", ns.Media.PlaySound("None") == false)
+    Check("Nothing at all is never played", ns.Media.PlaySound(nil) == false)
+    Check("An empty choice is never played", ns.Media.PlaySound("") == false)
+
+    ---------------------------------------------------------------------
     -- The throttle. Pure, with its own clock, because the alternative is
     -- a test that waits - and because a whole bar can come back at once.
     ---------------------------------------------------------------------
@@ -617,6 +647,7 @@ local function TestCommandList()
         raidbar = true, raid = true, check = true, invite = true,
         invites = true, loca = true, language = true,
         specs = true, spec = true,
+        sounds = true, sound = true,
     }
 
     local unknown

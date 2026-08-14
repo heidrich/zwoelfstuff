@@ -121,6 +121,26 @@ Register("enUS", {
     ["Panel font"] = true,
     ["Take the display over"] = true,
 
+    -- Sounds. THE FOUR EVENT NAMES ARE LOOKED UP THROUGH A VARIABLE -
+    -- L[event.text] - so the scanner that checks every literal L["..."] is
+    -- in this list CANNOT see them. They are here by hand, and anything
+    -- added to ns.Sounds.EVENTS has to be added here by hand too.
+    ["Sounds"] = true,
+    ["When you ask for a cooldown"] = true,
+    ["When somebody asks you"] = true,
+    ["When a cooldown comes back"] = true,
+    ["When a reminder appears"] = true,
+    ["The list is every sound your other addons have registered - pick one "
+        .. "and you will hear it. |cffffd100None|r is a real answer and "
+        .. "silences that moment completely."] = true,
+    ["|cffffd100Your addons have not registered any sounds yet.|r They come "
+        .. "from whatever else you have installed - BigWigs, Northern Sky "
+        .. "and WeakAuras all bring their own. |cffffd100/zs sounds|r lists "
+        .. "what is there."] = true,
+    ["A sound belongs to the SPELL, not to the place it sits in - so a "
+        .. "cooldown you gave a sound of its own keeps it wherever you move "
+        .. "it, and the key on that slot stays with the slot."] = true,
+
     ---------------------------------------------------------------------
     -- Raid Bar
     ---------------------------------------------------------------------
@@ -344,6 +364,32 @@ Register("deDE", {
     ["Bar text"] = "Leistentext",
     ["Panel font"] = "Schrift der Fenster",
     ["Take the display over"] = "Anzeige übernehmen",
+
+    ["Sounds"] = "Töne",
+    ["When you ask for a cooldown"] = "Wenn du einen Cooldown anforderst",
+    ["When somebody asks you"] = "Wenn dich jemand fragt",
+    ["When a cooldown comes back"] = "Wenn ein Cooldown wieder da ist",
+    ["When a reminder appears"] = "Wenn eine Erinnerung erscheint",
+    ["The list is every sound your other addons have registered - pick one "
+        .. "and you will hear it. |cffffd100None|r is a real answer and "
+        .. "silences that moment completely."] =
+        "Die Liste enthält jeden Ton, den deine anderen Addons angemeldet "
+        .. "haben - wähle einen und du hörst ihn sofort. |cffffd100None|r "
+        .. "ist eine echte Antwort und macht diesen Moment ganz stumm.",
+    ["|cffffd100Your addons have not registered any sounds yet.|r They come "
+        .. "from whatever else you have installed - BigWigs, Northern Sky "
+        .. "and WeakAuras all bring their own. |cffffd100/zs sounds|r lists "
+        .. "what is there."] =
+        "|cffffd100Deine Addons haben noch keine Töne angemeldet.|r "
+        .. "Sie kommen aus allem anderen, was du installiert hast - BigWigs, "
+        .. "Northern Sky und WeakAuras bringen eigene mit. "
+        .. "|cffffd100/zs sounds|r zeigt, was da ist.",
+    ["A sound belongs to the SPELL, not to the place it sits in - so a "
+        .. "cooldown you gave a sound of its own keeps it wherever you move "
+        .. "it, and the key on that slot stays with the slot."] =
+        "Ein Ton gehört zum ZAUBER, nicht zu seinem Platz - ein Cooldown "
+        .. "mit eigenem Ton behält ihn also, wohin du ihn auch schiebst, "
+        .. "und die Taste bleibt beim Platz.",
 
     ["Markers"] = "Zeichen",
     ["World markers"] = "Weltmarkierungen",
