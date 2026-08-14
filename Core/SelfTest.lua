@@ -5878,6 +5878,38 @@ local function TestExternals()
     -- lets every other caller in the file stay as it was.
     Check("An ordinary spell is its own slot", X.SlotFor(6940) == 6940)
 
+    ---------------------------------------------------------------------
+    -- POWER INFUSION, the one entry that is not a defensive
+    --
+    -- Owner asked for it by name. The numbers come out of LibOpenRaid's
+    -- Midnight file, and the two mistakes worth guarding are the ones that
+    -- would look right in the table and be wrong in a group: a spec
+    -- restriction (the source lists ALL THREE priest specs, so restricting
+    -- it hides the priest most likely to have it) and a healer flag (it is
+    -- not a healer's spell, and the healer is often the wrong priest).
+    ---------------------------------------------------------------------
+    local pi = X.Get(10060)
+    Check("Power Infusion is in the request list", pi ~= nil)
+    Check("...as the priest's, at two minutes",
+        pi and pi.class == "PRIEST" and pi.cooldown == 120,
+        pi and tostring(pi.cooldown) or "missing")
+    Check("...asked of ANY priest, because all three specs have it",
+        pi and pi.specIndex == nil and pi.healer ~= true)
+    Check("...and it is its own slot, not folded into another",
+        X.SlotFor(10060) == 10060 and (pi or {}).covers == nil)
+
+    -- The shadow priest is a right answer and the rule must not skip past
+    -- them. A healer-flagged entry would have, silently.
+    Check("A group whose only priest is shadow can still be asked", (function()
+        local roster = {
+            { name = "Me",     class = "WARRIOR", role = "TANK", isPlayer = true },
+            { name = "Schatten", class = "PRIEST", role = "DAMAGER" },
+            { name = "Baum",   class = "DRUID",   role = "HEALER" },
+        }
+        local target = X.Whom(pi, roster, nil)
+        return target ~= nil and target.name == "Schatten"
+    end)())
+
     -- THE ROUND TRIP. The asker's panel holds the slot; the mage answers with
     -- his own spell; the ACK coming back has to land on the slot again, or
     -- the asker's cell never goes quiet.

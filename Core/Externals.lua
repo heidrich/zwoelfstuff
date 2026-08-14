@@ -94,6 +94,29 @@ Externals.SPELLS = {
     { spellID = 2050,   class = "PRIEST",  cooldown = 60,  healer = true,
       specIndex = 2, specRole = "HEALER" },                        -- Holy Word: Serenity, Holy
     { spellID = 108968, class = "PRIEST",  cooldown = 300 },  -- Void Shift
+
+    -- POWER INFUSION, and it is the odd one in this list on purpose.
+    --
+    -- Owner, 2026-08-14: "bitte bei cd request PI einbauen". Everything else
+    -- above is cast on you to keep you ALIVE; this one is cast on you to make
+    -- you hit harder. It belongs here anyway, and for the panel's own reason:
+    -- it is somebody else's cooldown, you cannot press it, and asking for it
+    -- out loud in the middle of a pull is exactly the part that does not
+    -- happen. That is the whole definition this file works from.
+    --
+    -- READ, NOT REMEMBERED, the same rule the lust block set: LibOpenRaid's
+    -- ThingsToMantain_Midnight.lua - the CURRENT expansion's file, installed
+    -- here - carries
+    --     [10060] = {cooldown = 120, duration = 20, specs = {256, 257, 258},
+    --                talent = false, charges = 1, class = "PRIEST"}
+    -- and EllesmereUI's buff presets file agrees on the id and the class.
+    --
+    -- NO SPEC RESTRICTION, and that is not an omission: the source lists all
+    -- THREE priest specs, so a shadow priest is as right an answer as a
+    -- discipline one. Restricting it would hide the priest most likely to
+    -- have it. No `healer` flag either, for the same reason - this is not a
+    -- healer's spell and asking the healer for it is often the wrong priest.
+    { spellID = 10060,  class = "PRIEST",  cooldown = 120 },  -- Power Infusion
     { spellID = 116849, class = "MONK",    cooldown = 120, healer = true,
       specIndex = 2, specRole = "HEALER" },                        -- Life Cocoon, Mistweaver
     { spellID = 102342, class = "DRUID",   cooldown = 90,  healer = true,
