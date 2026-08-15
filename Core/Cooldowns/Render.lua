@@ -49,6 +49,10 @@ Cooldowns.Render = Render
 local Model = Cooldowns.Model
 local Store = Cooldowns.Store
 local Claim = Cooldowns.Claim
+local Effects = Cooldowns.Effects
+local Look = Cooldowns.Look
+local Text = Cooldowns.Text
+local Fill = Cooldowns.Fill
 
 ---------------------------------------------------------------------------
 -- Our frames
@@ -126,19 +130,26 @@ local function DrawBar(bar, claimed)
     local count = Store.Capacity(bar)
     local opts = Store.Lattice(bar)
 
-    -- WHICH CELLS HAVE NOTHING TO DRAW. A cell whose spell has no live frame
-    -- is a hole, and in wave 2 a hole STAYS a hole: the point of a fixed grid
-    -- is that a spell is always in the same place. Closing the gaps up is
-    -- Layout.Compact, it is driven by a setting under `effects`, and it
-    -- belongs to the wave that owns that setting.
-    local items, hidden = {}, {}
+    -- WHICH CELLS HAVE A LIVE FRAME AT ALL. A cell whose spell has none is a
+    -- hole, and a hole STAYS a hole: the point of a fixed grid is that a
+    -- spell is always in the same place.
+    local items = {}
     for index = 1, count do
         local spellID = cells[index]
-        local item = spellID and ns.CDM:ItemForSpell(spellID) or nil
-        if item then items[index] = item else hidden[index] = true end
+        items[index] = spellID and ns.CDM:ItemForSpell(spellID) or nil
     end
 
-    local places = Model.Places(count, opts, hidden, nil)
+    -- AND WHICH ARE HIDDEN BY A RULE, WHICH IS NOT THE SAME QUESTION.
+    --
+    -- Wave 2 fed the compactor "this cell has no live frame" and it was dead
+    -- code, because nothing set a reflow mode. The day one did, his five-icon
+    -- row would have re-packed itself every time Blizzard stopped pooling a
+    -- situational spell - a bar that rearranges itself when nothing about it
+    -- changed. 4.82.0 fed Compact the STATE map only (Screen.lua:1240-1248)
+    -- and so does this: closing a gap is something a rule you switched on
+    -- does, never something a missing frame does behind your back.
+    local hidden, compact = Effects.Pass(bar, items, count)
+    local places = Model.Places(count, opts, hidden, compact)
 
     -- The box, measured off the slots rather than from a formula - see
     -- Model.Extent. The offsets below turn cell-1-centre coordinates into
@@ -171,7 +182,23 @@ local function DrawBar(bar, claimed)
                     Claim.Strip(item)
                     Claim.Place(item,
                         { point, cell, point, inset, 0 }, width, height)
-                    Claim.Reveal(item)
+
+                    -- THE ORDER IS THE PICTURE, and it is not arbitrary.
+                    --
+                    -- Look last of the three that dress it: it is the file
+                    -- that decides whether this cell is on screen at all -
+                    -- Claim.Reveal or Claim.Veil, folded out of `alpha` and
+                    -- `inactiveAlpha` - and a cell told to be visible before
+                    -- its fill and its numbers are right flickers the old
+                    -- ones for a frame.
+                    --
+                    -- Text before Look for the same reason and Fill before
+                    -- Text because Fill owns the widget Text writes over.
+                    Fill.Apply(item, bar, index, cells[index])
+                    Text.Apply(item, Text.Style(bar, at.h))
+                    Look.Apply(item, Look.Style(bar, index))
+                    Effects.Track(item, cell, bar, cells[index])
+
                     claimed[item] = true
                     drawn = drawn + 1
                 end
@@ -253,6 +280,12 @@ function Render.Refresh()
     if not ns.Modules:IsOn("cooldowns") then return Render.Stop() end
     if not (ns.CDM.IsAvailable and ns.CDM:IsAvailable()) then return 0 end
 
+    -- ONE PASS BOUNDARY. Everything the effects layer remembers per pass -
+    -- which cells a rule turned off, whether any sound is wanted at all -
+    -- is cleared here rather than per bar, so a spell sitting on two bars is
+    -- one answer rather than two that can disagree.
+    Effects.BeginPass()
+
     local claimed, drawn = {}, 0
 
     for _, bar in pairs(Store.Bars()) do
@@ -277,6 +310,14 @@ end
 -- container hidden. A release that only stops REFRESHING would leave the
 -- icons pinned exactly where they are with nothing left able to name them.
 function Render.Stop()
+    -- THE TICKERS FIRST. Each of these arms its own OnUpdate and disarms it
+    -- when its list empties; handing the frames back without emptying the
+    -- lists would leave two tickers walking frames that are Blizzard's again
+    -- - which is not a leak that shows on screen, and therefore one nobody
+    -- would ever find.
+    Effects.StopAll()
+    Fill.ReleaseAll()
+
     local given = Claim.GiveAll()
     for _, container in pairs(containers) do container:Hide() end
     return given
@@ -299,6 +340,14 @@ end
 function Render.Start()
     if Render.started then return end
     Render.started = true
+
+    -- WHEN A STATE FLIPS, THE ARRANGEMENT MAY HAVE TO CHANGE. Effects.lua
+    -- loads above this file and cannot name it, so it asks to be called back
+    -- instead. Guarded against re-entry by the pass boundary above: a repaint
+    -- asked for from inside a repaint would recurse.
+    Effects.OnRepaint(function()
+        if ns.Modules:IsOn("cooldowns") then Render.Refresh() end
+    end)
 
     ns.CDM:OnChanged(function()
         if ns.Modules:IsOn("cooldowns") then Render.Refresh() end

@@ -140,6 +140,18 @@ Core\Cooldowns\Bars.lua
 # addon fails the build for a SetPoint on an adopted frame, and this one does
 # not.
 Core\Cooldowns\Claim.lua
+# WAVE 4 AND 5 - the styling layer. Effects, Look, Text and Fill each restyle
+# one adopted frame, and every one of them writes through Claim.Set rather
+# than to the frame directly: Claim records what a thing looked like before
+# the first change, so switching the module off puts all of it back. The desk
+# guard follows a frame into its parts now, so a raw setter in any of these
+# fails the build.
+#
+# Below Claim, which they all go through, and ABOVE Render, which drives them.
+Core\Cooldowns\Effects.lua
+Core\Cooldowns\Look.lua
+Core\Cooldowns\Text.lua
+Core\Cooldowns\Fill.lua
 # The pass that walks a bar: Store reads it, Model places it, Claim writes it.
 # LAST of the six, because it captures all three at file scope - this order is
 # load-bearing and a desk guard fails the build if it is disturbed.

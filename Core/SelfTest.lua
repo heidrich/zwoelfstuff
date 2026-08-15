@@ -299,11 +299,14 @@ local function TestSounds()
     -- already playing - an update that starts making a noise nobody asked
     -- for is an update people switch off.
     --
-    -- THREE, not four: "when a cooldown comes back" was played by the bars.
-    -- The number is asserted rather than left open because the failure it
-    -- catches is a row in the options that can never make a sound.
+    -- FOUR AGAIN. It was three while the bars were out - "when a cooldown
+    -- comes back" is played by them and by nothing else - and the number is
+    -- asserted rather than left open because the failure it catches is a row
+    -- in the options that can never make a sound. It caught the other half of
+    -- this too, from the desk: Effects played `ready` for a whole build
+    -- before anything declared it as a moment.
     ---------------------------------------------------------------------
-    Check("Three moments can make a noise", #S.EVENTS == 3,
+    Check("Four moments can make a noise", #S.EVENTS == 4,
         tostring(#S.EVENTS))
     for _, event in ipairs(S.EVENTS) do
         Check("'" .. tostring(event.key) .. "' is a known event",

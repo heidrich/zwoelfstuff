@@ -1,4 +1,4 @@
-﻿---------------------------------------------------------------------------
+---------------------------------------------------------------------------
 -- CDM - the Cooldown Manager layer.
 --
 -- THE CHANGE OF APPROACH, and why.
@@ -15,25 +15,35 @@
 -- icons, swipes, charges, stacks and timing, and it does that inside the
 -- game where secret values are not a problem.
 --
--- WE READ IT. WE NO LONGER TAKE IT OVER, and that is the change in 4.83.0.
+-- THIS FILE READS IT. IT DOES NOT WRITE TO IT, and that line is now a rule
+-- rather than a description of where the code happened to end up.
 --
--- Until then this file did both: it answered questions about the Cooldown
+-- Until 4.83.0 this file did both: it answered questions about the Cooldown
 -- Manager, and it also adopted Blizzard's item frames - re-anchoring them,
--- resizing them, stripping their decorations and handing them back on
--- release. That half was the engine under our own cooldown bars, and the
--- bars are gone. Owner's words: "there are a lot of other very good CDM
--- addons that do the job better." So a thousand lines of takeover went with
--- them, and what is left is the half every OTHER module actually uses:
+-- resizing them, stripping their decorations and handing them back. The bars
+-- were taken out, that half went with them, and the bars are now BACK - built
+-- a second time, in Core/Cooldowns/, on a contract this file is deliberately
+-- no part of. The writing all happens in Cooldowns/Claim.lua and a desk guard
+-- fails the build if it happens anywhere else, this file included.
+--
+-- So what is here is what every reader wants:
 --
 --   what does the Cooldown Manager know     Catalogue, ForEachCatalogued
 --   which frame is showing this spell       ItemForSpell, RebuildItemIndex
 --   is that frame active right now          ItemIsActive
 --   what spell is this frame really         ItemSpellID, VariantFamily
+--   what KIND of frame is it                ItemShape, ItemTracks
+--   is this aura in its refresh window      HookPandemic, InPandemic
+--   where does this frame keep its counter  Counter, CounterShown, CounterText
 --
--- Nothing here writes to a Blizzard frame any more. Every remaining call
--- asks and reports. The reminders, the co-tank panel, the death log and the
--- spell picker are the readers; if this file ever starts setting points
--- again, that is the bars coming back and it needs saying out loud.
+-- The last three groups came back with waves 4 and 5, which is the honest
+-- reason they are here: they are questions ABOUT the frame, and the answer to
+-- every one of them is read out of the game rather than worked out. The
+-- pandemic window is the clearest case - the arithmetic that would answer it
+-- is arithmetic on secret values, which raises, so Blizzard is asked instead.
+--
+-- The reminders, the co-tank panel, the death log, the spell picker and the
+-- cooldown bars are the readers.
 --
 -- Verified against these implementations on this machine:
 --   EllesmereUICooldownManager/EllesmereUICdmBuffBars.lua  (secret discipline)
@@ -754,6 +764,24 @@ function CDM:ItemViewer(item)
     return item and itemViewer[item] or nil
 end
 
+-- WHAT THIS ITEM IS ABOUT: "buff" or "cooldown".
+--
+-- The Cooldown Manager's four viewers split cleanly - Essential and Utility
+-- hold abilities, TrackedBuff and TrackedBar hold auras - and the difference
+-- decides which question about the item even HAS an answer. Owner, of the
+-- buffs: "die haben oft keinen cd", and he is right: an aura frequently has
+-- no cooldown at all, so asking the spell's cooldown about one answers
+-- "ready" for ever, and a ready-flash rule built on that fires permanently.
+--
+-- Falls back to "cooldown" for an item from no viewer we know, which is the
+-- reading that keeps such an item visible rather than hiding it on a guess.
+function CDM:ItemTracks(item)
+    local viewer = self:ItemViewer(item)
+    local key = viewer and viewer.key
+    if key == "buffIcon" or key == "buffBar" then return "buff" end
+    return "cooldown"
+end
+
 -- "icon" or "bar" - what Blizzard's own template makes this frame.
 --
 -- Defaults to "icon" for a frame we have never indexed, because three of the
@@ -816,6 +844,129 @@ function CDM:ItemIsActive(item)
     end
     return nil
 end
+---------------------------------------------------------------------------
+-- The pandemic window - ASKED, NEVER CALCULATED
+--
+-- The refresh window is the last ~30% of an aura's duration, where recasting
+-- wastes nothing. The obvious way to find it is to divide the time remaining
+-- by the full duration, and on this patch that is exactly what an addon may
+-- not do: both numbers can be secret, and dividing one secret by another is
+-- the taint the whole of Secrets.lua exists to avoid.
+--
+-- BLIZZARD ALREADY KNOWS. Its Cooldown Manager shows a pandemic marker of its
+-- own, through two methods on the item frame - ShowPandemicStateFrame and
+-- HidePandemicStateFrame. Hooking those turns the question from arithmetic
+-- into a fact somebody else worked out, inside the game, where the numbers
+-- are readable. The reference does exactly this and calculates nothing.
+--
+-- IT DEPENDS ON A BLIZZARD SETTING. The methods only fire for auras the user
+-- has switched pandemic alerts on for, in Blizzard's own Cooldown Manager
+-- options. Nothing here can turn that on for them, so the panel says so -
+-- which is what PandemicSupported is for.
+---------------------------------------------------------------------------
+
+-- frame -> true while it is inside its refresh window.
+local pandemic = setmetatable({}, { __mode = "k" })
+local pandemicHooked = setmetatable({}, { __mode = "k" })
+
+-- AT FILE SCOPE, DELIBERATELY. A hooksecurefunc callback is billed to the
+-- addon whose execution context created the closure, so a body made inside
+-- another addon's call path bills THEM for every one of our repaints. The
+-- reference found this by bisection and says so at its own hook site; a
+-- closure built per frame inside a render pass would repeat the mistake.
+local function OnPandemicShow(frame)
+    pandemic[frame] = true
+end
+
+local function OnPandemicHide(frame)
+    pandemic[frame] = nil
+end
+
+-- Idempotent, and safe to call every render pass: a frame is hooked once.
+function CDM:HookPandemic(item)
+    if not item or pandemicHooked[item] then return end
+    if type(item.ShowPandemicStateFrame) ~= "function" then return end
+
+    pandemicHooked[item] = true
+    hooksecurefunc(item, "ShowPandemicStateFrame", OnPandemicShow)
+    if type(item.HidePandemicStateFrame) == "function" then
+        hooksecurefunc(item, "HidePandemicStateFrame", OnPandemicHide)
+    end
+end
+
+function CDM:InPandemic(item)
+    return item ~= nil and pandemic[item] == true
+end
+
+-- Whether this client has the methods at all. Asked once for the panel, so
+-- "my pandemic glow does nothing" has an answer that is not a shrug.
+function CDM:PandemicSupported()
+    local found = false
+    self:ForEachItemEverywhere(function(item)
+        if type(item.ShowPandemicStateFrame) == "function" then found = true end
+    end)
+    return found
+end
+
+---------------------------------------------------------------------------
+-- The counters, and they live in ONE OF TWO PLACES
+--
+-- "frame.ChargeCount and frame.Applications are siblings of the icon, and on
+-- the frames whose Icon is a container the stack text lives at
+-- Icon.Applications." Looking in the first place only meant the setting
+-- silently did nothing on the other kind of frame - which from the outside is
+-- indistinguishable from the setting being broken, and was reported as
+-- exactly that.
+---------------------------------------------------------------------------
+
+-- AN OBJECT, OR NOTHING. Indexing a plain texture with a field name is nil
+-- rather than an error, so the second lookup is safe on the frames whose Icon
+-- is just an icon - but a Blizzard FIELD spelled like a widget METHOD would
+-- come back as a function, and every caller here is about to index it. The
+-- same guard Claim.lua carries, for the same reason.
+function CDM:Counter(item, key)
+    if type(item) ~= "table" then return nil end
+    local widget = item[key]
+    if type(widget) ~= "table" then
+        widget = type(item.Icon) == "table" and item.Icon[key] or nil
+    end
+    return type(widget) == "table" and widget or nil
+end
+
+-- IS BLIZZARD SHOWING ITS OWN COUNTER?
+--
+-- This is the comparison an addon may not make, made by the game. A stack
+-- count is a secret on this patch, so "is it more than one" cannot be asked
+-- here at all - but Blizzard asks it inside the engine and answers by HIDING
+-- the counter frame rather than by clearing the font string. So the frame's
+-- own visibility IS the answer, and reading it touches no secret.
+--
+-- nil means "there is no such counter to ask", which is not the same as false
+-- and must not be treated as one: a cell with no Blizzard frame at all has to
+-- fall back to its own judgement rather than being silenced.
+function CDM:CounterShown(item, key)
+    local widget = self:Counter(item, key)
+    if not widget then return nil end
+    local ok, shown = pcall(widget.IsShown, widget)
+    if not ok then return nil end
+    return shown and true or false
+end
+
+-- The font string inside one of Blizzard's counter frames. Published rather
+-- than re-derived by the caller: WHERE these live is the thing Counter exists
+-- to know, and a second finder would look in one of the two places and
+-- quietly report "none".
+function CDM:CounterText(item, key)
+    local widget = self:Counter(item, key)
+    if not widget then return nil end
+    if widget.GetText then return widget end
+
+    for _, region in ipairs({ widget:GetRegions() }) do
+        if region.GetText then return region end
+    end
+    return nil
+end
+
 ---------------------------------------------------------------------------
 -- Change notification
 --

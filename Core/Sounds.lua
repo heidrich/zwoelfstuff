@@ -55,6 +55,17 @@ Sounds.EVENTS = {
     { key = "request",  text = "When you ask for a cooldown" },
     { key = "asked",    text = "When somebody asks you" },
     { key = "reminder", text = "When a reminder appears" },
+    -- THE FOURTH MOMENT, and it is the only one that is not about another
+    -- person. A cooldown coming off cooldown is the thing you are actually
+    -- waiting for, and it is per SPELL like the other three - a sound on
+    -- every cooldown at once is a bar that chimes all evening.
+    --
+    -- Deliberately not tied to the ready FLASH: a sound instead of a flash is
+    -- a reasonable thing to want, and one switch for two senses is how a
+    -- setting stops being explainable. Added because a desk guard caught the
+    -- other half of it - Cooldowns/Effects.lua plays this and nothing here
+    -- declared it, so the sounds page had no row to choose it on.
+    { key = "ready",    text = "When a cooldown comes back" },
 }
 
 -- What plays when nothing has been chosen. A SoundKit id, not a file - these
