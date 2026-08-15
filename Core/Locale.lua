@@ -25,7 +25,7 @@
 --   2. MIGRATION IS SAFE. Wrapping a string that is already drawn changes
 --      nothing until somebody switches language - so the migration can be
 --      done a page at a time instead of in one commit that has to be perfect.
---   3. THE SOURCE STAYS READABLE. `L["Move bars"]` says what the button says.
+--   3. THE SOURCE STAYS READABLE. `L["Set keys"]` says what the button says.
 --      `L.EDITMODE_ACTION_1` needs a second file open to read the first.
 --
 -- WHAT IT COSTS, measured rather than assumed: every language table is

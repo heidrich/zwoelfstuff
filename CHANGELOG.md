@@ -64,6 +64,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   not played yet inherits. Every one of those checks now runs on a profile
   built for it, and the desk harness fails the run if a self test leaves any
   setting changed.
+- **Unlocking told you about two modes that no longer exist.** `/zs unlock`
+  answered with *"Move bars drags whole bars; Build takes them apart slot by
+  slot"* — both of them went out with the cooldown bars. It now says what the
+  instruction band above the toolbar says: drag a panel, arrow keys nudge it,
+  Shift for ten.
+- **The minimap note said right-click moves the bars.** It unlocks the panels
+  for moving, and has since the bars went.
 - **The checks for per-spec settings had never run outside the game.** The
   desk harness left the specialisation API missing, which the addon reads as
   "the client has not said yet" — and in that state every per-spec setting

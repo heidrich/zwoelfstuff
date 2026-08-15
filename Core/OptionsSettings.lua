@@ -266,8 +266,9 @@ function Page:BuildPage(page, width)
         function() return ns.db.minimap.show end,
         function(value) ns.MinimapButton:SetShown(value) end)
 
-    grid:Note(L["Left click opens this window, right click moves the bars, "
-        .. "and drag moves the button around the minimap edge."])
+    grid:Note(L["Left click opens this window, right click unlocks the "
+        .. "panels for moving, and drag moves the button around the minimap "
+        .. "edge."])
 
     UI.Toggle(grid:Row(L["Lock its position"]),
         function() return ns.db.minimap.locked end,

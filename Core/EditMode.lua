@@ -1092,10 +1092,15 @@ end
 
 local function BuildToolbar()
     toolbar = CreateFrame("Frame", nil, overlay)
-    -- 460, not 360. At 360 the bottom row ran to x=332 and Done, anchored to
-    -- the right edge, started at 276 - so in BUILD mode the primary button sat
-    -- on top of Spells and the two shared 56 pixels. It only showed up in build
-    -- mode, because Spells is the button that is hidden the rest of the time.
+    -- WIDE ENOUGH FOR THE BOTTOM ROW, measured rather than chosen: Grid,
+    -- Hide overlay, Set keys and Done sit in it left to right, and Done is
+    -- anchored to the RIGHT edge - so a toolbar that is too narrow does not
+    -- clip, it puts two buttons on top of each other.
+    --
+    -- The number was raised twice for exactly that, the second time for a
+    -- build mode that has since gone out with the cooldown bars. What is
+    -- left is the four above, and the width stays until something measures
+    -- them again.
     toolbar:SetSize(544, 108)
     toolbar:SetPoint("TOP", UIParent, "TOP", 0, -120)
     toolbar:SetFrameLevel(overlay:GetFrameLevel() + 40)
@@ -1359,9 +1364,15 @@ function EditMode:SetUnlocked(state)
         keyCatcher:Show()
         self:SetOverlayShown(true)
         self:Refresh()
-        ns.Print("Unlocked. |cffffd100Move bars|r drags whole bars; "
-            .. "|cffffd100Build|r takes them apart slot by slot. "
-            .. "|cffffd100/zs lock|r when you are done.")
+        -- WHAT IT SAYS HAS TO BE WHAT THE BAND SAYS. This line named the two
+        -- modes - "Move bars" and "Build" - for a week after both of them
+        -- went out with the cooldown bars, so the first thing the mode said
+        -- about itself was two buttons that are not there. It now says what
+        -- the instruction band above the toolbar says, and if one of them
+        -- changes the other is wrong.
+        ns.Print("Unlocked. Drag any panel to move it; arrow keys nudge it, "
+            .. "|cffffd100Shift|r for ten. |cffffd100Done|r or "
+            .. "|cffffd100/zs lock|r when you are finished.")
     else
         UI.ClosePopup()
         overlay:Hide()

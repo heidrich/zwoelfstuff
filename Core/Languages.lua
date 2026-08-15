@@ -263,7 +263,7 @@ Register("enUS", {
         true,
     ["The window you are looking at - its labels, values and headings."] = 
         true,
-    ["Left click opens this window, right click moves the bars, and drag moves the button around the minimap edge."] = 
+    ["Left click opens this window, right click unlocks the panels for moving, and drag moves the button around the minimap edge."] =
         true,
     ["The button stays where you put it on the minimap edge, and dragging it does nothing until you unlock it again."] = 
         true,
@@ -517,8 +517,8 @@ Register("deDE", {
         "Lässt die Szene hinter dem Fenster durch. Es blendet das ganze Fenster auf einmal ab, mit Absicht: blendet man jede Ebene einzeln, multiplizieren sich die Werte an den Überlappungen und keine Fläche behält ihre Farbe. Beurteile es in einer hellen Gegend, nicht in einer dunklen.",
     ["The window you are looking at - its labels, values and headings."] = 
         "Das Fenster, das du gerade ansiehst - seine Beschriftungen, Werte und Überschriften.",
-    ["Left click opens this window, right click moves the bars, and drag moves the button around the minimap edge."] = 
-        "Linksklick öffnet dieses Fenster, Rechtsklick verschiebt die Leisten, und Ziehen bewegt den Knopf am Rand der Minikarte.",
+    ["Left click opens this window, right click unlocks the panels for moving, and drag moves the button around the minimap edge."] =
+        "Linksklick öffnet dieses Fenster, Rechtsklick gibt die Panels zum Verschieben frei, und Ziehen bewegt den Knopf am Rand der Minikarte.",
     ["The button stays where you put it on the minimap edge, and dragging it does nothing until you unlock it again."] = 
         "Der Knopf bleibt, wo du ihn am Rand der Minikarte abgelegt hast, und Ziehen tut nichts, bis du ihn wieder freigibst.",
     ["An entry in the game's own addon list."] = 
