@@ -3767,7 +3767,14 @@ function Grid:ShowTab(name)
     end
 end
 
-function Grid:Section(title, key)
+-- `open` starts it unfolded, and it is what a TABBED page wants. A tab has
+-- already narrowed the page to one subject, so folding its three or four
+-- sections on top of that leaves a column of headings with nothing under any
+-- of them. Owner, 2026-08-15, with a picture of the cooldowns page: "well,
+-- damit kann man nicht arbeiten", and then the sharper half of it - "bars
+-- kann man nicht anlegen", because the button that makes one was inside a
+-- section that opened shut.
+function Grid:Section(title, key, open)
     self.group = key
     self.sectionName = title
 
@@ -3788,7 +3795,9 @@ function Grid:Section(title, key)
     end
 
     self.collapsed = self.collapsed or {}
-    if self.collapsed[key] == nil then self.collapsed[key] = true end
+    if self.collapsed[key] == nil then
+        self.collapsed[key] = not open
+    end
 
     local header
     header = UI.SectionHeader(self.content, title,
@@ -4018,9 +4027,22 @@ function Grid:Layout()
         end
     end
 
+    -- Has anything actually been put on the page yet. Not "is this the first
+    -- item recorded" - the two part company the moment a page has tabs.
+    local placed = false
+
     -- Opens the gap before a block: the larger of what the last one wanted
     -- below it and what this one wants above it, never the sum.
+    --
+    -- AND NOTHING AT ALL ABOVE THE FIRST BLOCK ON SCREEN. A heading asks for
+    -- no air when it is the first thing RECORDED, which is the same thing on
+    -- a page that is one long column - and is not on a page split into tabs,
+    -- where every tab but the first opens on a heading that was recorded
+    -- somewhere in the middle. That leaves a hole at the top of four pages
+    -- out of five, and a page that opens with a hole reads as one that has
+    -- not finished loading.
     local function OpenGap(padTop)
+        if not placed then pending = 0 return end
         y = y - math.max(pending, padTop or 0)
         pending = 0
     end
@@ -4058,6 +4080,7 @@ function Grid:Layout()
             end
             y = y - height
             pending = item.padBottom or UI.ROW_GAP
+            placed = true
         else
             if column == 0 then OpenGap(item.padTop) end
             region:ClearAllPoints()
@@ -4066,6 +4089,7 @@ function Grid:Layout()
             region:Show()
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
+            placed = true
             if column >= 2 then EndLine() end
         end
     end

@@ -84,6 +84,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The Cooldowns page opened with nothing on it.** Twenty-three headings, all
+  folded shut, over a preview band one pixel tall — so the bar's name was drawn
+  across the first heading, and the button that makes a bar was inside a
+  section that opened closed. Three separate faults, none of which stopped the
+  page from building:
+  - The settings now sit under **six tabs** — Bars, Look, Text, Effects, Fill
+    and Blizzard — the same split the co-tank page already wears, and every
+    section opens **open**. A tab has already narrowed the page to one subject;
+    folding three sections on top of that leaves a list of things the page will
+    not show you.
+  - The preview band **says how tall it is**, and the tab strip lives in it, so
+    what you are editing and the way to the rest of it both stay put while the
+    settings scroll.
+  - The preview **follows the selection**. Its refresh was written, was
+    correct, and was registered nowhere: it drew once when the page was built
+    and never again, so picking a second bar left the first one's cells on
+    screen under the first one's name.
+- **The desk now lays a page out instead of only building one.** Every guard
+  that watched these pages stopped at "it did not throw", which all three
+  faults above pass. The new one asks what is actually on the page: that the
+  band has a height, that at least one control is visible once the fold states
+  are applied, that every tab has something on it, and that the page carries
+  the refresh the window calls. It was checked against all four faults by
+  putting each one back.
+
 - **Every language this addon ships was showing mangled text.** All ten
   translated tables had been read as Windows-1252 and written back as UTF-8 at
   some point, which turns each accented letter into two — German showed

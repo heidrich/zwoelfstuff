@@ -349,6 +349,10 @@ Register("enUS", {
         true,
     ["Shown in the preview above"] = true,
     -- The bar editor: the look, the text, the effects and the fill
+    ["Text"] = true,
+    ["Effects"] = true,
+    ["Fill"] = true,
+    ["Blizzard"] = true,
     ["Spell name"] = true,
     ["Only shown where there is room beside the icon - a bar-shaped place with its icon at one end. A square place has no band to put a word in, and Blizzard's own tracking bars already write their name along themselves."] =
         true,
@@ -805,6 +809,10 @@ Register("deDE", {
         "Blizzards eigene Anzeigen zeigen weiter alles, was sie kennen. Das hier macht die, die du auf keine Leiste gelegt hast, unsichtbar statt sie zu verstecken - es sind Blizzards Frames, und einen davon zu verstecken ist genau das, was ihn für den Rest der Sitzung beschädigt.",
     ["Shown in the preview above"] = "Oben in der Vorschau",
     -- Der Leisten-Editor: Aussehen, Text, Effekte und Füllung
+    ["Text"] = "Text",
+    ["Effects"] = "Effekte",
+    ["Fill"] = "Füllung",
+    ["Blizzard"] = "Blizzard",
     ["Spell name"] = "Zaubername",
     ["Only shown where there is room beside the icon - a bar-shaped place with its icon at one end. A square place has no band to put a word in, and Blizzard's own tracking bars already write their name along themselves."] =
         "Wird nur gezeigt, wo neben dem Symbol Platz ist - ein leistenförmiger Platz mit dem Symbol an einem Ende. Ein quadratischer Platz hat kein Band für ein Wort, und Blizzards eigene Verfolgungsleisten schreiben ihren Namen schon selbst darauf.",

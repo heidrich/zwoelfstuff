@@ -587,6 +587,13 @@ function Page:BuildPage(page, width)
         end
         grid:Refresh()
     end
+
+    -- RETURNED, so the desk can look at what was built rather than only at
+    -- the fact that building it did not throw. See the "a page has to open on
+    -- something you can work with" guard: it asks the band for its height and
+    -- the grid for one visible control, and it can ask neither of a page that
+    -- hands back nothing.
+    return grid
 end
 
 ---------------------------------------------------------------------------

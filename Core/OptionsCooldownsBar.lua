@@ -360,11 +360,16 @@ local LOOK_KEYS = {
     "showEdge", "swipeAlpha", "swipeColor",
 }
 
+-- EACH OF THE FOUR OPENS ITS OWN TAB, and a tab boundary also ends whatever
+-- section was open - see the note on Grid:Tab. Without one, all fifteen of
+-- these headings sat in a single column under the three the page proper
+-- brings, which is the screen the owner could not work on.
 function Panel.BuildLook(grid, bar)
     local L = ns.L
     local groups = {}
 
-    grid:Section(L["The icon"], "cd-look-icon")
+    grid:Tab(L["Look"])
+    grid:Section(L["The icon"], "cd-look-icon", true)
     OverrideNote(grid, bar, LOOK_KEYS)
 
     -- IT STOPS AT A TENTH, and nought is deliberately not on the rail even
@@ -393,7 +398,7 @@ function Panel.BuildLook(grid, bar)
         .. "so these two reach it. A buff ICON does not - Blizzard takes the "
         .. "frame away entirely and there is nothing left to dim."])
 
-    grid:Section(L["Border"], "cd-look-border")
+    grid:Section(L["Border"], "cd-look-border", true)
 
     Slide(grid, bar, L["Thickness"], "borderSize",
         { min = 0, max = 4, step = 1, fallback = 1 })
@@ -406,7 +411,7 @@ function Panel.BuildLook(grid, bar)
         .. "and it stays sharper than any edge file at small sizes. The rest "
         .. "come from whatever your other addons registered."])
 
-    grid:Section(L["Behind the icon"], "cd-look-plate")
+    grid:Section(L["Behind the icon"], "cd-look-plate", true)
     grid:Note(L["A plate under the art. Spell art is opaque and fills its "
         .. "place, so you only see this where the art does not cover it - "
         .. "along a border, and behind a bar-shaped place."])
@@ -425,7 +430,7 @@ function Panel.BuildLook(grid, bar)
     Picture(grid, bar, L["Texture"], "statusbar", "backdropTexture", nil,
         "media-texture", L["Flat colour"])
 
-    grid:Section(L["The cooldown sweep"], "cd-look-sweep")
+    grid:Section(L["The cooldown sweep"], "cd-look-sweep", true)
 
     Colour(grid, bar, L["Colour"], "swipeColor", { 0, 0, 0 })
     Slide(grid, bar, L["Opacity"], "swipeAlpha",
@@ -565,8 +570,10 @@ end
 function Panel.BuildText(grid, bar)
     local L = ns.L
 
+    grid:Tab(L["Text"])
+
     for _, spec in ipairs(TEXT_ELEMENTS) do
-        grid:Section(spec.label(), "cd-text-" .. spec.key)
+        grid:Section(spec.label(), "cd-text-" .. spec.key, true)
 
         -- ON THE PAGE, because it decides whether you touch this block at
         -- all: Blizzard puts a charge count on a cooldown and a stack count
@@ -739,10 +746,12 @@ function Panel.BuildEffects(grid, bar)
     local L = ns.L
     local groups = {}
 
+    grid:Tab(L["Effects"])
+
     -----------------------------------------------------------------------
     -- The flash
     -----------------------------------------------------------------------
-    grid:Section(L["When a cooldown comes back"], "cd-fx-ready")
+    grid:Section(L["When a cooldown comes back"], "cd-fx-ready", true)
 
     local flashOn = FxGet(bar, "readyFlash")
     FxSwitch(grid, bar, L["Flash"], "readyFlash",
@@ -758,7 +767,7 @@ function Panel.BuildEffects(grid, bar)
     -----------------------------------------------------------------------
     -- The edge while it is ready
     -----------------------------------------------------------------------
-    grid:Section(L["The edge while it is ready"], "cd-fx-glow")
+    grid:Section(L["The edge while it is ready"], "cd-fx-glow", true)
 
     local glowOn = FxGet(bar, "readyGlow")
     FxSwitch(grid, bar, L["Keep an edge"], "readyGlow", { icon = "effect-edge" })
@@ -806,7 +815,7 @@ function Panel.BuildEffects(grid, bar)
     -----------------------------------------------------------------------
     -- The nag
     -----------------------------------------------------------------------
-    grid:Section(L["The nag"], "cd-fx-nag")
+    grid:Section(L["The nag"], "cd-fx-nag", true)
 
     -- A SLIDER RATHER THAN A SWITCH, so the mark goes on the row that IS the
     -- nag. Nought is off and the value box says so in the word rather than in
@@ -827,7 +836,7 @@ function Panel.BuildEffects(grid, bar)
     -----------------------------------------------------------------------
     -- While the buff it puts on you is up
     -----------------------------------------------------------------------
-    grid:Section(L["While the buff is up"], "cd-fx-active")
+    grid:Section(L["While the buff is up"], "cd-fx-active", true)
 
     local activeOn = FxGet(bar, "activeGlow")
     FxSwitch(grid, bar, L["Glow while it is up"], "activeGlow",
@@ -840,7 +849,7 @@ function Panel.BuildEffects(grid, bar)
     -----------------------------------------------------------------------
     -- The refresh window
     -----------------------------------------------------------------------
-    grid:Section(L["The refresh window"], "cd-fx-pandemic")
+    grid:Section(L["The refresh window"], "cd-fx-pandemic", true)
     -- ON THE PAGE, because it is a "this needs the other thing switched on":
     -- the window is Blizzard's arithmetic and we only ask for the answer, so
     -- an aura whose pandemic alert is off in the game's own settings never
@@ -861,7 +870,7 @@ function Panel.BuildEffects(grid, bar)
     -----------------------------------------------------------------------
     -- Greying and hiding
     -----------------------------------------------------------------------
-    grid:Section(L["Greying and hiding"], "cd-fx-hide")
+    grid:Section(L["Greying and hiding"], "cd-fx-hide", true)
 
     local dimOn = FxGet(bar, "dimOnCooldown")
     FxSwitch(grid, bar, L["Grey out while it runs"], "dimOnCooldown")
@@ -901,7 +910,7 @@ function Panel.BuildEffects(grid, bar)
     -----------------------------------------------------------------------
     -- One heartbeat for all of them
     -----------------------------------------------------------------------
-    grid:Section(L["Everything that pulses"], "cd-fx-pulse")
+    grid:Section(L["Everything that pulses"], "cd-fx-pulse", true)
 
     FxSlide(grid, bar, L["Speed"], "pulseSpeed",
         { min = 0.4, max = 2.5, step = 0.1,
@@ -1077,7 +1086,8 @@ function Panel.BuildFill(grid, bar)
     local L = ns.L
     local groups = {}
 
-    grid:Section(L["The bar's fill"], "cd-fill-bar")
+    grid:Tab(L["Fill"])
+    grid:Section(L["The bar's fill"], "cd-fill-bar", true)
     -- ON THE PAGE. It is the answer to "I set a colour and nothing happened",
     -- and the shape of a place is not something this page decides.
     grid:Note(L["These reach a place Blizzard draws as a tracked buff BAR. An "
@@ -1126,7 +1136,7 @@ function Panel.BuildFill(grid, bar)
             .. "here whose undo is its owner putting it back."])
     end
 
-    grid:Section(L["Charge marks and the spark"], "cd-fill-marks")
+    grid:Section(L["Charge marks and the spark"], "cd-fill-marks", true)
     -- ON THE PAGE: it is why the switch can be left on for a whole bar, which
     -- is a thing you decide rather than a thing you wonder about afterwards.
     grid:Note(L["Charge marks only appear on a spell that HAS more than one "
@@ -1147,7 +1157,7 @@ function Panel.BuildFill(grid, bar)
     Switch(grid, bar, L["Spark"], "showSpark", false,
         { sublabel = L["A bright line on the moving edge"] })
 
-    grid:Section(L["Stack colours"], "cd-fill-stacks")
+    grid:Section(L["Stack colours"], "cd-fill-stacks", true)
     grid:Note(L["A band takes the fill's colour over once the stack count "
         .. "reaches its number. The highest one reached is the one you see."])
     -- THE FLOOR IS ON THE PAGE, and it is the writer's half of a fault the

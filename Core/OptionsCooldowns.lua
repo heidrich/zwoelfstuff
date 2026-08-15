@@ -129,6 +129,23 @@ local function BuildBand(grid, width)
     local slotW, gap, slotH = Page.PreviewGeometry(width)
     host:SetHeight(slotH)
 
+    -- THE BAND HAS TO SAY HOW TALL IT IS, and this page never did.
+    --
+    -- UI.Page creates the sticky band one pixel high and anchors the scrolling
+    -- half to its BOTTOM - "the caller fills grid.sticky and then sets its
+    -- height", says the note there. With no such line the band stayed at that
+    -- one pixel, so the eyebrow, the preview and the first heading of the page
+    -- were all drawn in the same place. That is the "THIS BAR" sitting across
+    -- "+ YOUR BARS" in his screenshot, and every other page with a band -
+    -- externals, the raid bar, the co-tanks - has this line.
+    --
+    -- `band.tail` is what is parked at the BOTTOM of the band, under the
+    -- preview: the tab strip. It is set by BuildPage, after the tabs are known.
+    local function Fit()
+        band:SetHeight(BAND_HEAD + math.max(1, host:GetHeight()) + 10
+            + (band.tail or 0))
+    end
+
     local slots = {}
 
     -- CREATED AT THE SIZE IT IS ABOUT TO BE DRAWN AT. UI.SpellSlot takes the
@@ -190,6 +207,7 @@ local function BuildBand(grid, width)
         for _, slot in pairs(slots) do slot:Hide() end
         if not (store and bar) then
             host:SetHeight(1)
+            Fit()
             return
         end
 
@@ -222,13 +240,28 @@ local function BuildBand(grid, width)
             -- Anchored from the left edge rather than the middle: the band is
             -- as wide as the page and the bar is not, and a bar that grows
             -- leftwards would otherwise walk off the edge it grew towards.
+            -- offX and offY are the lattice's CENTRE, which is what
+            -- Model.Extent returns - so (y - offY) is already the distance
+            -- from the middle, and host's LEFT is on that middle.
             slot:SetPoint("CENTER", host, "LEFT",
-                (x - offX) + boxW / 2 + 4, (y - offY) + boxH / 2 - boxH / 2)
+                (x - offX) + boxW / 2 + 4, (y - offY))
             slot:SetSelected(Page.cell == index)
             slot:Show()
             if slot.Refresh then slot:Refresh() end
         end
+
+        Fit()
     end
+
+    -- REGISTERED, or its Refresh is never called by anything.
+    --
+    -- Grid:Refresh walks `widgets`, and only a region handed to Grid:Wide or
+    -- Grid:Row lands in there - the sticky band is neither. So band.Refresh
+    -- was written, was correct, and was dead: the preview lattice, which is
+    -- the whole point of this page, drew once at build time and never again.
+    -- Pick a second bar and the band went on showing the first one's name
+    -- over the first one's cells.
+    grid.widgets[#grid.widgets + 1] = band
 
     return band
 end
@@ -240,7 +273,7 @@ local function BuildBars(grid)
     local L = ns.L
     local store, bars = Store(), Bars()
 
-    grid:Section(L["Your bars"], "bars")
+    grid:Section(L["Your bars"], "bars", true)
 
     local list = {}
     for _, bar in pairs(store and store.Bars() or {}) do
@@ -382,7 +415,7 @@ end
 local function BuildArrangement(grid)
     local L = ns.L
 
-    grid:Section(L["Arrangement"], "arrangement")
+    grid:Section(L["Arrangement"], "arrangement", true)
 
     -- INTO THE ROW'S CONTROL SLOT, anchored to its right edge, which is where
     -- every other control on every other page sits. The first draft made the
@@ -457,7 +490,7 @@ end
 local function BuildSize(grid)
     local L = ns.L
 
-    grid:Section(L["Size and spacing"], "size")
+    grid:Section(L["Size and spacing"], "size", true)
 
     -- ALL FOUR, ALWAYS, for the reason the stagger row carries: this page is
     -- built once, so a block behind `if bar.kind == "bar"` is a block that can
@@ -520,7 +553,7 @@ end
 local function BuildRivals(grid)
     local L = ns.L
 
-    grid:Section(L["Who is managing your cooldowns"], "rivals")
+    grid:Section(L["Who is managing your cooldowns"], "rivals", true)
 
     local rivals = ns.Cooldowns and ns.Cooldowns.Rivals
     local others = rivals and rivals.Others() or {}
@@ -630,7 +663,7 @@ local function BuildRivals(grid)
     ---------------------------------------------------------------------
     -- What Blizzard's own Cooldown Manager knows
     ---------------------------------------------------------------------
-    grid:Section(L["Blizzard's Cooldown Manager"], "blizzard")
+    grid:Section(L["Blizzard's Cooldown Manager"], "blizzard", true)
 
     -- WHAT WE DO WITH THE ONES YOU DID NOT PLACE. Blizzard goes on drawing
     -- every cooldown it knows in its own viewers, so without this the bar you
@@ -657,24 +690,64 @@ local function BuildRivals(grid)
 end
 
 function Page:BuildPage(page, width)
+    local L = ns.L
     local grid = UI.Page(page, width, { tooltipNotes = true, sticky = true })
     grid.page = page
 
-    BuildBand(grid, width)
+    local band = BuildBand(grid, width)
+
+    -- SIX SHORT PAGES INSTEAD OF ONE OF TWENTY-THREE HEADINGS.
+    --
+    -- Folding sections were the answer to the 2 710-line page, and on their
+    -- own they are not enough: twenty-three of them, all shut, is a screen
+    -- with nothing on it but a list of things it will not show you. Owner,
+    -- 2026-08-15, with the picture: "well, damit kann man nicht arbeiten."
+    --
+    -- So the same split the co-tank page already wears - Widgets' own note on
+    -- Grid:Tab says it in one line: "nine sections in one scroll is a page you
+    -- have to remember your way around; the same nine split three ways is
+    -- three short pages." Each tab holds three to seven, and they open OPEN.
+    grid:Tab(L["Bars"])
     BuildBars(grid)
     BuildArrangement(grid)
     BuildSize(grid)
 
     -- WAVES 4 AND 5. Their own file, because eighteen look keys, four text
     -- elements, twenty effects and eleven fill settings on this one would be
-    -- the 2 710-line page again - which the owner named as the defect.
+    -- the 2 710-line page again - which the owner named as the defect. Each
+    -- one opens its own tab.
     local bar = Page.Current()
     ns.OptionsCooldownsBar.BuildLook(grid, bar)
     ns.OptionsCooldownsBar.BuildText(grid, bar)
     ns.OptionsCooldownsBar.BuildEffects(grid, bar)
     ns.OptionsCooldownsBar.BuildFill(grid, bar)
 
+    grid:Tab(L["Blizzard"])
     BuildRivals(grid)
+
+    -- THE STRIP LIVES IN THE STICKY BAND, under the preview. The two things
+    -- that must never scroll away are what you are editing and the way to the
+    -- rest of it, and both are now in the same place on every tab.
+    local strip
+    strip = UI.TabStrip(band, grid.tabs, function(name)
+        grid:ShowTab(name)
+        strip:Select(name)
+    end)
+    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
+    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
+    -- What the band has to leave room for at its bottom. Set before the first
+    -- Fit, which happens inside band.Refresh below.
+    band.tail = strip:GetHeight() + 10
+    grid.strip = strip
+
+    -- LAID OUT HERE, not left to OnSizeChanged. A tab is created with no
+    -- width and no x, so a strip that was never laid out has tabs that exist,
+    -- answer to clicks nobody can aim at, and are invisible - which shipped
+    -- once on the co-tank inspector. UI.TabStrip does hook its own resize
+    -- now, and this is the line that does not depend on that firing.
+    grid.tab = grid.tabs[1]
+    strip:Layout()
+    strip:Select(grid.tabs[1])
 
     -- THE TWO LINES THIS PAGE HAS BEEN MISSING SINCE IT WAS WRITTEN, and
     -- without them none of it works: Grid:Layout is what PLACES every row, and
@@ -687,6 +760,7 @@ function Page:BuildPage(page, width)
     -- says "every option on every page can be drawn" BUILDS a page; it does
     -- not lay one out, so it was green over a page that put nothing anywhere.
     grid:Layout()
+    band.Refresh()
     page.Refresh = function() grid:Refresh() end
 
     return grid
