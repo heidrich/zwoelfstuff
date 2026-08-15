@@ -740,13 +740,21 @@ end
 function CDM:ItemIsActive(item)
     if not item then return nil end
 
+    -- THE pcall GUARDS THE CALL, NOT THE ANSWER, and that was the hole. Both
+    -- of these read a value off a frame Blizzard owns and then boolean-test it
+    -- one line later, outside the pcall - and on this patch a boolean test is
+    -- exactly what a secret value raises on. It would have thrown a real error
+    -- out of a function whose whole promise is that it never does.
+    --
+    -- ns.CanCompute turns that into the third answer this function already
+    -- documents: nil, "cannot be answered", which every caller handles.
     if item.IsActive then
         local ok, active = pcall(item.IsActive, item)
-        if ok then return active and true or false end
+        if ok and ns.CanCompute(active) then return active and true or false end
     end
     if item.IsShown then
         local ok, shown = pcall(item.IsShown, item)
-        if ok then return shown and true or false end
+        if ok and ns.CanCompute(shown) then return shown and true or false end
     end
     return nil
 end

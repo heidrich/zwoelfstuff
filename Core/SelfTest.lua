@@ -7281,6 +7281,73 @@ local function TestInvites()
     if not ok then error(err) end
 end
 
+---------------------------------------------------------------------------
+-- THE FRAME CONTRACT'S ONE PIECE OF CODE
+--
+-- Rule 3 says our data never goes onto a frame Blizzard owns, and the reason
+-- that needs a table rather than a comment is that the obvious way to
+-- remember "this icon is in cell 4" is `frame.zsCell = 4`.
+--
+-- The property worth testing is the one that is easy to get wrong and
+-- impossible to see: the keys are WEAK. Blizzard's viewers recycle item
+-- frames through a pool across spec changes and reloads, and a strong table
+-- would hold every frame the session ever saw - then hand back last spec's
+-- note for a frame that has since been re-issued to a different spell. The
+-- old implementation had a "rival check" for exactly that symptom.
+--
+-- A desk guard cannot see this: __mode is a runtime property. So it is asked
+-- here, where there is a real collector, and the collect is affordable
+-- because /zs test is something a person types.
+---------------------------------------------------------------------------
+local function TestFrameContract()
+    local C = ns.Cooldowns
+    if not C then
+        Skip("The frame contract", "Cooldowns/Contract.lua is not loaded")
+        return
+    end
+
+    -- Stand-ins, not real frames: the question is about the TABLE, and a real
+    -- item frame is held by Blizzard's pool and would never be collected no
+    -- matter what __mode says - which would make the last check pass for the
+    -- wrong reason.
+    local one, two = {}, {}
+
+    local first = C.Record(one)
+    Check("A frame gets a note on first ask", type(first) == "table")
+    Check("And the same note on the second", C.Record(one) == first)
+    Check("A different frame gets a different note", C.Record(two) ~= first)
+
+    first.cell = 4
+    Check("What we remember is on OUR table, not theirs",
+        C.Record(one).cell == 4 and one.cell == nil)
+
+    Check("Known answers without inventing one", C.Known({}) == nil)
+    Check("And answers with the one that exists", C.Known(one) == first)
+
+    C.Forget(one)
+    Check("Forget drops it", C.Known(one) == nil)
+
+    Check("A nil frame is answered, not raised",
+        C.Record(nil) == nil and C.Known(nil) == nil)
+    Check("And forgetting nothing is not an error",
+        pcall(C.Forget, nil) == true)
+
+    -- THE ONE THAT MATTERS. Drop the only reference and collect: a strong
+    -- table keeps the count, a weak one lets it go.
+    local held = C.Held()
+    do
+        local doomed = {}
+        C.Record(doomed)
+        Check("Held counts what we are holding", C.Held() == held + 1)
+    end
+    collectgarbage("collect")
+    Check("A frame nobody holds any more takes its note with it",
+        C.Held() == held,
+        "the keys are not weak - notes will outlive the frames they describe")
+
+    C.Forget(two)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -7315,6 +7382,7 @@ function Test:Run()
         { "Slider maths",  TestSliderMaths },
         { "Lists with two readers", TestCommandList },
         { "Sounds",        TestSounds },
+        { "Frame contract", TestFrameContract },
     }
 
     for _, suite in ipairs(suites) do

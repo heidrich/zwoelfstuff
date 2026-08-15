@@ -49,6 +49,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **"Is this buff up?" could throw a real error in a dungeon.** The one call
+  every reminder makes reads two values off Blizzard's own cooldown frame
+  inside a `pcall` — and then tested them on the next line, outside it. On this
+  patch those values can arrive as *secret*, and testing a secret one is
+  exactly what raises. It now reports "cannot be answered", which is the third
+  answer that function already promised and every caller already handles. Found
+  by a new build check rather than by anybody hitting it.
+
 - **Reminders could not fire at all.** The index that answers "which frame is
   showing this spell" was rebuilt once per render pass by the bars. The bars
   went and its only writer went with them; nothing threw, and the table

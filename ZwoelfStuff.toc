@@ -101,6 +101,15 @@ Core\MediaLibrary.lua
 # scope would fire before the profile is even open.
 Core\Sounds.lua
 Core\Secrets.lua
+# THE COOLDOWN MANAGER, being built a second time. Everything under
+# Core\Cooldowns\ belongs to it, and the folder is the point: the last
+# implementation put 7 700 lines into five files at this level, and the file
+# that was hardest to cut was the one nobody could describe in a sentence.
+#
+# Contract.lua is first and holds no feature at all - it is the five rules
+# about Blizzard's frames plus the weak-keyed table that makes rule 3
+# possible. Above CDM.lua, which is the reader those rules protect.
+Core\Cooldowns\Contract.lua
 Core\CDM.lua
 # The shipped proc database. Data, and it grows with every export, so it loads
 # before the logic that reads it and stays a file you can paste into.
