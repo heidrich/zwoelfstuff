@@ -7389,6 +7389,22 @@ local function TestRivals()
     Check("CDM has to stand on its own", R.Claims("cdmanager toolkit") == false)
     Check("Punctuation around it still counts", R.Claims("(CDM)") == true)
 
+    -- THE FOLDER NAME ON ITS OWN, because four of the five addons known to
+    -- collide with a cooldown manager say what they are there and nowhere
+    -- else.
+    Check("A folder name alone is enough",
+        R.Claims("BetterCooldownManager") == true
+        and R.Claims("CooldownManagerCentered") == true
+        and R.Claims("SkironCooldownManager") == true)
+
+    -- AN UNDERSCORE IS NOT A WORD CHARACTER TO %w - it is to %a plus digits
+    -- and nothing else - so "ayije_cdm" has a frontier right where it is
+    -- needed. That is worth a check of its own rather than a comment: the
+    -- rule reads as though it would fail here, and the folder that depends on
+    -- it belongs to the one rival another addon calls a client crash.
+    Check("Ayije_CDM is found across the underscore",
+        R.Claims("Ayije_CDM") == true)
+
     Check("Case does not matter",
         R.Claims("COOLDOWN MANAGER") == true
         and R.Claims("cooldown manager") == true)

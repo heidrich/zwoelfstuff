@@ -54,6 +54,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **The welcome window lost its strapline.** "8 features in one addon. Pick
+  the ones you want running." sat over eight rows that are the features, each
+  with a switch on it — it narrated the thing underneath it, and the number in
+  it was a second copy of a list.
 - **The sidebar's first heading is gone.** "M+ and raid stuff" sat over
   everything the addon does, which is not a group worth naming — "System" and
   "Info" name a handful of rows each and stay. The air it provided between

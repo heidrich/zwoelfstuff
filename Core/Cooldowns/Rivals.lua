@@ -23,6 +23,19 @@
 -- addon - EllesmereUI's, whose notes say "A CDM replacement focused on
 -- performance, customizations and alerts".
 --
+-- CHECKED AGAINST SOMEBODY ELSE'S LIST, which is the strongest test available
+-- for a rule about addons that are not installed here. EllesmereUI ships a
+-- table of what it believes collides with its own cooldown module. Of the
+-- addons in it that are specifically about cooldowns, this rule finds all but
+-- one from metadata alone. The exception is a whole interface suite whose
+-- name and description never mention cooldowns - and it is deliberately NOT
+-- hardcoded here, because the claim that it collides is somebody else's,
+-- unverified, and a warning that fires on a suite is a warning aimed at a
+-- great many people who do not have this problem.
+--
+-- So the honest statement of what this can do is the one the options page
+-- makes: it finds addons that SAY what they are.
+--
 -- WHAT THIS DELIBERATELY DOES NOT REPORT. MoveAny is installed on that same
 -- machine and can move all four viewers - but only for a frame the user has
 -- ticked, and the default is off (its settings.lua registers the widget
@@ -102,7 +115,13 @@ function Rivals.Others()
                 local okState, state = pcall(C.GetAddOnEnableState, name, me)
                 on = (not okState) or state == ENABLED
             end
-            if on and (Claims(title) or Claims(notes)) then
+            -- THE FOLDER NAME COUNTS TOO, and it is the cheapest of the three.
+            -- Four of the five cooldown-manager addons known to collide with
+            -- this one are called BetterCooldownManager, CooldownManagerCentered,
+            -- SkironCooldownManager and Ayije_CDM: every one of them says what
+            -- it is in the folder alone, and an addon whose author was terse in
+            -- the Notes field is not one we want to miss.
+            if on and (Claims(name) or Claims(title) or Claims(notes)) then
                 found[#found + 1] = {
                     folder = name,
                     -- The title is what the user sees in their addon list, so

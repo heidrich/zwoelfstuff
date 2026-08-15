@@ -89,11 +89,15 @@ local function BuildFrame()
     version:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", -PAD, -PAD - 8)
     version:SetJustifyH("RIGHT")
 
-    local lead = UI.Label(frame, "", UI.FS.meta, C.textBody)
-    lead:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    lead:SetWidth(WIDTH - PAD * 2 - 50)
-    lead:SetJustifyH("LEFT")
-
+    -- NO STRAPLINE UNDER THE NAME. Owner, 2026-08-15, with a photograph of it:
+    -- "den text raus".
+    --
+    -- It counted the features and then told you to pick some. The rows below
+    -- are the features and each carries a switch, so the sentence was
+    -- narrating the thing it sat on top of - and the count in it was the
+    -- second copy of a list, which is the mistake this addon has made and
+    -- written down more than once. The rule is at a fixed offset from the
+    -- frame's top, so nothing below moves.
     local rule = frame:CreateTexture(nil, "ARTWORK")
     rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
     rule:SetHeight(1)
@@ -274,7 +278,6 @@ local function BuildFrame()
     frame:SetHeight(frame.baseHeight)
 
     frame.version = version
-    frame.lead = lead
 
     -- ESC closes it, and closing it by any route counts as answered.
     table.insert(UISpecialFrames, "ZwoelfStuffWelcomeFrame")
@@ -296,20 +299,16 @@ function Welcome:Close()
     if frame then frame:Hide() end
 end
 
--- fresh: the module keys to call out as new. first: nobody has ever been
--- asked on this character, in which case nothing is called out - on a first
--- run "everything is new" is not information.
-function Welcome:Show(fresh, first)
+-- fresh: the module keys to call out as new. On a first run that list is
+-- deliberately EMPTY - "everything is new" is not information - so nothing
+-- here has to know which of the two cases it is any more. It used to: the
+-- strapline said one thing on a first run and another after an update, and
+-- the strapline is gone.
+function Welcome:Show(fresh)
     if not ns.UI then return end
     if not frame then BuildFrame() end
 
     frame.version:SetText("v" .. (ns.version or "?"))
-    -- COUNTED, NOT TYPED. It said "Four features" and built six rows out of
-    -- the registry underneath - see Modules:Count.
-    frame.lead:SetText(first == false
-        and "This update brings something new. Pick what you want running."
-        or ns.L("%d features in one addon. Pick the ones you want running.",
-            ns.Modules:Count()))
 
     local isFresh = {}
     for _, key in ipairs(fresh or {}) do isFresh[key] = true end
@@ -373,7 +372,12 @@ end
 function Welcome:ShowIfDue()
     if not ns.db then return end
 
-    local due, fresh, first = ns.Modules.WelcomeDue(ns.db.welcomeSeen)
+    -- The third return - "nobody has ever been asked on this character" - is
+    -- deliberately not taken. Its only reader was the strapline, and on a
+    -- first run `fresh` is empty anyway, which is the same information in the
+    -- form the window actually uses. WelcomeDue still answers it; it is a pure
+    -- rule with its own tests and losing a caller is not a reason to change it.
+    local due, fresh = ns.Modules.WelcomeDue(ns.db.welcomeSeen)
     if not due then return end
 
     -- NOT IN COMBAT. Somebody who logs in mid-pull gets a window over the
@@ -384,7 +388,7 @@ function Welcome:ShowIfDue()
         waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
         waiter:SetScript("OnEvent", function(listener)
             listener:UnregisterAllEvents()
-            Welcome:Show(fresh, first)
+            Welcome:Show(fresh)
         end)
         return
     end
@@ -392,5 +396,5 @@ function Welcome:ShowIfDue()
     -- A beat after login, for the same reason every other window in this
     -- addon waits: the client is still building its own frames, and a window
     -- that appears during that lands behind them.
-    C_Timer.After(1.5, function() Welcome:Show(fresh, first) end)
+    C_Timer.After(1.5, function() Welcome:Show(fresh) end)
 end
