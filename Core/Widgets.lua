@@ -168,7 +168,25 @@ UI.COL_GAP    = 18
 -- The window, and the three columns it is made of. Stated here rather than in
 -- Options.lua because the inspector needs to know how wide it is in order to
 -- decide what fits on a row, and it is not the thing that creates itself.
-UI.WINDOW_W    = 1382
+-- 1382 UNTIL THE COOLDOWNS PAGE WANTED THREE COLUMNS OF ITS OWN.
+--
+-- That page puts a live card per bar on the left, its settings in the middle
+-- and the spell list on the right, and 1382 could not hold all three: at
+-- 750 for the first two, a card wide enough to draw a 250-pixel tracking bar
+-- at its real size left the settings too narrow to work in, and the other way
+-- round the previews were postage stamps. Owner, having seen both: "den
+-- bereich schmaler und die vorschau links breiter ... wenns vom platz her
+-- nicht reicht, koennen wir rechts die icon spalte schmaler machen oder addon
+-- breiter."
+--
+-- THE WINDOW, then, and not the icon column. The spell list is what a bar is
+-- built out of - it is dragged from and read - so it is the last thing that
+-- should pay, and narrowing it would have cost every OTHER page's inspector
+-- as well for a problem only this page has.
+--
+-- 1460 at 100% still stands on a 1366x768 laptop through the scale slider,
+-- which is what that slider is for - the same answer WINDOW_H gives below.
+UI.WINDOW_W    = 1460
 -- 760 UNTIL THE THIRTEENTH PAGE, and the number changed because the rail ran
 -- out rather than because anybody wanted a bigger window.
 --

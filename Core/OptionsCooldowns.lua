@@ -105,16 +105,23 @@ end
 -- for, so the middle only widens if this narrows - there is no slack between
 -- them to take.
 --
--- 270 rather than 330 was measured against what the cards actually have to
--- hold: the preview is SCALED to the card (see CardGeometry), so a narrower
--- column costs a fraction of a picture, while the settings beside it carry
--- media pickers 190 wide that had 384 to sit in. The settings get 444.
+-- 400, AND THE WINDOW GREW TO PAY FOR IT. Narrowing this column to 270 was
+-- the first answer and it was the wrong one: the settings got their room and
+-- the previews became postage stamps. Owner, with a picture of both: "den
+-- bereich schmaler und die vorschau links breiter ... wenns vom platz her
+-- nicht reicht, koennen wir rechts die icon spalte schmaler machen oder addon
+-- breiter." So UI.WINDOW_W went 1382 -> 1460 and both halves got what they
+-- need - 400 here, 392 for the settings.
 --
--- What did NOT fit at 270 is the card's header: a title, a kind badge, two
--- word buttons and a switch on one line needs about 340. So the two buttons
--- moved to a footer under the preview - which is where they belong anyway,
--- next to the bar they act on rather than crowded against the switch.
-local CARD_W = 270
+-- 400 is not a taste: the preview is SCALED to the card, and 380 of usable
+-- width is what draws his widest tracking bar at its real size instead of a
+-- shrunk picture of it. A preview that does not agree with the screen is
+-- worse than none - that lesson cost a release on the raid bar.
+--
+-- The two word buttons stay in the FOOTER they moved to at 270. They fit in
+-- the header again at this width, and they read better under the bar they act
+-- on than crowded against the switch.
+local CARD_W = 400
 local CARD_GAP = 22
 local CARD_HEAD = 26
 local CARD_PAD = 10
