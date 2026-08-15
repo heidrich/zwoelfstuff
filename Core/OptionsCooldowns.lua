@@ -209,65 +209,34 @@ local function BuildCards(host)
     empty:SetJustifyV("TOP")
     empty:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -26)
 
-    -- The three actions, made once and moved by Refresh - a button rebuilt per
-    -- pass is a button whose two-step "really?" forgets it was armed.
-    local newBar = UI.Button(host, L["New bar"], CARD_W, function()
+    -- ADDING A BAR IS A + AT THE TOP, on the heading's own line.
+    --
+    -- Owner, 2026-08-15: "wir brauchen oben ein + button zum hinzufuegen von
+    -- bars." It belongs at the top because that is where you look when there
+    -- is nothing yet, and it stays in one place whether the column holds no
+    -- bars or nine - which a button parked under the last card does not.
+    --
+    -- The other two actions moved ONTO THE CARDS. Duplicating and deleting are
+    -- things you do to a particular bar, and a footer button that acts on
+    -- "whichever one is selected" is a button whose consequence you have to
+    -- look somewhere else to know.
+    local add = UI.Button(host, "+", 30, function()
         local bars = Bars()
         local made = bars and bars.New()
         if made then Page.barID = made.id end
         Refresh()
     end)
-
-    local duplicate = UI.Button(host, L["Duplicate this one"], CARD_W,
-        function()
-            local bars, bar = Bars(), Page.Current()
-            local made = bar and bars and bars.Duplicate(bar.id)
-            if made then Page.barID = made.id end
-            Refresh()
-        end)
-
-    -- DELETING ONE ASKS TWICE, like every other thing in this addon you cannot
-    -- take back in the same second, and it disarms itself after four: a button
-    -- left sitting on "really?" is one somebody clicks on their way past a
-    -- week later.
-    local armed, remove = false, nil
-    local function Idle()
-        local bar = Page.Current()
-        return L("Delete %s", bar and (bar.name or L["this bar"])
-            or L["this bar"])
-    end
-
-    remove = UI.Button(host, L["Delete"], CARD_W, function()
-        if not armed then
-            armed = true
-            remove:SetText(L["Really delete it?"])
-            C_Timer.After(4, function()
-                if not armed then return end
-                armed = false
-                if remove and remove.SetText then remove:SetText(Idle()) end
-            end)
-            return
-        end
-        armed = false
-
-        local bars, bar = Bars(), Page.Current()
-        -- `and` cannot carry two answers, so the call is its own statement.
-        -- Written as `local _, freed = bars and bars.Delete(...)` the second
-        -- return is dropped on the floor and `freed` is always nil - so the
-        -- line that says how many bars were let loose would never once print.
-        local freed = 0
-        if bars and bar then
-            local _, released = bars.Delete(bar.id)
-            freed = released or 0
-        end
-        Page.barID = nil
-        if freed > 0 then
-            ns.Print(ns.L("%d bars were following it and now sit where they "
-                .. "are.", freed))
-        end
-        Refresh()
+    add:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+    add.dkTip = L["New bar"]
+    add:HookScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine(self.dkTip)
+        GameTooltip:Show()
     end)
-    host.deleteButton = remove
+    add:HookScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
 
     -- ONE CARD PER BAR, POOLED. Cards are frames and a page that makes a fresh
     -- one per refresh leaks a frame per press for the whole session.
@@ -299,6 +268,54 @@ local function BuildCards(host)
         card.toggle = CreateFrame("Frame", nil, card)
         card.toggle:SetSize(40, 20)
         card.toggle:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -7)
+
+        -- THE TWO ACTIONS THAT BELONG TO THIS BAR, on this bar. Deleting asks
+        -- twice, like every other thing in this addon you cannot take back in
+        -- the same second, and it disarms itself after four seconds: a button
+        -- left sitting on "really?" is one somebody clicks on their way past a
+        -- week later.
+        card.remove = UI.GhostButton(card, ns.L["Delete"], function()
+            if not card.dkBar then return end
+            if not card.armed then
+                card.armed = true
+                card.remove:SetText(ns.L["Really?"])
+                local id = card.dkBar.id
+                C_Timer.After(4, function()
+                    if not (card.armed and card.dkBar
+                        and card.dkBar.id == id) then return end
+                    card.armed = false
+                    card.remove:SetText(ns.L["Delete"])
+                end)
+                return
+            end
+            card.armed = false
+
+            local bars = Bars()
+            -- `and` cannot carry two answers, so the call is its own
+            -- statement: written as `local _, freed = bars and bars.Delete()`
+            -- the second return is dropped and the line that says how many
+            -- bars were let loose would never once print.
+            local freed = 0
+            if bars then
+                local _, released = bars.Delete(card.dkBar.id)
+                freed = released or 0
+            end
+            if Page.barID == card.dkBar.id then Page.barID = nil end
+            if freed > 0 then
+                ns.Print(ns.L("%d bars were following it and now sit where "
+                    .. "they are.", freed))
+            end
+            Refresh()
+        end, C.danger)
+        card.remove:SetPoint("TOPRIGHT", card.toggle, "TOPLEFT", -6, -1)
+
+        card.copy = UI.GhostButton(card, ns.L["Duplicate"], function()
+            local bars = Bars()
+            local made = card.dkBar and bars and bars.Duplicate(card.dkBar.id)
+            if made then Page.barID = made.id end
+            Refresh()
+        end)
+        card.copy:SetPoint("TOPRIGHT", card.remove, "TOPLEFT", -4, 0)
 
         -- The well the preview sits in: a piece of SCREEN set into the card,
         -- which is what makes the picture read as the bar rather than as more
@@ -391,7 +408,13 @@ local function BuildCards(host)
             local card = CardAt(index)
             card.dkBar = bar
             card.title:SetText(bar.name or L["Bar"])
-            card.badge:SetText((bar.kind == "bar") and L["Tracking bar"]
+            -- SetLabel, not SetText. A badge is a FRAME with a string
+            -- inside it, and a frame has no SetText - the call was a nil
+            -- value, it threw on the FIRST card, and everything after it in
+            -- this refresh never ran. That is why every control on the right
+            -- was blank: page.Refresh calls this before grid:Refresh, so one
+            -- nil call here left the whole settings half unpainted.
+            card.badge:SetLabel((bar.kind == "bar") and L["Tracking bar"]
                 or L["Icon bar"])
 
             if not card.switch then
@@ -409,6 +432,16 @@ local function BuildCards(host)
 
             card.mark:SetShown(Page.barID == bar.id)
 
+            -- A CARD IS POOLED, so the one that was armed to delete bar three
+            -- can come back holding bar four. Disarmed on every pass unless it
+            -- is still the same bar - otherwise the second click deletes
+            -- something nobody asked about.
+            if card.dkArmedFor ~= bar.id then
+                card.armed = false
+                card.dkArmedFor = bar.id
+            end
+            if not card.armed then card.remove:SetText(L["Delete"]) end
+
             local height = card.grid.Refresh() or 0
             card.well:SetHeight(math.max(STAGE_MIN, height + 12))
             card:SetHeight(CARD_HEAD + 4 + card.well:GetHeight() + CARD_PAD)
@@ -420,24 +453,25 @@ local function BuildCards(host)
         end
         for index = #list + 1, #cards do cards[index]:Hide() end
 
+        -- WHICHEVER CARD IS FIRST, for the desk guard that asks whether this
+        -- page still offers a way to delete a bar. Read after the loop,
+        -- because before it there is no card to name.
+        host.deleteButton = cards[1] and cards[1].remove or nil
+
         empty:SetShown(#list == 0)
-        if #list == 0 then y = y + 34 end
-
-        for _, button in ipairs({ newBar, duplicate, remove }) do
-            button:ClearAllPoints()
-            button:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -y)
-            y = y + UI.BUTTON_H + 6
-        end
-
-        duplicate:SetShown(#list > 0)
-        remove:SetShown(#list > 0)
-        if not armed then remove:SetText(Idle()) end
+        if #list == 0 then y = y + 40 end
 
         -- The column says how tall it is, or the scroll under it has no range
         -- and the last card is unreachable.
         host:SetHeight(math.max(1, y + 10))
         return y
     end
+
+    -- Named for the desk, which asks whether this page offers a way to make a
+    -- bar and a way to delete one - and asks it of a page with NO bars, which
+    -- is the state in which those two are easiest to lose.
+    host.addButton = add
+    host.CardAt = CardAt
 
     return host
 end
@@ -666,12 +700,22 @@ end
 local function BuildRivals(grid)
     local L = ns.L
 
-    grid:Section(L["Who is managing your cooldowns"], "rivals", true)
-
     local rivals = ns.Cooldowns and ns.Cooldowns.Rivals
     local others = rivals and rivals.Others() or {}
 
+    -- THE SECTION ONLY EXISTS WHEN THERE IS A CONFLICT.
+    --
+    -- It used to open with a heading and the sentence "Nothing else on this
+    -- account is managing them", which is a paragraph that costs a reader
+    -- exactly as much as a real one and tells them about a problem they do
+    -- not have. Owner, with a picture of it: "das kann raus."
+    --
+    -- Built at page-build time, and that is a real limit rather than an
+    -- oversight: this page is built once, so an addon enabled later in the
+    -- session is noticed on the next reload. Enabling one already requires a
+    -- reload, so there is no moment where the two disagree.
     if #others > 0 then
+        grid:Section(L["Who is managing your cooldowns"], "rivals", true)
         local names = {}
         for index, entry in ipairs(others) do names[index] = entry.label end
         grid:Note(L("Also managing cooldowns on this account: %s.",
@@ -760,8 +804,6 @@ local function BuildRivals(grid)
                 .. "in the game's own addon list, and putting it back there "
                 .. "puts everything back with it."])
         end
-    else
-        grid:Note(L["Nothing else on this account is managing them."])
     end
 
     -- HOW IT DECIDED USED TO BE WRITTEN OUT HERE, and it is gone. Owner,
@@ -795,11 +837,6 @@ local function BuildRivals(grid)
         .. "reminders, the death log and the spell pickers all read it, and "
         .. "they go on doing so whether this module is on or off."])
 
-    grid:Buttons({
-        { text = L["What it holds"], onClick = function()
-            ns.CDM:Dump()
-        end },
-    })
 end
 
 function Page:BuildPage(page, width)
@@ -849,10 +886,6 @@ function Page:BuildPage(page, width)
         { tooltipNotes = true, single = true })
     grid.page = page
     grid.cards = column
-    -- Named so the desk guard that asks "does this page offer a way to delete
-    -- a bar" finds one. A guard that cannot find the control reports it
-    -- absent, and absent prints the same green as passing.
-    grid.deleteButton = column.deleteButton
 
     ---------------------------------------------------------------------
     -- FIVE SHORT PAGES INSTEAD OF ONE OF TWENTY-THREE HEADINGS.
@@ -879,6 +912,21 @@ function Page:BuildPage(page, width)
     grid:Tab(L["Blizzard"])
     BuildRivals(grid)
 
+    -- WITH NO BARS THERE IS NOTHING TO SET.
+    --
+    -- Every control on the right reads the SELECTED bar, and with none there
+    -- is nothing to read - so the sliders showed empty boxes and the menus
+    -- showed empty buttons, and a menu only filled in once you had picked
+    -- something in it. That reads as a broken page rather than as an empty
+    -- one. So the settings stand down and say what to do instead, which is
+    -- the + at the top of the column.
+    local none = UI.Hint(right, L["Nothing to set up yet. Press + at the top "
+        .. "of the list to make your first bar."])
+    none:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -(34 + UI.PAD))
+    none:SetPoint("TOPRIGHT", right, "TOPRIGHT", 0, -(34 + UI.PAD))
+    none:SetJustifyV("TOP")
+    none:Hide()
+
     strip = UI.TabStrip(right, grid.tabs, function(name)
         grid:ShowTab(name)
         strip:Select(name)
@@ -901,9 +949,25 @@ function Page:BuildPage(page, width)
     grid:Layout()
     column.Refresh()
     if scroll.Update then scroll.Update() end
+
+    -- AFTER the first refresh, never before: the delete button belongs to a
+    -- card and there is no card until the column has drawn one. Named so the
+    -- desk guard that asks "does this page offer a way to delete a bar" finds
+    -- one - a guard that cannot find the control reports it absent, and
+    -- absent prints the same green as passing.
+    grid.deleteButton = column.deleteButton
+    grid.addButton = column.addButton
     page.Refresh = function()
         column.Refresh()
         if scroll.Update then scroll.Update() end
+
+        local has = Page.Current() ~= nil
+        strip:SetShown(has)
+        settings:SetShown(has)
+        none:SetShown(not has)
+        -- REFRESHED EVEN WHILE HIDDEN. A hidden grid still has to be right
+        -- the moment it is shown again, and skipping it here is how a page
+        -- comes back wearing the last bar's values.
         grid:Refresh()
     end
 

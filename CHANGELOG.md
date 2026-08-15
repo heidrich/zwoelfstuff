@@ -84,6 +84,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **One nil call left the whole settings half blank.** A card's kind badge is a
+  frame with a string inside it, and the card asked the *frame* for `SetText` —
+  which does not exist. It threw on the first card of every refresh, so no card
+  after it was drawn and none of the controls on the right ever painted their
+  value. They filled in one at a time, as you happened to set them.
+- **Adding a bar is a + at the top of the list**, where you look when there is
+  nothing yet and where it stays whether you have no bars or nine. Duplicating
+  and deleting moved onto the cards, because those are things you do to a
+  particular bar — a footer button that acts on "whichever one is selected" is
+  a button whose consequence you have to look somewhere else to know.
+- **With no bars, the settings stand down** and say to press + instead of
+  showing a page of controls that have nothing to read.
+- **"What it holds" is gone**, from the page header and from the Blizzard tab.
+  It printed the Cooldown Manager's whole catalogue into the chat — a
+  diagnostic sitting where a page's own verb belongs. `/zs cdm` still prints it.
+- **"Who is managing your cooldowns" only appears when somebody is.** A heading
+  plus "nothing is wrong" costs a reader exactly as much as a real one.
+
 - **Every bar is a live card again, one under the other.** The left half of the
   page is a column of previews — one per bar, each drawing *itself* rather than
   whichever one is selected — and the settings sit on the right under their

@@ -349,6 +349,10 @@ Register("enUS", {
         true,
     ["Shown in the preview above"] = true,
     -- The bar editor: the look, the text, the effects and the fill
+    ["Nothing to set up yet. Press + at the top of the list to make your first bar."] =
+        true,
+    ["Duplicate"] = true,
+    ["Really?"] = true,
     ["Click to change it"] = true,
     ["Drag it to sort the bar"] = true,
     ["Hold Shift while dropping to swap the two"] = true,
@@ -826,6 +830,10 @@ Register("deDE", {
         "Blizzards eigene Anzeigen zeigen weiter alles, was sie kennen. Das hier macht die, die du auf keine Leiste gelegt hast, unsichtbar statt sie zu verstecken - es sind Blizzards Frames, und einen davon zu verstecken ist genau das, was ihn für den Rest der Sitzung beschädigt.",
     ["Shown in the preview above"] = "Oben in der Vorschau",
     -- Der Leisten-Editor: Aussehen, Text, Effekte und Füllung
+    ["Nothing to set up yet. Press + at the top of the list to make your first bar."] =
+        "Noch nichts einzustellen. Druck oben in der Liste auf +, um deine erste Leiste anzulegen.",
+    ["Duplicate"] = "Duplizieren",
+    ["Really?"] = "Wirklich?",
     ["Click to change it"] = "Klicken zum Wechseln",
     ["Drag it to sort the bar"] = "Ziehen, um die Leiste zu sortieren",
     ["Hold Shift while dropping to swap the two"] =

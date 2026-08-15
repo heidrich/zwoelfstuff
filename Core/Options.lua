@@ -778,10 +778,10 @@ local PAGES = {
     { key = "cooldowns", title = "Cooldowns", glyph = "grid", module = "cooldowns",
       cooldowns = true,
       subtitle = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
-      actions = {
-          { text = "What it holds",
-            onClick = function() ns.CDM:Dump() end },
-      },
+      -- NO HEADER ACTION. "What it holds" printed the Cooldown Manager's whole
+      -- catalogue into the chat - a diagnostic, sitting where a page's own
+      -- verb belongs. Owner, with a picture of it: "das kann raus, auch der
+      -- button. verstehen die leute nicht." `/zs cdm` still prints it.
       build = function(page, width) return ns.OptionsCooldowns:BuildPage(page, width) end },
 
     -- NO THIRD COLUMN. Everything on it is a yes-or-no about something that
