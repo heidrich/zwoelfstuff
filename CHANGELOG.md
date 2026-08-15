@@ -4,6 +4,89 @@ All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.83.0] - 2026-08-15
+
+### Removed
+
+- **The cooldown bars are gone.** In the owner's words: *"CDM is gone. I will
+  put my focus on tank and group play features, and there are a lot of other
+  very good CDM addons that do the job better."* Out with them went the
+  renderer, the bar editor and its options page, the bar movers in Edit Mode
+  and everything that adopted Blizzard's Cooldown Manager frames — around
+  8 800 lines, a sixth of Core.
+- **What stayed, and why.** `CDM.lua` still reads the Cooldown Manager, and
+  four features depend on it: the reminders ask which frame is showing a
+  spell and whether it is active, the co-tank panel and the death log read
+  its catalogue, and the spell pickers list what it knows. That half of the
+  file is untouched. **Edit Mode stays too** — it still places the co-tank
+  panel, the taunt bar, requests, answers, the raid bar and the reminders;
+  only the bar-building half was removed.
+- **Your saved bars are not deleted.** Nothing in this release writes to
+  `bars` in your saved variables. Roll back and they are where you left them.
+
+### Changed
+
+- **"Active for" moved to the death log page.** It was on the cooldowns
+  page — say how long a trinket, potion or racial lasts, because the game
+  does not report it — and the death replay still reads it first for every
+  press it draws. The number itself is untouched in your account file. The
+  list now offers the defensives you picked, plus anything that already
+  carries a number.
+- **Defensives, consumables, cooldown requests and reminders are per
+  specialisation.** What you *pick* follows the spec; where a panel *sits*,
+  and its rows, columns and channels, stay on the profile. A window that
+  jumped on a spec change would be a worse bug than the one this fixes. A
+  spec the client has not named yet writes nothing at all, so an unanswered
+  question can never overwrite a real list.
+
+### Fixed
+
+- **Reminders could not fire at all.** The index that answers "which frame is
+  showing this spell" was rebuilt once per render pass by the bars. The bars
+  went and its only writer went with them; nothing threw, and the table
+  simply stayed empty for the whole session — so every reminder reported
+  "Blizzard is not showing this spell", blaming Blizzard's settings for a
+  hole of ours. It now rebuilds when the frame pools churn and on the first
+  read. No test could have caught it: an empty index and a spell that really
+  is untracked are the same answer.
+- **`/zs test` was eating your consumables.** The self test set the picked
+  list to `nil` to establish a state and left it that way, in a file whose
+  own header promises it never touches your settings. Reported as "it does
+  not save" — and from the outside that is exactly what it looked like.
+- **The changelog page in the options window was blank.** One list, two
+  readers, and the older one still called `SetText` on an entry that had
+  become a table.
+- **Edit Mode lost its instruction line**, and snapping silently snapped to
+  nothing: a local read before its own declaration is a different, empty
+  variable.
+
+## [4.82.0] - 2026-08-14
+
+### Added
+
+- **The group's deaths, as a log.** Who fell, when, and what ended them — for
+  everybody, not just you. A second icon with three skulls opens it, and the
+  last pulls are down the right; click one to read it.
+- **Click a death and read their last ten seconds** — the same table your own
+  death window shows, for whoever the row names. A red mark down the left
+  edge of a hit means the game itself calls that damage avoidable.
+- **Tonight, across pulls.** What keeps killing the group, counted in PULLS
+  rather than moments, and who keeps falling. **Share in chat** sends
+  whichever page you are reading.
+- **Power Infusion can be requested.** It asks ANY priest — all three
+  specialisations have it, so the shadow priest is as good an answer as the
+  healer.
+- **A What's New screen**, shown once per update.
+
+### Fixed
+
+- **Cooldown requests reached nobody across a realm border.** The macro
+  carried the short name; over a realm boundary the game needs
+  `Name-Realm` and refused the send with no error. `/zs chat` now says what
+  your client allows.
+- **A recorded "no" was filed as a clean bill** in the death analysis.
+  Nothing on screen looked wrong.
+
 ## [4.81.0] - 2026-08-13
 
 ### Fixed
