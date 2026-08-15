@@ -44,6 +44,17 @@ local NEW = {
     barHeight = 24,
     staggerOffset = 50,
     iconPlacement = "left",
+    -- THE TEXTURE A NEW BAR WEARS. Owner, 2026-08-15: "bitte die Texture ZS
+    -- Flat bei allen bars immer voreinstellen."
+    --
+    -- Three keys, not one: the backdrop is what a bar-shaped place is drawn
+    -- on, `fillTexture` empty means "wear whatever the backdrop wears" (see
+    -- Fill.Paint), and the border is left as it was - "None" is a real
+    -- choice there and shipping a border nobody asked for is louder than
+    -- shipping none.
+    backdropTexture = "ZS Flat",
+    fillTexture = "ZS Flat",
+
     point = "CENTER",
     relPoint = "CENTER",
     x = 0,

@@ -84,6 +84,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The bar width slider did not move the preview.** The card measured a bar's
+  *width* against the space it had for *height*: a 250-wide bar in three lines
+  came out at 60 and then stayed at 60 however far the slider was dragged. Each
+  side is now measured against its own room, at one shared scale so the shape
+  stays the bar's — and for an ordinary bar that scale is 1, so what you set is
+  what you see.
+- **A new bar wears ZS Flat**, for its backdrop and its fill.
+
 - **One nil call left the whole settings half blank.** A card's kind badge is a
   frame with a string inside it, and the card asked the *frame* for `SetText` —
   which does not exist. It threw on the first card of every refresh, so no card

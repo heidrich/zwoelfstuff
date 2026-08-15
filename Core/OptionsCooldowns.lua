@@ -33,8 +33,6 @@ ns.OptionsCooldowns = Page
 -- The lesson behind that sentence cost a release on the raid bar: a copied
 -- `SLOT = 40` drew every button half again too big over a bar that is 26.
 -- A preview that does not agree with the screen is worse than none.
-local MIN_SLOT = 20
-
 -- How tall one card's preview may grow before it is scaled down. A bar with
 -- twenty places would otherwise be a card you scroll past rather than a
 -- picture you can compare with the one under it.
@@ -119,15 +117,35 @@ local function CardGeometry(bar)
     local rows = math.max(1, math.ceil(count / columns))
     local gap = math.max(0, opts.spacing or 4)
 
-    local wanted = opts.width or opts.size or 40
-    local size = UI.PreviewSize(wanted, rows, columns,
-        CARD_W - CARD_PAD * 2, PREVIEW_MAX_H, gap, MIN_SLOT)
+    -- ONE SCALE FOR BOTH SIDES, AND EACH SIDE MEASURED AGAINST ITS OWN ROOM.
+    --
+    -- UI.PreviewSize takes ONE wanted size and divides both the width and the
+    -- height budget by it - which is right for a square and wrong for a bar.
+    -- A 250 by 24 bar in three lines was measured as 250 against the 190
+    -- pixels of height, came out at 60, and then STAYED at 60 however far the
+    -- width slider was dragged. Owner: "die bar breite veraendert sich nicht
+    -- live, kann die bar nicht im addon stylen wenn ich nicht sehe was da
+    -- passiert." He is right, and it was not the slider.
+    --
+    -- One scale, never two: the picture has to keep the bar's shape, so a
+    -- preview that fitted the width and the height separately would show a
+    -- rectangle nobody configured.
+    local wantedW = opts.width or opts.size or 40
+    local wantedH = opts.size or 40
 
-    -- The height follows the width by the SAME ratio, so a 250x24 bar previews
-    -- as a 250x24 bar and not as a 250 square.
-    local ratio = (wanted > 0) and (size / wanted) or 1
-    local height = math.max(MIN_SLOT, math.floor((opts.size or 40) * ratio))
-    return size, gap, height
+    local roomW = (CARD_W - CARD_PAD * 2) - (columns - 1) * gap
+    local roomH = PREVIEW_MAX_H - (rows - 1) * gap
+
+    -- NEVER ENLARGED. A bar drawn bigger than it is would be the same lie as
+    -- one drawn smaller, and the size he types is the size on screen.
+    local scale = 1
+    if wantedW > 0 then scale = math.min(scale, (roomW / columns) / wantedW) end
+    if wantedH > 0 then scale = math.min(scale, (roomH / rows) / wantedH) end
+    scale = math.max(0, scale)
+
+    return math.max(1, math.floor(wantedW * scale)),
+           math.floor(gap * scale + 0.5),
+           math.max(1, math.floor(wantedH * scale))
 end
 
 -- THE LATTICE THIS CARD DRAWS, in the renderer's own geometry at the card's
