@@ -78,17 +78,57 @@ function Store.Capacity(bar)
     --
     -- `rows` stays READ, never written: Store translates, it does not
     -- migrate. A bar that has never met this page answers exactly as before.
+    -- AN EXPLICIT COUNT IS THE HARD TRUTH, AND THAT IS THE ROW LIMIT.
+    --
+    -- Owner, 2026-08-15, with a picture of a bar he could not get down to one
+    -- line: "ich muss auf eine reihe begrenzen koennen." He could not, and
+    -- the reason was here: this used to answer with whichever was LARGEST of
+    -- the declared number and the highest index anything was stored at. Set
+    -- Rows to 1 on a bar carrying twelve picks and the bar went on drawing
+    -- twelve, because the picks outvoted the setting. A limit that a stored
+    -- value can overrule is not a limit.
+    --
+    -- NOTHING IS DELETED BY THIS. The picks stay exactly where they are and
+    -- come back the moment there is room; Store.Parked below counts them and
+    -- the page says the number out loud. That was the whole worry behind the
+    -- generous answer - "seven of his picks are gone, with nothing said" -
+    -- and saying it is the honest half of the fix rather than inflating the
+    -- bar to hide it.
+    local declared = tonumber(bar.cellCount)
+    if declared then return math.max(0, math.floor(declared)) end
+
+    -- NO EXPLICIT COUNT, WHICH IS EVERY BAR THAT HAS NEVER MET THIS PAGE.
+    -- Those keep the generous answer to the letter, so nothing on his screen
+    -- moves until he touches a control - and the first touch of Columns, Rows
+    -- or Places writes the number and settles it for good.
     local rows = tonumber(bar.rows) or 1
     local columns = tonumber(bar.columns) or 1
-    local declared = tonumber(bar.cellCount)
-    if not declared then declared = rows * columns end
-    declared = math.max(0, math.floor(declared))
 
-    local most = math.max(declared, Highest(bar.cells), Highest(bar.cellOpts))
+    local most = math.max(rows * columns, Highest(bar.cells),
+        Highest(bar.cellOpts))
     for _, list in pairs(type(bar.cellsBySpec) == "table" and bar.cellsBySpec or {}) do
         most = math.max(most, Highest(list))
     end
     return most
+end
+
+-- HOW MANY PICKS SIT PAST THE LAST PLACE.
+--
+-- The other half of the limit above: a bar narrowed below what it holds keeps
+-- every spell, and a page that did not say so would look exactly like a page
+-- that had thrown them away. Counted off the spec's own list, which is the
+-- one the renderer draws from.
+function Store.Parked(bar)
+    if type(bar) ~= "table" then return 0 end
+
+    local capacity = Store.Capacity(bar)
+    local count = 0
+    for index, spellID in pairs(Store.Cells(bar) or {}) do
+        if type(index) == "number" and index > capacity and spellID ~= nil then
+            count = count + 1
+        end
+    end
+    return count
 end
 
 -- THE PICKS FOR THE SPEC BEING PLAYED.

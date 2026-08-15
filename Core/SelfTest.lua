@@ -7689,13 +7689,27 @@ local function TestCooldownStore()
     Check("And it may be smaller than one full line",
         S.Capacity({ rows = 1, columns = 6, cellCount = 4 }) == 4)
 
-    -- SAYING SEVEN STILL DOES NOT THROW THE EIGHTH PICK AWAY, which is the
-    -- promise the page makes in words: "narrowing a bar never throws a pick
-    -- away". Capacity is the largest of what is declared and what is
-    -- referenced, and the new number goes in at the declared end.
-    Check("A pick past the count it declares still counts",
+    -- A DECLARED COUNT IS A LIMIT, AND THIS REVERSES WHAT THIS FILE ASSERTED.
+    --
+    -- It used to check that a pick past the declared end RAISED the count -
+    -- Capacity answered with the largest of what was declared and what was
+    -- referenced. Owner, 2026-08-15, with a photograph of a bar he could not
+    -- get down to one line: "ich muss auf eine reihe begrenzen koennen." He
+    -- could not, and this was why: a bar carrying twelve picks went on drawing
+    -- twelve however low Rows was set, because the picks outvoted the setting.
+    -- A limit a stored value can overrule is not a limit.
+    Check("A declared count is a limit and not a suggestion",
         S.Capacity({ columns = 6, cellCount = 3,
-            cells = { [9] = 1044 } }) == 9)
+            cells = { [9] = 1044 } }) == 3)
+
+    -- AND THE PICK IS STILL THERE, which is the half that keeps the old
+    -- promise true. Nothing is deleted; it is counted and the page says the
+    -- number out loud, which is what the generous answer was trying to do by
+    -- inflating the bar instead.
+    Check("The pick past the end is kept and counted",
+        S.Parked({ columns = 6, cellCount = 3, cells = { [9] = 1044 } }) == 1)
+    Check("A bar with room for everything parks nothing",
+        S.Parked({ columns = 6, cellCount = 9, cells = { [9] = 1044 } }) == 0)
 
     -- A bar written before this key existed answers exactly as it did, which
     -- is the whole of "Store translates, it does not migrate".

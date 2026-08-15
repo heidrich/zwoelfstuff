@@ -98,10 +98,27 @@ end
 -- cannot show is named on the page rather than faked: the sweep and the
 -- numbers need Blizzard's own frame, and the counts are secret values.
 ---------------------------------------------------------------------------
-local CARD_W = 330
+-- HOW WIDE THE CARD COLUMN IS, AND WHY IT IS NOT WIDER.
+--
+-- Owner, 2026-08-15: "du kannst auch den mittleren bereich breiter machen,
+-- wir haben ja platz." The page is handed 750 and every pixel of it is spoken
+-- for, so the middle only widens if this narrows - there is no slack between
+-- them to take.
+--
+-- 270 rather than 330 was measured against what the cards actually have to
+-- hold: the preview is SCALED to the card (see CardGeometry), so a narrower
+-- column costs a fraction of a picture, while the settings beside it carry
+-- media pickers 190 wide that had 384 to sit in. The settings get 444.
+--
+-- What did NOT fit at 270 is the card's header: a title, a kind badge, two
+-- word buttons and a switch on one line needs about 340. So the two buttons
+-- moved to a footer under the preview - which is where they belong anyway,
+-- next to the bar they act on rather than crowded against the switch.
+local CARD_W = 270
 local CARD_GAP = 22
 local CARD_HEAD = 26
 local CARD_PAD = 10
+local CARD_FOOT = 20
 local STAGE_MIN = 46
 
 -- HOW BIG ONE PREVIEW CELL IS DRAWN, read off the bar and scaled to the card.
@@ -325,7 +342,6 @@ local function BuildCards(host)
             end
             Refresh()
         end, C.danger)
-        card.remove:SetPoint("TOPRIGHT", card.toggle, "TOPLEFT", -6, -1)
 
         card.copy = UI.GhostButton(card, ns.L["Duplicate"], function()
             local bars = Bars()
@@ -333,7 +349,6 @@ local function BuildCards(host)
             if made then Page.barID = made.id end
             Refresh()
         end)
-        card.copy:SetPoint("TOPRIGHT", card.remove, "TOPLEFT", -4, 0)
 
         -- The well the preview sits in: a piece of SCREEN set into the card,
         -- which is what makes the picture read as the bar rather than as more
@@ -403,6 +418,13 @@ local function BuildCards(host)
         })
         card.grid:SetPoint("TOPLEFT", card.well, "TOPLEFT", 6, -6)
 
+        -- THE FOOTER, under the preview rather than beside the switch. Both
+        -- buttons are made above with the rest of the header so their
+        -- handlers read in one place; only where they SIT is decided here,
+        -- because until the well exists there is nothing to hang them under.
+        card.remove:SetPoint("TOPRIGHT", card.well, "BOTTOMRIGHT", 0, -4)
+        card.copy:SetPoint("RIGHT", card.remove, "LEFT", -10, 0)
+
         card:SetScript("OnClick", function()
             if not card.dkBar then return end
             Page.barID = card.dkBar.id
@@ -462,7 +484,8 @@ local function BuildCards(host)
 
             local height = card.grid.Refresh() or 0
             card.well:SetHeight(math.max(STAGE_MIN, height + 12))
-            card:SetHeight(CARD_HEAD + 4 + card.well:GetHeight() + CARD_PAD)
+            card:SetHeight(CARD_HEAD + 4 + card.well:GetHeight()
+                + 4 + CARD_FOOT + CARD_PAD)
 
             card:ClearAllPoints()
             card:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -y)
@@ -531,9 +554,10 @@ local function Number(key, fallback)
 end
 
 -- HOW MANY PLACES THE SELECTED BAR HAS, asked of the store rather than
--- multiplied out here. Capacity also counts a pick sitting past the last
--- place, which is what keeps "narrowing a bar never throws a pick away" true
--- on this page as well as in the renderer.
+-- multiplied out here. A bar that has said how many it has is believed to the
+-- letter - that is what makes Rows a limit - and a pick sitting past the last
+-- one is kept rather than counted: Store.Parked is what says how many, and
+-- the note under the sliders is where it is said.
 local function Places()
     local store, bar = Store(), Bar()
     if not (store and bar) then return 1 end
@@ -562,10 +586,14 @@ local function BuildArrangement(grid)
     -- four of them shoulder to shoulder: "bars muss gestabelt werden, und das
     -- sieht nicht gut aus."
     --
-    -- A real write to Across rather than a rule that overrides it, so the
+    -- A real write to Columns rather than a rule that overrides it, so the
     -- control still says what the bar is doing and dragging it back to four
-    -- across is allowed. A bar 200 wide beside another one is not a layout
+    -- columns is allowed. A bar 200 wide beside another one is not a layout
     -- anybody meant to ask for; it is the default nobody changed.
+    --
+    -- The PLACES are left alone, so a bar of five icons becomes five stacked
+    -- bars rather than one - the count is what he set and only the width of a
+    -- line is being decided here.
     UI.Dropdown(grid:Row(L["Cells are"]), {
         { value = "icon", text = L["Icons"] },
         { value = "bar",  text = L["Bars"] },
@@ -578,42 +606,94 @@ local function BuildArrangement(grid)
             Set("kind", value)
        end)
 
-    -- HOW MANY PLACES, AND HOW MANY OF THEM PER LINE. Two numbers, not a
-    -- rectangle. See Store.Capacity: `cellCount` is the truth and Across is
-    -- the view of it, exactly as Model.lua's own header puts it - "the list
-    -- is the truth and the columns are the view".
+    -----------------------------------------------------------------------
+    -- COLUMNS AND ROWS, IN THOSE WORDS
+    --
+    -- Owner, 2026-08-15, with a photograph of the three sliders: "wir
+    -- brauchen anzahl an spalten und reihen, nicht across. ich muss auf eine
+    -- reihe begrenzen koennen. das across versteht keiner" - and then, in
+    -- case the first was read as a layout note: "wir brauchen 2 klare
+    -- einstellungen, spalten und reihen."
+    --
+    -- He is right twice over. "Across" and "Down" are directions, and a
+    -- direction is not a count - somebody reading them cannot tell whether
+    -- Down is a number of lines or which way the bar grows, which is a
+    -- question the two rows further down actually answer. Columns and Rows
+    -- have meant one thing each since the first spreadsheet.
+    --
+    -- EITHER OF THEM WRITES THE TOTAL: cellCount = columns x rows. That is
+    -- what makes "one row" a thing you can ask for rather than a thing you
+    -- arrive at by dividing. Places is still there underneath as the truth,
+    -- because the pair can only ever describe a RECTANGLE and one of his own
+    -- bars is not one - see Model.lua's header, "the list is the truth and
+    -- the columns are the view".
+    -----------------------------------------------------------------------
+    grid:Section(L["Rows and columns"], "cd-grid", true)
+
+    -- BOTH NOTES ON THE PAGE, not in the hover. Grid:Section clears the row a
+    -- note would otherwise attach itself to, so a note written here is laid
+    -- out rather than hung on the control above - which is the only way a
+    -- limit is readable before you go looking for the control it limits.
+    grid:Note(L["Columns and Rows lay the places out, and either one sets how "
+        .. "many places that comes to. Places is the total underneath and may "
+        .. "be fewer than the rectangle holds - seven places in two rows of "
+        .. "four leaves the last one empty."])
+
+    local parked = grid:Note("")
+
+    -- HOW MANY LINES THE BAR COMES TO RIGHT NOW. Read rather than stored: two
+    -- controls over one number cannot disagree, and a stored `rows` beside a
+    -- stored `cellCount` is the pair that drifts.
+    local function Lines()
+        local across = math.max(1, Number("columns", 1))
+        return math.max(1, math.ceil(Places() / across))
+    end
+
+    UI.Slider(grid:Row(L["Columns"]), {
+        min = 1, max = 20, step = 1,
+        get = function() return Number("columns", 1) end,
+        set = function(value)
+            local bar = Bar()
+            if not bar then return end
+            -- COUNTED BEFORE THE WRITE. Lines() divides by the column count,
+            -- so reading it after the new one is in place answers for the
+            -- layout being replaced rather than the one being changed - and
+            -- widening a bar would quietly drop a row every time.
+            local lines = Lines()
+            bar.columns = value
+            Set("cellCount", value * lines)
+        end,
+    })
+
+    UI.Slider(grid:Row(L["Rows"]), {
+        min = 1, max = 20, step = 1,
+        get = Lines,
+        set = function(value)
+            Set("cellCount", math.max(1, Number("columns", 1)) * value)
+        end,
+    })
+
     UI.Slider(grid:Row(L["Places"]), {
         min = 1, max = 40, step = 1,
         get = function() return Places() end,
         set = function(value) Set("cellCount", value) end,
     })
-    UI.Slider(grid:Row(L["Across"]), {
-        min = 1, max = 20, step = 1,
-        get = function() return Number("columns", 1) end,
-        set = function(value) Set("columns", value) end,
-    })
 
-    -- DOWN IS A VIEW OF PLACES, and writing it writes places.
-    --
-    -- It is not a third number: lines are what you get when you wrap Places
-    -- every Across, so reading it is that division and setting it to three
-    -- is another way of saying "three lines' worth of places". Two controls
-    -- over one stored number and no way for them to disagree - which is the
-    -- whole reason the pair could not describe seven places before.
-    UI.Slider(grid:Row(L["Down"]), {
-        min = 1, max = 20, step = 1,
-        get = function()
-            local across = math.max(1, Number("columns", 1))
-            return math.max(1, math.ceil(Places() / across))
-        end,
-        set = function(value)
-            Set("cellCount", math.max(1, Number("columns", 1)) * value)
-        end,
-    })
-    grid:Note(L["Places is how many the bar has and across is how many of "
-        .. "them sit on a line; down is what that comes to. A spell already "
-        .. "sitting past the last place keeps its cell - narrowing a bar "
-        .. "never throws a pick away."])
+    -- SAID ONLY WHILE IT IS TRUE, and it is the honest half of the hard limit
+    -- in Store.Capacity: narrowing a bar below what it holds keeps every
+    -- spell, and a page that stayed quiet about it would look exactly like
+    -- one that had thrown them away.
+    grid.widgets[#grid.widgets + 1] = { Refresh = function()
+        local store, bar = Store(), Bar()
+        local left = (store and bar and store.Parked) and store.Parked(bar) or 0
+        parked.dkSkip = left < 1
+        parked:SetShown(left > 0)
+        if left > 0 then
+            parked:SetText(L("%d spells sit past the last place and are not "
+                .. "drawn. Nothing was thrown away - make room and they come "
+                .. "back where they were.", left))
+        end
+    end }
 
     UI.Dropdown(grid:Row(L["Pattern"]), ns.CD_LAYOUTS,
         function() return ns.Cooldowns.Store.Lattice(Bar()).layout or "grid" end,
@@ -712,151 +792,6 @@ local function BuildSize(grid)
     })
 end
 
----------------------------------------------------------------------------
--- Who else is doing this
----------------------------------------------------------------------------
-local function BuildRivals(grid)
-    local L = ns.L
-
-    local rivals = ns.Cooldowns and ns.Cooldowns.Rivals
-    local others = rivals and rivals.Others() or {}
-
-    -- THE SECTION ONLY EXISTS WHEN THERE IS A CONFLICT.
-    --
-    -- It used to open with a heading and the sentence "Nothing else on this
-    -- account is managing them", which is a paragraph that costs a reader
-    -- exactly as much as a real one and tells them about a problem they do
-    -- not have. Owner, with a picture of it: "das kann raus."
-    --
-    -- Built at page-build time, and that is a real limit rather than an
-    -- oversight: this page is built once, so an addon enabled later in the
-    -- session is noticed on the next reload. Enabling one already requires a
-    -- reload, so there is no moment where the two disagree.
-    if #others > 0 then
-        grid:Section(L["Who is managing your cooldowns"], "rivals", true)
-        local names = {}
-        for index, entry in ipairs(others) do names[index] = entry.label end
-        grid:Note(L("Also managing cooldowns on this account: %s.",
-            table.concat(names, ", ")))
-        grid:Note(L["Blizzard owns these frames and only one addon can hold "
-            .. "them. Whichever loads second finds them already taken, and "
-            .. "what you get on screen depends on the order they happened to "
-            .. "load in - which is why this is a choice rather than something "
-            .. "either addon can work around. Leave Cooldowns switched off to "
-            .. "keep theirs, or switch theirs off and switch this on."])
-
-        -----------------------------------------------------------------
-        -- ONE BUTTON PER ADDON, AND IT ASKS TWICE
-        --
-        -- Owner, 2026-08-15: "einen button einbauen, das man andere cdm
-        -- abstellt, das kann elle ui auch."
-        --
-        -- Two steps, disarming itself after four seconds - the same pattern
-        -- as deleting a profile, which is the other place in this addon
-        -- where one click does something you cannot take back in the same
-        -- second. It reloads the interface, and a reload nobody expected is
-        -- indistinguishable from a crash.
-        --
-        -- One button per addon rather than one for all of them. Two names on
-        -- one button is a press whose consequences the label cannot state.
-        -----------------------------------------------------------------
-        -- KEPT ON THE PAGE, so the desk can prove the button was actually
-        -- made. Without a handle the only evidence that this branch works is
-        -- that building it did not throw - and a `grid:Buttons` that quietly
-        -- returned nothing would pass that, then do nothing on click for
-        -- everybody who has a conflict, which is the only person who ever
-        -- sees this branch at all.
-        grid.page.rivalButtons = {}
-
-        for _, entry in ipairs(others) do
-            local dependents = ns.Cooldowns.Rivals.Dependents(entry.folder)
-            local armed, button = false, nil
-            local idle = L("Switch off %s", entry.label)
-
-            local _, made = grid:Buttons({
-                {
-                    text = idle,
-                    onClick = function()
-                        local handle = button
-                        if not handle then return end
-                        if not armed then
-                            armed = true
-                            handle:SetText(L["Do it and reload?"])
-                            -- Disarms itself. A button left sitting on
-                            -- "really?" is one somebody clicks on their way
-                            -- past a week later.
-                            C_Timer.After(4, function()
-                                armed = false
-                                if handle and handle.SetText then
-                                    handle:SetText(idle)
-                                end
-                            end)
-                            return
-                        end
-
-                        armed = false
-                        handle:SetText(idle)
-
-                        local ok, why = ns.Cooldowns.Rivals.Disable(entry.folder)
-                        if not ok then
-                            ns.Print("|cffff4040Not switched off|r - "
-                                .. (why or "?") .. ".")
-                            return
-                        end
-                        ReloadUI()
-                    end,
-                },
-            })
-            button = made
-            grid.page.rivalButtons[#grid.page.rivalButtons + 1] = made
-
-            if #dependents > 0 then
-                -- THE ONE THING THEIR POWER BUTTON DOES NOT SAY. Disabling
-                -- does not cascade: an addon that lists this one as a
-                -- dependency just stops loading, silently.
-                grid:Note(L("Careful: %s would stop loading as well, because "
-                    .. "it needs that addon.", table.concat(dependents, ", ")))
-            end
-            grid:Note(L["Switches that addon off, switches Cooldowns on here, "
-                .. "and reloads. Nothing is deleted - it is the same tick as "
-                .. "in the game's own addon list, and putting it back there "
-                .. "puts everything back with it."])
-        end
-    end
-
-    -- HOW IT DECIDED USED TO BE WRITTEN OUT HERE, and it is gone. Owner,
-    -- 2026-08-15, with a picture of this section: "der text kann raus."
-    --
-    -- He is right, and the reason is worth keeping: it explained the METHOD
-    -- ("read from what each addon says about itself in its own description")
-    -- to somebody who has just been told there is nothing to worry about.
-    -- A paragraph about how a check works belongs next to a check that found
-    -- something; over a clean answer it is just noise on the way past.
-
-    ---------------------------------------------------------------------
-    -- What Blizzard's own Cooldown Manager knows
-    ---------------------------------------------------------------------
-    grid:Section(L["Blizzard's Cooldown Manager"], "blizzard", true)
-
-    -- WHAT WE DO WITH THE ONES YOU DID NOT PLACE. Blizzard goes on drawing
-    -- every cooldown it knows in its own viewers, so without this the bar you
-    -- arranged sits next to a second, unarranged copy of the same icons.
-    UI.Toggle(grid:Row(ns.L["Hide the ones you did not place"]),
-        function() return ns.db.takeOverCDM ~= false end,
-        function(on) ns.db.takeOverCDM = on and true or false; Refresh() end)
-    grid:Note(L["Blizzard's own viewers keep showing everything they know. "
-        .. "This makes the ones you have not put on a bar invisible rather "
-        .. "than hiding them - they are Blizzard's frames and hiding one is "
-        .. "the thing that breaks them for the rest of the session."])
-
-    grid:Note(L["Everything here comes from Blizzard's Cooldown Manager - it "
-        .. "already knows the spells, binds the auras and has the timing, "
-        .. "none of which an addon can do for itself on this patch. The "
-        .. "reminders, the death log and the spell pickers all read it, and "
-        .. "they go on doing so whether this module is on or off."])
-
-end
-
 function Page:BuildPage(page, width)
     local L = ns.L
 
@@ -926,9 +861,6 @@ function Page:BuildPage(page, width)
     ns.OptionsCooldownsBar.BuildText(grid, bar)
     ns.OptionsCooldownsBar.BuildEffects(grid, bar)
     ns.OptionsCooldownsBar.BuildFill(grid, bar)
-
-    grid:Tab(L["Blizzard"])
-    BuildRivals(grid)
 
     -- WITH NO BARS THERE IS NOTHING TO SET.
     --

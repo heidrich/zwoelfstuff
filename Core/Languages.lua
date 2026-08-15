@@ -366,10 +366,13 @@ Register("enUS", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         true,
     ["Places"] = true,
+    ["Rows and columns"] = true,
+    ["Columns and Rows lay the places out, and either one sets how many places that comes to. Places is the total underneath and may be fewer than the rectangle holds - seven places in two rows of four leaves the last one empty."] =
+        true,
+    ["%d spells sit past the last place and are not drawn. Nothing was thrown away - make room and they come back where they were."] =
+        true,
     ["Delete"] = true,
     ["No bars yet. Make one and the spells you pick land on it."] = true,
-    ["Places is how many the bar has and across is how many of them sit on a line; down is what that comes to. A spell already sitting past the last place keeps its cell - narrowing a bar never throws a pick away."] =
-        true,
     ["Text"] = true,
     ["Effects"] = true,
     ["Fill"] = true,
@@ -850,11 +853,14 @@ Register("deDE", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         "Der Ablauf und die Zahlen brauchen Blizzards eigenen Rahmen, deshalb stehen sie nicht hier - alles andere ist die Leiste, wie sie gerade eingestellt ist.",
     ["Places"] = "Plätze",
+    ["Rows and columns"] = "Zeilen und Spalten",
+    ["Columns and Rows lay the places out, and either one sets how many places that comes to. Places is the total underneath and may be fewer than the rectangle holds - seven places in two rows of four leaves the last one empty."] =
+        "Spalten und Zeilen legen die Plätze aus, und jede von beiden setzt, wie viele Plätze das ergibt. Plätze ist die Gesamtzahl darunter und darf kleiner sein, als das Rechteck fasst - sieben Plätze in zwei Zeilen zu vier lassen den letzten frei.",
+    ["%d spells sit past the last place and are not drawn. Nothing was thrown away - make room and they come back where they were."] =
+        "%d Zauber sitzen hinter dem letzten Platz und werden nicht gezeichnet. Nichts wurde weggeworfen - schaff Platz, und sie kommen dorthin zurück, wo sie waren.",
     ["Delete"] = "Löschen",
     ["No bars yet. Make one and the spells you pick land on it."] =
         "Noch keine Leisten. Leg eine an, dann landen die Zauber, die du aussuchst, darauf.",
-    ["Places is how many the bar has and across is how many of them sit on a line; down is what that comes to. A spell already sitting past the last place keeps its cell - narrowing a bar never throws a pick away."] =
-        "Plätze ist, wie viele die Leiste hat, und Nebeneinander, wie viele davon auf eine Zeile gehen; Untereinander ist, was dabei herauskommt. Ein Zauber, der schon hinter dem letzten Platz sitzt, behält seine Zelle - eine Leiste schmaler zu machen wirft nie eine Wahl weg.",
     ["Text"] = "Text",
     ["Effects"] = "Effekte",
     ["Fill"] = "Füllung",
