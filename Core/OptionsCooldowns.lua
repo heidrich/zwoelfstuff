@@ -45,8 +45,85 @@ function Page:BuildPage(page, width)
             .. "what you get on screen depends on the order they happened to "
             .. "load in - which is why this is a choice rather than something "
             .. "either addon can work around. Leave Cooldowns switched off to "
-            .. "keep theirs, or switch theirs off in the game's addon list and "
-            .. "switch this on."])
+            .. "keep theirs, or switch theirs off and switch this on."])
+
+        -----------------------------------------------------------------
+        -- ONE BUTTON PER ADDON, AND IT ASKS TWICE
+        --
+        -- Owner, 2026-08-15: "einen button einbauen, das man andere cdm
+        -- abstellt, das kann elle ui auch."
+        --
+        -- Two steps, disarming itself after four seconds - the same pattern
+        -- as deleting a profile, which is the other place in this addon
+        -- where one click does something you cannot take back in the same
+        -- second. It reloads the interface, and a reload nobody expected is
+        -- indistinguishable from a crash.
+        --
+        -- One button per addon rather than one for all of them. Two names on
+        -- one button is a press whose consequences the label cannot state.
+        -----------------------------------------------------------------
+        -- KEPT ON THE PAGE, so the desk can prove the button was actually
+        -- made. Without a handle the only evidence that this branch works is
+        -- that building it did not throw - and a `grid:Buttons` that quietly
+        -- returned nothing would pass that, then do nothing on click for
+        -- everybody who has a conflict, which is the only person who ever
+        -- sees this branch at all.
+        page.rivalButtons = {}
+
+        for _, entry in ipairs(others) do
+            local dependents = ns.Cooldowns.Rivals.Dependents(entry.folder)
+            local armed, button = false, nil
+            local idle = L("Switch off %s", entry.label)
+
+            local _, made = grid:Buttons({
+                {
+                    text = idle,
+                    onClick = function()
+                        local handle = button
+                        if not handle then return end
+                        if not armed then
+                            armed = true
+                            handle:SetText(L["Do it and reload?"])
+                            -- Disarms itself. A button left sitting on
+                            -- "really?" is one somebody clicks on their way
+                            -- past a week later.
+                            C_Timer.After(4, function()
+                                armed = false
+                                if handle and handle.SetText then
+                                    handle:SetText(idle)
+                                end
+                            end)
+                            return
+                        end
+
+                        armed = false
+                        handle:SetText(idle)
+
+                        local ok, why = ns.Cooldowns.Rivals.Disable(entry.folder)
+                        if not ok then
+                            ns.Print("|cffff4040Not switched off|r - "
+                                .. (why or "?") .. ".")
+                            return
+                        end
+                        ReloadUI()
+                    end,
+                },
+            })
+            button = made
+            page.rivalButtons[#page.rivalButtons + 1] = made
+
+            if #dependents > 0 then
+                -- THE ONE THING THEIR POWER BUTTON DOES NOT SAY. Disabling
+                -- does not cascade: an addon that lists this one as a
+                -- dependency just stops loading, silently.
+                grid:Note(L("Careful: %s would stop loading as well, because "
+                    .. "it needs that addon.", table.concat(dependents, ", ")))
+            end
+            grid:Note(L["Switches that addon off, switches Cooldowns on here, "
+                .. "and reloads. Nothing is deleted - it is the same tick as "
+                .. "in the game's own addon list, and putting it back there "
+                .. "puts everything back with it."])
+        end
     else
         grid:Note(L["Nothing else on this account is managing them."])
     end

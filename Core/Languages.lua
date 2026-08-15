@@ -297,8 +297,13 @@ Register("enUS", {
     ["%d other addons"] = true,
     ["Blizzard's Cooldown Manager"] = true,
     ["What it holds"] = true,
-    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off in the game's addon list and switch this on."] =
+    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off and switch this on."] =
         true,
+    ["Switch off %s"] = true,
+    ["Do it and reload?"] = true,
+    ["Switches that addon off, switches Cooldowns on here, and reloads. Nothing is deleted - it is the same tick as in the game's own addon list, and putting it back there puts everything back with it."] =
+        true,
+    ["Careful: %s would stop loading as well, because it needs that addon."] = true,
     ["Read from what each addon says about itself in its own description, so an addon that manages cooldowns without ever saying so is not found. Addons switched off for this character are not counted."] =
         true,
     ["Everything here comes from Blizzard's Cooldown Manager - it already knows the spells, binds the auras and has the timing, none of which an addon can do for itself on this patch. The reminders, the death log and the spell pickers all read it, and they go on doing so whether this module is on or off."] =
@@ -571,8 +576,14 @@ Register("deDE", {
     ["%d other addons"] = "%d andere Addons",
     ["Blizzard's Cooldown Manager"] = "Blizzards Cooldown-Manager",
     ["What it holds"] = "Was er hält",
-    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off in the game's addon list and switch this on."] =
-        "Diese Frames gehören Blizzard, und nur ein Addon kann sie halten. Wer als Zweiter lädt, findet sie besetzt vor, und was auf dem Bildschirm landet, hängt an der Reihenfolge, in der zufällig geladen wurde - deshalb ist das eine Entscheidung und nichts, was eines der beiden Addons umgehen könnte. Lass Cooldowns aus, um bei deren Lösung zu bleiben, oder schalte deren Addon in der Addon-Liste des Spiels ab und das hier an.",
+    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off and switch this on."] =
+        "Diese Frames gehören Blizzard, und nur ein Addon kann sie halten. Wer als Zweiter lädt, findet sie besetzt vor, und was auf dem Bildschirm landet, hängt an der Reihenfolge, in der zufällig geladen wurde - deshalb ist das eine Entscheidung und nichts, was eines der beiden Addons umgehen könnte. Lass Cooldowns aus, um bei deren Lösung zu bleiben, oder schalte deren Addon ab und das hier an.",
+    ["Switch off %s"] = "%s abschalten",
+    ["Do it and reload?"] = "Wirklich, mit Neuladen?",
+    ["Switches that addon off, switches Cooldowns on here, and reloads. Nothing is deleted - it is the same tick as in the game's own addon list, and putting it back there puts everything back with it."] =
+        "Schaltet dieses Addon ab, schaltet Cooldowns hier an und lädt neu. Es wird nichts gelöscht - es ist dasselbe Häkchen wie in der Addon-Liste des Spiels, und wer es dort zurücksetzt, bekommt alles wieder.",
+    ["Careful: %s would stop loading as well, because it needs that addon."] =
+        "Achtung: %s würde ebenfalls nicht mehr laden, weil es dieses Addon braucht.",
     ["Read from what each addon says about itself in its own description, so an addon that manages cooldowns without ever saying so is not found. Addons switched off for this character are not counted."] =
         "Gelesen aus dem, was jedes Addon in seiner eigenen Beschreibung über sich sagt - ein Addon, das Cooldowns verwaltet, ohne das je zu erwähnen, wird also nicht gefunden. Für diesen Charakter abgeschaltete Addons zählen nicht mit.",
     ["Everything here comes from Blizzard's Cooldown Manager - it already knows the spells, binds the auras and has the timing, none of which an addon can do for itself on this patch. The reminders, the death log and the spell pickers all read it, and they go on doing so whether this module is on or off."] =

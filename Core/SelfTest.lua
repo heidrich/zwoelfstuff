@@ -7409,6 +7409,25 @@ local function TestRivals()
     local clash, list = R.Any()
     Check("Any agrees with the list it hands back",
         clash == (#list > 0))
+
+    -- WHAT WOULD BREAK IF THAT ADDON WENT AWAY. Answering a list for a name
+    -- that is nothing is the case a caller hits first, and it must not raise
+    -- on the way to the button that reads it.
+    Check("Nothing depends on nothing", #R.Dependents(nil) == 0)
+    Check("And the answer is always a list", type(R.Dependents("")) == "table")
+
+    -- THE GUARD PATHS OF Disable, AND ONLY THOSE.
+    --
+    -- Nothing here may pass a real addon name. Disable switches an addon off
+    -- and writes to the profile, and a test that did that would be the third
+    -- time this suite reached into somebody's settings and left them changed.
+    -- The two refusals are what a caller has to be able to trust; the rest of
+    -- that function is proved on the desk, where the page is built with a
+    -- stand-in rival and the button is really pressed.
+    local okNil, whyNil = R.Disable(nil)
+    Check("Switching off nothing is refused, not attempted",
+        okNil == false and type(whyNil) == "string")
+    Check("And so is an empty name", (R.Disable("")) == false)
 end
 
 function Test:Run()

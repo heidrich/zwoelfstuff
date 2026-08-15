@@ -144,6 +144,48 @@ local function BuildFrame()
     warn.text:SetPoint("TOPLEFT", warn, "TOPLEFT", 12, -9)
     warn.text:SetWidth(WIDTH - PAD * 2 - 24)
     warn.text:SetJustifyH("LEFT")
+
+    -- THE WAY OUT OF THE CONFLICT, offered where the conflict is reported.
+    -- Owner, 2026-08-15: "einen button einbauen, das man andere cdm abstellt,
+    -- das kann elle ui auch."
+    --
+    -- Two steps and a four-second disarm, the same as deleting a profile -
+    -- this reloads the interface, and an unexpected reload reads as a crash.
+    --
+    -- ONLY WHEN THERE IS EXACTLY ONE. Two addons cannot be named on one
+    -- button, and a button whose label cannot state what the press does has
+    -- no business being the first thing somebody sees. With more than one the
+    -- strip sends them to the Cooldowns page, which has a button each.
+    warn.armed = false
+    warn.button = UI.Button(warn, "", nil, function()
+        local folder = warn.folder
+        if not folder then return end
+        if not warn.armed then
+            warn.armed = true
+            warn.button:SetText(ns.L["Do it and reload?"])
+            C_Timer.After(4, function()
+                warn.armed = false
+                if warn.button and warn.idle then warn.button:SetText(warn.idle) end
+            end)
+            return
+        end
+
+        warn.armed = false
+        local ok, why = ns.Cooldowns.Rivals.Disable(folder)
+        if not ok then
+            ns.Print("|cffff4040Not switched off|r - " .. (why or "?") .. ".")
+            warn.button:SetText(warn.idle or "")
+            return
+        end
+        -- REMEMBERED BEFORE THE RELOAD, not by the OnHide that will never
+        -- run: a reload tears the frame down without hiding it, so a
+        -- character who came in through this button would be asked all over
+        -- again on the way back up.
+        Welcome:Remember()
+        ReloadUI()
+    end, "ghost")
+    warn.button:SetPoint("TOPRIGHT", warn, "TOPRIGHT", -12, 0)
+
     frame.warn = warn
 
     -- ONE ROW PER MODULE, built from the registry rather than typed out. A
@@ -283,23 +325,45 @@ function Welcome:Show(fresh, first)
     -- computed at build time would still be describing the old answer.
     local warn = frame.warn
     local rivals = ns.Cooldowns and ns.Cooldowns.Rivals
-    local other = rivals and rivals.Describe()
-    if other then
+    local clash, others = false, {}
+    if rivals then clash, others = rivals.Any() end
+    if clash then
         warn.text:SetText(ns.L(
             "%s is already managing your cooldowns. Two addons cannot hold "
             .. "the same cooldown frames - one of them loses, and which one "
             .. "depends on the order they loaded. Cooldowns is switched off "
             .. "below; turn it on to use ours instead, and switch theirs off "
-            .. "in your addon list.", other))
+            .. "in your addon list.", rivals.Describe()))
+
+        -- The button only when one addon can be named. Rebuilt every time the
+        -- window opens because the armed state must not survive a close: a
+        -- button that reopens already saying "really?" is one press from a
+        -- reload nobody asked for.
+        warn.armed = false
+        if #others == 1 then
+            warn.folder = others[1].folder
+            warn.idle = ns.L("Switch off %s", others[1].label)
+            warn.button:SetText(warn.idle)
+            warn.button:Show()
+        else
+            warn.folder, warn.idle = nil, nil
+            warn.button:Hide()
+        end
+
         -- MEASURED, not a constant: the sentence names another addon, and how
-        -- long that name is is not ours to know.
-        warn:SetHeight(warn.text:GetStringHeight() + 18)
+        -- long that name is is not ours to know. The button sits above the
+        -- text on its own line, so both are counted.
+        local buttonRoom = (#others == 1)
+            and (warn.button:GetHeight() + 6) or 0
+        warn.text:ClearAllPoints()
+        warn.text:SetPoint("TOPLEFT", warn, "TOPLEFT", 12, -9 - buttonRoom)
+        warn:SetHeight(warn.text:GetStringHeight() + 18 + buttonRoom)
         warn:Show()
     else
         warn:SetHeight(0.01)
         warn:Hide()
     end
-    frame:SetHeight(frame.baseHeight + (other and warn:GetHeight() + 10 or 0))
+    frame:SetHeight(frame.baseHeight + (clash and warn:GetHeight() + 10 or 0))
 
     frame:Show()
 end

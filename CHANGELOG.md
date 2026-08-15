@@ -31,7 +31,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   finds them taken, and what ends up on your screen depends on the order they
   happened to load in. On the first run the welcome window says which addon it
   found and leaves the choice to you; the Cooldowns page names it again in
-  full. Nothing is switched off on your behalf, here or anywhere.
+  full.
+  - **A button switches the other one off**, on both surfaces. It asks twice —
+    the first press only arms it, and it disarms itself after four seconds,
+    because the second press reloads your interface. It switches that addon
+    off, switches Cooldowns on here, and reloads. **Nothing is deleted**: it is
+    the same tick as in the game's own addon list, and putting it back there
+    puts everything back with it. If another addon *needs* the one you are
+    switching off, the page says which, because disabling does not cascade and
+    that addon would otherwise just stop loading without a word.
   - It reads what each addon says about **itself**, in its own description, so
     the list keeps working for addons that do not exist yet. Addons switched
     off for this character are not counted. Calibrated against 97 installed

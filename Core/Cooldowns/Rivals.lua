@@ -158,6 +158,99 @@ end
 -- one they gave.
 ---------------------------------------------------------------------------
 
+---------------------------------------------------------------------------
+-- WHO ELSE WOULD GO DARK IF THAT ADDON DID
+--
+-- Owner, 2026-08-15: "jetzt noch einen button einbauen, das man andere cdm
+-- abstellt, das kann elle ui auch." It can, and this is the part their power
+-- button does not do.
+--
+-- DisableAddOn does not cascade. Switch off an addon that another one lists
+-- as a Dependency and the second simply stops loading, with no message from
+-- anybody - the user pressed a button about their cooldowns and lost
+-- something else entirely. On the machine this was written on nothing
+-- depends on EllesmereUI's cooldown module, which is exactly why the check
+-- has to exist rather than be reasoned away: the next person's setup is not
+-- this one.
+--
+-- Only ENABLED addons count. One that is already switched off cannot be
+-- broken by this.
+---------------------------------------------------------------------------
+function Rivals.Dependents(folder)
+    local out = {}
+    local C = C_AddOns
+    if not (folder and C and C.GetNumAddOns and C.GetAddOnInfo
+        and C.GetAddOnDependencies) then
+        return out
+    end
+
+    local me = UnitGUID and UnitGUID("player")
+    for index = 1, C.GetNumAddOns() do
+        local ok, name = pcall(C.GetAddOnInfo, index)
+        if ok and name and name ~= folder then
+            local on = true
+            if me and C.GetAddOnEnableState then
+                local okState, state = pcall(C.GetAddOnEnableState, name, me)
+                on = (not okState) or state == ENABLED
+            end
+            if on then
+                -- Varargs, so it is collected into a table before anything
+                -- indexes it. GetAddOnDependencies returns the names one
+                -- after another rather than a list.
+                local okDeps, deps = pcall(function()
+                    return { C.GetAddOnDependencies(index) }
+                end)
+                if okDeps and deps then
+                    for _, dep in ipairs(deps) do
+                        if dep == folder then out[#out + 1] = name end
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+---------------------------------------------------------------------------
+-- SWITCH THEIRS OFF AND TAKE OVER
+--
+-- Three things, and they belong together because two of them without the
+-- third leave somebody worse off than before: their addon goes off, ours
+-- goes on, and the caller reloads. Disabling theirs alone would reload into
+-- no cooldown manager at all, which is not what anybody pressed the button
+-- for.
+--
+-- IT DELETES NOTHING. DisableAddOn is the same switch as the tick in the
+-- game's own addon list - their settings, their layouts and their saved
+-- variables are all untouched, and switching it back on there puts
+-- everything back. That is worth saying out loud on the button, and it is
+-- said.
+--
+-- The reload is the CALLER's, not ours. A function that reloads the interface
+-- can never be run by a test, and this one has enough in it to be worth
+-- testing.
+---------------------------------------------------------------------------
+function Rivals.Disable(folder)
+    if not folder or folder == "" then return false, "no addon named" end
+
+    local C = C_AddOns
+    if not (C and C.DisableAddOn) then
+        return false, "this client cannot switch addons off"
+    end
+
+    local ok = pcall(C.DisableAddOn, folder)
+    if not ok then return false, "the client refused" end
+
+    -- Ours on, in the same breath. Modules:Set writes it to the profile, and
+    -- the reload that follows is what saves the profile - so the order
+    -- matters: written first, reloaded after.
+    if ns.Modules then ns.Modules:Set("cooldowns", true) end
+
+    -- The scan is cached, and it is now wrong.
+    Rivals.Forget()
+    return true
+end
+
 -- FOR THE TESTS AND FOR /reload-less checking. The scan is cached because the
 -- answer cannot change; this is the door that says otherwise.
 function Rivals.Forget()
