@@ -718,6 +718,79 @@ local function TestSpellIdentity()
 end
 
 ---------------------------------------------------------------------------
+-- Custom active states
+--
+-- A window the player declared, for the things Blizzard only shows as a
+-- cooldown. Runs on the real account store and puts back what it found, so
+-- it is safe against saved data - `restore` may be nil, and writing nil back
+-- is the restore, not a skipped one.
+--
+-- THIS SUITE WAS CUT BY ACCIDENT and that is worth recording. It tests the
+-- aura layer and touches no bar, but it sat between two bar suites, so it
+-- went out with them - and with the page that wrote the setting gone at the
+-- same time, nothing was left pointing at Auras:SetActiveState in either
+-- direction. The setting is back on the death log page; this is the guard
+-- that says so out loud the next time somebody counts callers.
+---------------------------------------------------------------------------
+local function TestActiveStates()
+    if not (ns.Auras and ns.Auras.SetActiveState) then
+        Skip("Active states", "the aura layer is not loaded")
+        return
+    end
+
+    local store = ns.Auras:ActiveStates()
+    local restore = store[12345]
+
+    ns.Auras:SetActiveState(12345, 20)
+    Check("A declared window is remembered", ns.Auras:ActiveStateFor(12345) == 20)
+
+    Check("A spell with no window has none", ns.Auras:ActiveStateFor(12346) == nil
+        or ns.CDM:SameSpell(12345, 12346))
+
+    -- The whole reason the lookup is variant-aware: the game reports the form
+    -- you actually cast, which is not always the form you set the window on.
+    local other = ns.CDM:OverrideSpell(12345) or ns.CDM:BaseSpell(12345)
+    if other then
+        Check("The window follows the spell into its other form",
+            ns.Auras:ActiveStateFor(other) == 20)
+    else
+        Skip("The window follows the spell into its other form",
+            "this client reports no other form for the test ID")
+    end
+
+    ns.Auras:SetActiveState(12345, 0)
+    Check("Zero switches the window off",
+        ns.Auras:ActiveStateFor(12345) == nil and store[12345] == nil,
+        "an absent key, not a stored zero")
+
+    ns.Auras:SetActiveState(12345, 15)
+    ns.Auras:SetActiveState(12345, 30)
+    Check("Changing the number takes effect at once",
+        ns.Auras:ActiveStateFor(12345) == 30,
+        "the variant cache has to be dropped on every write")
+
+    Check("Nothing usable is never given a window",
+        ns.Auras:ActiveStateFor(nil) == nil)
+
+    -- AND THE REPLAY ACTUALLY READS IT, which is the half the old suite did
+    -- not cover and the half that broke. A number the player states is only
+    -- worth storing if the thing that draws the bar asks for it first - so
+    -- the guard is on the reader, not on the store.
+    if ns.Replay and ns.Replay.DurationOf then
+        ns.Auras:SetActiveState(12345, 42)
+        local seconds, source = ns.Replay.DurationOf(12345)
+        Check("The replay takes the stated window before anything else",
+            seconds == 42 and source == "set",
+            "got " .. tostring(seconds) .. " from " .. tostring(source))
+    end
+
+    store[12345] = restore
+    ns.ForgetActiveStates()
+    Check("The test put the real store back",
+        ns.Auras:ActiveStates()[12345] == restore)
+end
+
+---------------------------------------------------------------------------
 -- The visibility rules
 ---------------------------------------------------------------------------
 local function TestVisibility()
@@ -7111,6 +7184,7 @@ function Test:Run()
         { "Invites",       TestInvites },
         { "CD request",    TestExternals },
         { "Spell identity", TestSpellIdentity },
+        { "Active states", TestActiveStates },
         { "Design system",  TestDesignSystem },
         { "Menu filter",   TestMenuFilter },
         { "Co-tanks",      TestCoTanks },

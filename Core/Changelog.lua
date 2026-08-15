@@ -40,6 +40,15 @@ ns.CHANGELOG = {
                     .. "and group play features, and there are a lot of other "
                     .. "very good CDM addons that do the job better.",
             },
+            -- The one thing from that page a player can go looking for. Its
+            -- number is untouched in your account file; only the row moved.
+            {
+                icon = "Interface\\Icons\\Spell_Holy_BorrowedTime",
+                text = "|cffffd100\"Active for\" moved to the death log.|r It "
+                    .. "was on the cooldowns page, and it still does the same "
+                    .. "thing: say how long a trinket or a potion lasts and "
+                    .. "the death replay draws that window.",
+            },
         },
     },
     {

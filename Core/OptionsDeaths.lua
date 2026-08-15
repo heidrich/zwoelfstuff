@@ -106,6 +106,86 @@ function Page:BuildPage(page, width)
         .. "Right-click a slot to clear it.")
 
     ---------------------------------------------------------------------
+    -- How long one of them lasts, when the game will not say
+    --
+    -- THIS SETTING LOST ITS PAGE AND NOT ITS PURPOSE. It sat on the cooldown
+    -- bars page and its list read the bars' own cells - "pick a spell from
+    -- your bars" - so when the bars went, the only way to state a number
+    -- went with them. Nothing threw: Auras:SetActiveState is the ONLY writer
+    -- of that store, so the store simply stayed empty and every replay bar
+    -- fell through to the next source. A designed feature, silently
+    -- unreachable, exactly like the item index the audit found.
+    --
+    -- It belongs here now, because the number has one reader left and it is
+    -- on this page: Replay.BarLength asks for it FIRST for every press it
+    -- draws in the death replay, before the measured store and before the
+    -- tooltip. So the spells to offer are the defensives picked above -
+    -- those are the presses the replay draws bars for.
+    --
+    -- Anything already carrying a number is listed too, even if it is no
+    -- longer picked. A stored value with no row to edit it is a setting the
+    -- player cannot take back, and dropping a spell from the list above is
+    -- not the same as saying its duration was wrong.
+    ---------------------------------------------------------------------
+    grid:Section("Active for")
+
+    grid:Note("Some defensives have no duration the game reports - a trinket, "
+        .. "a potion, a racial. Say how long it lasts and the death replay "
+        .. "draws that window instead of a bare mark.")
+
+    local activeSpell
+
+    local function TimedSpells()
+        local out, seen = {}, {}
+        local function Offer(spellID)
+            if not spellID or seen[spellID] then return end
+            seen[spellID] = true
+            local seconds = ns.Auras:ActiveStates()[spellID]
+            local name = ns.SpellName(spellID) or ("Spell " .. spellID)
+            out[#out + 1] = {
+                value = spellID,
+                text = name .. (seconds and ("  |cff7ec6d4" .. seconds .. "s|r")
+                    or ""),
+                iconTexture = ns.SpellTexture(spellID),
+                spellID = spellID,
+                name = name,
+            }
+        end
+
+        for spellID in pairs(ns.Death.Defensives()) do Offer(spellID) end
+        for spellID in pairs(ns.Auras:ActiveStates()) do Offer(spellID) end
+
+        table.sort(out, function(a, b) return a.name < b.name end)
+        return out
+    end
+
+    UI.Dropdown(grid:FullRow("Spell", { controlWidth = 260 }), TimedSpells,
+        function() return activeSpell end,
+        function(value) activeSpell = value end,
+        { emptyText = "Pick one of your defensives" })
+
+    UI.Slider(grid:FullRow("Lasts", { controlWidth = 200 }), {
+        get = function()
+            if not activeSpell then return 0 end
+            return ns.Auras:ActiveStates()[activeSpell] or 0
+        end,
+        set = function(value)
+            if activeSpell then ns.Auras:SetActiveState(activeSpell, value) end
+        end,
+        min = 0, max = 120, step = 1,
+        format = function(v)
+            if (v or 0) < 1 then return "off" end
+            return string.format("%ds", v)
+        end,
+        -- So the seconds beside the name in the list above are the ones just
+        -- set, rather than the ones this page was opened with.
+        apply = function() ns.Options:Refresh() end,
+    })
+
+    grid:Note("Zero switches it off. Remembered for the whole account, not "
+        .. "per spec: a trinket lasts as long on every one of them.")
+
+    ---------------------------------------------------------------------
     -- Consumables
     --
     -- The owner: "wir brauchen zudem noch neben spells consumables wie
