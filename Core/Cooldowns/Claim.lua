@@ -368,6 +368,25 @@ function Claim.Strip(item)
     end
 end
 
+-- EVERY PART OF AN ITEM FRAME THAT ANYTHING MIGHT RESTYLE, in one list.
+--
+-- Read by the restore walk so that giving a frame back does not depend on
+-- which of the later waves happened to touch it. A part named here and never
+-- styled costs one nil check; a part styled and NOT named here is a mark left
+-- on a frame we said we had let go, which is the whole failure this file is
+-- built around.
+local function Parts(item)
+    local parts = {
+        item, item.Icon, item.Cooldown, item.Bar,
+        item.ChargeCount, item.Applications, item.Name, item.Duration,
+    }
+    if type(item.Icon) == "table" then
+        parts[#parts + 1] = item.Icon.Applications
+        parts[#parts + 1] = item.Icon.ChargeCount
+    end
+    return parts
+end
+
 ---------------------------------------------------------------------------
 -- Letting go
 --
@@ -388,6 +407,12 @@ function Claim.Give(item)
         pcall(item.SetAlpha, item, 1)
     end
 
+    -- EVERYTHING THE LATER WAVES RESTYLED, put back before the decorations.
+    -- Order matters only in that it must happen at all: a part styled by a
+    -- wave that did not exist when Give was written would otherwise stay
+    -- wearing our look on a frame we have just said we let go.
+    for _, part in ipairs(Parts(item)) do Claim.Unset(part) end
+
     for _, key in ipairs(Claim.DECORATIONS) do Undim(item[key]) end
 
     -- The chrome regions were matched by atlas rather than by name, so they
@@ -407,6 +432,136 @@ function Claim.Give(item)
     -- they all read `pin` as nil on their first line and do nothing.
     Cooldowns.Forget(item)
     return true
+end
+
+---------------------------------------------------------------------------
+-- REMEMBER, THEN SET. The door every other file writes through.
+--
+-- Waves 4 and 5 restyle these frames: the icon gets a crop and a desaturate,
+-- a tracking bar gets our fill texture and colour, the counters get our font.
+-- All of that writes to something Blizzard owns, and the rule this file
+-- exists for says only this file may.
+--
+-- FOUR MORE WRITERS WOULD HAVE DISSOLVED THE RULE, and the alternative -
+-- putting two thousand lines of styling in here - would have rebuilt the
+-- 2 710-line page one folder down. So the rule is kept and the mechanism is
+-- generalised instead: one function that records what a thing looked like
+-- BEFORE the first time it is asked to change it, and one that puts every
+-- recorded field back.
+--
+-- THIS IS THE WAVE 2 LESSON MADE STRUCTURAL. The version before the rebuild
+-- had a hand-written restore per decoration, so "everything is given back"
+-- was a discipline somebody had to remember at every call site - and the one
+-- they forgot cost Blizzard's Cooldown Manager its borders for a session.
+-- Here, forgetting is not available: recording IS the setter.
+---------------------------------------------------------------------------
+
+-- WHICH GETTER ANSWERS FOR WHICH SETTER. A setter with no entry cannot be
+-- recorded, so it cannot be undone, so it is REFUSED rather than applied - a
+-- write we could not take back is exactly what this file is here to prevent.
+--
+-- IsDesaturated for SetDesaturated: the pair is not spelled alike, which is
+-- the sort of thing a "strip the Set, prepend a Get" rule gets wrong silently.
+local UNDO = {
+    SetAlpha              = "GetAlpha",
+    SetTexture            = "GetTexture",
+    SetAtlas              = "GetAtlas",
+    SetVertexColor        = "GetVertexColor",
+    SetTexCoord           = "GetTexCoord",
+    SetDesaturated        = "IsDesaturated",
+    SetStatusBarTexture   = "GetStatusBarTexture",
+    SetStatusBarColor     = "GetStatusBarColor",
+    SetTextColor          = "GetTextColor",
+    SetSwipeColor         = nil,   -- see below
+}
+
+-- SETTERS WITH NO READER AT ALL, and they are not an oversight. A Cooldown's
+-- swipe colour and draw-edge can be written and cannot be asked for; there is
+-- no GetSwipeColor on any build. So the value before us is unknowable, and
+-- the honest undo is Blizzard's own default rather than a remembered one.
+local DEFAULTS = {
+    SetSwipeColor = { 0, 0, 0, 0.8 },
+    SetDrawEdge   = { false },
+    SetDrawSwipe  = { true },
+}
+
+-- What we changed on which object, and what it was. Weak keys: Blizzard's
+-- objects, pooled, and a strong table here would hold every one the session
+-- ever saw. Separate from the frame records because a region is not a frame
+-- and outlives none of the same things.
+local touched = setmetatable({}, { __mode = "k" })
+
+-- CHANGES SOMETHING BLIZZARD OWNS, AND RECORDS WHAT IT WAS.
+--
+--   Claim.Set(region, "SetVertexColor", 1, 0.4, 0.4)
+--
+-- The first call for a given setter on a given object reads the old value and
+-- keeps it. Later calls just apply - the record is what it looked like before
+-- WE touched it, not before the last time we did.
+--
+-- Returns true when the write happened. False means the object cannot do it,
+-- or that we have no way to undo it, and in both cases nothing was written.
+function Claim.Set(object, setter, ...)
+    if type(object) ~= "table" or type(setter) ~= "string" then return false end
+    if type(object[setter]) ~= "function" then return false end
+
+    local getter = UNDO[setter]
+    local fallback = DEFAULTS[setter]
+    if not (getter or fallback) then return false end
+
+    local held = touched[object]
+    if not held then
+        held = {}
+        touched[object] = held
+    end
+
+    if held[setter] == nil then
+        if getter and type(object[getter]) == "function" then
+            local read = { pcall(object[getter], object) }
+            -- read[1] is the pcall's own answer; everything after it is the
+            -- value. Kept as a list because three of these return four
+            -- numbers and one returns two.
+            if read[1] then
+                table.remove(read, 1)
+                held[setter] = read
+            end
+        end
+        -- Still nothing? Then the default is what we will hand back, and it
+        -- is recorded as such rather than left absent - an absent record is
+        -- indistinguishable from "we never touched this".
+        if held[setter] == nil then held[setter] = fallback or false end
+    end
+
+    pcall(object[setter], object, ...)
+    return true
+end
+
+-- Everything we changed on this object, put back.
+--
+-- `false` in the record means "there was nothing to read and no default": we
+-- changed it, we cannot undo it, and saying so is better than pretending.
+-- Nothing in the shipped list is in that state; it exists so that adding a
+-- setter without an undo is visible rather than silent.
+function Claim.Unset(object)
+    local held = object and touched[object]
+    if not held then return false end
+    touched[object] = nil
+
+    for setter, value in pairs(held) do
+        if value then
+            -- `unpack`, not `table.unpack`: this client runs Lua 5.1, where
+            -- the second one does not exist at all. The harness answers to
+            -- both, which is exactly how a 5.4-ism gets shipped.
+            pcall(object[setter], object, unpack(value))
+        end
+    end
+    return true
+end
+
+-- Has anything on this object been changed by us? For the self test, and for
+-- the restore walk below.
+function Claim.Touched(object)
+    return object ~= nil and touched[object] ~= nil
 end
 
 -- EVERY FRAME WE HOLD, HANDED BACK. What "switch the module off" means, and
