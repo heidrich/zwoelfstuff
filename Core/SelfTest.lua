@@ -8324,6 +8324,77 @@ local function TestCooldownStyling()
     Check("A rule this build no longer has hides nothing",
         Effects.HiddenByState({ hideWhen = "ready" }, true) == false)
 
+    ---------------------------------------------------------------------
+    -- FIVE ANSWERS, AND THE OLD TWO STILL MEAN WHAT THEY MEANT
+    --
+    -- Owner: "ich kann es aber nicht einstellen im addon! das sind noch alte
+    -- regeln." The rule was welded shut - one behaviour and a switch. Every
+    -- state below was already ANSWERABLE and none could be ASKED for.
+    ---------------------------------------------------------------------
+    Check("A bar written in 4.82.0 reads as the rule it was given",
+        Effects.ShowWhen({ hideWhen = "cooling" }) == "usable",
+        tostring(Effects.ShowWhen({ hideWhen = "cooling" })))
+    Check("And one with neither key is always on screen",
+        Effects.ShowWhen({}) == "always")
+    Check("An explicit choice beats the old key",
+        Effects.ShowWhen({ hideWhen = "cooling", showWhen = "ready" })
+            == "ready")
+    Check("Nonsense in the profile is not a sixth rule",
+        Effects.ShowWhen({ showWhen = "sideways" }) == "always")
+
+    local function Kept(rule, state)
+        return Effects.HiddenByState({ showWhen = rule }, state) == false
+    end
+    Check("Always keeps every state",
+        Kept("always", "ready") and Kept("always", "active")
+        and Kept("always", "cooling"))
+    Check("Ready keeps only the ready one",
+        Kept("ready", "ready") and not Kept("ready", "active")
+        and not Kept("ready", "cooling"))
+    Check("Working keeps only the one whose buff is running",
+        Kept("working", "active") and not Kept("working", "ready")
+        and not Kept("working", "cooling"))
+    Check("Recharging keeps only the one that is recharging",
+        Kept("cooling", "cooling") and not Kept("cooling", "ready")
+        and not Kept("cooling", "active"))
+    Check("Usable keeps the two that earn their square",
+        Kept("usable", "ready") and Kept("usable", "active")
+        and not Kept("usable", "cooling"))
+
+    -- UNKNOWN IS NEVER ROUNDED, WHATEVER THE RULE. Every one of the five.
+    local everyRuleKeepsUnknown = true
+    for _, rule in ipairs({ "always", "usable", "ready", "working", "cooling" }) do
+        if not Kept(rule, nil) then everyRuleKeepsUnknown = false end
+    end
+    Check("No rule hides a place the client will not answer for",
+        everyRuleKeepsUnknown)
+
+    -- THE PROBE THAT WOULD HAVE BROKEN. Effects.Pass used to ask whether a
+    -- rule hides anything by handing it `true` and then `false`. With five
+    -- answers that is wrong: "only while its buff runs" hides neither of
+    -- those under the old encoding, so the probe would have reported "this
+    -- rule hides nothing", skipped the entire per-cell walk, and the setting
+    -- would have done nothing at all while every test above passed.
+    Check("A rule that hides something says so before the walk",
+        Effects.CanHide({ showWhen = "working" }) == true)
+    Check("And the default says it does not",
+        Effects.CanHide({}) == false)
+    Check("An old stored rule still says it does",
+        Effects.CanHide({ hideWhen = "cooling" }) == true)
+
+    -- EVERY MENU ENTRY IS A RULE, and every rule is in the menu. The list the
+    -- dropdown is built from and the table the arithmetic reads are the same
+    -- five keys, which is what stops a sixth choice being added to one.
+    local menu = 0
+    for _, entry in ipairs(ns.CD_SHOW_WHEN or {}) do
+        menu = menu + 1
+        if Effects.ShowWhen({ showWhen = entry.value }) ~= entry.value then
+            menu = -1000
+        end
+    end
+    Check("Every answer in the menu is an answer the rule knows",
+        menu == 5, tostring(menu))
+
     Check("A glow lights when the client will not say what you can afford",
         Effects.GlowAllowed({ readyGlow = true, readyGlowUsableOnly = true },
             true, nil) == true)

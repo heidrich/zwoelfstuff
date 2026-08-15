@@ -146,6 +146,19 @@ ns.EFFECT_DEFAULTS = {
     -- lands on hiding nothing - see Effects.HiddenByState.
     hideWhen = "never",
 
+    -- WHICH STATES KEEP A PLACE ON SCREEN, and it is the successor to the two
+    -- values above. See Effects.ShowWhen: `hideWhen` is still READ, so all
+    -- nine of his stored bars keep doing exactly what they do today until he
+    -- touches the row.
+    --
+    --   "always"   every state                                 (the default)
+    --   "usable"   ready, or its own buff still running - what "hide while
+    --              recharging" used to mean
+    --   "ready"    only when you can press it
+    --   "working"  only while the buff it put on you is running
+    --   "cooling"  only while it is recharging - a recharge tracker
+    showWhen = "always",
+
     -- AND WHETHER THE OTHERS CLOSE UP BEHIND IT.
     --
     --   "off"   the place stays empty. Nothing moves, ever, and "the third
@@ -201,6 +214,7 @@ Effects.ANSWERED = {
     dimOnCooldown       = true,
     dimAmount           = true,
     hideWhen            = true,
+    showWhen            = true,
     reflow              = true,
     pulseSpeed          = true,
     -- lowWarn and lowColor are absent, and their absence is the statement.
@@ -402,31 +416,15 @@ end
 -- `item` FIRST, and every function in this file that touches one is written
 -- that way: that parameter name is the desk guard's door, so every line below
 -- it is inside the frame contract whether anybody remembers it or not.
+-- ONE ASKER, and this is its old two-valued face. Everything above is
+-- unchanged as a DESCRIPTION of the default rule - it is just no longer the
+-- only rule available. Kept because three callers and a dozen tests speak
+-- true/false/nil, and because "is this worth a square" is still the question
+-- the ready glow and the nag want answered.
 function Effects.Relevant(item, spellID, cooldownID)
-    if Tracks(item) == "buff" then
-        -- The frame's own answer, and for an aura it means exactly what it
-        -- says. Proven in game: false on three auras that were down, true on
-        -- the ones that were up. An aura often has no cooldown at all, so
-        -- asking the spell's cooldown about one answers "ready" for ever.
-        local up = ns.CDM:ItemIsActive(item)
-        if up == nil then return nil end
-        return up and true or false
-    end
-
-    local onCd = OnCooldown(spellID, cooldownID)
-    if onCd == nil then return nil end
-
-    -- Ready: nothing else to ask.
-    if not onCd then return true end
-
-    -- On cooldown, so the only thing that still earns it a square is its own
-    -- buff. Most defensives grant one carrying the ABILITY'S own spell id,
-    -- which is why a single lookup covers them; Blood Shield is the one he
-    -- named. When the client will not answer - inside restricted content it
-    -- often will not - this falls through to hiding, because "goes a few
-    -- seconds early in a dungeon" is a smaller fault than "never goes".
-    if OwnBuffUp(spellID) == true then return true end
-    return false
+    local state = Effects.CellState(item, spellID, cooldownID)
+    if state == nil then return nil end
+    return state == "ready" or state == "active"
 end
 
 -- Can it actually be cast right now - not "is the cooldown back", but "will
@@ -464,18 +462,144 @@ end
 -- client will not talk about must never disappear. An icon that vanishes
 -- because the addon could not read something is indistinguishable from a bug,
 -- and it takes the spell with it.
-function Effects.HiddenByState(fxOpts, relevant)
-    if relevant == nil then return false end
-    -- ONE RULE, and the inverse was deliberately taken out rather than left
-    -- unlisted. "Hide what is ready or working" is almost everything almost
-    -- always, so it emptied the bar; the owner hit it twice and read it as a
-    -- fault, which it was. A profile that still carries the old value falls
-    -- through to hiding nothing, which gives the bar back instead of leaving
-    -- somebody with an empty one.
-    if Effects.Option(fxOpts, "hideWhen") == "cooling" then
-        return relevant == false
+---------------------------------------------------------------------------
+-- WHEN A PLACE IS ON SCREEN, AND IT IS THE USER'S CHOICE NOW
+--
+-- Owner, 2026-08-15: "ich brauch noch conditions wann und wie die icons und
+-- bars angezeigt werden, also wenn auf cd, oder immer, oder wenn rdy etc. das
+-- fehlt komplett" - and then, sharper: "ich kann es aber nicht einstellen im
+-- addon! das sind noch alte regeln."
+--
+-- He is right. There was ONE rule and it was welded shut: a place earned its
+-- square by being usable or by working, and the only control was a two-value
+-- "Take off screen: Nothing / While recharging". Everything else - only when
+-- ready, only while recharging, only while its buff is up - could be
+-- ANSWERED by Effects.Relevant and could not be ASKED for.
+--
+-- THE OLD WARNING STILL STANDS AND IS NOW A DEFAULT RATHER THAN A CEILING.
+-- "Hide what is ready or working" was taken out once because it is almost
+-- everything almost always and emptied the bar. That is a good reason not to
+-- make it the DEFAULT; it is not a reason to refuse it to somebody who asks
+-- for it by name. "Only while recharging" is a real display - a recharge
+-- tracker - and he asked for it in those words.
+---------------------------------------------------------------------------
+
+-- WHAT A PLACE IS DOING, in one word.
+--
+--   "ready"    you can press it. For a tracked buff: its aura is up.
+--   "active"   it is on cooldown AND the buff it put on you is still running
+--   "cooling"  recharging, and nothing it did is still running
+--   nil        the client would not say
+--
+-- Split out of Effects.Relevant rather than written beside it, because two
+-- readers of the same three questions is how the menu and the screen come to
+-- disagree about what "ready" means. Relevant is now this function with its
+-- answers folded down to the old true/false/nil, so there is exactly one
+-- place that asks the client anything.
+function Effects.CellState(item, spellID, cooldownID)
+    if Tracks(item) == "buff" then
+        -- The frame's own answer, and for an aura it means exactly what it
+        -- says. An aura often has no cooldown at all, so asking the spell's
+        -- cooldown about one answers "ready" for ever.
+        local up = ns.CDM:ItemIsActive(item)
+        if up == nil then return nil end
+        -- A buff that is not up is not "recharging" in any sense the user
+        -- would recognise, but it is the state that is not ready - and the
+        -- menu word for it on a buff row is what the note on the page says.
+        return up and "ready" or "cooling"
     end
-    return false
+
+    local onCd = OnCooldown(spellID, cooldownID)
+    if onCd == nil then return nil end
+    if not onCd then return "ready" end
+
+    -- On cooldown, so the only thing that still earns it a square is its own
+    -- buff. Most defensives grant one carrying the ABILITY'S own spell id;
+    -- Blood Shield is the one he named. When the client will not answer -
+    -- inside restricted content it often will not - this falls to "cooling",
+    -- because "goes a few seconds early in a dungeon" is a smaller fault than
+    -- "never goes".
+    if OwnBuffUp(spellID) == true then return "active" end
+    return "cooling"
+end
+
+-- WHICH STATES EACH ANSWER KEEPS ON SCREEN.
+--
+-- A table rather than a chain of ifs, because this list IS what the options
+-- page offers: ns.CD_SHOW_WHEN is built from the same five keys, so a choice
+-- cannot exist in the menu and be missing from the rule.
+-- THE MENU, BUILT FROM THE SAME FIVE KEYS as the rule below. One list, so a
+-- choice cannot exist in the dropdown and be missing from the arithmetic -
+-- which is how "Fill up" came to be a control that did nothing, twice.
+ns.CD_SHOW_WHEN = {
+    { value = "always",  text = "Always" },
+    { value = "usable",  text = "Ready, or still working" },
+    { value = "ready",   text = "Only when ready" },
+    { value = "working", text = "Only while its buff runs" },
+    { value = "cooling", text = "Only while recharging" },
+}
+
+local SHOWN_IN = {
+    always  = { ready = true, active = true, cooling = true },
+    usable  = { ready = true, active = true },
+    ready   = { ready = true },
+    working = { active = true },
+    cooling = { cooling = true },
+}
+
+-- WHAT THIS BAR ASKS FOR, translated rather than migrated.
+--
+-- `hideWhen` is what 4.82.0 stored and all nine of his bars still carry it.
+-- Read in the shape it was written: "cooling" meant hide while merely
+-- recharging, which is exactly `usable`. Store's promise is that nothing on
+-- disk is rewritten, so the translation happens on every read and an older
+-- version still finds a profile it understands.
+function Effects.ShowWhen(fxOpts)
+    -- THE RAW STORED VALUE, NOT Effects.Option.
+    --
+    -- Option applies EFFECT_DEFAULTS, and `showWhen` has a default - so
+    -- asking it returns "always" for every bar that has never stored one, the
+    -- word is a legal rule, and the translation two lines down could never
+    -- run. Four checks went red on that in one go and they were right: it
+    -- would have silently reset the state rule on all nine of his bars, which
+    -- is precisely the "Store translates, it does not migrate" promise being
+    -- broken by a default rather than by a rewrite.
+    local stored = type(fxOpts) == "table" and fxOpts.showWhen or nil
+    if type(stored) == "string" and SHOWN_IN[stored] then return stored end
+
+    -- WHAT 4.82.0 WROTE. `hideWhen = "cooling"` meant "gone while it is only
+    -- recharging", which is exactly `usable`. Read here and nowhere else.
+    local was = type(fxOpts) == "table" and fxOpts.hideWhen or nil
+    if was == "cooling" then return "usable" end
+
+    return "always"
+end
+
+-- Whether this rule can hide anything at all. Asked before the per-cell walk:
+-- reading a state costs a GetSpellCooldown and sometimes an aura scan, per
+-- cell, per pass, and "always" is the default on every bar he owns.
+function Effects.CanHide(fxOpts)
+    return Effects.ShowWhen(fxOpts) ~= "always"
+end
+
+-- PURE. Whether this place is currently taken off screen by its state rule.
+--
+-- `state` nil is the important one: a cooldown the client will not talk about
+-- must never disappear. A place that vanishes because the addon could not
+-- read something is indistinguishable from a bug, and it takes the spell
+-- with it.
+--
+-- STILL ACCEPTS THE OLD TRUE/FALSE, because Effects.Track calls it with
+-- Relevant's answer on the tick path and the two would otherwise have to be
+-- changed in lockstep - which is the kind of pair that gets missed.
+function Effects.HiddenByState(fxOpts, state)
+    if state == nil then return false end
+    if state == true then state = "ready" end
+    if state == false then state = "cooling" end
+
+    local keeps = SHOWN_IN[Effects.ShowWhen(fxOpts)]
+    if not keeps then return false end
+    return not keeps[state]
 end
 
 -- PURE. Whether the ready glow may light this instant.
@@ -515,7 +639,7 @@ function Effects.Wanted(fxOpts, sound)
     end
     -- A bar that only hides things still needs the ticker: it is the only
     -- thing watching for the state to flip back.
-    return Effects.Option(fxOpts, "hideWhen") ~= "never"
+    return Effects.CanHide(fxOpts)
 end
 
 ---------------------------------------------------------------------------
@@ -811,8 +935,13 @@ function Effects.Pass(bar, items, count)
     -- nothing can, and the whole per-cell read below is skipped: Relevant
     -- costs a GetSpellCooldown and sometimes an aura scan, per cell, per
     -- pass, and "never" is the default on every bar he owns.
-    local asks = Effects.HiddenByState(fxOpts, true)
-        or Effects.HiddenByState(fxOpts, false)
+    -- ASKED OF THE RULE ITSELF rather than by probing it with two states.
+    -- The probe was right while there were two answers and wrong the moment
+    -- there were five: "only while its buff is up" hides neither `true` nor
+    -- `false` under the old encoding, so the probe would have said "this rule
+    -- hides nothing", skipped the whole per-cell walk, and the setting would
+    -- have done nothing at all.
+    local asks = Effects.CanHide(fxOpts)
 
     local cells = Store.Cells(bar)
     for index = 1, (count or 0) do
@@ -820,7 +949,7 @@ function Effects.Pass(bar, items, count)
         if item then
             local off = false
             if asks then
-                off = Effects.HiddenByState(fxOpts, Effects.Relevant(item,
+                off = Effects.HiddenByState(fxOpts, Effects.CellState(item,
                     cells[index], ns.CDM:ItemCooldownID(item)))
             end
             if off then hidden[index] = true end

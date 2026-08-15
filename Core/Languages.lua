@@ -366,6 +366,9 @@ Register("enUS", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         true,
     ["Places"] = true,
+    ["Show this place"] = true,
+    ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither. A place the client will not answer for stays on screen: one that vanished because something could not be read is indistinguishable from a bug."] =
+        true,
     ["When"] = true,
     ["When to show it"] = true,
     ["Combat"] = true,
@@ -861,6 +864,9 @@ Register("deDE", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         "Der Ablauf und die Zahlen brauchen Blizzards eigenen Rahmen, deshalb stehen sie nicht hier - alles andere ist die Leiste, wie sie gerade eingestellt ist.",
     ["Places"] = "Plätze",
+    ["Show this place"] = "Diesen Platz zeigen",
+    ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither. A place the client will not answer for stays on screen: one that vanished because something could not be read is indistinguishable from a bug."] =
+        "Bereit heißt, du kannst ihn drücken. Wirkt heißt, der Buff, den er dir gegeben hat, läuft noch - Antimagische Hülle, Blutschild. Lädt nach ist keins von beidem. Ein Platz, für den der Client nicht antwortet, bleibt sichtbar: einer, der verschwindet, weil etwas nicht gelesen werden konnte, ist von einem Fehler nicht zu unterscheiden.",
     ["When"] = "Wann",
     ["When to show it"] = "Wann sie zu sehen ist",
     ["Combat"] = "Kampf",

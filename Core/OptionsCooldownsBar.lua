@@ -880,19 +880,41 @@ function Panel.BuildEffects(grid, bar)
         { min = 0.2, max = 1, step = 0.05, format = Percent, scale = 100 }))
     groups[#groups + 1] = { when = dimOn, rows = dim }
 
-    -- ONE CONTROL WITH TWO ANSWERS. As two switches, both on is an empty bar
-    -- nobody meant to ask for. There is no third answer: hiding what is ready
-    -- or working reads like the useful opposite and is almost everything
-    -- almost always, so it emptied the bar and came out - see
-    -- Effects.HiddenByState, which lands an older profile on hiding nothing.
-    FxChoice(grid, bar, L["Take off screen"], "hideWhen", {
-        { value = "never",   text = L["Nothing"] },
-        { value = "cooling", text = L["While recharging"] },
-    })
-    grid:Note(L["Ready is always on screen. Press a defensive and it stays "
-        .. "while its own buff is still running - Anti-Magic Shell, Blood "
-        .. "Shield - and goes for the rest of the cooldown. Anything the "
-        .. "client will not answer for stays where it is."])
+    -----------------------------------------------------------------------
+    -- WHEN A PLACE IS ON SCREEN AT ALL, and it is five answers now.
+    --
+    -- Owner, 2026-08-15: "ich brauch noch conditions wann und wie die icons
+    -- und bars angezeigt werden, also wenn auf cd, oder immer, oder wenn rdy
+    -- etc. das fehlt komplett" - and then "ich kann es aber nicht einstellen
+    -- im addon! das sind noch alte regeln."
+    --
+    -- He is right about both halves. The rule was welded shut: one behaviour,
+    -- and a two-value switch that could only turn it on or off. Every other
+    -- state was already ANSWERABLE - Effects.CellState has had the arithmetic
+    -- all along - and none of them could be ASKED for.
+    --
+    -- READ THROUGH Effects.ShowWhen, NOT OFF THE KEY. A bar written in 4.82.0
+    -- carries `hideWhen` and no `showWhen`, and the translation lives in
+    -- exactly one place - Store's promise is that nothing on disk is
+    -- rewritten. A second copy here would be the copy that goes stale, and
+    -- its way of failing is that the menu says "Always" while the bar hides
+    -- half its places.
+    -----------------------------------------------------------------------
+    if Answered("showWhen") then
+        UI.Dropdown(grid:FullRow(L["Show this place"], { controlWidth = 210 }),
+            ns.CD_SHOW_WHEN,
+            function()
+                local effects, current = Fx(), Bar(bar)
+                if not effects then return "always" end
+                return effects.ShowWhen(current and current.effects)
+            end,
+            FxPut(bar, "showWhen"), { apply = Refresh })
+        grid:Note(L["Ready means you can press it. Working means the buff it "
+            .. "put on you is still running - Anti-Magic Shell, Blood Shield. "
+            .. "Recharging is neither. A place the client will not answer for "
+            .. "stays on screen: one that vanished because something could "
+            .. "not be read is indistinguishable from a bug."])
+    end
 
     -- STAYS EVEN WHEN NOTHING IS BEING HIDDEN, and says so on itself. It is a
     -- setting in its own right rather than the detail of the row above, and

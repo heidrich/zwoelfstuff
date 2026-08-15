@@ -408,9 +408,26 @@ function Look.Apply(item, style)
         -- every cooldown update. Claim.Grow is where that lives, because a
         -- setter with no getter and no honest default is exactly what Claim
         -- exists to refuse from anywhere else.
-        local grow = Door("Grow")
-        if grow then
-            dressing.grew = grow(item, style.fillGrow) and true or false
+        -- ASKED FOR ONLY BY A BAR THAT WANTS IT. Owner, twice, with the
+        -- line in his chat: "ZwoelfStuff: Claim.Grow is missing."
+        --
+        -- Door() complains once per session when the door is not there, and
+        -- that is right - a silently skipped feature is what this project
+        -- keeps paying for. But it was being asked for on EVERY bar-shaped
+        -- place whether or not anything wanted it, so the one person it
+        -- reached was somebody who has never been offered the setting: the
+        -- row is gated on Claim.Grow existing, so nobody can currently even
+        -- ask for `fillGrow`. A warning about a control that is not on the
+        -- page is noise, and noise is how a real warning stops being read.
+        --
+        -- His "Bars 2" DOES carry fillGrow on one cell, written in 4.82.0 -
+        -- so this still speaks for him, once, and it is then telling him
+        -- about a setting he really did choose.
+        if style.fillGrow then
+            local grow = Door("Grow")
+            if grow then
+                dressing.grew = grow(item, style.fillGrow) and true or false
+            end
         end
     else
         -- The art has to be told to fill the frame, and so does the sweep -
