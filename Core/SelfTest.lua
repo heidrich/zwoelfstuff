@@ -7716,6 +7716,24 @@ local function TestCooldownClaim()
     item.Icon = item:CreateTexture()
     item.Cooldown = CreateFrame("Frame", nil, item)
 
+    -- AN ALPHA IS A BYTE, SO NOTHING HERE COMPARES ONE EXACTLY.
+    --
+    -- The client stores 256 steps and hands the value back as a 32-bit float:
+    -- SetAlpha(0.9) reads back as 0.90196084976196, which is 230 times a
+    -- float32 reciprocal of 255. The first version of this suite compared
+    -- against the number it had PASSED IN, which is true out on the desk and
+    -- false in his client - five checks failed at once on a round trip that
+    -- was working perfectly.
+    --
+    -- Half a step is the widest a correct answer can be wrong by, and the
+    -- harness now quantises the same way, so this is a belt on top of braces
+    -- rather than the only thing holding it up.
+    local ALPHA_STEP = 1 / 510
+
+    local function Same(got, wanted)
+        return math.abs((got or -1) - (wanted or -1)) <= ALPHA_STEP
+    end
+
     -- DebuffBorder is deliberately NOT in this list - see below.
     local before = {
         Border = 0.90, Shadow = 0.35, IconShadow = 0.62,
@@ -7725,10 +7743,15 @@ local function TestCooldownClaim()
         item[key] = item:CreateTexture()
         item[key]:SetAlpha(alpha)
         item[key]:Show()
+        -- WHAT THE CLIENT ACTUALLY HOLDS, read back rather than assumed.
+        -- "The alpha it HAD" is what GetAlpha says, and that is exactly what
+        -- Claim records - so this is the number the restore owes us.
+        before[key] = item[key]:GetAlpha()
     end
     item.SpellActivationAlert = CreateFrame("Frame", nil, item)
     item.SpellActivationAlert:SetAlpha(0.8)
     item.SpellActivationAlert:Show()
+    local alertAlpha = item.SpellActivationAlert:GetAlpha()
 
     -- THE CHROME, matched by atlas prefix rather than by name - which is how
     -- the out-of-range veil was found on his client at all. One that must go
@@ -7737,11 +7760,13 @@ local function TestCooldownClaim()
     veil:SetAtlas("UI-CooldownManager-OORshadow")
     veil:SetAlpha(0.5)
     veil:Show()
+    local veilAlpha = veil:GetAlpha()
 
     local stranger = item:CreateTexture()
     stranger:SetAtlas("SomebodyElses-Decoration")
     stranger:SetAlpha(0.7)
     stranger:Show()
+    local strangerAlpha = stranger:GetAlpha()
 
     -- The rounded corners. The mask belongs to the TEXTURE it masks, so it
     -- has to come off the icon rather than be redefined - measured with
@@ -7781,7 +7806,7 @@ local function TestCooldownClaim()
     Check("The out-of-range veil goes with them, matched by its atlas",
         veil:GetAlpha() == 0)
     Check("Somebody else's texture is left exactly alone",
-        stranger:GetAlpha() == 0.7, tostring(stranger:GetAlpha()))
+        Same(stranger:GetAlpha(), strangerAlpha), tostring(stranger:GetAlpha()))
     Check("The mask comes OFF the icon, not redefined",
         item.Icon:GetNumMaskTextures() == 0)
 
@@ -7836,15 +7861,15 @@ local function TestCooldownClaim()
 
     local restored = true
     for key, alpha in pairs(before) do
-        if item[key]:GetAlpha() ~= alpha then restored = false end
+        if not Same(item[key]:GetAlpha(), alpha) then restored = false end
     end
     Check("Every decoration comes back at the alpha it HAD, not at 1",
         restored, string.format("border %s, wanted %s",
             tostring(item.Border:GetAlpha()), tostring(before.Border)))
     Check("The alert is shown again too",
-        item.SpellActivationAlert:GetAlpha() == 0.8
+        Same(item.SpellActivationAlert:GetAlpha(), alertAlpha)
         and item.SpellActivationAlert:IsShown())
-    Check("So does the out-of-range veil", veil:GetAlpha() == 0.5)
+    Check("So does the out-of-range veil", Same(veil:GetAlpha(), veilAlpha))
     Check("The rounded corners go back on", item.Icon:GetNumMaskTextures() == 1)
     Check("The frame is visible again", item:GetAlpha() == 1)
     Check("Nothing is placed any more", Claim.Placed() == 0)
@@ -7854,7 +7879,7 @@ local function TestCooldownClaim()
     -- that they no longer DO anything. Blizzard drives the frame again.
     item.Border:SetAlpha(0.25)
     Check("A released decoration is Blizzard's to drive again",
-        item.Border:GetAlpha() == 0.25, tostring(item.Border:GetAlpha()))
+        Same(item.Border:GetAlpha(), 0.25), tostring(item.Border:GetAlpha()))
 
     -- CLEARED FIRST, because SetPoint ADDS a point rather than replacing one -
     -- in the client and in the harness alike. Asserting on GetPoint(1) after a
