@@ -64,9 +64,25 @@ end
 function Store.Capacity(bar)
     if type(bar) ~= "table" then return 0 end
 
+    -- HOW MANY PLACES THE BAR HAS, AND IT IS ONE NUMBER.
+    --
+    -- `cellCount` is that number when it is set, and rows x columns when it
+    -- is not - which is every bar written before this, so nothing moves.
+    --
+    -- The pair was the only way to say it and could only ever describe a
+    -- RECTANGLE: six across meant six, twelve or eighteen, never seven. Owner,
+    -- 2026-08-15: "feste cells und rows sollte man einstellen koennen". His
+    -- own 4.82.0 bars already carry the number under `freeCount`, and the
+    -- desk has been reporting "1 carry more cells than their width declares"
+    -- since the audit - the shape was too narrow for his own profile.
+    --
+    -- `rows` stays READ, never written: Store translates, it does not
+    -- migrate. A bar that has never met this page answers exactly as before.
     local rows = tonumber(bar.rows) or 1
     local columns = tonumber(bar.columns) or 1
-    local declared = math.max(0, math.floor(rows * columns))
+    local declared = tonumber(bar.cellCount)
+    if not declared then declared = rows * columns end
+    declared = math.max(0, math.floor(declared))
 
     local most = math.max(declared, Highest(bar.cells), Highest(bar.cellOpts))
     for _, list in pairs(type(bar.cellsBySpec) == "table" and bar.cellsBySpec or {}) do
@@ -177,7 +193,8 @@ Store.READERS = {
     -- the point of this table existing.
     now = {
         -- The bar itself, and where it sits.
-        "id", "name", "enabled", "kind", "columns", "rows", "layout", "flow",
+        "id", "name", "enabled", "kind", "columns", "rows", "cellCount",
+        "layout", "flow",
         "growX", "growY", "point", "relPoint", "x", "y", "scale", "pinned",
         "staggerOffset",
 

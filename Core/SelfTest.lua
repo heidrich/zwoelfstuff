@@ -7677,6 +7677,31 @@ local function TestCooldownStore()
         S.Capacity({ rows = 2, columns = 5 }) == 10)
     Check("Nothing at all is nothing", S.Capacity(nil) == 0)
 
+    -- HOW MANY PLACES, SAID OUTRIGHT.
+    --
+    -- rows x columns can only ever describe a RECTANGLE - six across is six,
+    -- twelve or eighteen, never seven - and his own 4.82.0 bars already carry
+    -- the real number under `freeCount`. Owner, 2026-08-15: "feste cells und
+    -- rows sollte man einstellen koennen."
+    Check("A bar that says how many places it has is believed",
+        S.Capacity({ rows = 1, columns = 6, cellCount = 7 }) == 7,
+        tostring(S.Capacity({ rows = 1, columns = 6, cellCount = 7 })))
+    Check("And it may be smaller than one full line",
+        S.Capacity({ rows = 1, columns = 6, cellCount = 4 }) == 4)
+
+    -- SAYING SEVEN STILL DOES NOT THROW THE EIGHTH PICK AWAY, which is the
+    -- promise the page makes in words: "narrowing a bar never throws a pick
+    -- away". Capacity is the largest of what is declared and what is
+    -- referenced, and the new number goes in at the declared end.
+    Check("A pick past the count it declares still counts",
+        S.Capacity({ columns = 6, cellCount = 3,
+            cells = { [9] = 1044 } }) == 9)
+
+    -- A bar written before this key existed answers exactly as it did, which
+    -- is the whole of "Store translates, it does not migrate".
+    Check("A bar with no count at all is still rows times columns",
+        S.Capacity({ rows = 3, columns = 4 }) == 12)
+
     ---------------------------------------------------------------------
     -- THE UNIT CONVERSION, which is the one silent failure in this file
     ---------------------------------------------------------------------

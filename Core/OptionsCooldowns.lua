@@ -106,9 +106,8 @@ end
 ---------------------------------------------------------------------------
 -- The band: what is actually on this bar
 ---------------------------------------------------------------------------
-local function BuildBand(grid, width)
+local function BuildBand(band, width)
     local L = ns.L
-    local band = grid.sticky
     UI.Fill(band, "BACKGROUND", C.windowBg)
 
     local BAND_HEAD = 32
@@ -139,11 +138,8 @@ local function BuildBand(grid, width)
     -- "+ YOUR BARS" in his screenshot, and every other page with a band -
     -- externals, the raid bar, the co-tanks - has this line.
     --
-    -- `band.tail` is what is parked at the BOTTOM of the band, under the
-    -- preview: the tab strip. It is set by BuildPage, after the tabs are known.
     local function Fit()
-        band:SetHeight(BAND_HEAD + math.max(1, host:GetHeight()) + 10
-            + (band.tail or 0))
+        band:SetHeight(BAND_HEAD + math.max(1, host:GetHeight()) + 10)
     end
 
     local slots = {}
@@ -234,8 +230,12 @@ local function BuildBand(grid, width)
         for index = 1, count do
             local slot = SlotAt(index)
             local x, y = model.Slot(index, scaled, count)
-            slot:Resize(slotW)
-            if slot.SetSize then slot:SetSize(slotW, slotH) end
+            -- ONE CALL, AND IT IS TOLD BOTH SIDES. Resize used to take one
+            -- number and square it, so the real size had to be set after -
+            -- leaving the plus sign and the spell icon sized for the LONG
+            -- side inside a place 24 pixels tall.
+            slot.iconSide = bar.iconPlacement or "left"
+            slot:Resize(slotW, slotH)
             slot:ClearAllPoints()
             -- Anchored from the left edge rather than the middle: the band is
             -- as wide as the page and the bar is not, and a bar that grows
@@ -261,125 +261,182 @@ local function BuildBand(grid, width)
     -- the whole point of this page, drew once at build time and never again.
     -- Pick a second bar and the band went on showing the first one's name
     -- over the first one's cells.
-    grid.widgets[#grid.widgets + 1] = band
-
     return band
 end
 
 ---------------------------------------------------------------------------
--- The settings
+-- THE RAIL: EVERY BAR, ONE UNDER THE OTHER
+--
+-- Owner, 2026-08-15, looking at the bar list flowing two-abreast across the
+-- page: "teile das fenster in der mitte, links untereinander alle bars,
+-- rechts alle einstellungen? aehnlich wie wir es vorher hatten."
+--
+-- He is right twice over. Grid:Row is HALF the page wide and two of them
+-- share a line, which is correct for a setting and wrong for a list - so
+-- "Cooldowns" and "Bars 2" sat side by side with the buttons stacked under
+-- the left one only. And the list is not a setting at all: it is what you are
+-- choosing between, which is a rail, the same shape the window itself wears.
+--
+-- IT IS ALSO REBUILT ON EVERY REFRESH, and the version it replaces was not.
+-- This page is built ONCE, so a row made per bar at build time is the set of
+-- bars that existed the first time it was opened: pressing New bar changed
+-- the preview and added no row, for the rest of the session.
 ---------------------------------------------------------------------------
-local function BuildBars(grid)
+local RAIL_W = 236
+local RAIL_GAP = 22
+
+local function BuildRail(rail)
     local L = ns.L
-    local store, bars = Store(), Bars()
 
-    grid:Section(L["Your bars"], "bars", true)
+    local title = UI.Eyebrow(rail, L["Your bars"])
+    title:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -2)
 
-    local list = {}
-    for _, bar in pairs(store and store.Bars() or {}) do
-        if type(bar) == "table" and bar.id then list[#list + 1] = bar end
-    end
-    table.sort(list, function(a, b) return (a.id or 0) < (b.id or 0) end)
+    local rows = {}
+    local empty = UI.Hint(rail, L["No bars yet. Make one and the spells you "
+        .. "pick land on it."])
+    empty:SetWidth(RAIL_W)
+    empty:SetJustifyV("TOP")
+    empty:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -26)
 
-    if #list == 0 then
-        grid:Note(L["No bars yet. Make one and the spells you pick land on "
-            .. "it - everything Blizzard's Cooldown Manager already knows "
-            .. "about is in the list on the right."])
-    end
+    -- The three actions, made once and moved by Refresh - a button rebuilt
+    -- per pass is a button whose two-step "really?" forgets it was armed.
+    local newBar = UI.Button(rail, L["New bar"], RAIL_W, function()
+        local bars = Bars()
+        local made = bars and bars.New()
+        if made then Page.barID = made.id end
+        Refresh()
+    end)
 
-    for _, bar in ipairs(list) do
-        local id = bar.id
-        -- WHICH ONE YOU ARE EDITING, SAID IN WORDS ON THE ROW ITSELF. A page
-        -- whose preview belongs to one of five identical-looking rows and
-        -- says so nowhere is a page you edit the wrong bar on.
-        --
-        -- A sublabel rather than a colour, and not for taste: `UI.Row` takes
-        -- `icon`, `sublabel` and `tall`, and nothing else. The first draft
-        -- passed `accent = true`, which the row does not read - so it would
-        -- have marked nothing at all, silently, which is exactly the kind of
-        -- control that does nothing this addon spent a session removing.
-        --
-        -- `onClick`, and it is not a synonym for SetScript("OnClick"): a row
-        -- is a FRAME and a frame has no OnClick at all. This asked for one
-        -- and the client threw it back eight times on every paint, so
-        -- picking a bar by clicking its row has never once worked. UI.Row
-        -- hears it as OnMouseUp, which is the handler a frame has.
-        local row = grid:Row(bar.name or L["Bar"], {
-            sublabel = (Page.barID == id)
-                and L["Shown in the preview above"] or nil,
-            onClick = function()
-                Page.barID = id
-                Page.cell = nil
-                Refresh()
-            end,
-        })
-        UI.Toggle(row,
-            function() return bar.enabled ~= false end,
-            function(on)
-                bar.enabled = on and true or false
-                Refresh()
-            end)
-    end
-
-    grid:Buttons({
-        { text = L["New bar"], onClick = function()
-            local made = bars and bars.New()
-            if made then Page.barID = made.id end
-            Refresh()
-        end },
-        { text = L["Duplicate this one"], onClick = function()
-            local bar = Page.Current()
+    local duplicate = UI.Button(rail, L["Duplicate this one"], RAIL_W,
+        function()
+            local bars, bar = Bars(), Page.Current()
             local made = bar and bars and bars.Duplicate(bar.id)
             if made then Page.barID = made.id end
             Refresh()
-        end },
-    }, UI.PAD)
+        end)
 
     -- DELETING ONE ASKS TWICE, like every other thing in this addon you
-    -- cannot take back in the same second.
-    local bar = Page.Current()
-    if bar then  -- built once, with whatever bar was selected then
-        local armed, button = false, nil
-        local idle = L("Delete %s", bar.name or L["this bar"])
-        local _, made = grid:Buttons({
-            {
-                text = idle,
-                onClick = function()
-                    local handle = button
-                    if not handle then return end
-                    if not armed then
-                        armed = true
-                        handle:SetText(L["Really delete it?"])
-                        C_Timer.After(4, function()
-                            armed = false
-                            if handle and handle.SetText then
-                                handle:SetText(idle)
-                            end
-                        end)
-                        return
-                    end
-                    -- `and` cannot carry two answers, so the call is its own
-                    -- statement. Written as `local _, freed = bars and
-                    -- bars.Delete(...)` the second return is dropped on the
-                    -- floor and `freed` is always nil - so the line that says
-                    -- how many bars were let loose would never once print.
-                    local freed = 0
-                    if bars then
-                        local _, released = bars.Delete(bar.id)
-                        freed = released or 0
-                    end
-                    Page.barID = nil
-                    if freed > 0 then
-                        ns.Print(ns.L("%d bars were following it and now sit "
-                            .. "where they are.", freed))
-                    end
-                    Refresh()
-                end,
-            },
-        })
-        button = made
-        grid.deleteButton = made
+    -- cannot take back in the same second. It disarms itself after four
+    -- seconds: a button left sitting on "really?" is one somebody clicks on
+    -- their way past a week later.
+    local armed, remove = false, nil
+    local function Idle()
+        local bar = Page.Current()
+        return L("Delete %s", bar and (bar.name or L["this bar"])
+            or L["this bar"])
     end
+
+    remove = UI.Button(rail, L["Delete"], RAIL_W, function()
+        if not armed then
+            armed = true
+            remove:SetText(L["Really delete it?"])
+            C_Timer.After(4, function()
+                if not armed then return end
+                armed = false
+                if remove and remove.SetText then remove:SetText(Idle()) end
+            end)
+            return
+        end
+        armed = false
+
+        local bars, bar = Bars(), Page.Current()
+        -- `and` cannot carry two answers, so the call is its own statement.
+        -- Written as `local _, freed = bars and bars.Delete(...)` the second
+        -- return is dropped on the floor and `freed` is always nil - so the
+        -- line that says how many bars were let loose would never once print.
+        local freed = 0
+        if bars and bar then
+            local _, released = bars.Delete(bar.id)
+            freed = released or 0
+        end
+        Page.barID = nil
+        if freed > 0 then
+            ns.Print(ns.L("%d bars were following it and now sit where they "
+                .. "are.", freed))
+        end
+        Refresh()
+    end)
+    rail.deleteButton = remove
+
+    -- ONE ROW PER BAR, POOLED. The rows are frames and a page that makes a
+    -- fresh one per refresh leaks a frame per press for the session.
+    local function RowAt(index)
+        if rows[index] then return rows[index] end
+        local row = UI.Row(rail, "", { controlWidth = 40 })
+        row:SetWidth(RAIL_W)
+        UI.Toggle(row,
+            function()
+                local bar = row.dkBar
+                return bar and bar.enabled ~= false
+            end,
+            function(on)
+                local bar = row.dkBar
+                if not bar then return end
+                bar.enabled = on and true or false
+                Refresh()
+            end)
+        -- `onClick`, and it is not a synonym for SetScript("OnClick"): a row
+        -- is a FRAME and a frame has no OnClick at all. Asking for one threw
+        -- the client's refusal eight times on every paint, and picking a bar
+        -- by clicking its row never worked once.
+        row.dkPick = function()
+            if not row.dkBar then return end
+            Page.barID = row.dkBar.id
+            Page.cell = nil
+            Refresh()
+        end
+        row:SetScript("OnMouseUp", function(_, button)
+            if button == "LeftButton" and row.dkPick then row.dkPick() end
+        end)
+        rows[index] = row
+        return row
+    end
+
+    rail.Refresh = function()
+        local store = Store()
+        local list = {}
+        for _, bar in pairs(store and store.Bars() or {}) do
+            if type(bar) == "table" and bar.id then list[#list + 1] = bar end
+        end
+        table.sort(list, function(a, b) return (a.id or 0) < (b.id or 0) end)
+
+        local y = 26
+        for index, bar in ipairs(list) do
+            local row = RowAt(index)
+            row.dkBar = bar
+            row.label:SetText(bar.name or L["Bar"])
+
+            -- WHICH ONE YOU ARE EDITING, said on the row itself. A rail whose
+            -- preview belongs to one of five identical-looking rows and says
+            -- so nowhere is a rail you edit the wrong bar from.
+            local chosen = (Page.barID == bar.id)
+            row.bg:SetShown(chosen)
+            row.label:SetTextColor(unpack(chosen and C.text or C.textBody))
+
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -y)
+            row:Show()
+            if row.Refresh then row.Refresh() end
+            y = y + row:GetHeight()
+        end
+        for index = #list + 1, #rows do rows[index]:Hide() end
+
+        empty:SetShown(#list == 0)
+        if #list == 0 then y = y + 34 end
+
+        y = y + UI.PAD
+        for _, button in ipairs({ newBar, duplicate, remove }) do
+            button:ClearAllPoints()
+            button:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -y)
+            y = y + UI.BUTTON_H + 6
+        end
+
+        duplicate:SetShown(#list > 0)
+        remove:SetShown(#list > 0)
+        if not armed then remove:SetText(Idle()) end
+    end
+
+    return rail
 end
 
 -- THE BAR IS RESOLVED WHEN A CONTROL IS READ, NEVER WHEN IT IS BUILT.
@@ -418,6 +475,16 @@ local function Number(key, fallback)
     return tonumber(Get(key, fallback)) or fallback
 end
 
+-- HOW MANY PLACES THE SELECTED BAR HAS, asked of the store rather than
+-- multiplied out here. Capacity also counts a pick sitting past the last
+-- place, which is what keeps "narrowing a bar never throws a pick away" true
+-- on this page as well as in the renderer.
+local function Places()
+    local store, bar = Store(), Bar()
+    if not (store and bar) then return 1 end
+    return math.max(1, store.Capacity(bar))
+end
+
 local function BuildArrangement(grid)
     local L = ns.L
 
@@ -436,25 +503,62 @@ local function BuildArrangement(grid)
     -- walks every row that carries one of these.
     nameRow.Refresh = function() nameInput:SetText(Get("name", "") or "") end
 
+    -- SWITCHING TO BAR-SHAPED PLACES STACKS THEM. Owner, with a picture of
+    -- four of them shoulder to shoulder: "bars muss gestabelt werden, und das
+    -- sieht nicht gut aus."
+    --
+    -- A real write to Across rather than a rule that overrides it, so the
+    -- control still says what the bar is doing and dragging it back to four
+    -- across is allowed. A bar 200 wide beside another one is not a layout
+    -- anybody meant to ask for; it is the default nobody changed.
     UI.Dropdown(grid:Row(L["Cells are"]), {
         { value = "icon", text = L["Icons"] },
         { value = "bar",  text = L["Bars"] },
     }, function() return Get("kind", "icon") end,
-       function(value) Set("kind", value) end)
+       function(value)
+            local bar = Bar()
+            if bar and value == "bar" and Number("columns", 1) > 1 then
+                bar.columns = 1
+            end
+            Set("kind", value)
+       end)
 
+    -- HOW MANY PLACES, AND HOW MANY OF THEM PER LINE. Two numbers, not a
+    -- rectangle. See Store.Capacity: `cellCount` is the truth and Across is
+    -- the view of it, exactly as Model.lua's own header puts it - "the list
+    -- is the truth and the columns are the view".
+    UI.Slider(grid:Row(L["Places"]), {
+        min = 1, max = 40, step = 1,
+        get = function() return Places() end,
+        set = function(value) Set("cellCount", value) end,
+    })
     UI.Slider(grid:Row(L["Across"]), {
         min = 1, max = 20, step = 1,
         get = function() return Number("columns", 1) end,
         set = function(value) Set("columns", value) end,
     })
+
+    -- DOWN IS A VIEW OF PLACES, and writing it writes places.
+    --
+    -- It is not a third number: lines are what you get when you wrap Places
+    -- every Across, so reading it is that division and setting it to three
+    -- is another way of saying "three lines' worth of places". Two controls
+    -- over one stored number and no way for them to disagree - which is the
+    -- whole reason the pair could not describe seven places before.
     UI.Slider(grid:Row(L["Down"]), {
-        min = 1, max = 10, step = 1,
-        get = function() return Number("rows", 1) end,
-        set = function(value) Set("rows", value) end,
+        min = 1, max = 20, step = 1,
+        get = function()
+            local across = math.max(1, Number("columns", 1))
+            return math.max(1, math.ceil(Places() / across))
+        end,
+        set = function(value)
+            Set("cellCount", math.max(1, Number("columns", 1)) * value)
+        end,
     })
-    grid:Note(L["Across times down is how many places the bar has. A spell "
-        .. "already sitting past the last place keeps its cell - narrowing a "
-        .. "bar never throws a pick away."])
+    grid:Note(L["Places is how many the bar has and across is how many of "
+        .. "them sit on a line; down is what that comes to. A spell already "
+        .. "sitting past the last place keeps its cell - narrowing a bar "
+        .. "never throws a pick away."])
 
     UI.Dropdown(grid:Row(L["Pattern"]), ns.CD_LAYOUTS,
         function() return ns.Cooldowns.Store.Lattice(Bar()).layout or "grid" end,
@@ -657,14 +761,14 @@ local function BuildRivals(grid)
         grid:Note(L["Nothing else on this account is managing them."])
     end
 
-    -- HOW IT DECIDED, because a check that reports something surprising and
-    -- will not say why is a check people stop believing. It is also the line
-    -- that explains why an addon they think of as a cooldown addon is not
-    -- listed: it never said so about itself.
-    grid:Note(L["Read from what each addon says about itself in its own "
-        .. "description, so an addon that manages cooldowns without ever "
-        .. "saying so is not found. Addons switched off for this character "
-        .. "are not counted."])
+    -- HOW IT DECIDED USED TO BE WRITTEN OUT HERE, and it is gone. Owner,
+    -- 2026-08-15, with a picture of this section: "der text kann raus."
+    --
+    -- He is right, and the reason is worth keeping: it explained the METHOD
+    -- ("read from what each addon says about itself in its own description")
+    -- to somebody who has just been told there is nothing to worry about.
+    -- A paragraph about how a check works belongs next to a check that found
+    -- something; over a clean answer it is just noise on the way past.
 
     ---------------------------------------------------------------------
     -- What Blizzard's own Cooldown Manager knows
@@ -697,24 +801,82 @@ end
 
 function Page:BuildPage(page, width)
     local L = ns.L
-    local grid = UI.Page(page, width, { tooltipNotes = true, sticky = true })
+
+    ---------------------------------------------------------------------
+    -- THE WINDOW SPLIT DOWN THE MIDDLE, which is his own layout:
+    -- "links untereinander alle bars, rechts alle einstellungen".
+    --
+    --   band   full width, never scrolls - the bar you are editing
+    --   rail   left, every bar under the other, and the three actions
+    --   right  the tab strip and the settings, scrolling under it
+    --
+    -- The band is built here rather than by UI.Page's `sticky`, because it
+    -- belongs to the PAGE and the grid now owns only the right half.
+    ---------------------------------------------------------------------
+    local band = CreateFrame("Frame", nil, page)
+    band:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+    band:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
+    band:SetHeight(1)
+    BuildBand(band, width)
+
+    local body = CreateFrame("Frame", nil, page)
+    body:SetPoint("TOPLEFT", band, "BOTTOMLEFT", 0, -UI.PAD)
+    body:SetPoint("TOPRIGHT", band, "BOTTOMRIGHT", 0, -UI.PAD)
+    body:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
+
+    local rail = CreateFrame("Frame", nil, body)
+    rail:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
+    rail:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 0, 0)
+    rail:SetWidth(RAIL_W)
+    BuildRail(rail)
+
+    -- The hairline between the two halves. It is the only thing saying the
+    -- left column is a different kind of thing from the right one, now that
+    -- neither is a card on a ground of its own.
+    local split = body:CreateTexture(nil, "ARTWORK")
+    split:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    split:SetWidth(1)
+    split:SetPoint("TOPLEFT", rail, "TOPRIGHT", RAIL_GAP / 2, 0)
+    split:SetPoint("BOTTOMLEFT", rail, "BOTTOMRIGHT", RAIL_GAP / 2, 0)
+
+    local right = CreateFrame("Frame", nil, body)
+    right:SetPoint("TOPLEFT", rail, "TOPRIGHT", RAIL_GAP, 0)
+    right:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", 0, 0)
+
+    local strip
+    local settings = CreateFrame("Frame", nil, right)
+    settings:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -(34 + UI.PAD))
+    settings:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", 0, 0)
+
+    local pageWidth = width - RAIL_W - RAIL_GAP
+    local grid = UI.Page(settings, pageWidth,
+        { tooltipNotes = true, single = true })
     grid.page = page
+    grid.rail = rail
+    -- The delete button lives on the rail now. Named here as well so the
+    -- desk guard that asks "does this page offer a way to delete a bar"
+    -- still finds one - a guard that cannot find the control reports it
+    -- absent, and absent is how a working page fails a check.
+    grid.deleteButton = rail.deleteButton
+    -- The band is not the grid's any more, and the desk guard that asks a
+    -- page whether its band has a height reads it here. Named rather than
+    -- inferred: a guard that cannot find the band reports nothing, and
+    -- nothing prints the same green as passing.
+    grid.sticky = band
 
-    local band = BuildBand(grid, width)
-
-    -- SIX SHORT PAGES INSTEAD OF ONE OF TWENTY-THREE HEADINGS.
+    ---------------------------------------------------------------------
+    -- FIVE SHORT PAGES INSTEAD OF ONE OF TWENTY-THREE HEADINGS.
     --
-    -- Folding sections were the answer to the 2 710-line page, and on their
-    -- own they are not enough: twenty-three of them, all shut, is a screen
-    -- with nothing on it but a list of things it will not show you. Owner,
-    -- 2026-08-15, with the picture: "well, damit kann man nicht arbeiten."
+    -- Folding sections were the answer to the 2 710-line page and on their
+    -- own were not enough: twenty-three of them, all shut, is a screen with
+    -- nothing on it but a list of things it will not show you. Owner, with
+    -- the picture: "well, damit kann man nicht arbeiten."
     --
-    -- So the same split the co-tank page already wears - Widgets' own note on
-    -- Grid:Tab says it in one line: "nine sections in one scroll is a page you
-    -- have to remember your way around; the same nine split three ways is
-    -- three short pages." Each tab holds three to seven, and they open OPEN.
+    -- Widgets' own note on Grid:Tab says the rest in one line: "nine sections
+    -- in one scroll is a page you have to remember your way around; the same
+    -- nine split three ways is three short pages."
+    ---------------------------------------------------------------------
     grid:Tab(L["Bars"])
-    BuildBars(grid)
     BuildArrangement(grid)
     BuildSize(grid)
 
@@ -731,19 +893,12 @@ function Page:BuildPage(page, width)
     grid:Tab(L["Blizzard"])
     BuildRivals(grid)
 
-    -- THE STRIP LIVES IN THE STICKY BAND, under the preview. The two things
-    -- that must never scroll away are what you are editing and the way to the
-    -- rest of it, and both are now in the same place on every tab.
-    local strip
-    strip = UI.TabStrip(band, grid.tabs, function(name)
+    strip = UI.TabStrip(right, grid.tabs, function(name)
         grid:ShowTab(name)
         strip:Select(name)
     end)
-    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
-    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
-    -- What the band has to leave room for at its bottom. Set before the first
-    -- Fit, which happens inside band.Refresh below.
-    band.tail = strip:GetHeight() + 10
+    strip:SetPoint("TOPLEFT", right, "TOPLEFT", 0, 0)
+    strip:SetPoint("TOPRIGHT", right, "TOPRIGHT", 0, 0)
     grid.strip = strip
 
     -- LAID OUT HERE, not left to OnSizeChanged. A tab is created with no
@@ -761,13 +916,14 @@ function Page:BuildPage(page, width)
     -- so with that field nil, Grid:Refresh never ran, no row ever refreshed,
     -- and band.Refresh - the preview lattice, the whole point of the page -
     -- was never called once.
-    --
-    -- Every other options page in this addon does both. The desk guard that
-    -- says "every option on every page can be drawn" BUILDS a page; it does
-    -- not lay one out, so it was green over a page that put nothing anywhere.
     grid:Layout()
     band.Refresh()
-    page.Refresh = function() grid:Refresh() end
+    rail.Refresh()
+    page.Refresh = function()
+        band.Refresh()
+        rail.Refresh()
+        grid:Refresh()
+    end
 
     return grid
 end

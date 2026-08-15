@@ -84,6 +84,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The page is split down the middle.** Every bar in a column down the left,
+  one under the other, and the settings on the right under their tabs — the
+  owner's own layout, and the fix for a list that flowed two-abreast because a
+  settings row is half the page wide. The list also **rebuilds itself now**:
+  the page is built once, so a row made per bar at build time was the set of
+  bars that existed the first time it was opened, and pressing New bar added
+  nothing you could see.
+- **A bar has a number of places, not a rectangle.** `Rows x across` could
+  only ever describe six, twelve or eighteen — never seven. **Places** says it
+  outright; across is how many of them sit on a line, and down is what that
+  comes to. Bars written before this read exactly as they did.
+- **Bar-shaped places stack.** Switching a bar's cells from icons to bars puts
+  them one per line, which is the only arrangement anybody means by it — four
+  200-pixel bars shoulder to shoulder was the default nobody had changed.
+- **A bar-shaped place looked wrong in the preview.** Its spell icon was
+  stretched the whole width of the bar and its empty "+" was drawn for a box
+  eight times too tall. A place is now told both its sides, and its icon stays
+  square at the end the spell icon actually sits at.
 - **The Cooldowns page opened with nothing on it.** Twenty-three headings, all
   folded shut, over a preview band one pixel tall — so the bar's name was drawn
   across the first heading, and the button that makes a bar was inside a

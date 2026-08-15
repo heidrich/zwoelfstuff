@@ -349,6 +349,11 @@ Register("enUS", {
         true,
     ["Shown in the preview above"] = true,
     -- The bar editor: the look, the text, the effects and the fill
+    ["Places"] = true,
+    ["Delete"] = true,
+    ["No bars yet. Make one and the spells you pick land on it."] = true,
+    ["Places is how many the bar has and across is how many of them sit on a line; down is what that comes to. A spell already sitting past the last place keeps its cell - narrowing a bar never throws a pick away."] =
+        true,
     ["Text"] = true,
     ["Effects"] = true,
     ["Fill"] = true,
@@ -809,6 +814,12 @@ Register("deDE", {
         "Blizzards eigene Anzeigen zeigen weiter alles, was sie kennen. Das hier macht die, die du auf keine Leiste gelegt hast, unsichtbar statt sie zu verstecken - es sind Blizzards Frames, und einen davon zu verstecken ist genau das, was ihn für den Rest der Sitzung beschädigt.",
     ["Shown in the preview above"] = "Oben in der Vorschau",
     -- Der Leisten-Editor: Aussehen, Text, Effekte und Füllung
+    ["Places"] = "Plätze",
+    ["Delete"] = "Löschen",
+    ["No bars yet. Make one and the spells you pick land on it."] =
+        "Noch keine Leisten. Leg eine an, dann landen die Zauber, die du aussuchst, darauf.",
+    ["Places is how many the bar has and across is how many of them sit on a line; down is what that comes to. A spell already sitting past the last place keeps its cell - narrowing a bar never throws a pick away."] =
+        "Plätze ist, wie viele die Leiste hat, und Nebeneinander, wie viele davon auf eine Zeile gehen; Untereinander ist, was dabei herauskommt. Ein Zauber, der schon hinter dem letzten Platz sitzt, behält seine Zelle - eine Leiste schmaler zu machen wirft nie eine Wahl weg.",
     ["Text"] = "Text",
     ["Effects"] = "Effekte",
     ["Fill"] = "Füllung",

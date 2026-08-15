@@ -3201,9 +3201,37 @@ function UI.SpellSlot(parent, cfg)
     -- every time the rows, the columns or the icon size change - so a bar
     -- rebuilt from 40 down to 26 kept a plus sign drawn for a 40 pixel box
     -- and it was the only thing on the page that did not shrink.
-    slot.Resize = function(_, next_)
-        slot:SetSize(next_, next_)
-        ns.StyleUIFont(slot.mark, math.floor(next_ * 0.38))
+    --
+    -- AND A SLOT IS NOT ALWAYS A SQUARE. A cooldown bar whose places are
+    -- BAR-shaped previews as 200 by 24, and this took one number and made a
+    -- square of it - so the caller set the real size afterwards and left two
+    -- things sized for a 200 pixel box inside a 24 pixel one: a plus sign at
+    -- font 76, and the spell icon stretched the whole width of the bar.
+    -- Owner, with a picture of exactly that smear: "das sieht nicht gut aus",
+    -- and "dachte die bars waeren solved".
+    --
+    -- The short side is what both of them follow. An icon is square on
+    -- screen, so it stays square here and sits at the end `iconSide` names -
+    -- which is the same answer `iconPlacement` gives the renderer.
+    slot.Resize = function(_, width, height)
+        height = tonumber(height) or width
+        slot:SetSize(width, height)
+        ns.StyleUIFont(slot.mark, math.floor(math.min(width, height) * 0.38))
+
+        slot.icon:ClearAllPoints()
+        local side = slot.iconSide
+        if height < width - 4 and side ~= "stretch" then
+            local box = math.max(1, height - 4)
+            if side == "right" then
+                slot.icon:SetPoint("RIGHT", slot, "RIGHT", -2, 0)
+            else
+                slot.icon:SetPoint("LEFT", slot, "LEFT", 2, 0)
+            end
+            slot.icon:SetSize(box, box)
+        else
+            slot.icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 2, -2)
+            slot.icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -2, 2)
+        end
     end
 
     -- The drop marker, the same green ring the bar cards show.
@@ -3658,7 +3686,16 @@ function UI.Page(parent, width, opts)
         explain  = opts and opts.explain or nil,
         tooltipNotes = opts and opts.tooltipNotes or nil,
         width    = contentWidth,
-        colWidth = math.floor((contentWidth - UI.COL_GAP) / 2),
+
+        -- ONE COLUMN OR TWO, and it is a decision about how much room the
+        -- page has rather than a taste. Two columns of settings need about
+        -- 300 each; the cooldowns page gives 236 of its width to the bar
+        -- rail down the left, which left 230 - and a slider is 156 wide with
+        -- its label beside it. The desk reports that as nineteen controls
+        -- drawn over their own labels, which is exactly what it looks like.
+        perLine  = (opts and opts.single) and 1 or 2,
+        colWidth = (opts and opts.single) and contentWidth
+            or math.floor((contentWidth - UI.COL_GAP) / 2),
         items    = {},
         widgets  = {},
     }, Grid)
@@ -4110,7 +4147,7 @@ function Grid:Layout()
             lineHeight = math.max(lineHeight, item.height)
             column = column + 1
             placed = true
-            if column >= 2 then EndLine() end
+            if column >= (self.perLine or 2) then EndLine() end
         end
     end
     EndLine()
