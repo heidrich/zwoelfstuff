@@ -2707,9 +2707,14 @@ local function TestDesignSystem()
             ns.DEFAULTS.editMode[key] ~= nil)
     end
 
+    -- Arrangement, Fill order and Across left with the bars. Each one was a
+    -- list of choices for a page that no longer exists, and this check was
+    -- the only thing left reading them - a guard standing over a menu nobody
+    -- can open. The lists went; this is what remains, and every one of them
+    -- is drawn by a page you can still reach.
     local marked = {
-        { "Arrangement", ns.LAYOUTS }, { "Fill order", ns.FLOWS },
-        { "Across", ns.GROW_X }, { "Down", ns.GROW_Y },
+        { "Down", ns.GROW_Y },
+        { "Fill", ns.FILL_DIRECTIONS },
         { "Places", ns.SHOW_WHERE },
     }
     for _, pair in ipairs(marked) do

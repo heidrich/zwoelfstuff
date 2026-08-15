@@ -192,34 +192,6 @@ function Profiles:List()
     return out
 end
 
--- The other CHARACTERS, which is not the same question as the other
--- profiles. Kept because "take a layout from" asks it, and because a
--- character is what somebody remembers - they think "my paladin", not "the
--- profile my paladin happens to point at".
-function ns.OtherProfiles()
-    local store = Store()
-    local out = {}
-
-    for charKey, name in pairs(store.charProfile or {}) do
-        local profile = type(name) == "string" and store.profiles[name]
-        -- A character POINTING AT THE PROFILE IN USE is left off the list.
-        -- Its layout is the one you are looking at, so there is nothing to
-        -- copy - and taking it would not be nothing: the copy empties every
-        -- cell on the way over, so it would strip the spells off your own
-        -- bars. CopyLayoutFrom refuses it too; this just keeps the refusal
-        -- out of the menu.
-        if charKey ~= ns.profileKey and name ~= ns.profileName
-            and type(profile) == "table" then
-            out[#out + 1] = {
-                key = charKey, name = name, bars = #(profile.bars or {}),
-            }
-        end
-    end
-
-    table.sort(out, function(a, b) return a.key < b.key end)
-    return out
-end
-
 -- The bars belonging to a character, by character key. One place, so the
 -- copy path does not have to know that a character is a pointer now.
 --
