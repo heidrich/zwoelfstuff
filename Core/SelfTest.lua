@@ -7567,6 +7567,84 @@ local function TestCooldownModel()
         places[4] and places[4].slot == 4 and places[4].x == 108)
 end
 
+---------------------------------------------------------------------------
+-- READING A STORED BAR
+--
+-- Every fixture in here is the SHAPE his own file actually has, taken off
+-- disk rather than off the defaults table - including the two things that
+-- would have been got wrong by writing against the defaults: a cell list with
+-- holes in it, and a stagger stored as a percentage.
+---------------------------------------------------------------------------
+local function TestCooldownStore()
+    local S = ns.Cooldowns and ns.Cooldowns.Store
+    if not S then
+        Skip("Reading a stored bar", "Cooldowns/Store.lua is not loaded")
+        return
+    end
+
+    -- HIS SHAPE. A hole at slot 2 is a bar somebody arranged, not a broken
+    -- one, and `#` on this table may legally answer 1.
+    local bar = {
+        id = 3, name = "Cooldowns", rows = 1, columns = 5,
+        iconSize = 40, spacing = 4, staggerOffset = 50,
+        layout = "grid", flow = "rows", growX = "right", growY = "down",
+        cells = { 1044, nil, 102342, 633, 47788 },
+    }
+
+    Check("A hole in the middle does not shorten the bar",
+        S.Capacity(bar) == 5, tostring(S.Capacity(bar)))
+
+    -- THE ONE HIS FILE ACTUALLY HAS: a bar declaring five columns in one row
+    -- and a cell list twelve long. Trusting the declared number drops seven
+    -- of his picks, silently.
+    local wide = { rows = 1, columns = 5, cells = {} }
+    for index = 1, 12 do wide.cells[index] = 1000 + index end
+    Check("A cell past the declared width still counts",
+        S.Capacity(wide) == 12, tostring(S.Capacity(wide)))
+
+    -- And the other direction: a bar with room and nothing in it is still
+    -- that big, or the editor has nowhere to drop a spell.
+    Check("An empty bar is as big as it says it is",
+        S.Capacity({ rows = 2, columns = 5 }) == 10)
+    Check("Nothing at all is nothing", S.Capacity(nil) == 0)
+
+    ---------------------------------------------------------------------
+    -- THE UNIT CONVERSION, which is the one silent failure in this file
+    ---------------------------------------------------------------------
+    local opts = S.Lattice(bar)
+    Check("The stagger comes across as a fraction of a step",
+        opts.stagger == 0.5, tostring(opts.stagger))
+    Check("iconSize becomes the model's size", opts.size == 40)
+    Check("And the words that already agree are passed straight through",
+        opts.layout == "grid" and opts.flow == "rows"
+        and opts.growX == "right" and opts.growY == "down")
+
+    -- Proved end to end rather than by inspection: fifty read as fifty
+    -- STEPS would put the second row a screen and a half to the right.
+    local M = ns.Cooldowns.Model
+    if M then
+        local shifted = S.Lattice(bar)
+        shifted.layout = "staggered"
+        local x = M.Slot(6, shifted, 10)
+        Check("A staggered row moves half a cell, not fifty",
+            x == 22, tostring(x))
+    end
+
+    ---------------------------------------------------------------------
+    -- WHAT NOTHING READS YET, reported rather than assumed dead
+    ---------------------------------------------------------------------
+    local waves, unknown = S.Survey(bar)
+    Check("Keys that are read today are named as such",
+        waves.now and #waves.now > 0)
+    Check("A bar of his has no unclaimed keys", #unknown == 0,
+        table.concat(unknown, ", "))
+
+    local invented = { id = 1, somethingNobodyDeclared = true }
+    local _, strange = S.Survey(invented)
+    Check("A key no wave claims is reported, not swallowed",
+        #strange == 1 and strange[1] == "somethingNobodyDeclared")
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -7604,6 +7682,7 @@ function Test:Run()
         { "Frame contract", TestFrameContract },
         { "Other cooldown addons", TestRivals },
         { "Cooldown lattice", TestCooldownModel },
+        { "Reading a stored bar", TestCooldownStore },
     }
 
     for _, suite in ipairs(suites) do

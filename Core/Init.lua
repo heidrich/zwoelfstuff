@@ -772,6 +772,16 @@ end
 --           version still finds it. A STRING names a key on the profile; a
 --           TABLE is that table - the request panel keeps its slots inside
 --           its own config, not at the top level.
+--   owner   whose table it is, defaulting to the profile. A cooldown bar
+--           keeps its own cellsBySpec INSIDE the bar - one bar's picks are
+--           not the next bar's - so the store has to be able to sit
+--           somewhere other than the top level.
+--
+--           This argument is the whole of what the rebuilt cooldown manager
+--           needed from this function. It was worth a fourth caller and one
+--           parameter rather than a second implementation: the case that
+--           loses data is the unanswered spec below, and there is exactly
+--           one place that gets it right.
 --
 -- Returns nil while the client has not said which spec this is. Writing
 -- under "WARRIOR:0" files a pick in a bin nothing will ever read again;
@@ -784,14 +794,15 @@ local function CarryOver(value)
     return out
 end
 
-function ns.SpecStore(field, legacy)
-    if not ns.db then return nil end
+function ns.SpecStore(field, legacy, owner)
+    owner = owner or ns.db
+    if not owner then return nil end
 
     local key, known = ns.SpecKey()
     if not (key and known) then return nil end
 
-    ns.db[field] = ns.db[field] or {}
-    local store = ns.db[field]
+    owner[field] = owner[field] or {}
+    local store = owner[field]
 
     if store[key] == nil then
         local was = legacy

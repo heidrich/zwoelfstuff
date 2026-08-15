@@ -127,6 +127,9 @@ Core\Layout.lua
 # Layout.lua because it calls Layout.Compact rather than carrying a second
 # copy of the gap-closing rule.
 Core\Cooldowns\Model.lua
+# Reading the bars still in the profile. Below Model, whose vocabulary it
+# translates into, and below Profiles - it reads ns.db and ns.SpecStore.
+Core\Cooldowns\Store.lua
 Core\Visibility.lua
 # The aura engine and the co-tank frames.
 #
