@@ -7446,6 +7446,127 @@ local function TestRivals()
     Check("And so is an empty name", (R.Disable("")) == false)
 end
 
+---------------------------------------------------------------------------
+-- THE COOLDOWN LATTICE
+--
+-- Every number in here is worked out by hand in the comment beside it. That
+-- is the point of a pure model: an off-by-one in cell placement raises no
+-- error - it puts the right icon in the wrong square, which looks exactly
+-- like a working bar and is only ever found by somebody staring at a screen.
+--
+-- The defaults the arithmetic below assumes: size 32, spacing 4, so one step
+-- is 36 on both axes.
+---------------------------------------------------------------------------
+local function TestCooldownModel()
+    local M = ns.Cooldowns and ns.Cooldowns.Model
+    if not M then
+        Skip("The cooldown lattice", "Cooldowns/Model.lua is not loaded")
+        return
+    end
+
+    local four = { columns = 4 }
+
+    -- Cell 1 is the origin. Everything else is measured from it, so if this
+    -- is not nought the whole bar is offset and every other check still passes.
+    local x, y, w, h = M.Slot(1, four, 4)
+    Check("Cell 1 sits at the origin", x == 0 and y == 0)
+    Check("And is one cell big", w == 32 and h == 32)
+
+    -- Cell 5 of a four-wide bar is the first of the second row: straight
+    -- below cell 1, one step down. +y is UP, so down is negative.
+    x, y = M.Slot(5, four, 8)
+    Check("The fifth cell of a four-wide bar starts the second row",
+        x == 0 and y == -36, string.format("%s,%s", x, y))
+
+    -- Growing upwards flips only the y. It is the case that reads correctly
+    -- in the source either way round and is upside down on screen.
+    x, y = M.Slot(5, { columns = 4, growY = "up" }, 8)
+    Check("Growing up puts the second row above the first",
+        x == 0 and y == 36, string.format("%s,%s", x, y))
+
+    -- Growing left flips only the x, and cell 1 stays at nought.
+    x = M.Slot(2, { columns = 4, growX = "left" }, 4)
+    Check("Growing left puts the second cell to the left", x == -36)
+
+    ---------------------------------------------------------------------
+    -- READING ORDER, which is not the same question as growth
+    ---------------------------------------------------------------------
+    local row, column = M.Cell(6, 4, "rows")
+    Check("Along rows: the sixth cell is row 1, column 1",
+        row == 1 and column == 1, string.format("%s,%s", row, column))
+
+    -- Eight cells four wide is two rows tall, so filling downwards puts the
+    -- second cell UNDER the first and the third at the top of column two.
+    row, column = M.Cell(2, 4, "columns", 8)
+    Check("Down columns: the second cell is under the first",
+        row == 1 and column == 0, string.format("%s,%s", row, column))
+    row, column = M.Cell(3, 4, "columns", 8)
+    Check("And the third starts the second column",
+        row == 0 and column == 1, string.format("%s,%s", row, column))
+
+    ---------------------------------------------------------------------
+    -- THE PROPERTY THE WHOLE MODEL EXISTS FOR
+    --
+    -- A flat list re-flows when the width changes; a stored grid position
+    -- scrambles. Cell 6 is on the second row at three wide and on the third
+    -- at two wide, and it is still the sixth thing on the bar either way.
+    ---------------------------------------------------------------------
+    local _, sixAtThree = M.Cell(6, 3, "rows")
+    local rowAtTwo = M.Cell(6, 2, "rows")
+    Check("Narrowing the bar re-flows rather than scrambles",
+        M.Cell(6, 3, "rows") == 1 and sixAtThree == 2 and rowAtTwo == 2)
+
+    ---------------------------------------------------------------------
+    -- STAGGER, on the row and not on the cell
+    ---------------------------------------------------------------------
+    local staggered = { columns = 4, layout = "staggered" }
+    x = M.Slot(1, staggered, 8)
+    Check("A staggered bar does not move its first row", x == 0)
+    x = M.Slot(5, staggered, 8)
+    Check("It shifts the second row by half a step", x == 18, tostring(x))
+    x = M.Slot(9, staggered, 12)
+    Check("And leaves the third alone again", x == 0, tostring(x))
+
+    ---------------------------------------------------------------------
+    -- THE BOX, measured off the slots rather than from a formula
+    ---------------------------------------------------------------------
+    local width, height = M.Extent(4, four)
+    Check("Four cells in a row are four cells and three gaps wide",
+        width == 140 and height == 32,
+        string.format("%sx%s", width, height))
+
+    width, height = M.Extent(8, four)
+    Check("Two rows are two cells and one gap tall",
+        width == 140 and height == 68, string.format("%sx%s", width, height))
+
+    -- THE ONE A FORMULA WOULD GET WRONG. A staggered bar is half a step wider
+    -- than the same cells in a grid, and a box computed as columns*step would
+    -- crop the last icon of the shifted row - one layout, one row, and it
+    -- reads as a texture fault.
+    width = M.Extent(8, staggered)
+    Check("A staggered bar is half a step wider than a straight one",
+        width == 158, tostring(width))
+
+    Check("Nothing at all has no size", (M.Extent(0, four)) == 0)
+
+    ---------------------------------------------------------------------
+    -- COMPOSED WITH THE GAP-CLOSING RULE, which lives in Layout and is
+    -- called rather than copied
+    ---------------------------------------------------------------------
+    local places, used = M.Places(4, four, { [2] = true }, "all")
+    Check("A hidden cell is absent from the places", places[2] == nil)
+    Check("And the ones after it move up a slot",
+        places[3] and places[3].slot == 2 and places[3].x == 36,
+        places[3] and tostring(places[3].x) or "missing")
+    Check("The bar knows it only needs three slots", used == 3)
+
+    -- Switched off, nothing moves. The identity case is the one every caller
+    -- is in most of the time.
+    places = M.Places(4, four, {}, nil)
+    Check("With closing off, cell 4 stays in slot 4",
+        places[4] and places[4].slot == 4 and places[4].x == 108)
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -7482,6 +7603,7 @@ function Test:Run()
         { "Sounds",        TestSounds },
         { "Frame contract", TestFrameContract },
         { "Other cooldown addons", TestRivals },
+        { "Cooldown lattice", TestCooldownModel },
     }
 
     for _, suite in ipairs(suites) do

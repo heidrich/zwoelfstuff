@@ -123,6 +123,10 @@ Core\Auras.lua
 # read by Bars.lua at file scope - BAR_DEFAULTS is built out of their default
 # tables - so all three load above it.
 Core\Layout.lua
+# The cooldown lattice - where cell N of a bar sits. Pure, and BELOW
+# Layout.lua because it calls Layout.Compact rather than carrying a second
+# copy of the gap-closing rule.
+Core\Cooldowns\Model.lua
 Core\Visibility.lua
 # The aura engine and the co-tank frames.
 #
