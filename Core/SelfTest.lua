@@ -6541,6 +6541,72 @@ local function TestPanelMovers()
         end
     end
 
+    ---------------------------------------------------------------------
+    -- AND THE COOLDOWN BARS, WHICH ARE MOVERS TOO
+    --
+    -- THE THIRD SURFACE, and the first two both shipped without a cog and a
+    -- padlock for the same reason: the builder that grew the tools was not
+    -- the builder that made the box. The owner said "mein reminder hat kein
+    -- zahnrad oder lock" five days after saying it about the externals mover.
+    --
+    -- So the bars get the same walk on the day they get their movers, rather
+    -- than on the day he photographs one.
+    ---------------------------------------------------------------------
+    local barMovers = ns.EditMode.BarMovers and ns.EditMode:BarMovers() or {}
+
+    if #barMovers == 0 then
+        Skip("Whether the bar movers carry a cog and a padlock",
+            "no bar is on screen, so no mover was built")
+    else
+        for index, mover in ipairs(barMovers) do
+            local who = "bar " .. index
+            Check("The " .. who .. " mover has a cog", mover.cog ~= nil)
+            Check("The " .. who .. " mover has a padlock", mover.lock ~= nil)
+            Check("And it knows how to draw the padlock",
+                type(mover.RefreshLock) == "function")
+            Check("And it carries what its cog needs",
+                mover.spec ~= nil and mover.spec.page ~= nil
+                and type(mover.spec.apply) == "function"
+                and type(mover.spec.config) == "function")
+
+            -- IT HAS TO KNOW WHICH BAR IT IS FOR, and that is the one thing
+            -- these movers can get wrong that the other two cannot: they are
+            -- pooled by position and the bars are sorted by id, so a mover
+            -- that closed over the id it was built with would start dragging
+            -- somebody else's bar the moment a bar above it was deleted.
+            Check("The " .. who .. " mover names the bar it drags",
+                mover.dkBarID ~= nil and mover.spec.config() ~= nil,
+                tostring(mover.dkBarID))
+
+            local cfg = mover.spec and mover.spec.config()
+            if cfg then
+                Check("And its settings are the bar with that id",
+                    cfg.id == mover.dkBarID,
+                    string.format("%s vs %s", tostring(cfg.id),
+                        tostring(mover.dkBarID)))
+
+                local was = cfg.pinned
+                local start = mover:GetScript("OnDragStart")
+
+                cfg.pinned = true
+                mover.grab = nil
+                if start then start(mover) end
+                Check("A pinned " .. who .. " refuses to be dragged",
+                    mover.grab == nil)
+
+                cfg.pinned = false
+                mover.grab = nil
+                if start then start(mover) end
+                Check("An unpinned " .. who .. " takes the drag",
+                    mover.grab ~= nil)
+
+                mover.grab = nil
+                cfg.pinned = was
+                mover:RefreshLock()
+            end
+        end
+    end
+
     if not any then
         Skip("Whether the panel movers carry a cog and a padlock",
             "edit mode has not been opened this session")
@@ -8046,6 +8112,68 @@ local function TestCooldownRender()
             spare:GetAlpha() == 1, tostring(spare:GetAlpha()))
         Check("And our own scaffolding leaves the screen",
             container:IsShown() == false)
+
+        ---------------------------------------------------------------
+        -- AND THE MOVER, IN THE SAME WORLD
+        --
+        -- Its own suite skips on this desk and skips in his client too
+        -- unless a bar happens to be on screen - and a check that never runs
+        -- is not a lenient check, it is an absent one. There is a bar on
+        -- screen right here, built two paragraphs up, so this is the one
+        -- place the question can actually be asked without a client.
+        ---------------------------------------------------------------
+        ns.db.modules.cooldowns = true
+        Render.Refresh()
+
+        local wasUnlocked = ns.EditMode:IsUnlocked()
+        ns.EditMode:SetUnlocked(true)
+        ns.EditMode:Refresh()
+
+        local movers = ns.EditMode.BarMovers and ns.EditMode:BarMovers() or {}
+        Check("A bar on screen gets a mover", #movers == 1, tostring(#movers))
+
+        local mover = movers[1]
+        if mover then
+            Check("The mover has the cog and the padlock every other one has",
+                mover.cog ~= nil and mover.lock ~= nil
+                and type(mover.RefreshLock) == "function")
+            -- POOLED BY POSITION, PAIRED BY ID. This is the one thing these
+            -- movers can get wrong that the panels cannot: delete the bar
+            -- above and mover 3 is now bar 4's, so anything that closed over
+            -- an id at build time would drag the wrong bar.
+            Check("And it names the bar it drags", mover.dkBarID == 9001,
+                tostring(mover.dkBarID))
+
+            local cfg = mover.spec and mover.spec.config()
+            Check("Its settings are that bar", cfg ~= nil and cfg.id == 9001)
+
+            if cfg then
+                local start = mover:GetScript("OnDragStart")
+                cfg.pinned = true
+                mover.grab = nil
+                if start then start(mover) end
+                Check("A pinned bar refuses to be dragged", mover.grab == nil)
+
+                cfg.pinned = false
+                mover.grab = nil
+                if start then start(mover) end
+                Check("An unpinned one takes the drag", mover.grab ~= nil)
+                mover.grab = nil
+
+                -- AND THE DRAG WRITES WHERE THE BAR IS. The mover existing
+                -- and the drag doing something are two questions, and the
+                -- taunt button shipped a whole release answering only the
+                -- first.
+                mover.spec.apply(120, -340)
+                Check("Moving it writes the bar's position",
+                    cfg.x == 120 and cfg.y == -340,
+                    string.format("%s,%s", tostring(cfg.x), tostring(cfg.y)))
+            end
+        end
+
+        ns.EditMode:SetUnlocked(wasUnlocked)
+        ns.db.modules.cooldowns = false
+        Render.Refresh()
     end)
 
     -- PUT THE WORLD BACK WHATEVER HAPPENED. A suite that throws halfway and

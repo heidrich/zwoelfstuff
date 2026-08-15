@@ -1,4 +1,4 @@
-﻿---------------------------------------------------------------------------
+---------------------------------------------------------------------------
 -- EditMode - unlock the screen and put everything where you want it.
 --
 -- ONE MODE. There were two: one moved whole bars, the other took a bar apart
@@ -912,6 +912,211 @@ local function DragReminders()
     end
 end
 
+---------------------------------------------------------------------------
+-- THE COOLDOWN BARS
+--
+-- A LIST, LIKE THE REMINDERS, AND NOT A SINGLETON LIKE THE PANELS. That is
+-- the whole reason this is a third block rather than five more rows in
+-- PANEL_MOVERS: there is one co-tank panel and one taunt button, and there
+-- are as many bars as you make.
+--
+-- FOLLOWED BY ID, NOT BY POSITION. `Store.Bars()` is a list and deleting one
+-- reshuffles every index below it, so a mover that remembered "I am number 3"
+-- would start dragging somebody else's bar the moment a bar above it went.
+-- The id is the thing 4.82.0 already stored for exactly this reason - see
+-- Cooldowns/Bars.lua - and it is never reused.
+---------------------------------------------------------------------------
+local barMovers = {}
+
+-- The bars in a stable order, with their containers. One walk, because every
+-- reader below wants the same pairing, and building it twice is how a mover
+-- and the thing it drags end up disagreeing about which bar is which.
+local function BarList()
+    local out = {}
+    local Cooldowns = ns.Cooldowns
+    if not (Cooldowns and Cooldowns.Store and Cooldowns.Render) then return out end
+    if not ns.Modules:IsOn("cooldowns") then return out end
+
+    local containers = Cooldowns.Render.Containers()
+    for _, bar in pairs(Cooldowns.Store.Bars()) do
+        if type(bar) == "table" and bar.id and bar.enabled ~= false then
+            out[#out + 1] = { bar = bar, frame = containers[bar.id] }
+        end
+    end
+    table.sort(out, function(a, b) return (a.bar.id or 0) < (b.bar.id or 0) end)
+    return out
+end
+
+local function BarByID(id)
+    local Cooldowns = ns.Cooldowns
+    local store = Cooldowns and Cooldowns.Store
+    return store and store.ByID(id) or nil
+end
+
+local function ApplyBarMove(id, x, y)
+    local bar = BarByID(id)
+    if not bar then return end
+    -- Centre terms, like the panels and the reminders. A bar pinned by one of
+    -- its own corners is a later wave; until then the readout means what it
+    -- says on every surface this addon places.
+    bar.point, bar.relPoint = "CENTER", "CENTER"
+    bar.x, bar.y = math.floor(x + 0.5), math.floor(y + 0.5)
+    if ns.Cooldowns.Render then ns.Cooldowns.Render.Refresh() end
+end
+
+local function CreateBarMover(index)
+    local mover = CreateFrame("Button", nil, overlay)
+    mover:SetFrameLevel(overlay:GetFrameLevel() + 10)
+    mover:RegisterForDrag("LeftButton")
+    mover:Hide()
+
+    mover.bg = mover:CreateTexture(nil, "BACKGROUND")
+    mover.bg:SetAllPoints(mover)
+    mover.bg:SetColorTexture(C.sidebarBg[1], C.sidebarBg[2], C.sidebarBg[3], 0.55)
+
+    mover.edge = ns.CreateBorder(mover, 1, "BORDER")
+    mover.edge:SetColor(C.accentDim[1], C.accentDim[2], C.accentDim[3], 1)
+
+    -- THE COG AND THE PADLOCK EVERY OTHER MOVER HAS. The owner has now asked
+    -- for these twice on two different surfaces - the externals mover and the
+    -- reminders - and both times the answer went into the builder that was
+    -- not this one. Third surface, same tools, from the start.
+    --
+    -- A bar is one of SEVERAL, so `pinned` and "switch off" mean this bar
+    -- rather than the whole module - the reminders' reading, not the panels'.
+    local spec = {
+        label = "",
+        page = "cooldowns",
+        module = "cooldowns",
+        config = function() return BarByID(mover.dkBarID) end,
+        origin = function()
+            local bar = BarByID(mover.dkBarID)
+            if not bar then return 0, 0 end
+            return bar.x or 0, bar.y or 0
+        end,
+        apply = function(x, y) ApplyBarMove(mover.dkBarID, x, y) end,
+        switchOff = { text = "Switch this one off", onClick = function()
+            local bar = BarByID(mover.dkBarID)
+            if not bar then return end
+            bar.enabled = false
+            if ns.Cooldowns.Render then ns.Cooldowns.Render.Refresh() end
+            EditMode:Refresh()
+            ns.Options:Refresh()
+        end },
+    }
+    mover.spec = spec
+    local tab = AttachTools(mover, spec)
+
+    -- Beside the tool strip rather than inside the box: the box is exactly
+    -- the size of the bar, and on a row of five 40-pixel icons a caption
+    -- printed inside it would sit on top of the icons being placed.
+    mover.name = UI.Label(mover, "", 11, C.textDim)
+    mover.name:SetPoint("LEFT", tab, "RIGHT", 6, 0)
+    mover.name:SetWordWrap(false)
+
+    mover.coords = UI.Label(mover, "", 10, C.textDim)
+    mover.coords:SetPoint("TOP", mover, "BOTTOM", 0, -3)
+    mover.coords:SetWordWrap(false)
+
+    mover:SetScript("OnDragStart", function(self)
+        local bar = BarByID(self.dkBarID)
+        if not bar then return end
+        -- A PINNED BAR DOES NOT MOVE. That is what its padlock is for, and
+        -- the bar you have finished placing is exactly the one a stray drag
+        -- lands on while you are still placing the other.
+        if bar.pinned then return end
+
+        local cursorX, cursorY = CursorPosition()
+        self.grab = {
+            cursorX = cursorX, cursorY = cursorY,
+            originX = bar.x or 0, originY = bar.y or 0,
+        }
+    end)
+
+    local function Stop(self)
+        self.grab = nil
+        ShowGuide(guideX, nil, true)
+        ShowGuide(guideY, nil, false)
+    end
+    mover:SetScript("OnDragStop", Stop)
+    mover:SetScript("OnMouseUp", Stop)
+
+    mover.dkIndex = index
+    return mover
+end
+
+local function DragBars()
+    for _, mover in ipairs(barMovers) do
+        if mover.grab then
+            if not IsMouseButtonDown("LeftButton") then
+                mover.grab = nil
+                ShowGuide(guideX, nil, true)
+                ShowGuide(guideY, nil, false)
+                return
+            end
+
+            local frame = mover.dkFrame
+            if not frame then return end
+
+            local cursorX, cursorY = CursorPosition()
+            local x = mover.grab.originX + (cursorX - mover.grab.cursorX)
+            local y = mover.grab.originY + (cursorY - mover.grab.cursorY)
+
+            local lineX, lineY
+            if not IsAltKeyDown() then
+                -- The bar's own scale, exactly as the reminders do it: the
+                -- saved x and y are in screen terms and the width is not.
+                local scale = frame:GetScale()
+                if not scale or scale <= 0 then scale = 1 end
+                local snappedX, gx = Snap(x, nil, frame:GetWidth() * scale / 2, "x")
+                local snappedY, gy = Snap(y, nil, frame:GetHeight() * scale / 2, "y")
+                x, y = snappedX, snappedY
+                lineX, lineY = gx, gy
+            end
+
+            ApplyBarMove(mover.dkBarID, x, y)
+            ShowGuide(guideX, lineX, true)
+            ShowGuide(guideY, lineY, false)
+            return
+        end
+    end
+end
+
+local function RefreshBarMovers()
+    local list = BarList()
+
+    for index, entry in ipairs(list) do
+        local mover = barMovers[index]
+        if not mover then
+            mover = CreateBarMover(index)
+            barMovers[index] = mover
+        end
+
+        -- WHICH BAR THIS MOVER IS FOR, written before anything reads it. The
+        -- movers are pooled by position and the bars are sorted by id, so the
+        -- pairing changes whenever a bar is added or deleted - and every
+        -- closure above reads dkBarID rather than closing over the id it
+        -- happened to have when it was built.
+        mover.dkBarID = entry.bar.id
+        mover.dkFrame = entry.frame
+
+        if not (entry.frame and EditMode.overlayShown and entry.frame:IsShown()) then
+            mover:Hide()
+        else
+            mover:ClearAllPoints()
+            mover:SetAllPoints(entry.frame)
+            mover.name:SetText(entry.bar.name or "Bar")
+            mover.coords:SetText(string.format("%d, %d",
+                entry.bar.x or 0, entry.bar.y or 0))
+            mover.coords:SetShown(Prefs().showCoords or mover.grab ~= nil)
+            mover:RefreshLock()
+            mover:Show()
+        end
+    end
+
+    for index = #list + 1, #barMovers do barMovers[index]:Hide() end
+end
+
 local function RefreshReminderMovers()
     -- Same as the panel above: switched off, there is nothing to place, and
     -- the frames of a module that ran earlier this session are still there.
@@ -957,6 +1162,7 @@ local function OnUpdate()
         DragPanel(entry.mover, entry.panel, entry.apply)
     end
     DragReminders()
+    DragBars()
     if not dragging then return end
 
     -- The button can be let go anywhere, including over another window or off
@@ -1226,6 +1432,7 @@ function EditMode:Refresh()
     -- unmovable for a whole release.
     RefreshPanelMovers()
     RefreshReminderMovers()
+    RefreshBarMovers()
 
     -- AND THE LINE THAT SAYS WHAT TO DO. It used to be refreshed from the
     -- mode switch, and the mode switch went with the bars - so the panel
@@ -1264,6 +1471,16 @@ end
 function EditMode:ReminderMovers()
     local out = {}
     for index, mover in ipairs(reminderMovers) do out[index] = mover end
+    return out
+end
+
+-- THE BAR MOVERS, and they owe the check the same answer the other two do: a
+-- cog, a padlock, and a spec that knows what those two are for. Two surfaces
+-- have now shipped without them because the builder that grew the tools was
+-- not the builder that made the box, so this is what the self test walks.
+function EditMode:BarMovers()
+    local out = {}
+    for index, mover in ipairs(barMovers) do out[index] = mover end
     return out
 end
 
