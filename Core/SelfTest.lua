@@ -7631,6 +7631,45 @@ local function TestCooldownStore()
     end
 
     ---------------------------------------------------------------------
+    -- THE THREE AN AUDIT AGAINST HIS OWN BARS FOUND, all of which drew
+    -- something rather than failing
+    ---------------------------------------------------------------------
+
+    -- HIS SECOND BAR: column gap 2, row gap 4. One number for both axes is
+    -- right on one of his four bars by coincidence.
+    local twoGaps = S.Lattice({ columns = 5, iconSize = 36,
+        spacing = 2, lineSpacing = 4 })
+    Check("A bar's row gap is not its column gap",
+        twoGaps.spacing == 2 and twoGaps.lineSpacing == 4)
+    if M then
+        -- step across = 36+2 = 38, step down = 36+4 = 40
+        local x, y = M.Slot(6, twoGaps, 10)
+        Check("And the model uses each on its own axis",
+            x == 0 and y == -40, string.format("%s,%s", x, y))
+    end
+
+    -- HIS THIRD BAR, "Bars 2": kind="bar", 250 by 24, carrying an untouched
+    -- iconSize of 40. Reading iconSize and never kind hands the model four
+    -- forty-pixel squares for a bar a quarter of the screen wide.
+    local statusBar = S.Lattice({ kind = "bar", rows = 3, columns = 1,
+        barWidth = 250, barHeight = 24, iconSize = 40, spacing = 3 })
+    Check("A bar-kind cell is as wide as the bar, not as wide as an icon",
+        statusBar.width == 250 and statusBar.size == 24,
+        string.format("%sx%s", tostring(statusBar.width),
+            tostring(statusBar.size)))
+    local icons = S.Lattice({ kind = "icon", iconSize = 40 })
+    Check("And an icon cell stays square",
+        icons.size == 40 and icons.width == nil)
+
+    -- THE VALUE RENAME. 4.82.0 stored "stagger"; this model says "staggered".
+    -- None of his bars is staggered, so nothing would have said a word until
+    -- somebody imported one from a shared string.
+    Check("A bar stored as 'stagger' is still staggered",
+        S.Lattice({ layout = "stagger" }).layout == "staggered")
+    Check("And a word we do not know is passed through, not swallowed",
+        S.Lattice({ layout = "free" }).layout == "free")
+
+    ---------------------------------------------------------------------
     -- WHAT NOTHING READS YET, reported rather than assumed dead
     ---------------------------------------------------------------------
     local waves, unknown = S.Survey(bar)

@@ -127,6 +127,19 @@ local FIELDS = {
     size    = 32,     -- one cell, square unless width says otherwise
     width   = nil,    -- nil means square
     spacing = 4,
+    -- THE GAP BETWEEN ROWS IS ITS OWN NUMBER, and it was very nearly not.
+    --
+    -- The first draft used `spacing` on both axes, which is right on exactly
+    -- one of his four bars by coincidence: two of them carry spacing 2 and 3
+    -- against lineSpacing 4, and one of those has a single column, so the row
+    -- gap is the ONLY gap it has. A bar drawn with the wrong row gap is not a
+    -- bar that fails - it is a bar that looks very slightly not like the one
+    -- you arranged, which is the hardest kind of wrong to report.
+    --
+    -- nil rather than a number of its own: falling back to `spacing` keeps a
+    -- caller that only knows about one gap honest, and a stored bar always
+    -- carries both.
+    lineSpacing = nil,
     layout  = "grid",
     flow    = "rows",
     growX   = "right",
@@ -148,7 +161,8 @@ local function Steps(opts)
     local size = Read(opts, "size")
     local width = Read(opts, "width") or size
     local spacing = Read(opts, "spacing")
-    return width + spacing, size + spacing, width, size
+    local lineSpacing = Read(opts, "lineSpacing") or spacing
+    return width + spacing, size + lineSpacing, width, size
 end
 
 -- WHERE CELL `index` SITS, as its centre and its size.

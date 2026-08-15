@@ -105,15 +105,47 @@ end
 -- to the right, which draws nothing on screen at all and reads as "the
 -- staggered layout is broken" rather than as a unit.
 ---------------------------------------------------------------------------
+-- The value 4.82.0 stored for the staggered layout, and the one this model
+-- says. A rename with no translation is the quietest bug there is: the source
+-- reads correctly, the stored bar reads correctly, and the comparison between
+-- them is false - so a staggered bar draws as a plain grid and nothing
+-- anywhere says why. None of his four bars is staggered today, which is
+-- precisely why this would have gone unnoticed until somebody imported one
+-- from a shared string.
+local LAYOUTS = { stagger = "staggered" }
+
 function Store.Lattice(bar)
     bar = type(bar) == "table" and bar or {}
 
     local percent = tonumber(bar.staggerOffset)
+
+    -- A CELL IS NOT ALWAYS A SQUARE, and one of his bars is the proof.
+    --
+    -- `kind` is "icon" or "bar". An icon cell is iconSize square; a bar cell
+    -- is a StatusBar, barWidth by barHeight. His "Bars 2" is kind="bar",
+    -- 250 by 24, and carries iconSize 40 as an untouched default - so a
+    -- reader that looks at iconSize and never at kind hands the model four
+    -- forty-pixel squares for a bar a quarter of the screen wide. It would
+    -- have drawn something, which is the problem.
+    local size, width
+    if bar.kind == "bar" then
+        size = tonumber(bar.barHeight) or 24
+        width = tonumber(bar.barWidth) or 200
+    else
+        size = tonumber(bar.iconSize) or 32
+    end
+
+    local spacing = tonumber(bar.spacing) or 4
     return {
         columns = tonumber(bar.columns) or 1,
-        size    = tonumber(bar.iconSize) or 32,
-        spacing = tonumber(bar.spacing) or 4,
-        layout  = bar.layout,
+        size    = size,
+        width   = width,
+        spacing = spacing,
+        -- Two gaps, not one. See Model's FIELDS: two of his bars carry a row
+        -- gap different from their column gap, and on the single-column one
+        -- it is the only gap it has.
+        lineSpacing = tonumber(bar.lineSpacing) or spacing,
+        layout  = LAYOUTS[bar.layout] or bar.layout,
         flow    = bar.flow,
         growX   = bar.growX,
         growY   = bar.growY,
@@ -144,12 +176,27 @@ Store.READERS = {
         "id", "name", "enabled", "kind", "columns", "rows", "layout", "flow",
         "growX", "growY", "iconSize", "spacing", "staggerOffset",
         "cells", "cellsBySpec", "cellOpts",
+        -- MOVED UP FROM `placement` after an audit against his own bars.
+        -- Filing these under a later wave was the mistake: they are not
+        -- where a bar SITS, they are how big one of its cells is and how far
+        -- the next row is. The model cannot answer at all for his "Bars 2"
+        -- without barWidth and barHeight, and it answers WRONGLY - which is
+        -- worse - for two of his bars without lineSpacing.
+        "lineSpacing", "barWidth", "barHeight",
     },
-    -- Wave 2, Claim and Render: where the bar sits and how big it is.
+    -- Wave 2, Claim and Render: where the bar sits.
+    --
+    -- `anchor` is here because a guard found it, not because anybody
+    -- remembered it. None of his four bars carries the key - he has never
+    -- hung one bar off another - so the check that reads his profile could
+    -- never have surfaced it. The one that reads 4.82.0's shipped defaults
+    -- did, on its first run. It is `{ to = <barID>, ... }`, it is released
+    -- when its target bar is deleted, and it is validated on load against
+    -- circular references; all of that is real work that wave 2 owes
+    -- somebody who is not him.
     placement = {
         "point", "relPoint", "x", "y", "scale", "pinned", "locked",
-        "barWidth", "barHeight", "lineSpacing", "freeCount",
-        "parked", "parkedBySpec", "raster",
+        "freeCount", "parked", "parkedBySpec", "raster", "anchor",
     },
     -- Wave 4, the look.
     look = {
