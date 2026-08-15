@@ -2912,7 +2912,53 @@ function UI.Swatch(row, get, set, apply)
     local edge = ns.CreateBorder(swatch, 1, "OVERLAY")
     edge:SetColor(1, 1, 1, 0.25)
 
+    -- Held here rather than inside the click, because Picked below has to
+    -- reach it and the click is what assigns it.
+    local picker
+
+    -- WHERE THE PICKER KEEPS THE COLOUR, AND IT HAS MOVED.
+    --
+    -- 10.2.5 rebuilt ColorPickerFrame: the wheel is a child at
+    -- `Content.ColorPicker` and the old `ColorPickerFrame:GetColorRGB` is a
+    -- wrapper that is not on every build. Asking the wrong object answers
+    -- nothing at all - and the caller then wrote three nils into a stored
+    -- colour, which reads back as white and looks exactly like "the colour
+    -- was not taken". Owner, 2026-08-15: "farbe wird nicht uebernommen und
+    -- auch nicht angezeigt, ueberall geht keine farbe", with the picker
+    -- confirmed to open - so the break is on the way back, and this is the
+    -- only line on it.
+    --
+    -- Both shapes asked, the inner one first, and NOTHING is written when
+    -- neither answers. A colour that cannot be read is not black and is not
+    -- white; storing either is inventing an answer.
+    local function Picked()
+        local inner = picker and picker.Content and picker.Content.ColorPicker
+        for _, source in ipairs({ inner, picker }) do
+            if source and type(source.GetColorRGB) == "function" then
+                local ok, r, g, b = pcall(source.GetColorRGB, source)
+                if ok and type(r) == "number" and type(g) == "number"
+                    and type(b) == "number" then
+                    return r, g, b
+                end
+            end
+        end
+        return nil
+    end
+
     local function Commit(r, g, b)
+        if not (type(r) == "number" and type(g) == "number"
+            and type(b) == "number") then
+            -- SAID OUT LOUD, ONCE. A silent no-op here is a control that
+            -- does nothing, which is the exact thing this addon spent a
+            -- session removing.
+            if not UI.warnedColourPicker then
+                UI.warnedColourPicker = true
+                ns.Print("|cffff4040The colour picker did not hand a colour "
+                    .. "back|r - nothing was changed. Please report this "
+                    .. "with your game version.")
+            end
+            return
+        end
         set(r, g, b)
         fill:SetColorTexture(r, g, b, 1)
         if apply then apply() end
@@ -2920,13 +2966,13 @@ function UI.Swatch(row, get, set, apply)
 
     swatch:SetScript("OnClick", function()
         local r, g, b = get()
-        local picker = ColorPickerFrame
+        picker = ColorPickerFrame
         if not picker then return end
 
         picker:SetFrameStrata("FULLSCREEN_DIALOG")
         picker:SetClampedToScreen(true)
 
-        local function OnPick() Commit(picker:GetColorRGB()) end
+        local function OnPick() Commit(Picked()) end
         local function OnCancel() Commit(r, g, b) end
 
         -- SetupColorPickerAndShow is the 10.2.5 overhaul; the field
