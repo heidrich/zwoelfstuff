@@ -632,6 +632,12 @@ local CONTROL_W = 168
 -- slider is 156 of the 168, and without this a label would be cut off at 192
 -- while the rest sat empty next to it.
 local function ClaimRow(row, control)
+    -- A control can also be put somewhere that is not a row - the cooldown
+    -- cards carry a bare on/off switch in their header, with a name of their
+    -- own already drawn beside it. Nothing to give the difference back to
+    -- then, and a hard error over it is the widget refusing to be used
+    -- anywhere but on a row.
+    if not (row and row.label) then return end
     row.label:SetPoint("RIGHT", control, "LEFT", -UI.GAP, 0)
 end
 
@@ -3158,6 +3164,520 @@ function UI.CellUnderCursor()
 end
 
 ---------------------------------------------------------------------------
+-- THE PREVIEW BARS RUN.
+--
+-- A still bar in an editor is a lie by omission: it says nothing about which
+-- way the fill goes, what is behind it, where the leading edge sits or how the
+-- ramp reads while it moves - and every one of those is a control on the page
+-- beside it. Drawn full it showed none of them; drawn part-full it read as a
+-- bar that was the wrong length, which was reported three times in 4.82.0.
+-- Running, it is at every length in turn and there is nothing to be wrong
+-- about. The standing rule, written down after the co-tank test mode:
+-- invented data has to move.
+--
+-- One clock for the whole grid, and each cell offset along it so the bars do
+-- not march in lockstep - real cooldowns are not in step either.
+---------------------------------------------------------------------------
+local PREVIEW_CYCLE = 4.0
+local PREVIEW_STAGGER = 0.43
+
+local function ApplyPreviewFill(cell, portion)
+    local run = cell.run
+    if not run then return end
+
+    local corner, pad, w, h = ns.Layout.PreviewFill(run.direction,
+        run.leftPad, run.rightPad, run.area, run.height, portion)
+    cell.fill:ClearAllPoints()
+    cell.fill:SetPoint(corner, cell, corner, pad, 0)
+    cell.fill:SetSize(w, h)
+end
+
+---------------------------------------------------------------------------
+-- CellGrid - one bar, drawn as it really looks
+--
+-- BACK FROM 4.82.0, and the owner asked for it by name. Looking at the page
+-- that replaced it: "ich fand es vorher besser, wo ich alle bars als live
+-- view untereinander hatte", with the requirement under it - "die bars
+-- muessen immer 100% den ist status spiegeln, also so wie sie wirklich
+-- aussehen".
+--
+-- THAT IS WHY THIS PAINTS RATHER THAN DIAGRAMS. The positions come from the
+-- same Model the renderer asks, and the look from ns.PaintSurface and
+-- ns.PaintBorder - the same two functions that paint the thing on screen,
+-- from the same resolved style. A preview drawn in the editor's own accent
+-- colour tells you nothing about the bar you are building, and this card had
+-- that fault three times before it was deleted.
+--
+-- WHAT IT CANNOT SHOW, stated so nobody engineers around it: a running
+-- cooldown's sweep and its numbers (both need Blizzard's own frame, and the
+-- counts are secret values this addon may not read), whether a spell is
+-- active this second, and Blizzard's own tracking-bar chrome. It shows the
+-- SETTINGS - which is what the page beside it edits.
+--
+-- cfg = {
+--   layout()      -> slots, box    the renderer's own geometry, scaled
+--   style(h, i)   -> the resolved look for that cell, or nil
+--   content(i)    -> spellID or nil
+--   iconPlacement(), selected(), onPick(i), onClear(i), onMove(from, to, swap)
+-- }
+---------------------------------------------------------------------------
+function UI.CellGrid(parent, cfg)
+    local grid = CreateFrame("Frame", nil, parent)
+    grid.cells = {}
+    grid.slots = {}
+    grids[#grids + 1] = grid
+
+    -- A bar cell holds a spell ID. Stated rather than left nil, because the
+    -- drag machinery matches kinds now and an unnamed grid would refuse every
+    -- drop that used to work. See UI.DragOutcome.
+    grid.dkKind = cfg and cfg.dragKind or "spell"
+
+    -- Where a dragged cell would land: an accent outline rather than a wash
+    -- over the icon, so it can be fully opaque and still show what is under it.
+    local marker = CreateFrame("Frame", nil, grid)
+    marker:SetFrameLevel(grid:GetFrameLevel() + 10)
+    local markerEdge = ns.CreateBorder(marker, 2, "OVERLAY")
+    markerEdge:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+    marker:Hide()
+
+    -- One slot, as a rectangle measured from the grid's top left. The engine
+    -- answers in centres against the arrangement's own origin; this is the one
+    -- place that converts, so nothing below has to think about it twice.
+    local function SlotRect(index)
+        local slot = grid.slots[index]
+        local box = grid.box
+        if not (slot and box) then return nil end
+
+        local left = box.centreX - box.width / 2
+        local top  = box.centreY + box.height / 2
+        return slot.x - slot.w / 2 - left,
+               -(top - (slot.y + slot.h / 2)),
+               slot.w, slot.h
+    end
+
+    local function CellPosition(index)
+        local x, y = SlotRect(index)
+        return x or 0, y or 0
+    end
+
+    -- Hit-tested against the real rectangles rather than divided out of a
+    -- lattice. An arc has no columns to divide by, and a puzzle has no lattice
+    -- at all - the arithmetic version would answer confidently and wrongly.
+    local function CellUnderCursor()
+        local scale = grid:GetEffectiveScale()
+        local cursorX, cursorY = GetCursorPosition()
+        cursorX, cursorY = cursorX / scale, cursorY / scale
+
+        local left, top = grid:GetLeft(), grid:GetTop()
+        if not left or not top then return nil end
+
+        local localX, localY = cursorX - left, cursorY - top
+
+        -- Backwards, so the cell drawn LAST - the one on top where two
+        -- overlap - is the one the cursor is understood to be over.
+        for index = #grid.slots, 1, -1 do
+            local x, y, w, h = SlotRect(index)
+            if x and localX >= x and localX <= x + w
+                and localY <= y and localY >= y - h then
+                return index
+            end
+        end
+        return nil
+    end
+
+    local function NewCell(index)
+        local cell = CreateFrame("Button", nil, grid)
+        cell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        cell:RegisterForDrag("LeftButton")
+
+        -- Recessed, not raised: an empty cell is a slot waiting to be filled,
+        -- and a well reads that way where a raised tile reads as a button.
+        -- Only ever seen on an EMPTY cell now - a filled one wears the bar's
+        -- own backdrop instead, see below.
+        cell.bg = Fill(cell, "BACKGROUND", C.well)
+
+        -- The bar's real backdrop, with its real texture and colour. This is
+        -- what makes the card a PREVIEW rather than a diagram: what you are
+        -- looking at is painted by the same two functions that paint the
+        -- thing on screen, from the same style table.
+        cell.plate = cell:CreateTexture(nil, "BACKGROUND", nil, 1)
+        cell.plate:SetAllPoints(cell)
+        cell.plate:Hide()
+
+        cell.icon = cell:CreateTexture(nil, "ARTWORK")
+        cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
+        cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
+        cell.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        -- The fill of a bar-shaped cell, beside its square icon. Without it a
+        -- tracking bar in the editor is an icon and a hole, which tells you
+        -- nothing about the texture you just picked. It runs the WHOLE length
+        -- of the bar - see the note where it is anchored, which is the third
+        -- and last word on why there is no part-full fill here any more.
+        cell.fill = cell:CreateTexture(nil, "ARTWORK", nil, 1)
+        cell.fill:Hide()
+
+        cell.caption = cell:CreateFontString(nil, "OVERLAY")
+        cell.caption:SetJustifyH("LEFT")
+        cell.caption:SetWordWrap(false)
+        cell.caption:Hide()
+
+        -- Its own frame above the cell's textures, exactly like the border on
+        -- screen: a texture on the cell would be painted under the cell's own
+        -- child frames whatever layer it claims.
+        cell.chrome = ns.CreateChrome(cell)
+
+        cell.plus = UI.Label(cell, "+", 16, C.textFaint)
+        cell.plus:SetPoint("CENTER", cell, "CENTER", 0, -1)
+
+        cell.edge = ns.CreateBorder(cell, 1, "OVERLAY")
+
+        -- A second, outset border for the selection, so it reads clearly even
+        -- on a cell whose own border is already dark.
+        cell.ringHost = CreateFrame("Frame", nil, cell)
+        -- ABOVE the chrome, and measured rather than assumed:
+        -- ns.CreateChrome puts the border frame at +5, and a
+        -- ring below it is drawn under the bar's own border.
+        cell.ringHost:SetFrameLevel(cell:GetFrameLevel() + 6)
+        cell.ringHost:SetPoint("TOPLEFT", cell, "TOPLEFT", -2, 2)
+        cell.ringHost:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 2, -2)
+        cell.ring = ns.CreateBorder(cell.ringHost, 2, "OVERLAY")
+        cell.ring:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+        cell.ring:Hide()
+
+        -- Hover is a ring, not a white wash: a wash over a spell icon dulls
+        -- the very thing it is meant to point at, and it would have to be
+        -- see-through to work at all.
+        cell.hoverHost = CreateFrame("Frame", nil, cell)
+        -- ABOVE the chrome, and measured rather than assumed:
+        -- ns.CreateChrome puts the border frame at +5, and a
+        -- ring below it is drawn under the bar's own border.
+        cell.hoverHost:SetFrameLevel(cell:GetFrameLevel() + 6)
+        cell.hoverHost:SetPoint("TOPLEFT", cell, "TOPLEFT", -2, 2)
+        cell.hoverHost:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 2, -2)
+        cell.hover = ns.CreateBorder(cell.hoverHost, 2, "OVERLAY")
+        cell.hover:SetColor(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
+        cell.hover:Hide()
+
+        cell.number = cell:CreateFontString(nil, "OVERLAY")
+        ns.StyleFont(cell.number, 10, "OUTLINE")
+        cell.number:SetPoint("TOPLEFT", cell, "TOPLEFT", 2, -2)
+        cell.number:SetTextColor(1, 1, 1, 0.6)
+
+        cell:SetScript("OnEnter", function(self)
+            if not (cfg.selected and cfg.selected() == self.dkIndex) then
+                self.hover:Show()
+            end
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+
+            if self.dkSpellID then
+                -- The game's own tooltip. An ID the client does not know
+                -- throws rather than returning empty, hence the fallback.
+                if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.dkSpellID) then
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:AddLine(ns.SpellName(self.dkSpellID) or "?")
+                    GameTooltip:AddLine(tostring(self.dkSpellID), 0.5, 0.5, 0.5)
+                end
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(ns.L["Click to change it"], 0.62, 0.64, 0.68)
+                GameTooltip:AddLine(ns.L["Drag it to sort the bar"], 0.62, 0.64, 0.68)
+                GameTooltip:AddLine(ns.L["Hold Shift while dropping to swap the two"],
+                    0.62, 0.64, 0.68)
+                GameTooltip:AddLine(ns.L["Right click to clear"], 0.62, 0.64, 0.68)
+            else
+                GameTooltip:AddLine(ns.L("Place %d", self.dkIndex or 0))
+                GameTooltip:AddLine(ns.L["Empty"], 0.62, 0.64, 0.68)
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(ns.L["Click it, then pick a spell on the right"],
+                    1.00, 0.478, 0.239)
+            end
+            GameTooltip:Show()
+        end)
+        cell:SetScript("OnLeave", function(self)
+            self.hover:Hide()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+
+        cell:SetScript("OnClick", function(self, button)
+            if button == "RightButton" then
+                if self.dkSpellID and cfg.onClear then cfg.onClear(self.dkIndex) end
+            elseif cfg.onPick then
+                cfg.onPick(self.dkIndex)
+            end
+        end)
+
+        -- THE DRAG DOES NOT OWN OnUpdate. It used to install its own handler
+        -- here and clear it on drop, which would have torn the running
+        -- preview off the card the first time anybody sorted a bar. There is
+        -- one handler on the grid and it reads `dragFrom` - see the end of
+        -- UI.CellGrid.
+        cell:SetScript("OnDragStart", function(self)
+            if not self.dkSpellID then return end
+            grid.dragFrom = self.dkIndex
+            self.icon:SetAlpha(0.3)
+        end)
+
+        cell:SetScript("OnDragStop", function(self)
+            marker:Hide()
+            self.icon:SetAlpha(1)
+
+            local from = grid.dragFrom
+            grid.dragFrom = nil
+            local target = CellUnderCursor()
+            if from and target and target ~= from and cfg.onMove then
+                -- Read at the DROP, not at the pick-up: the modifier is a
+                -- statement about where it is landing, and people press it
+                -- while they are already dragging.
+                cfg.onMove(from, target, IsShiftKeyDown())
+            end
+        end)
+
+        grid.cells[index] = cell
+        return cell
+    end
+
+    -- Reachable from outside, so a drag that started somewhere else entirely
+    -- can ask this grid whether the cursor is over one of its cells.
+    grid.CellAt = CellUnderCursor
+    grid.dkDrop = cfg.onDrop
+
+    grid.ShowMarker = function(index)
+        local x, y, w, h
+        if index then x, y, w, h = SlotRect(index) end
+        if not x then
+            marker:Hide()
+            return
+        end
+        marker:ClearAllPoints()
+        marker:SetPoint("TOPLEFT", grid, "TOPLEFT", x - 2, y + 2)
+        marker:SetSize(w + 4, h + 4)
+        marker:Show()
+    end
+
+    grid.HideMarker = function() marker:Hide() end
+
+    -- Returns the height it ended up needing, so the page can lay out below.
+    grid.Refresh = function()
+        local slots, box = cfg.layout()
+        grid.slots, grid.box = slots or {}, box
+        -- NOTHING TO DRAW IS AN ANSWER. A bar with no places, or a page
+        -- refreshed before the store can say, used to index a nil box.
+        if not box then
+            for _, cell in ipairs(grid.cells) do cell:Hide() end
+            grid:SetSize(1, 1)
+            return 0
+        end
+        local total = #grid.slots
+
+        for index = 1, total do
+            local cell = grid.cells[index] or NewCell(index)
+            local x, y, w, h = SlotRect(index)
+
+            cell:ClearAllPoints()
+            cell:SetPoint("TOPLEFT", grid, "TOPLEFT", x, y)
+            cell:SetSize(w, h)
+            cell.dkIndex = index
+
+            -- A cell hidden by its own override still has to be clickable in
+            -- the editor, or there would be no way to bring it back. It is
+            -- shown at a fraction instead, which also says WHY it is faint.
+            cell:SetAlpha(slots[index].hidden and 0.3 or 1)
+
+            local spellID = cfg.content(index)
+            cell.dkSpellID = spellID
+
+            -- The bar's OWN look, resolved by the same function the screen
+            -- calls. Asked for per cell, because a cell can be scaled and the
+            -- automatic text size follows the cell rather than the bar.
+            -- Per CELL, so a cell wearing its own colour previews in that
+            -- colour rather than in the bar's.
+            local style = cfg.style and cfg.style(h, index)
+            local isBar = slots[index].kind == "bar"
+
+            if spellID and style then
+                ns.PaintSurface(cell.plate, style)
+                ns.PaintBorder(cell.chrome, style, isBar)
+                cell.bg:Hide()
+            else
+                cell.plate:Hide()
+                cell.chrome.pixel:Hide()
+                if cell.chrome.SetBackdrop then cell.chrome:SetBackdrop(nil) end
+                cell.bg:Show()
+            end
+
+            if spellID then
+                local texture = ns.SpellTexture(spellID)
+                cell.icon:SetTexture(texture or ns.WHITE)
+                cell.icon:SetDesaturated(not texture)
+                cell.icon:SetAlpha(1)
+
+                local zoom = style and style.iconZoom or 0.08
+                cell.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+
+                -- Square, even in a bar-shaped cell. Stretched across the
+                -- width of a bar a spell icon is an unreadable smear, and the
+                -- editor is supposed to show what the bar will look like -
+                -- where the icon is a square at one end.
+                cell.icon:ClearAllPoints()
+                if isBar then
+                    local place = cfg.iconPlacement and cfg.iconPlacement() or "left"
+                    cell.icon:SetShown(place ~= "hidden")
+                    local side = (place == "right") and "RIGHT" or "LEFT"
+                    cell.icon:SetPoint("TOP" .. side, cell, "TOP" .. side, 0, 0)
+                    cell.icon:SetPoint("BOTTOM" .. side, cell, "BOTTOM" .. side, 0, 0)
+                    cell.icon:SetWidth(h)
+
+                    -- The fill, in the bar's OWN colour and texture, from the
+                    -- same settings the screen uses - a preview painted in the
+                    -- editor's accent colour tells you nothing about the bar
+                    -- you are actually building. The pads are the room the
+                    -- icon takes at whichever end it sits.
+                    local inset = (place == "hidden") and 0 or h
+                    local leftPad = (place == "right") and 0 or inset
+                    local rightPad = (place == "right") and -inset or 0
+
+                    -- WHAT THE BAR NEEDS IN ORDER TO RUN, remembered on the
+                    -- cell rather than worked out again sixty times a second.
+                    -- The direction is the same one-of-four the screen fills
+                    -- along, both ends and both axes: at 100% those look
+                    -- identical, which is exactly why a still preview could
+                    -- not show the setting at all.
+                    --
+                    -- FILL-UP IS DELIBERATELY NOT HONOURED. Claim has no
+                    -- door for SetTimerDuration - Look.lua asks for one and
+                    -- gets a red line back - so no bar on screen fills
+                    -- upwards. A preview that agreed with a switch the screen
+                    -- ignores would be the editor lying about a setting, which
+                    -- is worse than showing nothing.
+                    cell.run = {
+                        -- The entry Bars:Style already resolved, exactly as
+                        -- Screen.lua reads it. Handing it back through
+                        -- FillDirection was the eighth time this card and the
+                        -- screen disagreed - it silently answered "left to
+                        -- right" for every bar.
+                        direction = (style and style.fillDirection)
+                            or ns.Layout.FillDirection("right"),
+                        leftPad = leftPad,
+                        rightPad = rightPad,
+                        area = math.max(1, w - inset),
+                        height = h,
+                    }
+                    ApplyPreviewFill(cell, 1)
+
+                    if style then
+                        local fill = style.fillTexture
+                        if fill and ns.Media.IsKnown("statusbar", fill) then
+                            cell.fill:SetTexture(ns.Media.Statusbar(fill))
+                        else
+                            cell.fill:SetTexture(ns.WHITE)
+                        end
+                        -- THROUGH ns.Tint, like everything else that can
+                        -- ramp. 4.31.0 made it the one sink and rewired the
+                        -- fill, the backdrop, the border and every stack band
+                        -- through it - and missed the card, so the editor drew
+                        -- a gradient backdrop under a flat fill while the
+                        -- screen drew both. A preview that disagrees with the
+                        -- thing it previews is the fault this card has now had
+                        -- three times.
+                        local colour = style.fillColor
+                        ns.Tint(cell.fill, colour, style.fillAlpha,
+                            style.fillGradient)
+                    end
+                    cell.fill:Show()
+
+                    if style and style.spellName.show then
+                        local name = style.spellName
+                        ns.Media.ApplyFont(cell.caption, name.font, name.size,
+                            name.outline, name.color)
+                        -- The SAME band and the same anchor the screen uses,
+                        -- from the same two functions. A preview that puts the
+                        -- name somewhere else is not a preview - and it drew
+                        -- it hard on the left while the bar itself had learned
+                        -- to follow the setting.
+                        local leftInset, rightInset =
+                            ns.Layout.LabelBand(place, (place == "hidden") and 0 or h)
+                        local _, _, justify, vertical =
+                            ns.Layout.LabelAnchor(name.anchor)
+
+                        cell.caption:ClearAllPoints()
+                        cell.caption:SetPoint(vertical .. "LEFT", cell,
+                            vertical .. "LEFT", leftInset + (name.x or 0), name.y or 0)
+                        cell.caption:SetPoint(vertical .. "RIGHT", cell,
+                            vertical .. "RIGHT", -rightInset + (name.x or 0), name.y or 0)
+                        cell.caption:SetJustifyH(justify)
+                        cell.caption:SetText(ns.SpellName(spellID) or "")
+                        cell.caption:Show()
+                    else
+                        cell.caption:Hide()
+                    end
+                else
+                    cell.icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 0, 0)
+                    cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 0, 0)
+                    cell.icon:Show()
+                    cell.fill:Hide()
+                    cell.caption:Hide()
+                    -- An icon cell has no fill to run. Cleared rather than
+                    -- left behind: cells are reused, and a cell that turns
+                    -- from a bar into an icon would otherwise go on being
+                    -- resized every frame.
+                    cell.run = nil
+                end
+
+                cell.plus:Hide()
+                cell.number:SetText(tostring(index))
+                cell.edge:Hide()
+            else
+                cell.icon:Hide()
+                cell.fill:Hide()
+                cell.caption:Hide()
+                cell.run = nil
+                cell.plus:Show()
+                cell.number:SetText("")
+                cell.edge:SetColor(C.control[1], C.control[2], C.control[3], 1)
+                cell.edge:Show()
+            end
+
+            -- The selected cell is what the right column is editing, so it has
+            -- to be obvious which one that is.
+            local isSelected = cfg.selected and cfg.selected() == index
+            cell.ring:SetShown(isSelected)
+            if isSelected then cell.hover:Hide() end
+
+            cell:Show()
+        end
+
+        for index = total + 1, #grid.cells do grid.cells[index]:Hide() end
+
+        grid:SetSize(math.max(box.width, 1), math.max(box.height, 1))
+        return box.height
+    end
+
+    -- THE ONE HANDLER ON THIS FRAME, doing both jobs. A hidden frame gets no
+    -- OnUpdate, so the card costs nothing while the window is shut and there
+    -- is nothing to start or stop.
+    grid:SetScript("OnUpdate", function(self, elapsed)
+        if self.dragFrom then self.ShowMarker(CellUnderCursor()) end
+
+        local phase = (self.phase or 0) + elapsed
+        if phase >= PREVIEW_CYCLE then phase = phase % PREVIEW_CYCLE end
+        self.phase = phase
+
+        for index, cell in ipairs(self.cells) do
+            local run = cell.run
+            if run and cell:IsShown() then
+                -- Draining is what a cooldown does, so that is the default and
+                -- Fill up is the one that runs the other way.
+                local own = (phase + index * PREVIEW_STAGGER) % PREVIEW_CYCLE
+                ApplyPreviewFill(cell, 1 - own / PREVIEW_CYCLE)
+            end
+        end
+    end)
+
+    return grid
+end
+
+-------------------------------------------------------------------------------------------------------------------
 -- SpellSlot - one square you drop a spell onto
 --
 -- A reminder watches ONE spell, and a death log holds a handful - so "drag

@@ -349,6 +349,18 @@ Register("enUS", {
         true,
     ["Shown in the preview above"] = true,
     -- The bar editor: the look, the text, the effects and the fill
+    ["Click to change it"] = true,
+    ["Drag it to sort the bar"] = true,
+    ["Hold Shift while dropping to swap the two"] = true,
+    ["Right click to clear"] = true,
+    ["Empty"] = true,
+    ["Place %d"] = true,
+    ["Click it, then pick a spell on the right"] = true,
+    ["Every bar you have, drawn the way it really looks."] = true,
+    ["Icon bar"] = true,
+    ["Tracking bar"] = true,
+    ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
+        true,
     ["Places"] = true,
     ["Delete"] = true,
     ["No bars yet. Make one and the spells you pick land on it."] = true,
@@ -814,6 +826,21 @@ Register("deDE", {
         "Blizzards eigene Anzeigen zeigen weiter alles, was sie kennen. Das hier macht die, die du auf keine Leiste gelegt hast, unsichtbar statt sie zu verstecken - es sind Blizzards Frames, und einen davon zu verstecken ist genau das, was ihn für den Rest der Sitzung beschädigt.",
     ["Shown in the preview above"] = "Oben in der Vorschau",
     -- Der Leisten-Editor: Aussehen, Text, Effekte und Füllung
+    ["Click to change it"] = "Klicken zum Wechseln",
+    ["Drag it to sort the bar"] = "Ziehen, um die Leiste zu sortieren",
+    ["Hold Shift while dropping to swap the two"] =
+        "Beim Loslassen Umschalt halten, um die beiden zu tauschen",
+    ["Right click to clear"] = "Rechtsklick zum Leeren",
+    ["Empty"] = "Leer",
+    ["Place %d"] = "Platz %d",
+    ["Click it, then pick a spell on the right"] =
+        "Anklicken, dann rechts einen Zauber aussuchen",
+    ["Every bar you have, drawn the way it really looks."] =
+        "Jede Leiste, die du hast, so gezeichnet, wie sie wirklich aussieht.",
+    ["Icon bar"] = "Symbolleiste",
+    ["Tracking bar"] = "Verfolgungsleiste",
+    ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
+        "Der Ablauf und die Zahlen brauchen Blizzards eigenen Rahmen, deshalb stehen sie nicht hier - alles andere ist die Leiste, wie sie gerade eingestellt ist.",
     ["Places"] = "Plätze",
     ["Delete"] = "Löschen",
     ["No bars yet. Make one and the spells you pick land on it."] =

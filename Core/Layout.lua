@@ -239,6 +239,43 @@ function Layout.FillEdge(orientation, reverse)
     return reverse and "LEFT" or "RIGHT", false
 end
 
+-- WHERE A PART-FULL PREVIEW FILL SITS.
+--
+-- Back from 4.82.0 unchanged, and its own header is why: a version ago the
+-- card drew a bar at a STATIC 70%, which was reported wrong three separate
+-- times - the bar simply reads as shorter than it is. So it drew a FULL bar,
+-- and could then show neither which way the fill runs nor the backdrop behind
+-- it.
+--
+-- A bar that DRAINS is at every fraction in turn, so there is no single length
+-- to be wrong about, and everything a full bar could not show is visible again
+-- while it runs. The rule was never the fault; the still picture was. Owner,
+-- 2026-08-15, on why the old page was better: "ich fand es vorher besser, wo
+-- ich alle bars als live view untereinander hatte."
+--
+-- ONE anchor and both sizes, never two opposing anchors plus a size: those two
+-- rules fight, and which of them wins is not worth having to remember.
+--
+-- leftPad and rightPad are the room the icon takes at either end (rightPad
+-- negative, as an inset from the right edge); area and height are what is left
+-- over for the bar itself. portion is how full it is right now.
+function Layout.PreviewFill(direction, leftPad, rightPad, area, height, portion)
+    portion = portion or 1
+
+    if direction.orientation == "VERTICAL" then
+        -- Downwards hangs from the TOP: the fill starts at the end it grows
+        -- away from, which is the reverse flag read the same way the
+        -- StatusBar reads it.
+        local corner = direction.reverse and "TOPLEFT" or "BOTTOMLEFT"
+        return corner, leftPad, area, math.max(1, height * portion)
+    end
+
+    if direction.reverse then
+        return "TOPRIGHT", rightPad, math.max(1, area * portion), height
+    end
+    return "TOPLEFT", leftPad, math.max(1, area * portion), height
+end
+
 -- Green at full, through amber, to red. Two straight ramps rather than one
 -- across all three, because a single interpolation from green to red passes
 -- through grey-brown at the halfway point and reads as "something is wrong

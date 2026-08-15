@@ -84,6 +84,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **Every bar is a live card again, one under the other.** The left half of the
+  page is a column of previews — one per bar, each drawing *itself* rather than
+  whichever one is selected — and the settings sit on the right under their
+  tabs. The separate preview band is gone: the cards are the preview, and a
+  copy of the selected one across the top was the same picture twice.
+- **The previews are painted, not diagrammed.** Positions come from the same
+  model the renderer asks, and the look from the same two painters the screen
+  uses, from the same resolved settings — so the backdrop, the border, the icon
+  crop, the fill texture, its colour and its gradient, the fill direction and
+  the spell name are the ones your bar actually wears. **And the bars run:** a
+  still bar says nothing about which way it fills or where its leading edge
+  sits, and drawn part-full it just reads as the wrong length. Draining, it is
+  at every length in turn.
+  - What a preview **cannot** show is named rather than faked: the cooldown
+    sweep and the numbers need Blizzard's own frame, and the counts are values
+    this addon is not allowed to read. Nor does a preview fill *upwards* even
+    when the setting says so — no bar on screen does, and an editor that agreed
+    with a switch the screen ignores would be lying to you.
+- **A cell can be dragged again**, and dropped on another to move it, with
+  Shift to swap the two. Right-click clears one.
+
 - **The page is split down the middle.** Every bar in a column down the left,
   one under the other, and the settings on the right under their tabs — the
   owner's own layout, and the fix for a list that flowed two-abreast because a

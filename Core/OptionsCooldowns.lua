@@ -34,7 +34,11 @@ ns.OptionsCooldowns = Page
 -- `SLOT = 40` drew every button half again too big over a bar that is 26.
 -- A preview that does not agree with the screen is worse than none.
 local MIN_SLOT = 20
-local BAND_MAX_H = 190
+
+-- How tall one card's preview may grow before it is scaled down. A bar with
+-- twenty places would otherwise be a card you scroll past rather than a
+-- picture you can compare with the one under it.
+local PREVIEW_MAX_H = 190
 
 -- Which bar is being edited, and which of its cells is waiting for a spell.
 -- On the module rather than local, so the self test can drive the page the
@@ -75,239 +79,146 @@ local function Refresh()
     ns.Options:Refresh()
 end
 
--- WHAT ONE PREVIEW SLOT IS DRAWN AT. Read off the bar, never a constant of
--- this file's own - see the note at MIN_SLOT.
+---------------------------------------------------------------------------
+-- THE CARD COLUMN: EVERY BAR, LIVE, ONE UNDER THE OTHER
 --
--- A bar-shaped bar previews as its own rectangle, so its "slot" is as wide as
--- barWidth and as tall as barHeight, scaled down together if the band cannot
--- hold it. Squares for a bar a quarter of the screen wide is exactly the
--- picture the old renderer's header warns about, and a preview that lies that
--- way is how somebody spends an evening on a setting that was never wrong.
-function Page.PreviewGeometry(width)
-    local store, bar = Store(), Page.Current()
+-- Owner, 2026-08-15, having seen both: "ich fand es vorher besser, wo ich alle
+-- bars als live view untereinander hatte. koennen wir hier einen mittelweg
+-- finden?" - and the requirement that decides how this is built: "die bars
+-- muessen immer 100% den ist status spiegeln, also so wie sie wirklich
+-- aussehen."
+--
+-- THE MIDDLE GROUND IS: his column of live cards on the left, the tabbed
+-- settings on the right. One bar per card, each drawing ITSELF rather than the
+-- one that happens to be selected - so the page answers "what do my bars look
+-- like" without clicking anything, which is what the old page was better at.
+--
+-- 100% IS A CLAIM THAT HAS TO BE EARNED, so it is worth writing down exactly
+-- what it means here. Every card is painted by UI.CellGrid, which asks Model
+-- for the positions and ns.PaintSurface / ns.PaintBorder for the look - the
+-- same functions the renderer uses, from the same resolved style. What it
+-- cannot show is named on the page rather than faked: the sweep and the
+-- numbers need Blizzard's own frame, and the counts are secret values.
+---------------------------------------------------------------------------
+local CARD_W = 330
+local CARD_GAP = 22
+local CARD_HEAD = 26
+local CARD_PAD = 10
+local STAGE_MIN = 46
+
+-- HOW BIG ONE PREVIEW CELL IS DRAWN, read off the bar and scaled to the card.
+-- Never a constant of this file's own: a copied `SLOT = 40` drew every button
+-- half again too big over a bar that is 26, and cost a release on the raid bar.
+local function CardGeometry(bar)
+    local store = Store()
     if not (store and bar) then return 40, 4, 40 end
 
     local opts = store.Lattice(bar)
-    local rows = math.max(1, math.ceil(
-        math.max(1, store.Capacity(bar)) / math.max(1, opts.columns or 1)))
+    local count = math.max(1, store.Capacity(bar))
+    local columns = math.max(1, opts.columns or 1)
+    local rows = math.max(1, math.ceil(count / columns))
     local gap = math.max(0, opts.spacing or 4)
 
     local wanted = opts.width or opts.size or 40
-    local size = UI.PreviewSize(wanted, rows, opts.columns or 1,
-        width - 28, BAND_MAX_H, gap, MIN_SLOT)
+    local size = UI.PreviewSize(wanted, rows, columns,
+        CARD_W - CARD_PAD * 2, PREVIEW_MAX_H, gap, MIN_SLOT)
 
-    -- The height follows the width by the SAME ratio, so a 250x24 bar
-    -- previews as a 250x24 bar and not as a 250 square.
+    -- The height follows the width by the SAME ratio, so a 250x24 bar previews
+    -- as a 250x24 bar and not as a 250 square.
     local ratio = (wanted > 0) and (size / wanted) or 1
     local height = math.max(MIN_SLOT, math.floor((opts.size or 40) * ratio))
     return size, gap, height
 end
 
----------------------------------------------------------------------------
--- The band: what is actually on this bar
----------------------------------------------------------------------------
-local function BuildBand(band, width)
-    local L = ns.L
-    UI.Fill(band, "BACKGROUND", C.windowBg)
+-- THE LATTICE THIS CARD DRAWS, in the renderer's own geometry at the card's
+-- scale. Only the two sizes and the two gaps are scaled - every step comes
+-- from the model, so a stagger, a flow down columns or a bar that grows
+-- leftwards is right here because it is right there.
+local function CardSlots(bar)
+    local store = Store()
+    if not (store and bar) then return nil, nil end
 
-    local BAND_HEAD = 32
+    local model = ns.Cooldowns.Model
+    local opts = store.Lattice(bar)
+    local count = math.max(1, store.Capacity(bar))
+    local slotW, gap, slotH = CardGeometry(bar)
 
-    local title = UI.Eyebrow(band, L["This bar"])
-    title:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -10)
+    local scaled = {
+        columns = opts.columns, layout = opts.layout, flow = opts.flow,
+        growX = opts.growX, growY = opts.growY, stagger = opts.stagger,
+        size = slotH, width = slotW,
+        spacing = gap,
+        lineSpacing = math.max(0, math.floor(
+            (opts.lineSpacing or gap) * (slotH / math.max(1, opts.size or 40)))),
+    }
 
-    local rule = band:CreateTexture(nil, "ARTWORK")
-    rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
-    rule:SetHeight(1)
-    rule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
-    rule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
-
-    local host = CreateFrame("Frame", nil, band)
-    host:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -BAND_HEAD)
-    host:SetPoint("TOPRIGHT", band, "TOPRIGHT", -14, -BAND_HEAD)
-
-    local slotW, gap, slotH = Page.PreviewGeometry(width)
-    host:SetHeight(slotH)
-
-    -- THE BAND HAS TO SAY HOW TALL IT IS, and this page never did.
-    --
-    -- UI.Page creates the sticky band one pixel high and anchors the scrolling
-    -- half to its BOTTOM - "the caller fills grid.sticky and then sets its
-    -- height", says the note there. With no such line the band stayed at that
-    -- one pixel, so the eyebrow, the preview and the first heading of the page
-    -- were all drawn in the same place. That is the "THIS BAR" sitting across
-    -- "+ YOUR BARS" in his screenshot, and every other page with a band -
-    -- externals, the raid bar, the co-tanks - has this line.
-    --
-    local function Fit()
-        band:SetHeight(BAND_HEAD + math.max(1, host:GetHeight()) + 10)
-    end
+    local boxW, boxH, centreX, centreY = model.Extent(count, scaled)
 
     local slots = {}
-
-    -- CREATED AT THE SIZE IT IS ABOUT TO BE DRAWN AT. UI.SpellSlot takes the
-    -- font size of its empty "+" from the size it is handed, once - so a
-    -- lattice rebuilt from 40 down to 26 keeps a plus sign drawn for a 40
-    -- pixel box, and it is the only thing on the page that does not shrink.
-    local function SlotAt(index)
-        if slots[index] then return slots[index] end
-
-        local slot = UI.SpellSlot(host, {
-            size = slotW,
-            -- NAMED BY WHAT IT CARRIES, not by the page it is on. A drag kind
-            -- of "cooldowns" would take a raid-bar marker without complaint
-            -- and draw an empty square for the rest of the session; "spell"
-            -- is what a cooldown cell actually holds. See UI.DragOutcome.
-            dragKind = "spell",
-            get = function()
-                local store, bar = Store(), Page.Current()
-                if not (store and bar) then return nil end
-                return store.Cells(bar)[index]
-            end,
-            onPick = function(spellID)
-                local bars, bar = Bars(), Page.Current()
-                if not (bars and bar) then return end
-                local ok, why = bars.SetCell(bar, index, spellID)
-                if not ok then
-                    ns.Print("|cffff8040Not put on the bar|r - "
-                        .. (why or "?") .. ".")
-                    return
-                end
-                Page.cell = nil
-                Refresh()
-            end,
-            onEmptyClick = function()
-                Page.cell = (Page.cell ~= index) and index or nil
-                ns.Options:Refresh()
-            end,
-            onClear = function()
-                local bars, bar = Bars(), Page.Current()
-                if bars and bar then bars.SetCell(bar, index, nil) end
-                Refresh()
-            end,
-        })
-        slots[index] = slot
-        return slot
+    for index = 1, count do
+        local x, y, w, h = model.Slot(index, scaled, count)
+        slots[index] = { x = x, y = y, w = w, h = h,
+            kind = (bar.kind == "bar") and "bar" or "icon" }
     end
 
-    -- THE LATTICE, DRAWN BY THE SAME MODEL THAT DRAWS THE SCREEN.
-    --
-    -- Not "a grid that looks like the bar" - Model.Slot, the function the
-    -- renderer calls, scaled to fit the band. That is what makes "the preview
-    -- agrees with the screen" a fact rather than a hope: a stagger, a flow
-    -- down columns or a bar that grows leftwards is right here because it is
-    -- right there, and an off-by-one in the model is visible on this page.
-    band.Refresh = function()
-        local store, bar = Store(), Page.Current()
-        title:SetText(bar and (bar.name or L["This bar"]) or L["No bars yet"])
-
-        for _, slot in pairs(slots) do slot:Hide() end
-        if not (store and bar) then
-            host:SetHeight(1)
-            Fit()
-            return
-        end
-
-        local model = ns.Cooldowns.Model
-        local opts = store.Lattice(bar)
-        local count = math.max(1, store.Capacity(bar))
-
-        slotW, gap, slotH = Page.PreviewGeometry(width)
-
-        -- The preview lattice is the real one at a scale. Every step comes
-        -- from the model, so only the two sizes and the two gaps are scaled.
-        local scaled = {
-            columns = opts.columns, layout = opts.layout, flow = opts.flow,
-            growX = opts.growX, growY = opts.growY, stagger = opts.stagger,
-            size = slotH, width = slotW,
-            spacing = gap,
-            lineSpacing = math.max(0, math.floor(
-                (opts.lineSpacing or gap) * (slotH / math.max(1, opts.size or 40)))),
-        }
-
-        local boxW, boxH, offX, offY = model.Extent(count, scaled)
-        host:SetHeight(math.max(1, boxH))
-
-        for index = 1, count do
-            local slot = SlotAt(index)
-            local x, y = model.Slot(index, scaled, count)
-            -- ONE CALL, AND IT IS TOLD BOTH SIDES. Resize used to take one
-            -- number and square it, so the real size had to be set after -
-            -- leaving the plus sign and the spell icon sized for the LONG
-            -- side inside a place 24 pixels tall.
-            slot.iconSide = bar.iconPlacement or "left"
-            slot:Resize(slotW, slotH)
-            slot:ClearAllPoints()
-            -- Anchored from the left edge rather than the middle: the band is
-            -- as wide as the page and the bar is not, and a bar that grows
-            -- leftwards would otherwise walk off the edge it grew towards.
-            -- offX and offY are the lattice's CENTRE, which is what
-            -- Model.Extent returns - so (y - offY) is already the distance
-            -- from the middle, and host's LEFT is on that middle.
-            slot:SetPoint("CENTER", host, "LEFT",
-                (x - offX) + boxW / 2 + 4, (y - offY))
-            slot:SetSelected(Page.cell == index)
-            slot:Show()
-            if slot.Refresh then slot:Refresh() end
-        end
-
-        Fit()
-    end
-
-    -- REGISTERED, or its Refresh is never called by anything.
-    --
-    -- Grid:Refresh walks `widgets`, and only a region handed to Grid:Wide or
-    -- Grid:Row lands in there - the sticky band is neither. So band.Refresh
-    -- was written, was correct, and was dead: the preview lattice, which is
-    -- the whole point of this page, drew once at build time and never again.
-    -- Pick a second bar and the band went on showing the first one's name
-    -- over the first one's cells.
-    return band
+    return slots, { width = boxW, height = boxH,
+        centreX = centreX, centreY = centreY }
 end
 
----------------------------------------------------------------------------
--- THE RAIL: EVERY BAR, ONE UNDER THE OTHER
+-- THE LOOK OF ONE CELL, merged from the three modules that own the pieces.
 --
--- Owner, 2026-08-15, looking at the bar list flowing two-abreast across the
--- page: "teile das fenster in der mitte, links untereinander alle bars,
--- rechts alle einstellungen? aehnlich wie wir es vorher hatten."
---
--- He is right twice over. Grid:Row is HALF the page wide and two of them
--- share a line, which is correct for a setting and wrong for a list - so
--- "Cooldowns" and "Bars 2" sat side by side with the buttons stacked under
--- the left one only. And the list is not a setting at all: it is what you are
--- choosing between, which is a rail, the same shape the window itself wears.
---
--- IT IS ALSO REBUILT ON EVERY REFRESH, and the version it replaces was not.
--- This page is built ONCE, so a row made per bar at build time is the set of
--- bars that existed the first time it was opened: pressing New bar changed
--- the preview and added no row, for the rest of the session.
----------------------------------------------------------------------------
-local RAIL_W = 236
-local RAIL_GAP = 22
+-- Not resolved here - ASKED. Look.Style answers the backdrop, the border and
+-- the crop; Fill.Paint answers the fill, and it is the same reader Fill.Dress
+-- uses on the real frame; Text.Style answers the four text elements. A fourth
+-- copy of any of those defaults is a fourth copy that goes stale, which is the
+-- fault this card has already had three times.
+local function CardStyle(bar, height, index)
+    local cd = ns.Cooldowns
+    if not (cd and cd.Look and cd.Fill and cd.Text and bar) then return nil end
 
-local function BuildRail(rail)
+    local style = cd.Look.Style(bar, index)
+    if type(style) ~= "table" then return nil end
+
+    local wear = cd.Fill.Paint(bar, index)
+    local text = cd.Text.Style(bar, height)
+
+    -- COPIED ONTO THE LOOK RATHER THAN MUTATING IT. Look.Style hands back a
+    -- table whose fillDirection is the SHARED entry out of ns.FILL_DIRECTIONS
+    -- - writing into it would corrupt every bar and every renderer.
+    local merged = {}
+    for key, value in pairs(style) do merged[key] = value end
+    merged.fillTexture = wear.texture
+    merged.fillColor = wear.color
+    merged.fillAlpha = wear.alpha
+    merged.fillGradient = wear.gradient
+    merged.fillDirection = wear.direction
+    merged.spellName = text and text.spellName or nil
+    return merged
+end
+
+local function BuildCards(host)
     local L = ns.L
+    local cards = {}
 
-    local title = UI.Eyebrow(rail, L["Your bars"])
-    title:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -2)
+    local title = UI.Eyebrow(host, L["Your bars"])
+    title:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -2)
 
-    local rows = {}
-    local empty = UI.Hint(rail, L["No bars yet. Make one and the spells you "
+    local empty = UI.Hint(host, L["No bars yet. Make one and the spells you "
         .. "pick land on it."])
-    empty:SetWidth(RAIL_W)
+    empty:SetWidth(CARD_W)
     empty:SetJustifyV("TOP")
-    empty:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -26)
+    empty:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -26)
 
-    -- The three actions, made once and moved by Refresh - a button rebuilt
-    -- per pass is a button whose two-step "really?" forgets it was armed.
-    local newBar = UI.Button(rail, L["New bar"], RAIL_W, function()
+    -- The three actions, made once and moved by Refresh - a button rebuilt per
+    -- pass is a button whose two-step "really?" forgets it was armed.
+    local newBar = UI.Button(host, L["New bar"], CARD_W, function()
         local bars = Bars()
         local made = bars and bars.New()
         if made then Page.barID = made.id end
         Refresh()
     end)
 
-    local duplicate = UI.Button(rail, L["Duplicate this one"], RAIL_W,
+    local duplicate = UI.Button(host, L["Duplicate this one"], CARD_W,
         function()
             local bars, bar = Bars(), Page.Current()
             local made = bar and bars and bars.Duplicate(bar.id)
@@ -315,10 +226,10 @@ local function BuildRail(rail)
             Refresh()
         end)
 
-    -- DELETING ONE ASKS TWICE, like every other thing in this addon you
-    -- cannot take back in the same second. It disarms itself after four
-    -- seconds: a button left sitting on "really?" is one somebody clicks on
-    -- their way past a week later.
+    -- DELETING ONE ASKS TWICE, like every other thing in this addon you cannot
+    -- take back in the same second, and it disarms itself after four: a button
+    -- left sitting on "really?" is one somebody clicks on their way past a
+    -- week later.
     local armed, remove = false, nil
     local function Idle()
         local bar = Page.Current()
@@ -326,7 +237,7 @@ local function BuildRail(rail)
             or L["this bar"])
     end
 
-    remove = UI.Button(rail, L["Delete"], RAIL_W, function()
+    remove = UI.Button(host, L["Delete"], CARD_W, function()
         if not armed then
             armed = true
             remove:SetText(L["Really delete it?"])
@@ -356,43 +267,118 @@ local function BuildRail(rail)
         end
         Refresh()
     end)
-    rail.deleteButton = remove
+    host.deleteButton = remove
 
-    -- ONE ROW PER BAR, POOLED. The rows are frames and a page that makes a
-    -- fresh one per refresh leaks a frame per press for the session.
-    local function RowAt(index)
-        if rows[index] then return rows[index] end
-        local row = UI.Row(rail, "", { controlWidth = 40 })
-        row:SetWidth(RAIL_W)
-        UI.Toggle(row,
-            function()
-                local bar = row.dkBar
-                return bar and bar.enabled ~= false
+    -- ONE CARD PER BAR, POOLED. Cards are frames and a page that makes a fresh
+    -- one per refresh leaks a frame per press for the whole session.
+    local function CardAt(index)
+        if cards[index] then return cards[index] end
+
+        local card = CreateFrame("Button", nil, host)
+        card:SetWidth(CARD_W)
+        card:RegisterForClicks("LeftButtonUp")
+        UI.Fill(card, "BACKGROUND", C.surface)
+        UI.Plate(card, 1, 1)
+
+        -- The accent stripe down the left edge is the selection, which is the
+        -- mark UI.Card already uses everywhere else in this window.
+        card.mark = card:CreateTexture(nil, "OVERLAY")
+        card.mark:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
+        card.mark:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
+        card.mark:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 0, 0)
+        card.mark:SetWidth(3)
+        card.mark:Hide()
+
+        card.title = UI.Label(card, "", UI.FS.row, C.text)
+        card.title:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -8)
+        card.title:SetWordWrap(false)
+
+        card.badge = UI.Badge(card, "", "kind")
+        card.badge:SetPoint("LEFT", card.title, "RIGHT", 8, 0)
+
+        card.toggle = CreateFrame("Frame", nil, card)
+        card.toggle:SetSize(40, 20)
+        card.toggle:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -7)
+
+        -- The well the preview sits in: a piece of SCREEN set into the card,
+        -- which is what makes the picture read as the bar rather than as more
+        -- of the page.
+        card.well = CreateFrame("Frame", nil, card)
+        card.well:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD,
+            -(CARD_HEAD + 4))
+        card.well:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD,
+            -(CARD_HEAD + 4))
+        UI.Fill(card.well, "BACKGROUND", C.well)
+
+        card.grid = UI.CellGrid(card.well, {
+            dragKind = "spell",
+            layout = function() return CardSlots(card.dkBar) end,
+            style = function(height, index)
+                return CardStyle(card.dkBar, height, index)
             end,
-            function(on)
-                local bar = row.dkBar
-                if not bar then return end
-                bar.enabled = on and true or false
+            iconPlacement = function()
+                return card.dkBar and card.dkBar.iconPlacement or "left"
+            end,
+            content = function(index)
+                local store = Store()
+                if not (store and card.dkBar) then return nil end
+                return store.Cells(card.dkBar)[index]
+            end,
+            selected = function()
+                if not (card.dkBar and Page.barID == card.dkBar.id) then
+                    return nil
+                end
+                return Page.cell
+            end,
+            onPick = function(index)
+                if not card.dkBar then return end
+                Page.barID = card.dkBar.id
+                Page.cell = (Page.cell ~= index) and index or nil
                 Refresh()
-            end)
-        -- `onClick`, and it is not a synonym for SetScript("OnClick"): a row
-        -- is a FRAME and a frame has no OnClick at all. Asking for one threw
-        -- the client's refusal eight times on every paint, and picking a bar
-        -- by clicking its row never worked once.
-        row.dkPick = function()
-            if not row.dkBar then return end
-            Page.barID = row.dkBar.id
-            Page.cell = nil
+            end,
+            onClear = function(index)
+                local bars = Bars()
+                if bars and card.dkBar then
+                    bars.SetCell(card.dkBar, index, nil)
+                end
+                Refresh()
+            end,
+            onDrop = function(index, spellID)
+                local bars = Bars()
+                if not (bars and card.dkBar) then return end
+                local ok, why = bars.SetCell(card.dkBar, index, spellID)
+                if not ok then
+                    ns.Print("|cffff8040Not put on the bar|r - "
+                        .. (why or "?") .. ".")
+                    return
+                end
+                Page.barID = card.dkBar.id
+                Page.cell = nil
+                Refresh()
+            end,
+            onMove = function(from, to, swap)
+                local bars, store = Bars(), Store()
+                if not (bars and store and card.dkBar) then return end
+                local cells = store.Cells(card.dkBar)
+                local moving, landing = cells[from], cells[to]
+                bars.SetCell(card.dkBar, to, moving)
+                bars.SetCell(card.dkBar, from, swap and landing or nil)
+                Refresh()
+            end,
+        })
+        card.grid:SetPoint("TOPLEFT", card.well, "TOPLEFT", 6, -6)
+
+        card:SetScript("OnClick", function()
+            if not card.dkBar then return end
+            Page.barID = card.dkBar.id
             Refresh()
-        end
-        row:SetScript("OnMouseUp", function(_, button)
-            if button == "LeftButton" and row.dkPick then row.dkPick() end
         end)
-        rows[index] = row
-        return row
+
+        cards[index] = card
+        return card
     end
 
-    rail.Refresh = function()
+    host.Refresh = function()
         local store = Store()
         local list = {}
         for _, bar in pairs(store and store.Bars() or {}) do
@@ -402,41 +388,58 @@ local function BuildRail(rail)
 
         local y = 26
         for index, bar in ipairs(list) do
-            local row = RowAt(index)
-            row.dkBar = bar
-            row.label:SetText(bar.name or L["Bar"])
+            local card = CardAt(index)
+            card.dkBar = bar
+            card.title:SetText(bar.name or L["Bar"])
+            card.badge:SetText((bar.kind == "bar") and L["Tracking bar"]
+                or L["Icon bar"])
 
-            -- WHICH ONE YOU ARE EDITING, said on the row itself. A rail whose
-            -- preview belongs to one of five identical-looking rows and says
-            -- so nowhere is a rail you edit the wrong bar from.
-            local chosen = (Page.barID == bar.id)
-            row.bg:SetShown(chosen)
-            row.label:SetTextColor(unpack(chosen and C.text or C.textBody))
+            if not card.switch then
+                card.switch = UI.Toggle({ slot = card.toggle },
+                    function()
+                        return card.dkBar and card.dkBar.enabled ~= false
+                    end,
+                    function(on)
+                        if not card.dkBar then return end
+                        card.dkBar.enabled = on and true or false
+                        Refresh()
+                    end).control
+            end
+            if card.switch and card.switch.Refresh then card.switch.Refresh() end
 
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -y)
-            row:Show()
-            if row.Refresh then row.Refresh() end
-            y = y + row:GetHeight()
+            card.mark:SetShown(Page.barID == bar.id)
+
+            local height = card.grid.Refresh() or 0
+            card.well:SetHeight(math.max(STAGE_MIN, height + 12))
+            card:SetHeight(CARD_HEAD + 4 + card.well:GetHeight() + CARD_PAD)
+
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -y)
+            card:Show()
+            y = y + card:GetHeight() + CARD_GAP
         end
-        for index = #list + 1, #rows do rows[index]:Hide() end
+        for index = #list + 1, #cards do cards[index]:Hide() end
 
         empty:SetShown(#list == 0)
         if #list == 0 then y = y + 34 end
 
-        y = y + UI.PAD
         for _, button in ipairs({ newBar, duplicate, remove }) do
             button:ClearAllPoints()
-            button:SetPoint("TOPLEFT", rail, "TOPLEFT", 0, -y)
+            button:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -y)
             y = y + UI.BUTTON_H + 6
         end
 
         duplicate:SetShown(#list > 0)
         remove:SetShown(#list > 0)
         if not armed then remove:SetText(Idle()) end
+
+        -- The column says how tall it is, or the scroll under it has no range
+        -- and the last card is unreachable.
+        host:SetHeight(math.max(1, y + 10))
+        return y
     end
 
-    return rail
+    return host
 end
 
 -- THE BAR IS RESOLVED WHEN A CONTROL IS READ, NEVER WHEN IT IS BUILT.
@@ -803,78 +806,61 @@ function Page:BuildPage(page, width)
     local L = ns.L
 
     ---------------------------------------------------------------------
-    -- THE WINDOW SPLIT DOWN THE MIDDLE, which is his own layout:
-    -- "links untereinander alle bars, rechts alle einstellungen".
+    -- THE PAGE, IN TWO HALVES. His own layout, twice asked for: "teile das
+    -- fenster in der mitte, links untereinander alle bars, rechts alle
+    -- einstellungen", and then "ich fand es vorher besser, wo ich alle bars
+    -- als live view untereinander hatte."
     --
-    --   band   full width, never scrolls - the bar you are editing
-    --   rail   left, every bar under the other, and the three actions
-    --   right  the tab strip and the settings, scrolling under it
+    --   left   every bar as a live card, scrolling, one under the other
+    --   right  the tab strip and the settings for the one you picked
     --
-    -- The band is built here rather than by UI.Page's `sticky`, because it
-    -- belongs to the PAGE and the grid now owns only the right half.
+    -- THERE IS NO PREVIEW BAND ANY MORE. The cards ARE the preview, so a copy
+    -- of the selected one across the top of the page was the same picture
+    -- twice - and the one at the top was the one that could not be compared
+    -- with anything.
     ---------------------------------------------------------------------
-    local band = CreateFrame("Frame", nil, page)
-    band:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
-    band:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
-    band:SetHeight(1)
-    BuildBand(band, width)
+    local left = CreateFrame("Frame", nil, page)
+    left:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
+    left:SetWidth(CARD_W + 14)
 
-    local body = CreateFrame("Frame", nil, page)
-    body:SetPoint("TOPLEFT", band, "BOTTOMLEFT", 0, -UI.PAD)
-    body:SetPoint("TOPRIGHT", band, "BOTTOMRIGHT", 0, -UI.PAD)
-    body:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
+    local scroll, column = UI.ScrollArea(left, CARD_W)
+    BuildCards(column)
 
-    local rail = CreateFrame("Frame", nil, body)
-    rail:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
-    rail:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 0, 0)
-    rail:SetWidth(RAIL_W)
-    BuildRail(rail)
-
-    -- The hairline between the two halves. It is the only thing saying the
-    -- left column is a different kind of thing from the right one, now that
-    -- neither is a card on a ground of its own.
-    local split = body:CreateTexture(nil, "ARTWORK")
+    -- The hairline between the halves. It is the only thing saying the left
+    -- column is a different kind of thing from the right one.
+    local split = page:CreateTexture(nil, "ARTWORK")
     split:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
     split:SetWidth(1)
-    split:SetPoint("TOPLEFT", rail, "TOPRIGHT", RAIL_GAP / 2, 0)
-    split:SetPoint("BOTTOMLEFT", rail, "BOTTOMRIGHT", RAIL_GAP / 2, 0)
+    split:SetPoint("TOPLEFT", left, "TOPRIGHT", CARD_GAP / 2, 0)
+    split:SetPoint("BOTTOMLEFT", left, "BOTTOMRIGHT", CARD_GAP / 2, 0)
 
-    local right = CreateFrame("Frame", nil, body)
-    right:SetPoint("TOPLEFT", rail, "TOPRIGHT", RAIL_GAP, 0)
-    right:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", 0, 0)
+    local right = CreateFrame("Frame", nil, page)
+    right:SetPoint("TOPLEFT", left, "TOPRIGHT", CARD_GAP, 0)
+    right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
 
     local strip
     local settings = CreateFrame("Frame", nil, right)
     settings:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -(34 + UI.PAD))
     settings:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", 0, 0)
 
-    local pageWidth = width - RAIL_W - RAIL_GAP
+    local pageWidth = width - CARD_W - 14 - CARD_GAP
     local grid = UI.Page(settings, pageWidth,
         { tooltipNotes = true, single = true })
     grid.page = page
-    grid.rail = rail
-    -- The delete button lives on the rail now. Named here as well so the
-    -- desk guard that asks "does this page offer a way to delete a bar"
-    -- still finds one - a guard that cannot find the control reports it
-    -- absent, and absent is how a working page fails a check.
-    grid.deleteButton = rail.deleteButton
-    -- The band is not the grid's any more, and the desk guard that asks a
-    -- page whether its band has a height reads it here. Named rather than
-    -- inferred: a guard that cannot find the band reports nothing, and
-    -- nothing prints the same green as passing.
-    grid.sticky = band
+    grid.cards = column
+    -- Named so the desk guard that asks "does this page offer a way to delete
+    -- a bar" finds one. A guard that cannot find the control reports it
+    -- absent, and absent prints the same green as passing.
+    grid.deleteButton = column.deleteButton
 
     ---------------------------------------------------------------------
     -- FIVE SHORT PAGES INSTEAD OF ONE OF TWENTY-THREE HEADINGS.
     --
-    -- Folding sections were the answer to the 2 710-line page and on their
-    -- own were not enough: twenty-three of them, all shut, is a screen with
-    -- nothing on it but a list of things it will not show you. Owner, with
-    -- the picture: "well, damit kann man nicht arbeiten."
-    --
-    -- Widgets' own note on Grid:Tab says the rest in one line: "nine sections
-    -- in one scroll is a page you have to remember your way around; the same
-    -- nine split three ways is three short pages."
+    -- Folding sections were the answer to the 2 710-line page and on their own
+    -- were not enough: twenty-three of them, all shut, is a screen with
+    -- nothing on it but a list of things it will not show you. Owner, with the
+    -- picture: "well, damit kann man nicht arbeiten."
     ---------------------------------------------------------------------
     grid:Tab(L["Bars"])
     BuildArrangement(grid)
@@ -901,27 +887,23 @@ function Page:BuildPage(page, width)
     strip:SetPoint("TOPRIGHT", right, "TOPRIGHT", 0, 0)
     grid.strip = strip
 
-    -- LAID OUT HERE, not left to OnSizeChanged. A tab is created with no
-    -- width and no x, so a strip that was never laid out has tabs that exist,
-    -- answer to clicks nobody can aim at, and are invisible - which shipped
-    -- once on the co-tank inspector. UI.TabStrip does hook its own resize
-    -- now, and this is the line that does not depend on that firing.
+    -- LAID OUT HERE, not left to OnSizeChanged. A tab is created with no width
+    -- and no x, so a strip that was never laid out has tabs that exist, answer
+    -- to clicks nobody can aim at, and are invisible - which shipped once on
+    -- the co-tank inspector.
     grid.tab = grid.tabs[1]
     strip:Layout()
     strip:Select(grid.tabs[1])
 
-    -- THE TWO LINES THIS PAGE HAS BEEN MISSING SINCE IT WAS WRITTEN, and
-    -- without them none of it works: Grid:Layout is what PLACES every row, and
-    -- Options.PaintView ends in `if page.Refresh then page.Refresh() end` -
-    -- so with that field nil, Grid:Refresh never ran, no row ever refreshed,
-    -- and band.Refresh - the preview lattice, the whole point of the page -
-    -- was never called once.
+    -- Grid:Layout is what PLACES every row, and Options.PaintView ends in
+    -- `if page.Refresh then page.Refresh() end` - so with that field nil,
+    -- Grid:Refresh never runs, no row refreshes, and no card is ever redrawn.
     grid:Layout()
-    band.Refresh()
-    rail.Refresh()
+    column.Refresh()
+    if scroll.Update then scroll.Update() end
     page.Refresh = function()
-        band.Refresh()
-        rail.Refresh()
+        column.Refresh()
+        if scroll.Update then scroll.Update() end
         grid:Refresh()
     end
 

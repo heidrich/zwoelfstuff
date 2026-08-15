@@ -602,6 +602,45 @@ local function Overlays(fill, note, material, texture, direction, list)
 end
 
 ---------------------------------------------------------------------------
+-- WHAT A FILL LOOKS LIKE, WITHOUT A FRAME TO PUT IT ON
+--
+-- Dress below writes these five values through Claim onto a StatusBar
+-- Blizzard owns. The options page needs the SAME five to paint a preview on a
+-- bar of OURS - and the preview must not resolve them a second time, because
+-- a second copy of "empty means wear the backdrop's texture" and of the two
+-- default colours is a second copy that goes stale. Fill.lua's own header
+-- says it in the note above Option: when the look wave lands its own
+-- resolver, this must MOVE rather than be joined.
+--
+-- Pure: it reads the stored bar and nothing else, so it answers at the desk.
+-- The texture is a KEY, not a path - `nil` means "leave whatever is there",
+-- which is Blizzard's own on screen and the backdrop's on a preview.
+---------------------------------------------------------------------------
+function Fill.Paint(bar, index)
+    local key = Fill.Option(bar, index, "fillTexture")
+    if key == nil or key == "" then
+        key = Fill.Option(bar, index, "backdropTexture")
+    end
+    if not (key ~= nil and key ~= "" and ns.Media.IsKnown("statusbar", key)) then
+        key = nil
+    end
+
+    local colour = Fill.Option(bar, index, "fillColor")
+    local markColour = Fill.Option(bar, index, "chargeMarkColor")
+
+    return {
+        texture   = key,
+        color     = type(colour) == "table" and colour or { 1.00, 0.478, 0.239 },
+        alpha     = tonumber(Fill.Option(bar, index, "fillAlpha")) or 0.85,
+        gradient  = Fill.Option(bar, index, "fillGradient"),
+        direction = Fill.Direction(bar, index),
+        spark     = Fill.Option(bar, index, "showSpark") and true or false,
+        marks     = Fill.Option(bar, index, "chargeMarks") and true or false,
+        markColor = type(markColour) == "table" and markColour or { 0, 0, 0 },
+    }
+end
+
+---------------------------------------------------------------------------
 -- Dressing one fill
 --
 -- The order below is the order old Screen.lua:263-270 proved is load-bearing,
@@ -621,29 +660,23 @@ local function Dress(item, fill, bar, index, spellID)
     --    default than white and one less thing to give back. Empty means "wear
     --    whatever the backdrop wears", so a bar reads as one object rather than
     --    two textures that happen to be adjacent (old Bars.lua:1165-1169).
-    local key = Fill.Option(bar, index, "fillTexture")
-    if key == nil or key == "" then
-        key = Fill.Option(bar, index, "backdropTexture")
-    end
+    -- Asked ONCE, of the resolver the preview also asks. See Fill.Paint.
+    local wear = Fill.Paint(bar, index)
 
     local path
-    if key ~= nil and key ~= "" and ns.Media.IsKnown("statusbar", key) then
-        path = ns.Media.Statusbar(key)
+    if wear.texture then
+        path = ns.Media.Statusbar(wear.texture)
         Claim.Set(fill, "SetStatusBarTexture", path)
     end
 
     -- 2 and 3. THE BAR COLOUR, THEN THE RAMP. Nothing may set the bar colour
     --    after this point.
-    local colour = Fill.Option(bar, index, "fillColor")
-    local texture = Paint(fill,
-        type(colour) == "table" and colour or { 1.00, 0.478, 0.239 },
-        tonumber(Fill.Option(bar, index, "fillAlpha")) or 0.85,
-        Fill.Option(bar, index, "fillGradient"))
+    local texture = Paint(fill, wear.color, wear.alpha, wear.gradient)
 
     -- 4. WHICH END AND WHICH AXIS. Two calls, because SetReverseFill alone only
     --    ever flips a horizontal bar - up and down were unreachable in 4.82.0 no
     --    matter which way the switch was thrown.
-    local direction = Fill.Direction(bar, index)
+    local direction = wear.direction
     Claim.Set(fill, "SetOrientation", direction.orientation)
     Claim.Set(fill, "SetReverseFill", direction.reverse)
 
@@ -654,17 +687,14 @@ local function Dress(item, fill, bar, index, spellID)
     --    turns that into no lines at all, so the setting can stay on for a bar
     --    of spells that mostly have a single charge.
     local wanted = 0
-    if Fill.Option(bar, index, "chargeMarks") then
+    if wear.marks then
         wanted = Fill.Divisions(Fill.MaxCharges(spellID))
     end
-    local markColour = Fill.Option(bar, index, "chargeMarkColor")
-    local marked = Marks(item, fill, note, wanted,
-        type(markColour) == "table" and markColour or { 0, 0, 0 }, vertical)
+    local marked = Marks(item, fill, note, wanted, wear.markColor, vertical)
 
     -- 6. THE SPARK, on the edge the fill grows towards.
-    local sparked = Spark(item, fill, note,
-        Fill.Option(bar, index, "showSpark") and true or false,
-        direction, texture, vertical)
+    local sparked = Spark(item, fill, note, wear.spark, direction, texture,
+        vertical)
 
     -- 7. THE THRESHOLDS, last, because they copy the direction and anchor to the
     --    texture object the two steps above settled. The second answer - how
