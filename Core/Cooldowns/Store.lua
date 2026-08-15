@@ -171,57 +171,70 @@ end
 -- and the report names it separately for that reason.
 ---------------------------------------------------------------------------
 Store.READERS = {
-    -- Read today, by Model and by this file.
+    -- READ TODAY, by Model, by Store, by Render and by the four files of
+    -- waves 4 and 5. It started as thirteen keys and it is the whole bar bar
+    -- six, which is what progress looks like here: the number that falls is
+    -- the point of this table existing.
     now = {
+        -- The bar itself, and where it sits.
         "id", "name", "enabled", "kind", "columns", "rows", "layout", "flow",
-        "growX", "growY", "iconSize", "spacing", "staggerOffset",
+        "growX", "growY", "point", "relPoint", "x", "y", "scale", "pinned",
+        "staggerOffset",
+
+        -- What is on it.
         "cells", "cellsBySpec", "cellOpts",
-        -- MOVED UP FROM `placement` after an audit against his own bars.
-        -- Filing these under a later wave was the mistake: they are not
-        -- where a bar SITS, they are how big one of its cells is and how far
-        -- the next row is. The model cannot answer at all for his "Bars 2"
-        -- without barWidth and barHeight, and it answers WRONGLY - which is
-        -- worse - for two of his bars without lineSpacing.
-        "lineSpacing", "barWidth", "barHeight",
-        -- MOVED UP FROM `look` in wave 2, and it is the same correction a
-        -- third time. `iconPlacement` reads like styling and is geometry: it
-        -- decides where an ICON-shaped frame sits inside a BAR-shaped slot,
-        -- and the alternative to answering it is stretching a square across
-        -- 250 pixels. Filed under the look wave, that would have shipped.
+
+        -- HOW BIG ONE CELL IS AND HOW FAR THE NEXT ONE. Every one of these
+        -- reads like styling and is GEOMETRY, and every one of them was
+        -- filed under a later wave until an audit against his own four bars
+        -- moved it: without barWidth and barHeight the model cannot answer at
+        -- all for his "Bars 2", and without lineSpacing it answers WRONGLY -
+        -- which is worse - for two of them.
+        "iconSize", "spacing", "lineSpacing", "barWidth", "barHeight",
         "iconPlacement",
-        -- Wave 2 reads these because they are where the bar IS. The rest of
-        -- `placement` is about being MOVED, which is the editor's wave.
-        "point", "relPoint", "x", "y", "scale",
-    },
-    -- Wave 2, Claim and Render: where the bar sits.
-    --
-    -- `anchor` is here because a guard found it, not because anybody
-    -- remembered it. None of his four bars carries the key - he has never
-    -- hung one bar off another - so the check that reads his profile could
-    -- never have surfaced it. The one that reads 4.82.0's shipped defaults
-    -- did, on its first run. It is `{ to = <barID>, ... }`, it is released
-    -- when its target bar is deleted, and it is validated on load against
-    -- circular references; all of that is real work that wave 2 owes
-    -- somebody who is not him.
-    placement = {
-        "pinned", "locked", "freeCount", "parked", "parkedBySpec", "raster",
-        "anchor",
-    },
-    -- Wave 4, the look.
-    look = {
+
+        -- The look, wave 4.
         "alpha", "backdrop", "backdropAlpha", "backdropColor",
         "backdropGradient", "backdropTexture", "borderColor",
-        "borderGradient", "borderSize", "borderTexture", "fillAlpha",
-        "fillColor", "fillDirection", "fillGradient", "fillGrow", "fillSide",
-        "fillTexture", "iconPlacement", "iconZoom", "inactiveAlpha",
-        "inactiveDesaturate", "showEdge", "showSpark", "spellName",
-        "swipeAlpha", "swipeColor",
-        -- `iconPlacement` used to be here. It is geometry - see `now`.
+        "borderGradient", "borderSize", "borderTexture", "iconZoom",
+        "inactiveAlpha", "inactiveDesaturate", "showEdge", "swipeAlpha",
+        "swipeColor",
+
+        -- The text, wave 4.
+        "countdown", "stacks", "charges", "spellName",
+
+        -- The states and the effects, wave 4.
+        "effects", "show",
+
+        -- The fill of a tracking bar, wave 5.
+        "fillAlpha", "fillColor", "fillDirection", "fillGradient", "fillGrow",
+        "fillSide", "fillTexture", "showSpark", "chargeMarks",
+        "chargeMarkColor", "stackThresholds",
     },
-    -- Wave 4 as well, but they are states rather than colours.
-    effects = {
-        "effects", "charges", "chargeMarks", "chargeMarkColor", "countdown",
-        "stacks", "stackThresholds", "show",
+
+    -- WHAT NOTHING READS YET, and there are six left.
+    --
+    -- Five of them are one feature: the free-form puzzle layout, where a bar
+    -- has no lattice at all and every cell carries its own x and y.
+    -- `freeCount` is its length, `raster` is what a dragged cell snaps to,
+    -- and `parked`/`parkedBySpec` are the cells taken off it. His first bar
+    -- carries ten `cellOpts` for five cells, left over from when it was
+    -- wider, so this is not hypothetical for him.
+    --
+    -- `anchor` is the sixth and it is on its own: `{ to = <barID> }`, one bar
+    -- hung off another. He has never used it - which is exactly why it needed
+    -- a guard that reads 4.82.0's SHIPPED DEFAULTS rather than his profile to
+    -- surface it at all. Deleting a bar already releases its followers (see
+    -- Cooldowns/Bars.lua); what is missing is anything that READS it to place
+    -- one, plus the circular-reference check that owes somebody who is not him.
+    --
+    -- `locked` is deliberately NOT here: 4.82.0's own defaults call it a dead
+    -- field from an older shape, replaced by `pinned`, and it survives on two
+    -- of his four bars as a fossil. Naming it as "waiting" would be a promise
+    -- to read something that never meant anything.
+    later = {
+        "freeCount", "raster", "parked", "parkedBySpec", "anchor",
+        "locked",
     },
 }
 

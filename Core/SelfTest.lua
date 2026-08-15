@@ -8201,6 +8201,226 @@ local function TestCooldownRender()
     if not ok then error(err, 0) end
 end
 
+---------------------------------------------------------------------------
+-- WHAT THE STYLING LAYER DOES WITHOUT A SCREEN
+--
+-- Waves 4 and 5 are four files and about three thousand lines, and almost all
+-- of it draws. What CAN be asked at a desk is the half each of them split out
+-- on purpose: the arithmetic and the rules. That half is also where the
+-- silent failures live - an off-by-one in a glow's position does not raise,
+-- it puts a dot in the wrong corner; a rule that folds `false` into `true`
+-- gives somebody a switch that cannot be switched off.
+--
+-- THE THREE-VALUED ANSWERS ARE THE POINT OF THIS SUITE. Everything in these
+-- files that reads the client can answer "I could not tell", and every one of
+-- those has to fall back to the behaviour of the FEATURE SWITCHED OFF. An
+-- icon that disappears because a secret could not be tested is
+-- indistinguishable from a bug, and it takes the spell with it.
+---------------------------------------------------------------------------
+local function TestCooldownStyling()
+    local C = ns.Cooldowns
+    if not (C and C.Effects and C.Look and C.Text and C.Fill) then
+        Skip("The styling layer", "waves 4 and 5 are not loaded")
+        return
+    end
+
+    local Effects, Look, Text, Fill = C.Effects, C.Look, C.Text, C.Fill
+
+    ---------------------------------------------------------------------
+    -- `x and y or z` CANNOT CARRY FALSE, and half these defaults are true
+    ---------------------------------------------------------------------
+    Check("A stored false survives a default of true",
+        Effects.Option({ readyGlowCombatOnly = false }, "readyGlowCombatOnly")
+        == false)
+    Check("And an absent key still answers with the default",
+        Effects.Option({}, "readyGlowCombatOnly") == true)
+    Check("A bar with no effects table at all answers the defaults",
+        Effects.Option(nil, "readyFlash") == false)
+
+    ---------------------------------------------------------------------
+    -- UNKNOWN IS NEVER ROUNDED INTO THE FLATTERING ANSWER
+    ---------------------------------------------------------------------
+    Check("A cooldown the client will not talk about is never hidden",
+        Effects.HiddenByState({ hideWhen = "cooling" }, nil) == false)
+    Check("One it WILL talk about still is",
+        Effects.HiddenByState({ hideWhen = "cooling" }, false) == true)
+    Check("And a bar hiding nothing hides nothing",
+        Effects.HiddenByState({ hideWhen = "never" }, false) == false)
+
+    -- The inverse rule was taken out rather than left unlisted, and a profile
+    -- that still carries it must give the bar BACK rather than empty it.
+    Check("A rule this build no longer has hides nothing",
+        Effects.HiddenByState({ hideWhen = "ready" }, true) == false)
+
+    Check("A glow lights when the client will not say what you can afford",
+        Effects.GlowAllowed({ readyGlow = true, readyGlowUsableOnly = true },
+            true, nil) == true)
+    Check("And stays dark when it says you cannot",
+        Effects.GlowAllowed({ readyGlow = true, readyGlowUsableOnly = true },
+            true, false) == false)
+    Check("A spell that is not ready never glows",
+        Effects.GlowAllowed({ readyGlow = true }, false, true) == false)
+
+    ---------------------------------------------------------------------
+    -- THE TICKER IS ARMED BY WHAT IS ASKED FOR, NOT BY WHAT IS DRAWN
+    --
+    -- 4.82.0 asked only about the visuals, so somebody who chose a sound and
+    -- left every visual off was watched by nothing and heard nothing - and a
+    -- sound that never comes is indistinguishable from a broken sound file.
+    ---------------------------------------------------------------------
+    Check("A bar with everything off wants no ticker",
+        Effects.Wanted({ hideWhen = "never" }, false) == false)
+    Check("A sound alone is enough to arm it",
+        Effects.Wanted({ hideWhen = "never" }, true) == true)
+    Check("So is a rule that only hides things",
+        Effects.Wanted({ hideWhen = "cooling" }, false) == true)
+    Check("And so is the nag on its own",
+        Effects.Wanted({ hideWhen = "never", reminderAfter = 5 }, false) == true)
+
+    ---------------------------------------------------------------------
+    -- WALKING THE OUTLINE, which is the only way a running glow is provable
+    ---------------------------------------------------------------------
+    local w, h = 40, 40
+    local x0, y0 = Effects.PerimeterPoint(0, w, h)
+    local x1, y1 = Effects.PerimeterPoint(1, w, h)
+    Check("The walk comes back to where it started",
+        math.abs(x0 - x1) < 0.001 and math.abs(y0 - y1) < 0.001,
+        string.format("%.2f,%.2f vs %.2f,%.2f", x0, y0, x1, y1))
+
+    local xWrap, yWrap = Effects.PerimeterPoint(1.25, w, h)
+    local xQuarter, yQuarter = Effects.PerimeterPoint(0.25, w, h)
+    Check("And it wraps, so a caller may add without thinking",
+        math.abs(xWrap - xQuarter) < 0.001
+        and math.abs(yWrap - yQuarter) < 0.001)
+
+    -- EVERY POINT IS ON THE EDGE. Eight dots that drift inside the rectangle
+    -- is a glow that reads as a smudge, and no arithmetic error large enough
+    -- to see would fail a check of the corners alone.
+    local strayed = 0
+    for step = 0, 31 do
+        local x, y = Effects.PerimeterPoint(step / 32, w, h)
+        local onEdge = math.abs(x) < 0.001 or math.abs(x - w) < 0.001
+            or math.abs(y) < 0.001 or math.abs(y - h) < 0.001
+        if not onEdge then strayed = strayed + 1 end
+    end
+    Check("Every one of thirty-two points is on the outline", strayed == 0,
+        tostring(strayed) .. " strayed inside")
+
+    ---------------------------------------------------------------------
+    -- RULE 4 FOLDED INTO ONE NUMBER
+    ---------------------------------------------------------------------
+    local full = Look.Style({ alpha = 1, inactiveAlpha = 0.55 }, 1)
+    Check("A cell that is up is at the alpha you set",
+        Look.Opacity(full, true) == 1)
+    Check("One that is down is dimmed by the inactive share",
+        math.abs(Look.Opacity(full, false) - 0.55) < 0.001,
+        tostring(Look.Opacity(full, false)))
+    -- The whole of the three-valued rule, in the one place it decides whether
+    -- something is on screen at all.
+    Check("And one the client will not talk about is NOT dimmed",
+        Look.Opacity(full, nil) == 1)
+
+    local off = Look.Style({ alpha = 1, inactiveAlpha = 0 }, 1)
+    Check("Zero is still reachable, so Blizzard's own behaviour is offerable",
+        Look.Opacity(off, false) == 0)
+
+    ---------------------------------------------------------------------
+    -- HIS OWN BARS' LOOK, read back rather than assumed
+    ---------------------------------------------------------------------
+    local bare = Look.Style({}, 1)
+    Check("A bar with no look keys at all still resolves to numbers",
+        type(bare.borderSize) == "number" and type(bare.iconZoom) == "number"
+        and type(bare.backdropColor) == "table")
+    Check("And zero really is a border size, not a missing one",
+        Look.Style({ borderSize = 0 }, 1).borderSize == 0)
+
+    ---------------------------------------------------------------------
+    -- THE TEXT OFFSETS, which are the corner-clipping fix
+    ---------------------------------------------------------------------
+    local x, y = Text.Offset({ anchor = "BOTTOMRIGHT" })
+    Check("A corner-anchored number is pushed off both edges",
+        x < 0 and y > 0, string.format("%s,%s", tostring(x), tostring(y)))
+    x, y = Text.Offset({ anchor = "CENTER" })
+    Check("A centred one is not pushed anywhere", x == 0 and y == 0)
+    x = Text.Offset({ anchor = "BOTTOMRIGHT", x = 10 })
+    Check("And what you nudged it by is added, not replaced", x == -2 + 10,
+        tostring(x))
+
+    ---------------------------------------------------------------------
+    -- WHICH WAY A FILL RUNS - four answers, two mechanisms
+    --
+    -- Shipping these as one setting was a real bug: "Fill up" was wired to
+    -- SetReverseFill, which moves the fill to the other END rather than
+    -- making it grow. And up and down are unreachable without the
+    -- orientation, because reverse only ever flips a horizontal bar.
+    ---------------------------------------------------------------------
+    -- ONE ENTRY, not two returns: the direction is a row of
+    -- ns.FILL_DIRECTIONS, so the orientation and the reverse cannot be read
+    -- apart and cannot drift from the words on the page.
+    local way = Fill.Direction({ fillDirection = "right" }, 1)
+    Check("Left to right is horizontal and not reversed",
+        way.orientation == "HORIZONTAL" and not way.reverse)
+    way = Fill.Direction({ fillDirection = "left" }, 1)
+    Check("Right to left is the same bar, reversed",
+        way.orientation == "HORIZONTAL" and way.reverse == true)
+    way = Fill.Direction({ fillDirection = "up" }, 1)
+    Check("Upwards needs the other orientation entirely",
+        way.orientation == "VERTICAL" and not way.reverse)
+    way = Fill.Direction({ fillDirection = "down" }, 1)
+    Check("And downwards is that one reversed",
+        way.orientation == "VERTICAL" and way.reverse == true)
+    way = Fill.Direction({}, 1)
+    Check("A bar that never said falls back to left-to-right",
+        way.value == "right")
+
+    -- THE OLD KEY IS STILL READ. `fillSide` is what a profile written before
+    -- the four-answer setting carries, and a bar that loses its direction on
+    -- an update is a bar that silently starts draining the wrong way.
+    way = Fill.Direction({ fillSide = true }, 1)
+    Check("A profile that predates the setting keeps its direction",
+        way.value == "left", tostring(way.value))
+
+    ---------------------------------------------------------------------
+    -- THE THRESHOLDS ARE SORTED BECAUSE THE ORDER IS THE DRAW ORDER
+    --
+    -- The count they are compared against is a SECRET on this patch, so the
+    -- highest crossed one cannot be chosen with an `if` here at all - it has
+    -- to be painted last. Which makes the sort load-bearing rather than tidy.
+    ---------------------------------------------------------------------
+    local sorted = Fill.Thresholds({ stackThresholds = {
+        { value = 5, color = { 1, 0, 0 } },
+        { value = 2, color = { 0, 1, 0 } },
+        { value = 9, color = { 0, 0, 1 } },
+    } }, 1)
+    Check("Thresholds come back lowest first",
+        #sorted == 3 and sorted[1].value == 2 and sorted[3].value == 9,
+        string.format("%s,%s,%s", tostring(sorted[1] and sorted[1].value),
+            tostring(sorted[2] and sorted[2].value),
+            tostring(sorted[3] and sorted[3].value)))
+    Check("A bar with none has none", #Fill.Thresholds({}, 1) == 0)
+
+    -- HIS OWN THREE, AND THEY HAVE NEVER PAINTED. All three thresholds in his
+    -- file carry value 0, which the renderer discards because a threshold of
+    -- zero is crossed by an aura that is merely present. The panel wrote rows
+    -- the renderer throws away, and nothing said so - so the count DROPPED
+    -- comes back as a second answer rather than being swallowed, which is
+    -- what lets the page fix its writer instead of somebody loosening this.
+    local kept, dropped = Fill.Thresholds({ stackThresholds = {
+        { value = 0, color = { 1, 0, 0 } },
+        { value = 0, color = { 1, 0, 0 } },
+        { value = 4, color = { 1, 0, 0 } },
+    } }, 1)
+    Check("A threshold of zero is dropped and SAID, not silently kept",
+        #kept == 1 and dropped == 2,
+        string.format("kept %d, dropped %s", #kept, tostring(dropped)))
+
+    -- A hand-edited profile is not a reason to raise three lines later.
+    local rubbish = Fill.Thresholds({ stackThresholds = {
+        { value = 3 }, "nonsense", { color = {} } } }, 1)
+    Check("And an entry that is not a threshold is dropped, not drawn",
+        #rubbish == 1, tostring(#rubbish))
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -8241,6 +8461,7 @@ function Test:Run()
         { "Reading a stored bar", TestCooldownStore },
         { "Claiming and letting go", TestCooldownClaim },
         { "Placing a bar", TestCooldownRender },
+        { "The styling layer", TestCooldownStyling },
     }
 
     for _, suite in ipairs(suites) do
