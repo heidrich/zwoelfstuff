@@ -8491,6 +8491,20 @@ local function TestCooldownStyling()
         { value = 3 }, "nonsense", { color = {} } } }, 1)
     Check("And an entry that is not a threshold is dropped, not drawn",
         #rubbish == 1, tostring(#rubbish))
+
+    -- SOMETHING CAN READ A STACK COUNT AT ALL, which is the question every
+    -- band above depends on and none of them could ask.
+    --
+    -- Fill.CanFeed tests for ns.CDM.ItemStacks by name. That function went
+    -- with the old CDM.lua and did not come back, so it answered false on
+    -- every client - Fill.Overlays was handed an empty list whatever was
+    -- stored, the ticker gave up before it started, and not one band painted
+    -- on a bar he had already set three of them on. Every test above passed
+    -- throughout: they check that a threshold SURVIVES the filter, which says
+    -- nothing about whether anything downstream can ever feed it.
+    Check("A stack count can be read off a frame at all",
+        Fill.CanFeed() == true,
+        "ns.CDM.ItemStacks is " .. type(ns.CDM and ns.CDM.ItemStacks))
 end
 
 function Test:Run()

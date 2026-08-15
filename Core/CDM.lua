@@ -373,6 +373,64 @@ end
 -- uses Essential, Utility, TrackedBuff and TrackedBar by name), never guessed,
 -- and every lookup is nil-safe so a renamed member costs one group heading
 -- rather than the whole list.
+---------------------------------------------------------------------------
+-- How many stacks an item frame is showing
+--
+-- READ BUT NEVER INSPECTED. On 12.0 this number can be a secret value, and on
+-- 12.1 it is one inside restricted content. So it is fetched, stored and
+-- handed to widget setters - StatusBar:SetValue and FontString:SetText both
+-- take secret arguments natively - and nothing here ever compares it, adds to
+-- it or tests it for truth. The comparison against a threshold happens inside
+-- the C layer; see the overlays in Cooldowns/Fill.lua.
+--
+-- Two sources, in that order: the frame's own cached aura table first, because
+-- it reads without erroring on every client, and the aura-instance query only
+-- as a fallback for a frame whose cache is not populated - that call HARD
+-- ERRORS on restricted units, so it is guarded twice over.
+--
+-- BROUGHT BACK VERBATIM FROM 4.82.0, AND ITS ABSENCE WAS A WHOLE FEATURE.
+-- Fill.CanFeed asks for this function by name, Fill.Overlays is handed an
+-- empty list when it is not there, and the ticker that pushes counts in gives
+-- up before it starts - so not one stack band has painted since the rebuild,
+-- on a bar he had already configured three of them on. The options page says
+-- so in a sentence that now goes away by itself, which is why it was written
+-- as a question rather than a paragraph.
+--
+-- pcall RATHER THAN A CHECK, because there is nothing to check first: whether
+-- a table is reachable is only answered by reaching for it. On 12.0 the cheap
+-- path could not throw; on 12.1 the table it reads lives inside restricted
+-- content, and an error here is not a missing stack count - it is thrown
+-- inside the render pass that draws every icon on every bar.
+---------------------------------------------------------------------------
+function CDM:ItemStacks(item)
+    if not item then return nil end
+
+    local ok, cached = pcall(function() return item.auraDataCached end)
+    if ok and cached then
+        local readable, stacks = pcall(function()
+            if cached.applications ~= nil then return cached.applications end
+            return nil
+        end)
+        if readable and stacks ~= nil then return stacks end
+    end
+
+    local gotID, instanceID = pcall(function() return item.auraInstanceID end)
+    local gotUnit, unit = pcall(function() return item.auraDataUnit end)
+    if not (gotID and gotUnit) then return nil end
+
+    local get = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
+    -- ns.CanCompute rather than a bare issecretvalue: a secret instance id may
+    -- not be passed to the query, and nil must not reach it either.
+    if get and unit and ns.CanCompute(instanceID) then
+        local answered, data = pcall(get, unit, instanceID)
+        if answered and data and data.applications ~= nil then
+            return data.applications
+        end
+    end
+
+    return nil
+end
+
 function CDM:CategoryViewer(category)
     local categories = Enum and Enum.CooldownViewerCategory
     if not categories then return nil end
@@ -682,6 +740,48 @@ function CDM:Dump()
     if arranged == 0 then
         ns.Print("   |cff888888No arrangement read - Blizzard's Cooldown Manager|r")
         ns.Print("   |cff888888settings have not been opened this session.|r")
+    end
+
+    -- WHAT A TRACKING BAR IS ACTUALLY MADE OF, measured rather than assumed.
+    --
+    -- Blizzard's TrackedBar template carries a square icon at one end and a
+    -- StatusBar beside it, and this addon leaves both where the template put
+    -- them - it sizes the ITEM and lets the template lay its own parts out.
+    -- Whether those parts follow the frame is a question only a client can
+    -- answer, and the answer decides whether raising the bar height moves the
+    -- fill or only the plate behind it.
+    do
+        local shown = 0
+        self:ForEachItemEverywhere(function(item)
+            if shown >= 2 or self:ItemShape(item) ~= "bar" then return end
+
+            local fill = ns.Cooldowns and ns.Cooldowns.Fill
+                and ns.Cooldowns.Fill.Bar(item) or nil
+            local iw, ih = item:GetSize()
+            local fw, fh = 0, 0
+            if fill then fw, fh = fill:GetSize() end
+
+            local icon = type(item.Icon) == "table" and item.Icon or nil
+            local cw, ch = 0, 0
+            if icon and icon.GetSize then cw, ch = icon:GetSize() end
+
+            if shown == 0 then
+                ns.Print("|cffffd100Tracking bar geometry|r "
+                    .. "|cff888888(frame / fill / icon)|r")
+            end
+            ns.Print(string.format(
+                "   %s  frame |cffffd100%.0fx%.0f|r  fill %s  icon %.0fx%.0f",
+                ns.SpellName(self:ItemSpellID(item) or 0) or "?",
+                iw, ih,
+                fill and string.format("|cffffd100%.0fx%.0f|r", fw, fh)
+                    or "|cffff4040none|r",
+                cw, ch))
+            shown = shown + 1
+        end)
+        if shown == 0 then
+            ns.Print("|cff888888No tracking-bar frame is live, so its "
+                .. "geometry cannot be measured.|r")
+        end
     end
 
     local catalogue = self:Catalogue()

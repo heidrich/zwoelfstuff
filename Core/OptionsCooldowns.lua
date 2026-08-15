@@ -450,7 +450,13 @@ local function BuildCards(host)
         end
         table.sort(list, function(a, b) return (a.id or 0) < (b.id or 0) end)
 
-        local y = 26
+        -- WHERE THE FIRST CARD STARTS, and it is a clearance rather than a
+        -- margin: the + and the eyebrow share the top line, and at 26 the
+        -- button's bottom edge and the first card's top edge were two pixels
+        -- apart. Owner, with a picture: "der plus button braucht nach unten
+        -- hin mehr platz." Nothing above the button to give it, so the room
+        -- comes from below - which is the same gap either way.
+        local y = 44
         for index, bar in ipairs(list) do
             local card = CardAt(index)
             card.dkBar = bar
