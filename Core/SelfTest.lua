@@ -7348,6 +7348,69 @@ local function TestFrameContract()
     C.Forget(two)
 end
 
+---------------------------------------------------------------------------
+-- WHO ELSE SAYS THEY MANAGE COOLDOWNS
+--
+-- The rule reads what every installed addon says about ITSELF, so its whole
+-- worth is in where it draws the line. That line was drawn against 97 real
+-- addons and it is one word wide: matching "cooldown" on its own reports
+-- ProfessionShoppingList, whose description reads "Track recipes, reagents,
+-- cooldowns, patron orders" and which has never touched a cooldown frame.
+--
+-- Those two sentences are in here verbatim for that reason. A first-run
+-- warning that fires on a quiet neighbour is one people learn to click away,
+-- and by the time anybody notices it has been crying wolf for a month there
+-- is nothing left to check it against - the addon that caused it will have
+-- been updated. So the calibration is nailed down where it can fail loudly.
+---------------------------------------------------------------------------
+local function TestRivals()
+    local R = ns.Cooldowns and ns.Cooldowns.Rivals
+    if not R then
+        Skip("Other cooldown addons", "Cooldowns/Rivals.lua is not loaded")
+        return
+    end
+
+    -- The one it MUST find. EllesmereUI Cooldown Manager, v8.8.7, both lines
+    -- copied out of its own TOC.
+    Check("A title that names the Cooldown Manager is found",
+        R.Claims("|cff0cd29fEllesmereUI|r Cooldown Manager") == true)
+    Check("And a description that says CDM replacement",
+        R.Claims("A CDM replacement focused on performance, customizations "
+            .. "and alerts.") == true)
+
+    -- The one it MUST NOT find, and the reason the rule is not one word
+    -- shorter. Straight out of ProfessionShoppingList's TOC.
+    Check("A description that merely mentions cooldowns is not",
+        R.Claims("Track recipes, reagents, cooldowns, patron orders, and more")
+            == false,
+        "matching on the word 'cooldown' alone reports this addon")
+
+    -- CDM as a word, not as three letters inside one.
+    Check("CDM has to stand on its own", R.Claims("cdmanager toolkit") == false)
+    Check("Punctuation around it still counts", R.Claims("(CDM)") == true)
+
+    Check("Case does not matter",
+        R.Claims("COOLDOWN MANAGER") == true
+        and R.Claims("cooldown manager") == true)
+    Check("Nothing to read is not a match",
+        R.Claims(nil) == false and R.Claims("") == false)
+
+    -- The scan itself. Out here there is no client to enumerate, so this asks
+    -- the one thing that must hold either way: it answers a list rather than
+    -- nil, and it never names US.
+    local others = R.Others()
+    Check("The scan answers a list", type(others) == "table")
+    local named = false
+    for _, entry in ipairs(others) do
+        if entry.folder == "ZwoelfStuff" then named = true end
+    end
+    Check("And never reports this addon as its own rival", named == false)
+
+    local clash, list = R.Any()
+    Check("Any agrees with the list it hands back",
+        clash == (#list > 0))
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -7383,6 +7446,7 @@ function Test:Run()
         { "Lists with two readers", TestCommandList },
         { "Sounds",        TestSounds },
         { "Frame contract", TestFrameContract },
+        { "Other cooldown addons", TestRivals },
     }
 
     for _, suite in ipairs(suites) do

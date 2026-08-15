@@ -158,6 +158,18 @@ ns.DEFAULTS = {
     -- acts in your name at people who are not in the room - so they arrive
     -- switched off and the welcome window offers them, which is what the
     -- generation counter above exists for.
+    -- COOLDOWNS IS THE THIRD FALSE ONE, and it has the strongest case of the
+    -- three. The other two put something of ours on the screen; this one
+    -- reaches for frames that belong to BLIZZARD and that another addon may
+    -- already be holding. Two addons claiming those frames produce a broken
+    -- screen neither of them can diagnose - see Cooldowns/Rivals.lua, which
+    -- says who else is doing it, and the strip on the welcome window that
+    -- reports it.
+    --
+    -- Defaulting it off means the answer is always one somebody GAVE. There
+    -- is no clever version of this: a default that switches itself on when
+    -- the addon list looks quiet is a setting that changes behind the user
+    -- when they install something else.
     modules    = {
         cotanks   = true,
         reminders = true,
@@ -166,6 +178,7 @@ ns.DEFAULTS = {
         deaths    = true,
         raidbar   = false,
         invites   = false,
+        cooldowns = false,
     },
 
     -- WHICH LANGUAGE. "auto" is the client's own, which is what nearly

@@ -24,8 +24,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Your saved bars are not deleted.** Nothing in this release writes to
   `bars` in your saved variables. Roll back and they are where you left them.
 
+### Added
+
+- **The addon now notices when another one is managing your cooldowns.** Two
+  addons cannot both hold Blizzard's cooldown frames — whichever loads second
+  finds them taken, and what ends up on your screen depends on the order they
+  happened to load in. On the first run the welcome window says which addon it
+  found and leaves the choice to you; the Cooldowns page names it again in
+  full. Nothing is switched off on your behalf, here or anywhere.
+  - It reads what each addon says about **itself**, in its own description, so
+    the list keeps working for addons that do not exist yet. Addons switched
+    off for this character are not counted. Calibrated against 97 installed
+    addons: matching on the word "cooldown" alone reports a profession tracker
+    whose description mentions crafting cooldowns, so it does not.
+- **Cooldowns is a module again**, first in the list and first in the window's
+  sidebar. It arrives **switched off**, like the raid bar and the invite tool
+  and for a stronger reason: it is the only feature here that reaches for
+  frames somebody else may already be holding. The bars themselves are being
+  rebuilt — until they land, the switch decides only whether we intend to
+  touch those frames at all.
+
 ### Changed
 
+- **The sidebar's first heading is gone.** "M+ and raid stuff" sat over
+  everything the addon does, which is not a group worth naming — "System" and
+  "Info" name a handful of rows each and stay. The air it provided between
+  Edit mode and the list stays too.
 - **The licence is All Rights Reserved.** The store page has always said so;
   the folder that shipped carried an MIT `LICENSE` beside it, which is the kind
   of contradiction that only gets found by somebody acting on the wrong half of

@@ -100,6 +100,52 @@ local function BuildFrame()
     rule:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(HEAD_TOP + PAD + 62))
     rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(HEAD_TOP + PAD + 62))
 
+    ---------------------------------------------------------------------
+    -- SOMEBODY ELSE IS ALREADY DOING ONE OF THESE.
+    --
+    -- Owner, 2026-08-15: "baue direkt noch einen check ein, ob der user einen
+    -- anderen cdm nutzt ... eine warnung und eine wahl."
+    --
+    -- The Cooldown Manager is the only feature here that can COLLIDE. Two
+    -- addons claiming Blizzard's cooldown frames produce a broken screen that
+    -- neither of them can diagnose, because the frames belong to neither.
+    --
+    -- ONE CONTROL, NOT TWO. The choice he asked for is the switch on the
+    -- Cooldowns row directly underneath - this strip is the reason for it, not
+    -- a second way to set it. A warning with its own pair of buttons beside a
+    -- toggle that sets the same thing is two answers to one question, and the
+    -- day they disagree is the day nobody can say which one won.
+    --
+    -- IT IS ALSO NOT AN OFFER TO SWITCH THEIR ADDON OFF. That can be done -
+    -- C_AddOns.DisableAddOn plus a reload, which is how EllesmereUI's own
+    -- power button works - and the first window this addon ever shows is not
+    -- where somebody's other addons get turned off. That offer lives on the
+    -- Cooldowns page, where it is a deliberate press.
+    ---------------------------------------------------------------------
+    -- IT SITS IN THE LAYOUT CHAIN WHETHER IT SHOWS OR NOT, and carries its own
+    -- top margin inside its HEIGHT rather than in its anchor. A strip anchored
+    -- ten pixels down leaves those ten pixels behind when it is hidden, and
+    -- the rows below drift by ten on every screen that has no conflict - which
+    -- is nearly all of them, so the wrong case would be the one nobody sees.
+    local warn = CreateFrame("Frame", nil, frame)
+    warn:SetPoint("TOPLEFT", rule, "BOTTOMLEFT", 0, 0)
+    warn:SetPoint("TOPRIGHT", rule, "BOTTOMRIGHT", 0, 0)
+    warn:SetHeight(0.01)
+    warn:Hide()
+    -- C.warning AND NOT C.danger. The palette says danger is for
+    -- "destructive actions ONLY" - a button that will delete something. This
+    -- is a state of the world somebody should know about, and painting it in
+    -- the delete colour is how that colour stops meaning delete.
+    UI.Fill(warn, "BACKGROUND", C.surface)
+    local warnEdge = ns.CreateBorder(warn, 1, "BORDER")
+    warnEdge:SetColor(C.warning[1], C.warning[2], C.warning[3], 0.55)
+
+    warn.text = UI.Label(warn, "", UI.FS.meta, C.text)
+    warn.text:SetPoint("TOPLEFT", warn, "TOPLEFT", 12, -9)
+    warn.text:SetWidth(WIDTH - PAD * 2 - 24)
+    warn.text:SetJustifyH("LEFT")
+    frame.warn = warn
+
     -- ONE ROW PER MODULE, built from the registry rather than typed out. A
     -- fifth module has to appear here by existing - a welcome screen that has
     -- to be edited to mention a new feature is a welcome screen that will one
@@ -121,7 +167,7 @@ local function BuildFrame()
         if previous then
             row:SetPoint("TOP", previous, "BOTTOM", 0, 0)
         else
-            row:SetPoint("TOP", rule, "BOTTOM", 0, -4)
+            row:SetPoint("TOP", warn, "BOTTOM", 0, -4)
         end
         previous = row
 
@@ -178,9 +224,12 @@ local function BuildFrame()
     footer:SetWidth(WIDTH - PAD * 2 - (130 + 8 + notNow:GetWidth() + 16))
 
     -- The height is what the rows added up to, not a number typed once and
-    -- wrong after the fifth module.
-    frame:SetHeight(HEAD_TOP + PAD + 62 + 4 + #frame.rows * ROW_H + PAD
-        + math.max(footer:GetStringHeight(), UI.BUTTON_H) + PAD)
+    -- wrong after the fifth module. The warning strip is NOT in it: it is only
+    -- there for somebody who has a conflict, so its height is added in Show
+    -- where the answer is known.
+    frame.baseHeight = HEAD_TOP + PAD + 62 + 4 + #frame.rows * ROW_H + PAD
+        + math.max(footer:GetStringHeight(), UI.BUTTON_H) + PAD
+    frame:SetHeight(frame.baseHeight)
 
     frame.version = version
     frame.lead = lead
@@ -227,6 +276,30 @@ function Welcome:Show(fresh, first)
         row.badge:SetShown(isFresh[row.moduleKey] and true or false)
         if row.Refresh then row.Refresh() end
     end
+
+    -- THE CONFLICT LINE, decided every time the window opens rather than once
+    -- when it was built: somebody can enable another cooldown addon and come
+    -- back to this window from Settings in the same session, and a strip
+    -- computed at build time would still be describing the old answer.
+    local warn = frame.warn
+    local rivals = ns.Cooldowns and ns.Cooldowns.Rivals
+    local other = rivals and rivals.Describe()
+    if other then
+        warn.text:SetText(ns.L(
+            "%s is already managing your cooldowns. Two addons cannot hold "
+            .. "the same cooldown frames - one of them loses, and which one "
+            .. "depends on the order they loaded. Cooldowns is switched off "
+            .. "below; turn it on to use ours instead, and switch theirs off "
+            .. "in your addon list.", other))
+        -- MEASURED, not a constant: the sentence names another addon, and how
+        -- long that name is is not ours to know.
+        warn:SetHeight(warn.text:GetStringHeight() + 18)
+        warn:Show()
+    else
+        warn:SetHeight(0.01)
+        warn:Hide()
+    end
+    frame:SetHeight(frame.baseHeight + (other and warn:GetHeight() + 10 or 0))
 
     frame:Show()
 end

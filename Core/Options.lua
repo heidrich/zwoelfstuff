@@ -769,6 +769,19 @@ local PAGES = {
       },
       build = function(page, width) return ns.OptionsRaidBar:BuildPage(page, width) end },
 
+    -- THE COOLDOWN MANAGER, being rebuilt. Its page carries the one question
+    -- that has to be settled before any of it draws - whether another addon
+    -- is already holding Blizzard's cooldown frames - and the module switch
+    -- it belongs to. No third column: the spell picker arrives with the bars,
+    -- and it will come from SpellPane like the other two do.
+    { key = "cooldowns", title = "Cooldowns", glyph = "grid", module = "cooldowns",
+      subtitle = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
+      actions = {
+          { text = "What it holds",
+            onClick = function() ns.CDM:Dump() end },
+      },
+      build = function(page, width) return ns.OptionsCooldowns:BuildPage(page, width) end },
+
     -- NO THIRD COLUMN. Everything on it is a yes-or-no about something that
     -- happens without you, and there is no list to pick from - the two boxes
     -- are typed into.
@@ -852,14 +865,29 @@ Options.PAGES = PAGES
 -- that says nothing about itself - which is what "the Bars entry can go" was
 -- one bad edit away from leaving behind.
 --
--- Every entry is either an `eyebrow` heading or a `page`. The one row that is
--- neither - Edit mode, which CLOSES this window rather than opening a page -
--- is added by the builder, because its action needs the frame it closes. It
--- goes at the head: it is the entry used most often, and a door belongs at
--- the top.
+-- Every entry is an `eyebrow` heading, a `page`, or a bare `gap`. The one row
+-- that is none of those - Edit mode, which CLOSES this window rather than
+-- opening a page - is added by the builder, because its action needs the
+-- frame it closes. It goes at the head: it is the entry used most often, and
+-- a door belongs at the top.
+--
+-- THE FIRST GROUP HAS NO HEADING, at the owner's word 2026-08-15: "entferne
+-- M+ and raid stuff". It never earned one - "System" and "Info" name a
+-- handful of rows each and are worth a caption, while the first group was
+-- everything the addon does and got a label that only said so at length.
+--
+-- The `gap` in its place is not decoration and is the reason this is not a
+-- plain deletion. That heading carried the ONLY air between the door and the
+-- list (see `position > 1` in the painter), and glueing Edit mode to
+-- Cooldowns turns a door into the first item of a menu.
 ---------------------------------------------------------------------------
 local NAV = {
-    { eyebrow = "M+ and raid stuff" },
+    { gap = true },
+    -- ABOVE CO-TANKS, at the owner's word 2026-08-15: "pack den cdm einfach
+    -- ueber co-tanks". It is also where it was before the bars were removed,
+    -- and the rail is a list people navigate by position rather than by
+    -- reading - see the note further down about not moving rows.
+    { page = "cooldowns" },
     { page = "cotanks" },
     { page = "reminders" },
     { page = "externals" },
@@ -1590,7 +1618,12 @@ function Options:Create()
     -- from the rail's top would have to be recomputed then.
     local y = UI.PAD
     for position, entry in ipairs(rail_entries) do
-        if entry.eyebrow then
+        if entry.gap then
+            -- The same air a heading brings, without the words. Only between
+            -- rows: leading air at the very top would push the list off its
+            -- own head.
+            if position > 1 then y = y + 18 end
+        elseif entry.eyebrow then
             -- Air ABOVE the heading, and none under it. A heading belongs to
             -- what follows; spaced evenly it belongs to neither side.
             if position > 1 then y = y + 18 end

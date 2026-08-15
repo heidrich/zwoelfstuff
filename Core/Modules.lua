@@ -60,9 +60,39 @@ ns.Modules = Modules
 --    one puts buttons on your screen and the other acts in your name at
 --    people who are not in the room, and neither should start doing that
 --    because somebody updated an addon.
-Modules.GENERATION = 4
+-- 5: the Cooldown Manager, coming back. Everybody who has already answered is
+--    asked once more, about this one entry - and for a reason stronger than
+--    usual: it is the only module in the list that can COLLIDE with another
+--    addon, and the answer has to be given before either of us draws
+--    anything. See Cooldowns/Rivals.lua.
+Modules.GENERATION = 5
 
 local LIST = {
+    {
+        -- FIRST IN THE LIST, WHICH IS BOOT ORDER. The reminders ask the
+        -- Cooldown Manager whether a buff is up and the death log builds its
+        -- defensives out of its catalogue, so it comes up before both - the
+        -- same position the bars held before they were removed.
+        --
+        -- NO Boot AND NO Apply YET, and that is a statement of where the
+        -- rebuild has got to rather than an omission: nothing draws until
+        -- Claim and Render land. What the switch decides TODAY is whether we
+        -- intend to manage these frames at all, which is exactly the question
+        -- that has to be settled before another addon is already holding them.
+        --
+        -- OFF BY DEFAULT WHEN SOMEBODY ELSE IS DOING IT. Modules:IsOn answers
+        -- "on" for anything unanswered, so the default is written into the
+        -- profile at first run instead of assumed here - see Init's rival
+        -- check. Two addons fighting over Blizzard's frames is the one
+        -- failure this module can cause, and the safe side of it is silence.
+        -- `grid` is the design's own cooldowns mark - ICON_FILES maps it to
+        -- nav-cooldowns, which is the file drawn for this page before the
+        -- bars were removed. The drawing outlived the feature; it goes back
+        -- on the feature rather than a second one being invented.
+        key = "cooldowns", title = "Cooldowns", glyph = "grid", since = 5,
+        blurb = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
+        detail = "Off, we leave Blizzard's cooldown frames alone entirely.",
+    },
     {
         key = "cotanks", title = "Co-Tanks", glyph = "tanks", since = 1,
         blurb = "Every other tank in the group, with their health and their cooldowns.",

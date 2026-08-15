@@ -110,6 +110,11 @@ Core\Secrets.lua
 # about Blizzard's frames plus the weak-keyed table that makes rule 3
 # possible. Above CDM.lua, which is the reader those rules protect.
 Core\Cooldowns\Contract.lua
+# Who ELSE is managing cooldowns. Read at login before any module boots, and
+# above CDM.lua because the answer decides whether we go near those frames at
+# all. It reads addon metadata and nothing of ours, so it needs only the
+# namespace above it.
+Core\Cooldowns\Rivals.lua
 Core\CDM.lua
 # The shipped proc database. Data, and it grows with every export, so it loads
 # before the logic that reads it and stays a file you can paste into.
@@ -200,6 +205,9 @@ Core\News.lua
 # went: the death log and the reminders both build theirs from it, so it
 # loads above them and below the two catalogues it reads.
 Core\SpellPane.lua
+# The Cooldowns page. Above the rest only because it is first in the rail;
+# it reads Cooldowns\Rivals.lua and CDM.lua, both of which are far above.
+Core\OptionsCooldowns.lua
 Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
 # growing a second one, so BuildSpellPane has to exist by the time this loads.

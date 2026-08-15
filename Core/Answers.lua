@@ -513,8 +513,8 @@ function Answers.Announce(who, spellID)
     told = true
     ns.Print(string.format("|cffffd100%s asked you for %s.|r", who or "Somebody",
         spellID and (ns.SpellName(spellID) or "a cooldown") or "a taunt"))
-    ns.Print("  Switch on |cffffd100External CD answer|r (/zs, under M+ and raid stuff) and "
-        .. "a button lights up for it instead of this line.")
+    ns.Print("  Switch on |cffffd100External CD answer|r (|cffffd100/zs|r, in the list on "
+        .. "the left) and a button lights up for it instead of this line.")
     return true
 end
 

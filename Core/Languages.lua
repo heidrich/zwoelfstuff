@@ -287,7 +287,23 @@ Register("enUS", {
         true,
     ["A line in your own chat frame for every invitation sent. Worth keeping on: an invite tool that works silently is one you cannot tell from one that has stopped."] = 
         true,
-    ["Everybody at that rank and above it. Rank numbers count downwards from the guild master, which is why this reads as \"and above\" rather than \"and below\"."] = 
+    ["Everybody at that rank and above it. Rank numbers count downwards from the guild master, which is why this reads as \"and above\" rather than \"and below\"."] =
+        true,
+
+    -- The Cooldowns page, and the conflict check on the welcome window
+    ["Who is managing your cooldowns"] = true,
+    ["Nothing else on this account is managing them."] = true,
+    ["Also managing cooldowns on this account: %s."] = true,
+    ["%d other addons"] = true,
+    ["Blizzard's Cooldown Manager"] = true,
+    ["What it holds"] = true,
+    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off in the game's addon list and switch this on."] =
+        true,
+    ["Read from what each addon says about itself in its own description, so an addon that manages cooldowns without ever saying so is not found. Addons switched off for this character are not counted."] =
+        true,
+    ["Everything here comes from Blizzard's Cooldown Manager - it already knows the spells, binds the auras and has the timing, none of which an addon can do for itself on this patch. The reminders, the death log and the spell pickers all read it, and they go on doing so whether this module is on or off."] =
+        true,
+    ["%s is already managing your cooldowns. Two addons cannot hold the same cooldown frames - one of them loses, and which one depends on the order they loaded. Cooldowns is switched off below; turn it on to use ours instead, and switch theirs off in your addon list."] =
         true,
 })
 
@@ -545,6 +561,24 @@ Register("deDE", {
         "Eine Zeile in deinem eigenen Chatfenster für jede verschickte Einladung. Lohnt sich anzulassen: ein Einladungswerkzeug, das stumm arbeitet, ist von einem, das stehengeblieben ist, nicht zu unterscheiden.",
     ["Everybody at that rank and above it. Rank numbers count downwards from the guild master, which is why this reads as \"and above\" rather than \"and below\"."] = 
         "Jeder in diesem Rang und darüber. Rangnummern zählen vom Gildenmeister abwärts, deshalb heißt es hier \"und darüber\" und nicht \"und darunter\".",
+
+    -- Die Cooldowns-Seite und die Konfliktprüfung im Willkommensfenster
+    ["Who is managing your cooldowns"] = "Wer deine Cooldowns verwaltet",
+    ["Nothing else on this account is managing them."] =
+        "Sonst verwaltet sie auf diesem Account niemand.",
+    ["Also managing cooldowns on this account: %s."] =
+        "Verwalten auf diesem Account ebenfalls Cooldowns: %s.",
+    ["%d other addons"] = "%d andere Addons",
+    ["Blizzard's Cooldown Manager"] = "Blizzards Cooldown-Manager",
+    ["What it holds"] = "Was er hält",
+    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off in the game's addon list and switch this on."] =
+        "Diese Frames gehören Blizzard, und nur ein Addon kann sie halten. Wer als Zweiter lädt, findet sie besetzt vor, und was auf dem Bildschirm landet, hängt an der Reihenfolge, in der zufällig geladen wurde - deshalb ist das eine Entscheidung und nichts, was eines der beiden Addons umgehen könnte. Lass Cooldowns aus, um bei deren Lösung zu bleiben, oder schalte deren Addon in der Addon-Liste des Spiels ab und das hier an.",
+    ["Read from what each addon says about itself in its own description, so an addon that manages cooldowns without ever saying so is not found. Addons switched off for this character are not counted."] =
+        "Gelesen aus dem, was jedes Addon in seiner eigenen Beschreibung über sich sagt - ein Addon, das Cooldowns verwaltet, ohne das je zu erwähnen, wird also nicht gefunden. Für diesen Charakter abgeschaltete Addons zählen nicht mit.",
+    ["Everything here comes from Blizzard's Cooldown Manager - it already knows the spells, binds the auras and has the timing, none of which an addon can do for itself on this patch. The reminders, the death log and the spell pickers all read it, and they go on doing so whether this module is on or off."] =
+        "Alles hier kommt aus Blizzards Cooldown-Manager - er kennt die Zauber bereits, bindet die Auren und hat das Timing, und nichts davon kann ein Addon auf diesem Patch selbst leisten. Die Erinnerungen, das Todesprotokoll und die Zauberlisten lesen ihn alle, und sie tun das weiter, ob dieses Modul an ist oder aus.",
+    ["%s is already managing your cooldowns. Two addons cannot hold the same cooldown frames - one of them loses, and which one depends on the order they loaded. Cooldowns is switched off below; turn it on to use ours instead, and switch theirs off in your addon list."] =
+        "%s verwaltet deine Cooldowns bereits. Zwei Addons können dieselben Cooldown-Frames nicht gemeinsam halten - eines verliert, und welches, hängt an der Ladereihenfolge. Cooldowns ist unten ausgeschaltet; schalte es an, um stattdessen unseres zu nutzen, und deren Addon in deiner Addon-Liste ab.",
 })
 
 ---------------------------------------------------------------------------
