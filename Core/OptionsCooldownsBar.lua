@@ -1088,11 +1088,21 @@ function Panel.BuildFill(grid, bar)
 
     grid:Tab(L["Fill"])
     grid:Section(L["The bar's fill"], "cd-fill-bar", true)
-    -- ON THE PAGE. It is the answer to "I set a colour and nothing happened",
-    -- and the shape of a place is not something this page decides.
-    grid:Note(L["These reach a place Blizzard draws as a tracked buff BAR. An "
-        .. "icon has no fill of its own, whichever shape this bar's places "
-        .. "are set to."])
+    -- THE PARAGRAPH THAT USED TO STAND HERE IS GONE, and so is the reason it
+    -- was needed. It explained that these settings reach a place Blizzard
+    -- draws as a tracked buff BAR and that an icon has no fill - which is a
+    -- sentence you only have to write when the block is offered to somebody
+    -- it cannot help. Owner, 2026-08-15, with a picture of it: "der erklaer
+    -- text raus, und die bars fill option nicht bei den icon cds einblenden,
+    -- nur bei track bars. dann haben wir wieder was entwirrt."
+    --
+    -- The tab now appears only where there IS a fill, decided in
+    -- OptionsCooldowns.lua's HasFill. That is not the same test as
+    -- `bar.kind == "bar"`: a place's shape is Blizzard's, not this bar's, so
+    -- a spell out of the Buff bars viewer arrives as a StatusBar however this
+    -- bar's places are set. Gating on the bar's own kind would have hidden
+    -- the settings for the one place on an icon bar that has a fill, which is
+    -- the case the header above measured rather than assumed.
     OverrideNote(grid, bar, FILL_KEYS)
 
     Colour(grid, bar, L["Colour"], "fillColor", { 1.00, 0.478, 0.239 })

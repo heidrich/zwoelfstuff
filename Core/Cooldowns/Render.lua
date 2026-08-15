@@ -124,7 +124,12 @@ end
 -- `claimed` is filled in rather than returned, because the takeover pass
 -- afterwards needs every bar's answer at once - a frame on bar two must not
 -- be veiled because bar one did not want it.
-local function DrawBar(bar, claimed)
+-- `factor` is what ns.Visibility says this bar's rule comes to: 1 when every
+-- rule agrees, and whatever "otherwise" is set to when one does not. Handed
+-- in rather than asked for here, because Render.Refresh has already asked
+-- once to decide whether to draw the bar at all - and two answers to one
+-- question is how a bar ends up half drawn at the wrong brightness.
+local function DrawBar(bar, claimed, factor)
     local container = Container(bar)
     local cells = Store.Cells(bar)
     local count = Store.Capacity(bar)
@@ -197,7 +202,23 @@ local function DrawBar(bar, claimed)
                     local style = Text.Style(bar, at.h)
                     Fill.Apply(item, bar, index, cells[index])
                     Text.Apply(item, style)
-                    Look.Apply(item, Look.Style(bar, index))
+
+                    -- THE SHOW RULE ARRIVES AS OPACITY, and that is the only
+                    -- place it can arrive. Rule 4 allows a claimed frame
+                    -- alpha 1 and nothing else, so "half hidden" cannot be
+                    -- spent on the frame - Look.Apply already solved exactly
+                    -- this for the bar's own Opacity setting with a veil
+                    -- texture on our OWN chrome, and this multiplies into the
+                    -- same number rather than adding a second dimmer that
+                    -- would multiply with it by accident.
+                    --
+                    -- Multiplied onto a FRESH table: Look.Style builds one per
+                    -- call, so nothing stored is being written here.
+                    local look = Look.Style(bar, index)
+                    if factor and factor < 1 then
+                        look.alpha = (tonumber(look.alpha) or 1) * factor
+                    end
+                    Look.Apply(item, look)
                     Effects.Track(item, cell, bar, cells[index])
 
                     -- THE SPELL NAME, AND ONLY RENDER KNOWS WHETHER THERE IS
@@ -313,10 +334,24 @@ function Render.Refresh()
 
     for _, bar in pairs(Store.Bars()) do
         if type(bar) == "table" and bar.id then
-            if bar.enabled == false then
+            -- WHETHER THIS BAR IS ON SCREEN AT ALL, asked of ns.Visibility
+            -- rather than of bar.enabled.
+            --
+            -- ns.Visibility has been complete since 4.82.0 - the rules, the
+            -- events, the explanation - and until this line it had NOT ONE
+            -- CALLER. `show` sat in Store.READERS.now under "the states and
+            -- the effects", which is a table whose whole job is to say which
+            -- keys are read; for this key it was simply untrue. Every rule
+            -- anybody had set was stored, listed as read, and ignored.
+            --
+            -- Factor rather than Evaluate: it folds `enabled == false` and
+            -- mode "never" into the same number as a rule that does not
+            -- match, so there is one answer and one place that decides it.
+            local factor = ns.Visibility:Factor(bar)
+            if factor <= 0 then
                 HideBar(bar)
             else
-                drawn = drawn + DrawBar(bar, claimed)
+                drawn = drawn + DrawBar(bar, claimed, factor)
             end
         end
     end
@@ -375,6 +410,20 @@ function Render.Start()
     ns.CDM:OnChanged(function()
         if ns.Modules:IsOn("cooldowns") then Render.Refresh() end
     end)
+
+    -- AND WHEN THE WORLD CHANGES UNDER THE RULES. Combat, group, target,
+    -- resting, zone and spec - ns.Visibility watches all eight events and
+    -- samples ONCE per change, so twelve bars asking twelve questions is one
+    -- pass over the game rather than twelve. Never a timer: polling the group
+    -- size sixty times a second to learn something that changes twice an
+    -- evening is how an addon earns a reputation.
+    ns.Visibility:OnChanged(function()
+        if ns.Modules:IsOn("cooldowns") then Render.Refresh() end
+    end)
+    -- Sampled before the first pass, or every rule is evaluated against the
+    -- state table's own initial values - "not in combat, alone, out in the
+    -- world" - until the first event happens to fire.
+    ns.Visibility:Start()
 
     Render.Refresh()
 end

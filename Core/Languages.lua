@@ -366,6 +366,14 @@ Register("enUS", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         true,
     ["Places"] = true,
+    ["When"] = true,
+    ["When to show it"] = true,
+    ["Combat"] = true,
+    ["Group"] = true,
+    ["Target"] = true,
+    ["Rested"] = true,
+    ["Otherwise"] = true,
+    ["gone"] = true,
     ["Rows and columns"] = true,
     ["Columns and Rows lay the places out, and either one sets how many places that comes to. Places is the total underneath and may be fewer than the rectangle holds - seven places in two rows of four leaves the last one empty."] =
         true,
@@ -853,6 +861,14 @@ Register("deDE", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         "Der Ablauf und die Zahlen brauchen Blizzards eigenen Rahmen, deshalb stehen sie nicht hier - alles andere ist die Leiste, wie sie gerade eingestellt ist.",
     ["Places"] = "Plätze",
+    ["When"] = "Wann",
+    ["When to show it"] = "Wann sie zu sehen ist",
+    ["Combat"] = "Kampf",
+    ["Group"] = "Gruppe",
+    ["Target"] = "Ziel",
+    ["Rested"] = "Ausgeruht",
+    ["Otherwise"] = "Sonst",
+    ["gone"] = "weg",
     ["Rows and columns"] = "Zeilen und Spalten",
     ["Columns and Rows lay the places out, and either one sets how many places that comes to. Places is the total underneath and may be fewer than the rectangle holds - seven places in two rows of four leaves the last one empty."] =
         "Spalten und Zeilen legen die Plätze aus, und jede von beiden setzt, wie viele Plätze das ergibt. Plätze ist die Gesamtzahl darunter und darf kleiner sein, als das Rechteck fasst - sieben Plätze in zwei Zeilen zu vier lassen den letzten frei.",

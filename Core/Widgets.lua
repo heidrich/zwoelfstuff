@@ -5217,11 +5217,40 @@ function UI.TabStrip(parent, names, onPick)
         tabs[index] = { button = tab, name = name }
     end
 
+    -- A TAB THAT DOES NOT APPLY IS NOT ON THE STRIP.
+    --
+    -- Not greyed out and not empty: a tab is a promise that there is
+    -- something behind it, and one that opens on a page explaining why it is
+    -- blank is worse than one that is not offered. The buttons are made once
+    -- either way - a page in this window is BUILT ONCE, so a tab created on
+    -- demand would never be laid out.
+    local away = {}
+    strip.SetTabShown = function(_, name, shown)
+        away[name] = (not shown) and true or nil
+    end
+
+    strip.Live = function()
+        local out = {}
+        for _, entry in ipairs(tabs) do
+            if not away[entry.name] then out[#out + 1] = entry end
+        end
+        return out
+    end
+
     -- Widths are handed out at layout time, not now: the strip does not know
-    -- how wide it is until its parent has been sized.
+    -- how wide it is until its parent has been sized. Divided by the tabs
+    -- that are actually ON it, or five tabs' worth of width would be shared
+    -- out among four and leave a gap where the fifth used to be.
     strip.Layout = function(self)
-        local each = math.floor(self:GetWidth() / #tabs)
-        for index, entry in ipairs(tabs) do
+        for _, entry in ipairs(tabs) do
+            entry.button:SetShown(not away[entry.name])
+        end
+
+        local live = strip.Live()
+        if #live == 0 then return end
+
+        local each = math.floor(self:GetWidth() / #live)
+        for index, entry in ipairs(live) do
             entry.button:ClearAllPoints()
             entry.button:SetPoint("TOP", self, "TOP", 0, 0)
             entry.button:SetPoint("BOTTOM", self, "BOTTOM", 0, 0)

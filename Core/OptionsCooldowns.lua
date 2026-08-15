@@ -577,6 +577,42 @@ local function Places()
     return math.max(1, store.Capacity(bar))
 end
 
+-- A refresher that is not a ROW. Grid:Refresh walks grid.widgets and calls
+-- Refresh on anything that has one, so a plain table with the one field is
+-- how a block hangs recomputation off the page without a control to hang it
+-- on. The same three lines OptionsCooldownsBar.lua keeps, written out rather
+-- than reached for across the file boundary because it is a local there.
+local function OnRefresh(grid, fn)
+    grid.widgets[#grid.widgets + 1] = { Refresh = fn }
+end
+
+-- WHETHER ANY PLACE ON THIS BAR HAS A FILL AT ALL.
+--
+-- Two answers, and the second is why this is not `bar.kind == "bar"`. A
+-- PLACE'S SHAPE IS BLIZZARD'S: ns.CDM:ItemShape reads the viewer the spell
+-- lives in, so a spell out of the Buff bars viewer arrives as a StatusBar
+-- however this bar's places are set, and Render.Fit puts it in the place
+-- whole. A bar of icons with one tracked buff on it HAS a fill to configure,
+-- and gating on the bar's own kind would hide the settings for the only place
+-- on it they could reach.
+local function HasFill(bar)
+    if type(bar) ~= "table" then return false end
+    if bar.kind == "bar" then return true end
+
+    local store, cdm = Store(), ns.CDM
+    if not (store and cdm and cdm.ItemForSpell and cdm.ItemShape) then
+        return false
+    end
+
+    local cells = store.Cells(bar)
+    for index = 1, store.Capacity(bar) do
+        local spellID = cells[index]
+        local item = spellID and cdm:ItemForSpell(spellID) or nil
+        if item and cdm:ItemShape(item) == "bar" then return true end
+    end
+    return false
+end
+
 local function BuildArrangement(grid)
     local L = ns.L
 
@@ -805,6 +841,174 @@ local function BuildSize(grid)
     })
 end
 
+---------------------------------------------------------------------------
+-- When a bar is on screen at all
+--
+-- Its own tab, because it is the one block on this page that is not about
+-- what a bar LOOKS like. Owner, 2026-08-15: "display conditions sind immer
+-- noch nicht drin ... das ging alles mal bevor wir den cdm rausgehauen
+-- haben." It did, and ns.Visibility survived the removal intact - the rules,
+-- the eight events, the explanation. What it lost was every caller.
+--
+-- EVERY RULE IS AN "AND", and every one defaults to "any" - a rule you have
+-- not set cannot be the reason something is missing. That sentence is
+-- ns.Visibility's own header and it is what makes the block readable without
+-- a diagram.
+---------------------------------------------------------------------------
+local function BuildWhen(grid)
+    local L = ns.L
+    local V = ns.Visibility
+
+    grid:Tab(L["When"])
+    grid:Section(L["When to show it"], "cd-when", true)
+
+    -- READ WITHOUT CREATING, written on the first WRITE. Store's promise is
+    -- that nothing is rewritten, and a bar that grew an empty `show` table by
+    -- being looked at is a rewrite - the same rule GradientRows follows one
+    -- file over.
+    local function Rule(key, fallback)
+        return function()
+            local bar = Bar()
+            local rule = type(bar) == "table" and bar.show or nil
+            local value = type(rule) == "table" and rule[key] or nil
+            if value == nil then return fallback end
+            return value
+        end
+    end
+
+    local function Write(key)
+        return function(value)
+            local bar = Bar()
+            if type(bar) ~= "table" then return end
+            if type(bar.show) ~= "table" then bar.show = {} end
+            bar.show[key] = value
+            Refresh()
+        end
+    end
+
+    local mode = Rule("mode", "always")
+    UI.Dropdown(grid:FullRow(L["Show"], { controlWidth = 190 }),
+        ns.SHOW_MODES, mode, Write("mode"), { apply = Refresh })
+
+    -- THE ROWS THAT ONLY MEAN ANYTHING UNDER "Only when...".
+    --
+    -- SetRelevant rather than hidden: a rule row is not a row you might want,
+    -- it is a row about a mode you have not chosen - and somebody who finds
+    -- no row at all concludes the addon cannot do it. Same decision, same
+    -- word, as the reminders page.
+    local ruleRows = {}
+    local function Keep(row)
+        if row then ruleRows[#ruleRows + 1] = row end
+        return row
+    end
+
+    -- The four conditions carry a mark each for the reason the six places
+    -- below do: they are one kind of thing, four times over, and the word is
+    -- otherwise the only thing telling them apart.
+    Keep(UI.Dropdown(grid:FullRow(L["Combat"],
+        { controlWidth = 190, icon = "cond-combat" }),
+        ns.SHOW_COMBAT, Rule("combat", "any"), Write("combat"),
+        { apply = Refresh }))
+    Keep(UI.Dropdown(grid:FullRow(L["Group"],
+        { controlWidth = 190, icon = "cond-group" }),
+        ns.SHOW_GROUP, Rule("group", "any"), Write("group"),
+        { apply = Refresh }))
+    Keep(UI.Dropdown(grid:FullRow(L["Target"],
+        { controlWidth = 190, icon = "cond-target" }),
+        ns.SHOW_TARGET, Rule("target", "any"), Write("target"),
+        { apply = Refresh }))
+    Keep(UI.Dropdown(grid:FullRow(L["Rested"],
+        { controlWidth = 190, icon = "cond-rested" }),
+        ns.SHOW_RESTING, Rule("resting", "any"), Write("resting"),
+        { apply = Refresh }))
+
+    -- ONE SWITCH PER PLACE, not a multi-select: six switches whose state you
+    -- can see beat one control you have to open to find out what is in it.
+    --
+    -- Written as FALSE and never as nil - a missing key reads as "allowed"
+    -- (see ns.Visibility's Allows), so unticking a place by clearing the key
+    -- would silently undo itself.
+    for _, place in ipairs(ns.SHOW_WHERE) do
+        Keep(UI.Toggle(grid:FullRow(place.text,
+            { controlWidth = 124, icon = place.icon }),
+            function()
+                local bar = Bar()
+                local where = type(bar) == "table" and type(bar.show) == "table"
+                    and bar.show.where or nil
+                -- NO STORED LIST MEANS EVERYWHERE, which is what the
+                -- evaluator does with it. A switch that read "off" for a bar
+                -- that shows everywhere would be six lies on one screen.
+                if type(where) ~= "table" then return true end
+                if where[place.key] == nil then return true end
+                return where[place.key] and true or false
+            end,
+            function(value)
+                local bar = Bar()
+                if type(bar) ~= "table" then return end
+                if type(bar.show) ~= "table" then bar.show = {} end
+                if type(bar.show.where) ~= "table" then
+                    -- SEEDED FULL on the first tick, because the stored table
+                    -- is read as a filter: writing only the one key somebody
+                    -- just switched OFF would leave a table that allows
+                    -- nothing else, and the bar would vanish from five places
+                    -- nobody touched.
+                    local seeded = {}
+                    for _, entry in ipairs(ns.SHOW_WHERE) do
+                        seeded[entry.key] = true
+                    end
+                    bar.show.where = seeded
+                end
+                bar.show.where[place.key] = value and true or false
+                Refresh()
+            end))
+    end
+
+    -- WHAT "DOES NOT APPLY" LOOKS LIKE, and it really is a fraction.
+    --
+    -- Rule 4 allows a claimed frame alpha 1 and nothing else, so this cannot
+    -- be spent on the frames - but Look.Apply already solved that for the
+    -- bar's own Opacity with a veil texture on our own chrome, and Render
+    -- multiplies this into the same number. Nought is the frame let go of
+    -- entirely; anything above it is a ghost you can still arrange against.
+    Keep(UI.Slider(grid:FullRow(L["Otherwise"], { controlWidth = 124 }), {
+        min = 0, max = 1, step = 0.05,
+        -- `scale`, and it is not decoration: the value box is typed into as
+        -- well as dragged, and without it a typed 55 is stored as 55, clamps
+        -- to 1, and the fade silently stops working. 4.82.0 shipped this row
+        -- without it for a release.
+        scale = 100,
+        format = function(value)
+            if (value or 0) <= 0 then return L["gone"] end
+            return string.format("%d%%", math.floor((value or 0) * 100 + 0.5))
+        end,
+        get = Rule("hiddenAlpha", 0),
+        set = Write("hiddenAlpha"),
+        apply = Refresh,
+    }))
+
+    -- WHY IT IS NOT ON SCREEN RIGHT NOW, in the evaluator's own words.
+    --
+    -- Asked of ns.Visibility:Explain rather than worked out here, so the
+    -- panel and the bar can never disagree about which rule won - the exact
+    -- failure 4.82.0 had, where the editor named "not in this kind of place"
+    -- in the one case the evaluator lets the bar through.
+    local why = grid:Note("")
+
+    OnRefresh(grid, function()
+        local on = mode() == "rules"
+        for _, row in ipairs(ruleRows) do row:SetRelevant(on) end
+
+        local bar = Bar()
+        local reason = bar and V and V:Explain(bar) or nil
+        if reason then
+            why:SetText("|cffff7a3dRight now:|r " .. reason)
+        else
+            why:SetText("|cff888888Every rule has to agree. One you have not "
+                .. "set cannot be the reason something is missing.|r")
+        end
+    end)
+end
+
 function Page:BuildPage(page, width)
     local L = ns.L
 
@@ -875,6 +1079,8 @@ function Page:BuildPage(page, width)
     ns.OptionsCooldownsBar.BuildEffects(grid, bar)
     ns.OptionsCooldownsBar.BuildFill(grid, bar)
 
+    BuildWhen(grid)
+
     -- WITH NO BARS THERE IS NOTHING TO SET.
     --
     -- Every control on the right reads the SELECTED bar, and with none there
@@ -924,10 +1130,25 @@ function Page:BuildPage(page, width)
         column.Refresh()
         if scroll.Update then scroll.Update() end
 
-        local has = Page.Current() ~= nil
+        local current = Page.Current()
+        local has = current ~= nil
         strip:SetShown(has)
         settings:SetShown(has)
         none:SetShown(not has)
+
+        -- THE FILL TAB ONLY WHERE THERE IS A FILL. Re-decided on every pass
+        -- rather than at build time: this page is built ONCE, and the answer
+        -- changes with the selected bar and with what is dropped onto it.
+        local fill = L["Fill"]
+        strip:SetTabShown(fill, HasFill(current))
+        if not HasFill(current) and grid.tab == fill then
+            -- STOOD ON A TAB THAT JUST LEFT. Without this the settings half
+            -- shows the fill rows with nothing on the strip marked, which
+            -- reads as a page that has lost its place.
+            grid:ShowTab(grid.tabs[1])
+            strip:Select(grid.tabs[1])
+        end
+        strip:Layout()
         -- REFRESHED EVEN WHILE HIDDEN. A hidden grid still has to be right
         -- the moment it is shown again, and skipping it here is how a page
         -- comes back wearing the last bar's values.
