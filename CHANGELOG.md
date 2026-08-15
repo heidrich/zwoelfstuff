@@ -64,6 +64,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   not played yet inherits. Every one of those checks now runs on a profile
   built for it, and the desk harness fails the run if a self test leaves any
   setting changed.
+- **The window opened on an empty Settings page.** Clicking any other row and
+  coming back filled it in. Building a page happens when you select it, and
+  opening the window never selected anything — it just showed the first one.
+  That was harmless while the first page was Cooldowns, which had no builder
+  at all and was drawn entirely by the frame around it. The bars went, Settings
+  moved into first place, and the first thing the addon showed anybody was a
+  blank stage. It now opens the first page through the same door every other
+  page uses.
 - **Unlocking told you about two modes that no longer exist.** `/zs unlock`
   answered with *"Move bars drags whole bars; Build takes them apart slot by
   slot"* — both of them went out with the cooldown bars. It now says what the

@@ -632,16 +632,15 @@ end
 -- first one uses the right column, which is why it carries the flag rather
 -- than the shell hardcoding an index.
 ---------------------------------------------------------------------------
+-- THE FIRST ENTRY IS THE PAGE THE WINDOW OPENS ON, and that is not merely an
+-- order: Create() runs its builder before anything is shown. Whatever stands
+-- here has to survive being built before the window has ever been on screen.
+--
+-- (The ten lines that used to sit here belonged to the Cooldowns page, which
+-- was the first entry until the bars went. The comment stayed behind and read
+-- as if it were about Settings - "its two actions carry their marks" over a
+-- page that has no actions.)
 local PAGES = {
-    -- No subtitle text of its own: this page's second line is a STATUS, not
-    -- an instruction. "Your bars, in the order you built them" is true on the
-    -- first visit and noise on every one after it, whereas how many cells are
-    -- still empty is the one thing worth knowing at a glance.
-    --
-    -- ITS TWO ACTIONS CARRY THEIR MARKS. These are the only pair in the
-    -- window whose names describe the same activity from two sides - "move
-    -- them" and "take them apart" - and the marks separate them faster than
-    -- the words do.
     -- Through the namespace like the pages below it: the builder lives in
     -- Core/OptionsSettings.lua. What this page holds is the split its own
     -- header comment explains - every bar, this window, the ways in - and
@@ -1723,7 +1722,26 @@ function Options:Create()
     self.ShowPage = ShowPage
 
     SetStageWidth(true)
-    self:Refresh()
+
+    -- THROUGH THE SAME DOOR AS EVERY OTHER PAGE, and this line is a bug fix.
+    --
+    -- It used to be a bare self:Refresh(), which PAINTS the window and shows
+    -- page one - and never runs its builder, because building happens in
+    -- ShowPage and nothing had called it yet. That was harmless for exactly
+    -- as long as page one was the Cooldowns page: that page had NO builder at
+    -- all, it was drawn entirely by the frame, its status line and its two
+    -- action buttons.
+    --
+    -- The bars went and Settings moved up into the first slot. Settings has a
+    -- builder. So the window opened on a page that had never been built - an
+    -- empty stage with its rail row lit - and clicking any other row and back
+    -- filled it in, because THAT goes through ShowPage. Owner, 2026-08-15:
+    -- "immer wenn ich das addon oeffne, lande ich auf einer leeren settings
+    -- seite, erst beim hin und her klicken wird der inhalt geladen."
+    --
+    -- The desk could not see it: the harness walks ShowPage over every page
+    -- deliberately, so out here page one was always built a moment later.
+    ShowPage(self.pageIndex)
 
     table.insert(UISpecialFrames, "ZwoelfStuffOptionsFrame")   -- close with ESC
 end
