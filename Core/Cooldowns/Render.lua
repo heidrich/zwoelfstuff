@@ -194,10 +194,33 @@ local function DrawBar(bar, claimed)
                     --
                     -- Text before Look for the same reason and Fill before
                     -- Text because Fill owns the widget Text writes over.
+                    local style = Text.Style(bar, at.h)
                     Fill.Apply(item, bar, index, cells[index])
-                    Text.Apply(item, Text.Style(bar, at.h))
+                    Text.Apply(item, style)
                     Look.Apply(item, Look.Style(bar, index))
                     Effects.Track(item, cell, bar, cells[index])
+
+                    -- THE SPELL NAME, AND ONLY RENDER KNOWS WHETHER THERE IS
+                    -- ROOM FOR ONE.
+                    --
+                    -- It is written on OUR cell rather than on their frame,
+                    -- and it stands down unless the slot is wider than it is
+                    -- tall: a square has no band beside the icon to put a
+                    -- word in, and a buff-bar frame already writes its own
+                    -- name along itself - ours on top of that is the same
+                    -- word twice, the second one pushed into an ellipsis.
+                    --
+                    -- `width` is what the icon actually took, so the name
+                    -- starts where the picture ends however the icon was
+                    -- placed. Its own nine positions are honoured inside
+                    -- Text.Caption; both old renderers anchored it hard to
+                    -- the left and ignored the setting, which is a control
+                    -- that cannot do anything - and the owner found it by
+                    -- trying it.
+                    local band = (at.w > at.h + 0.5)
+                        and ns.CDM:ItemShape(item) ~= "bar" and width or nil
+                    Text.Caption(cell, style, cells[index], band,
+                        bar.iconPlacement)
 
                     claimed[item] = true
                     drawn = drawn + 1

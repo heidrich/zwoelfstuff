@@ -241,6 +241,11 @@ Core\SpellPane.lua
 # The Cooldowns page. Above the rest only because it is first in the rail;
 # it reads Cooldowns\Rivals.lua and CDM.lua, both of which are far above.
 Core\OptionsCooldowns.lua
+# The look, text, effects and fill blocks of that page, in a file of their
+# own. Below it because the page CALLS them, and because the bar they edit is
+# whichever one OptionsCooldowns.Current answers with - the page owns the
+# selection and these blocks ask it on every read.
+Core\OptionsCooldownsBar.lua
 Core\OptionsCoTanks.lua
 # Below OptionsBars: the reminders page borrows its spell list rather than
 # growing a second one, so BuildSpellPane has to exist by the time this loads.

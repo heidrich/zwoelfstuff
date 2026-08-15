@@ -348,6 +348,139 @@ Register("enUS", {
     ["Blizzard's own viewers keep showing everything they know. This makes the ones you have not put on a bar invisible rather than hiding them - they are Blizzard's frames and hiding one is the thing that breaks them for the rest of the session."] =
         true,
     ["Shown in the preview above"] = true,
+    -- The bar editor: the look, the text, the effects and the fill
+    ["Spell name"] = true,
+    ["Only shown where there is room beside the icon - a bar-shaped place with its icon at one end. A square place has no band to put a word in, and Blizzard's own tracking bars already write their name along themselves."] =
+        true,
+    ["A band starts at one stack. To switch one off, take it away - a band of nought would be crossed by an aura that is merely there."] =
+        true,
+    ["A band takes the fill's colour over once the stack count reaches its number. The highest one reached is the one you see."] =
+        true,
+    ["A bright line on the moving edge"] = true,
+    ["A plate under the art. Spell art is opaque and fills its place, so you only see this where the art does not cover it - along a border, and behind a bar-shaped place."] =
+        true,
+    ["A pulse the moment the cooldown ends"] = true,
+    ["A spell that has been ready this long IN COMBAT starts pulsing. For the defensive you keep forgetting."] =
+        true,
+    ["A tracked buff BAR stays on screen while its aura is down, so these two reach it. A buff ICON does not - Blizzard takes the frame away entirely and there is nothing left to dim."] =
+        true,
+    ["Add a band"] = true,
+    ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
+        true,
+    ["Anything left alone here follows the stack count, field by field - so a bar arranged before the two were split keeps the one number it was drawn with."] =
+        true,
+    ["Behind the icon"] = true,
+    ["Belongs to the staggered pattern and is ignored by the others. As a share of one cell, so it stays right when you change the icon size."] =
+        true,
+    ["Blizzard counts these and runs the clock. We set the face, the colour and where the number sits, and never the number itself - which is why a protected count still reads correctly."] =
+        true,
+    ["Blizzard puts a stack count on a buff and a charge count on a cooldown, never both on one place. Each of these reaches the places it belongs to and is quiet on the rest."] =
+        true,
+    ["Blizzard's Cooldown Manager is asked whether the spell is on a real cooldown, so the global cooldown never sets any of this off. A cooldown the client will not talk about is left alone."] =
+        true,
+    ["Blizzard's icon art has a border baked into the file. Cropping cuts it off; at 0 you see the whole thing, frame and all. Above a fifth it starts eating the picture instead."] =
+        true,
+    ["Bottom"] = true,
+    ["Bottom left"] = true,
+    ["Bottom right"] = true,
+    ["Centre"] = true,
+    ["Charge marks"] = true,
+    ["Charge marks and the spark"] = true,
+    ["Charge marks only appear on a spell that HAS more than one charge, so the switch can stay on for a whole bar without marking everything on it."] =
+        true,
+    ["Charges"] = true,
+    ["Close up"] = true,
+    ["Close up in the row"] = true,
+    ["Crop"] = true,
+    ["Edge colour"] = true,
+    ["Edge style"] = true,
+    ["Edge thickness"] = true,
+    ["Everything that pulses"] = true,
+    ["Flash"] = true,
+    ["Flash colour"] = true,
+    ["Flat colour"] = true,
+    ["Font"] = true,
+    ["From"] = true,
+    ["Glow in the window"] = true,
+    ["Glow while it is up"] = true,
+    ["Gradient"] = true,
+    ["Grey out while it is down"] = true,
+    ["Grey out while it runs"] = true,
+    ["Greying and hiding"] = true,
+    ["How grey"] = true,
+    ["How many"] = true,
+    ["How many squares"] = true,
+    ["Its colour"] = true,
+    ["Keep an edge"] = true,
+    ["Keeps the edge dark while you are short of the resource. Range and target are ignored - a defensive with nothing targeted is not the same as one you cannot pay for."] =
+        true,
+    ["Leading edge"] = true,
+    ["Leave it empty"] = true,
+    ["Leaving it empty keeps everything where you learned it. Closing up in the ROW keeps a grid's shape, so the second row stays the second row."] =
+        true,
+    ["Left"] = true,
+    ["Mark colour"] = true,
+    ["No band is drawn yet: nothing in this version can read a stack count off a frame Blizzard owns. What you set here is kept and starts painting when it can."] =
+        true,
+    ["None is a crisp one-pixel line drawn from colour textures, and it stays sharper than any edge file at small sizes. The rest come from whatever your other addons registered."] =
+        true,
+    ["Nothing"] = true,
+    ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design."] =
+        true,
+    ["Nudge across"] = true,
+    ["Nudge up"] = true,
+    ["One line per charge boundary"] = true,
+    ["One speed for the flash, the nag and the squares"] = true,
+    ["Only closes up what the row above takes off screen"] = true,
+    ["Only the one-pixel line - an edge file takes one colour"] = true,
+    ["Only when you can pay for it"] = true,
+    ["Outline"] = true,
+    ["Over time"] = true,
+    ["Position"] = true,
+    ["Ready is always on screen. Press a defensive and it stays while its own buff is still running - Anti-Magic Shell, Blood Shield - and goes for the rest of the cooldown. Anything the client will not answer for stays where it is."] =
+        true,
+    ["Remind me after"] = true,
+    ["Reminder colour"] = true,
+    ["Right"] = true,
+    ["Running squares"] = true,
+    ["Same as behind the icon"] = true,
+    ["Same as everywhere"] = true,
+    ["Second colour"] = true,
+    ["Size"] = true,
+    ["Soft edge"] = true,
+    ["Some places on this bar carry a look of their own and keep it. What you change here reaches every other place."] =
+        true,
+    ["Spark"] = true,
+    ["Speed"] = true,
+    ["Stack colours"] = true,
+    ["Stack count"] = true,
+    ["Take off screen"] = true,
+    ["Take this band away"] = true,
+    ["That is as many bands as one bar carries (%d). Take one away to add another."] =
+        true,
+    ["The bar's fill"] = true,
+    ["The bright line the sweep drags behind it"] = true,
+    ["The cooldown sweep"] = true,
+    ["The edge while it is ready"] = true,
+    ["The empty place"] = true,
+    ["The icon"] = true,
+    ["The nag"] = true,
+    ["The refresh window"] = true,
+    ["The tail of an aura where recasting it wastes nothing. Blizzard works the window out and we ask for the answer, so this only lights for auras you have switched pandemic alerts on for in the game's own settings."] =
+        true,
+    ["These reach a place Blizzard draws as a tracked buff BAR. An icon has no fill of its own, whichever shape this bar's places are set to."] =
+        true,
+    ["Top"] = true,
+    ["Top left"] = true,
+    ["Top right"] = true,
+    ["Whether the bar fills or empties while the cooldown runs. The clock belongs to Blizzard's own template and it re-drives the bar on every update, so this is the one setting here whose undo is its owner putting it back."] =
+        true,
+    ["While inactive"] = true,
+    ["While recharging"] = true,
+    ["While the buff is up"] = true,
+    ["Window colour"] = true,
+    ["auto"] = true,
+    ["off"] = true,
     ["Every spell"] = true,
     ["Click one to put it on the bar."] = true,
     ["Click to fill place %d of %s"] = true,
@@ -671,6 +804,145 @@ Register("deDE", {
     ["Blizzard's own viewers keep showing everything they know. This makes the ones you have not put on a bar invisible rather than hiding them - they are Blizzard's frames and hiding one is the thing that breaks them for the rest of the session."] =
         "Blizzards eigene Anzeigen zeigen weiter alles, was sie kennen. Das hier macht die, die du auf keine Leiste gelegt hast, unsichtbar statt sie zu verstecken - es sind Blizzards Frames, und einen davon zu verstecken ist genau das, was ihn für den Rest der Sitzung beschädigt.",
     ["Shown in the preview above"] = "Oben in der Vorschau",
+    -- Der Leisten-Editor: Aussehen, Text, Effekte und Füllung
+    ["Spell name"] = "Zaubername",
+    ["Only shown where there is room beside the icon - a bar-shaped place with its icon at one end. A square place has no band to put a word in, and Blizzard's own tracking bars already write their name along themselves."] =
+        "Wird nur gezeigt, wo neben dem Symbol Platz ist - ein leistenförmiger Platz mit dem Symbol an einem Ende. Ein quadratischer Platz hat kein Band für ein Wort, und Blizzards eigene Verfolgungsleisten schreiben ihren Namen schon selbst darauf.",
+    ["A band starts at one stack. To switch one off, take it away - a band of nought would be crossed by an aura that is merely there."] =
+        "Ein Band beginnt bei einem Stapel. Zum Abschalten nimm es weg - ein Band bei null würde von jeder bloß vorhandenen Aura überschritten.",
+    ["A band takes the fill's colour over once the stack count reaches its number. The highest one reached is the one you see."] =
+        "Ein Band übernimmt die Farbe der Füllung, sobald die Stapelzahl seine Zahl erreicht. Sichtbar ist das höchste erreichte.",
+    ["A bright line on the moving edge"] =
+        "Eine helle Linie auf der laufenden Kante",
+    ["A plate under the art. Spell art is opaque and fills its place, so you only see this where the art does not cover it - along a border, and behind a bar-shaped place."] =
+        "Eine Platte unter dem Bild. Zaubergrafik ist deckend und füllt ihren Platz, du siehst das hier also nur dort, wo sie ihn nicht bedeckt - am Rand entlang und hinter einem leistenförmigen Platz.",
+    ["A pulse the moment the cooldown ends"] =
+        "Ein Puls in dem Moment, in dem der Cooldown endet",
+    ["A spell that has been ready this long IN COMBAT starts pulsing. For the defensive you keep forgetting."] =
+        "Ein Zauber, der IM KAMPF so lange bereit war, beginnt zu pulsieren. Für den Defensiven, den du immer vergisst.",
+    ["A tracked buff BAR stays on screen while its aura is down, so these two reach it. A buff ICON does not - Blizzard takes the frame away entirely and there is nothing left to dim."] =
+        "Eine verfolgte Buff-LEISTE bleibt auf dem Bildschirm, während ihre Aura aus ist - diese beiden erreichen sie also. Ein Buff-SYMBOL nicht: Blizzard nimmt das Frame ganz weg, und dann ist nichts mehr da, was man dimmen könnte.",
+    ["Add a band"] = "Band hinzufügen",
+    ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
+        "Ein Symbolplatz ist quadratisch und nutzt den ersten Wert; ein Leistenplatz die anderen beiden. Welche Art die Plätze einer Leiste sind, steht oben unter Anordnung.",
+    ["Anything left alone here follows the stack count, field by field - so a bar arranged before the two were split keeps the one number it was drawn with."] =
+        "Was du hier unberührt lässt, folgt der Stapelzahl, Feld für Feld - eine Leiste, die vor der Trennung der beiden eingerichtet wurde, behält also die eine Zahl, mit der sie gezeichnet war.",
+    ["Behind the icon"] = "Hinter dem Symbol",
+    ["Belongs to the staggered pattern and is ignored by the others. As a share of one cell, so it stays right when you change the icon size."] =
+        "Gehört zum versetzten Muster und wird von den anderen ignoriert. Als Anteil einer Zelle, damit es stimmt, wenn du die Symbolgröße änderst.",
+    ["Blizzard counts these and runs the clock. We set the face, the colour and where the number sits, and never the number itself - which is why a protected count still reads correctly."] =
+        "Blizzard zählt das und führt die Uhr. Wir setzen Schrift, Farbe und Ort der Zahl, nie die Zahl selbst - deshalb stimmt auch eine geschützte Zählung.",
+    ["Blizzard puts a stack count on a buff and a charge count on a cooldown, never both on one place. Each of these reaches the places it belongs to and is quiet on the rest."] =
+        "Blizzard setzt eine Stapelzahl auf einen Buff und eine Ladungszahl auf einen Cooldown, nie beides auf denselben Platz. Jede erreicht die Plätze, zu denen sie gehört, und schweigt auf den übrigen.",
+    ["Blizzard's Cooldown Manager is asked whether the spell is on a real cooldown, so the global cooldown never sets any of this off. A cooldown the client will not talk about is left alone."] =
+        "Blizzards Cooldown-Manager wird gefragt, ob der Zauber wirklich auf Cooldown ist - der globale Cooldown löst hier also nichts aus. Ein Cooldown, über den der Client nichts sagt, bleibt unangetastet.",
+    ["Blizzard's icon art has a border baked into the file. Cropping cuts it off; at 0 you see the whole thing, frame and all. Above a fifth it starts eating the picture instead."] =
+        "Blizzards Symbolgrafik hat einen Rand fest in der Datei. Der Zuschnitt schneidet ihn ab; bei 0 siehst du alles, Rahmen inklusive. Über einem Fünftel frisst er stattdessen das Bild an.",
+    ["Bottom"] = "Unten",
+    ["Bottom left"] = "Unten links",
+    ["Bottom right"] = "Unten rechts",
+    ["Centre"] = "Mitte",
+    ["Charge marks"] = "Ladungsmarken",
+    ["Charge marks and the spark"] = "Ladungsmarken und der Funke",
+    ["Charge marks only appear on a spell that HAS more than one charge, so the switch can stay on for a whole bar without marking everything on it."] =
+        "Ladungsmarken erscheinen nur bei einem Zauber, der mehr als eine Ladung HAT - der Schalter kann also für eine ganze Leiste an bleiben, ohne alles darauf zu markieren.",
+    ["Charges"] = "Ladungen",
+    ["Close up"] = "Aufrücken",
+    ["Close up in the row"] = "In der Reihe aufrücken",
+    ["Crop"] = "Zuschnitt",
+    ["Edge colour"] = "Kantenfarbe",
+    ["Edge style"] = "Kantenstil",
+    ["Edge thickness"] = "Kantenstärke",
+    ["Everything that pulses"] = "Alles, was pulsiert",
+    ["Flash"] = "Blitz",
+    ["Flash colour"] = "Blitzfarbe",
+    ["Flat colour"] = "Einfarbig",
+    ["Font"] = "Schrift",
+    ["From"] = "Ab",
+    ["Glow in the window"] = "Im Fenster leuchten",
+    ["Glow while it is up"] = "Leuchten, solange er oben ist",
+    ["Gradient"] = "Verlauf",
+    ["Grey out while it is down"] = "Ausgrauen, solange sie aus ist",
+    ["Grey out while it runs"] = "Ausgrauen, solange er läuft",
+    ["Greying and hiding"] = "Ausgrauen und Ausblenden",
+    ["How grey"] = "Wie grau",
+    ["How many"] = "Wie viele",
+    ["How many squares"] = "Wie viele Quadrate",
+    ["Its colour"] = "Seine Farbe",
+    ["Keep an edge"] = "Kante behalten",
+    ["Keeps the edge dark while you are short of the resource. Range and target are ignored - a defensive with nothing targeted is not the same as one you cannot pay for."] =
+        "Hält die Kante dunkel, solange dir die Ressource fehlt. Reichweite und Ziel bleiben außen vor - ein Defensiver ohne Ziel ist nicht dasselbe wie einer, den du nicht bezahlen kannst.",
+    ["Leading edge"] = "Vordere Kante",
+    ["Leave it empty"] = "Leer lassen",
+    ["Leaving it empty keeps everything where you learned it. Closing up in the ROW keeps a grid's shape, so the second row stays the second row."] =
+        "Leer lassen hält alles dort, wo du es gelernt hast. In der REIHE aufrücken behält die Form des Rasters, die zweite Reihe bleibt also die zweite Reihe.",
+    ["Left"] = "Links",
+    ["Mark colour"] = "Markenfarbe",
+    ["No band is drawn yet: nothing in this version can read a stack count off a frame Blizzard owns. What you set here is kept and starts painting when it can."] =
+        "Noch wird kein Band gezeichnet: nichts in dieser Version kann eine Stapelzahl von einem Frame ablesen, das Blizzard gehört. Was du hier einstellst, bleibt erhalten und beginnt zu zeichnen, sobald es geht.",
+    ["None is a crisp one-pixel line drawn from colour textures, and it stays sharper than any edge file at small sizes. The rest come from whatever your other addons registered."] =
+        "Keine ist eine scharfe Ein-Pixel-Linie aus Farbtexturen und bleibt bei kleinen Größen schärfer als jede Kantendatei. Der Rest kommt aus dem, was deine anderen Addons registriert haben.",
+    ["Nothing"] = "Nichts",
+    ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design."] =
+        "Null rechnet die Größe aus dem Platz aus, auf dem die Zahl sitzt - das lässt eine 24-Pixel-Leiste und ein 64-Pixel-Symbol wie eine Gestaltung aussehen.",
+    ["Nudge across"] = "Waagerecht verschieben",
+    ["Nudge up"] = "Senkrecht verschieben",
+    ["One line per charge boundary"] = "Eine Linie pro Ladungsgrenze",
+    ["One speed for the flash, the nag and the squares"] =
+        "Eine Geschwindigkeit für den Blitz, das Nörgeln und die Quadrate",
+    ["Only closes up what the row above takes off screen"] =
+        "Rückt nur auf, was die Regel darüber vom Bildschirm nimmt",
+    ["Only the one-pixel line - an edge file takes one colour"] =
+        "Nur die Ein-Pixel-Linie - eine Kantendatei nimmt eine Farbe",
+    ["Only when you can pay for it"] = "Nur, wenn du ihn bezahlen kannst",
+    ["Outline"] = "Umrandung",
+    ["Over time"] = "Mit der Zeit",
+    ["Position"] = "Position",
+    ["Ready is always on screen. Press a defensive and it stays while its own buff is still running - Anti-Magic Shell, Blood Shield - and goes for the rest of the cooldown. Anything the client will not answer for stays where it is."] =
+        "Bereit ist immer auf dem Bildschirm. Drück einen Defensiven und er bleibt, solange sein eigener Buff läuft - Antimagische Hülle, Blutschild - und geht für den Rest des Cooldowns. Was der Client nicht beantwortet, bleibt, wo es ist.",
+    ["Remind me after"] = "Erinnern nach",
+    ["Reminder colour"] = "Erinnerungsfarbe",
+    ["Right"] = "Rechts",
+    ["Running squares"] = "Laufende Quadrate",
+    ["Same as behind the icon"] = "Wie hinter dem Symbol",
+    ["Same as everywhere"] = "Wie überall",
+    ["Second colour"] = "Zweite Farbe",
+    ["Size"] = "Größe",
+    ["Soft edge"] = "Weiche Kante",
+    ["Some places on this bar carry a look of their own and keep it. What you change here reaches every other place."] =
+        "Manche Plätze dieser Leiste haben ein eigenes Aussehen und behalten es. Was du hier änderst, erreicht jeden anderen Platz.",
+    ["Spark"] = "Funke",
+    ["Speed"] = "Geschwindigkeit",
+    ["Stack colours"] = "Stapelfarben",
+    ["Stack count"] = "Stapelzahl",
+    ["Take off screen"] = "Vom Bildschirm nehmen",
+    ["Take this band away"] = "Dieses Band entfernen",
+    ["That is as many bands as one bar carries (%d). Take one away to add another."] =
+        "Mehr Bänder trägt eine Leiste nicht (%d). Nimm eines weg, um ein anderes hinzuzufügen.",
+    ["The bar's fill"] = "Die Füllung der Leiste",
+    ["The bright line the sweep drags behind it"] =
+        "Die helle Linie, die der Zeiger hinter sich herzieht",
+    ["The cooldown sweep"] = "Der Cooldown-Zeiger",
+    ["The edge while it is ready"] = "Die Kante, solange er bereit ist",
+    ["The empty place"] = "Der leere Platz",
+    ["The icon"] = "Das Symbol",
+    ["The nag"] = "Das Nörgeln",
+    ["The refresh window"] = "Das Auffrischfenster",
+    ["The tail of an aura where recasting it wastes nothing. Blizzard works the window out and we ask for the answer, so this only lights for auras you have switched pandemic alerts on for in the game's own settings."] =
+        "Das Ende einer Aura, in dem ein Neuwirken nichts verschenkt. Blizzard rechnet das Fenster aus und wir fragen nur nach der Antwort - das leuchtet also nur für Auren, für die du in den Einstellungen des Spiels selbst Pandemie-Hinweise eingeschaltet hast.",
+    ["These reach a place Blizzard draws as a tracked buff BAR. An icon has no fill of its own, whichever shape this bar's places are set to."] =
+        "Diese erreichen einen Platz, den Blizzard als verfolgte Buff-LEISTE zeichnet. Ein Symbol hat keine eigene Füllung, egal welche Form für die Plätze dieser Leiste eingestellt ist.",
+    ["Top"] = "Oben",
+    ["Top left"] = "Oben links",
+    ["Top right"] = "Oben rechts",
+    ["Whether the bar fills or empties while the cooldown runs. The clock belongs to Blizzard's own template and it re-drives the bar on every update, so this is the one setting here whose undo is its owner putting it back."] =
+        "Ob sich die Leiste füllt oder leert, während der Cooldown läuft. Die Uhr gehört Blizzards eigener Vorlage und treibt die Leiste bei jeder Aktualisierung neu an - das ist also die eine Einstellung hier, deren Rücknahme ihr Eigentümer selbst vornimmt.",
+    ["While inactive"] = "Während inaktiv",
+    ["While recharging"] = "Während des Aufladens",
+    ["While the buff is up"] = "Solange der Buff oben ist",
+    ["Window colour"] = "Fensterfarbe",
+    ["auto"] = "auto",
+    ["off"] = "aus",
     ["Every spell"] = "Jeder Zauber",
     ["Click one to put it on the bar."] =
         "Klick einen an, um ihn auf die Leiste zu legen.",

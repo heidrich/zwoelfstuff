@@ -299,7 +299,7 @@ local function BuildBars(grid)
     -- DELETING ONE ASKS TWICE, like every other thing in this addon you
     -- cannot take back in the same second.
     local bar = Page.Current()
-    if bar then
+    if bar then  -- built once, with whatever bar was selected then
         local armed, button = false, nil
         local idle = L("Delete %s", bar.name or L["this bar"])
         local _, made = grid:Buttons({
@@ -343,10 +343,44 @@ local function BuildBars(grid)
     end
 end
 
+-- THE BAR IS RESOLVED WHEN A CONTROL IS READ, NEVER WHEN IT IS BUILT.
+--
+-- This page is built ONCE - Options.ShowPage sets entry.built and nothing
+-- clears it - so a `local bar = Page.Current()` at the top of a builder is
+-- the bar that happened to be selected the first time the page was opened.
+-- Click a second bar in "Your bars" and every slider on the page would go on
+-- reading and WRITING the first one, silently, for the rest of the session.
+--
+-- Found by the agent that wrote the look and effects sections, which resolves
+-- through Page.Current() on every read for exactly this reason. Four rows had
+-- it wrong here and none of them would have raised.
+local function Bar()
+    return Page.Current()
+end
+
+-- Reading and writing one field of whichever bar is selected. A setter that
+-- fires with no bar is a no-op rather than an error: the page still exists
+-- for a moment after the last bar is deleted.
+local function Get(key, fallback)
+    local bar = Bar()
+    local value = bar and bar[key]
+    if value == nil then return fallback end
+    return value
+end
+
+local function Set(key, value)
+    local bar = Bar()
+    if not bar then return end
+    bar[key] = value
+    Refresh()
+end
+
+local function Number(key, fallback)
+    return tonumber(Get(key, fallback)) or fallback
+end
+
 local function BuildArrangement(grid)
     local L = ns.L
-    local bar = Page.Current()
-    if not bar then return end
 
     grid:Section(L["Arrangement"], "arrangement")
 
@@ -356,113 +390,127 @@ local function BuildArrangement(grid)
     -- own label - and nothing would have said so out here.
     local nameRow = grid:FullRow(L["Name"], { controlWidth = 260 })
     local nameInput = UI.Input(nameRow.slot, 260, function(text)
-        if text and text ~= "" then
-            bar.name = text
-            Refresh()
-        end
+        if text and text ~= "" then Set("name", text) end
     end, false, L["Bar"])
     nameInput:SetPoint("RIGHT", nameRow.slot, "RIGHT", 0, 0)
-    nameInput:SetText(bar.name or "")
-    nameRow.Refresh = function() nameInput:SetText(bar.name or "") end
+    -- Refreshed rather than set once, so it follows the selection. Grid:Refresh
+    -- walks every row that carries one of these.
+    nameRow.Refresh = function() nameInput:SetText(Get("name", "") or "") end
 
     UI.Dropdown(grid:Row(L["Cells are"]), {
         { value = "icon", text = L["Icons"] },
         { value = "bar",  text = L["Bars"] },
-    }, function() return bar.kind or "icon" end,
-       function(value) bar.kind = value; Refresh() end)
+    }, function() return Get("kind", "icon") end,
+       function(value) Set("kind", value) end)
 
     UI.Slider(grid:Row(L["Across"]), {
         min = 1, max = 20, step = 1,
-        get = function() return tonumber(bar.columns) or 1 end,
-        set = function(value) bar.columns = value; Refresh() end,
+        get = function() return Number("columns", 1) end,
+        set = function(value) Set("columns", value) end,
     })
     UI.Slider(grid:Row(L["Down"]), {
         min = 1, max = 10, step = 1,
-        get = function() return tonumber(bar.rows) or 1 end,
-        set = function(value) bar.rows = value; Refresh() end,
+        get = function() return Number("rows", 1) end,
+        set = function(value) Set("rows", value) end,
     })
     grid:Note(L["Across times down is how many places the bar has. A spell "
         .. "already sitting past the last place keeps its cell - narrowing a "
         .. "bar never throws a pick away."])
 
     UI.Dropdown(grid:Row(L["Pattern"]), ns.CD_LAYOUTS,
-        function() return (ns.Cooldowns.Store.Lattice(bar)).layout or "grid" end,
-        function(value) bar.layout = value; Refresh() end)
+        function() return ns.Cooldowns.Store.Lattice(Bar()).layout or "grid" end,
+        function(value) Set("layout", value) end)
 
-    if (ns.Cooldowns.Store.Lattice(bar)).layout == "staggered" then
-        UI.Slider(grid:Row(L["Shift every other line"]), {
-            min = 0, max = 100, step = 5, suffix = "%",
-            get = function() return tonumber(bar.staggerOffset) or 50 end,
-            set = function(value) bar.staggerOffset = value; Refresh() end,
-        })
-        grid:Note(L["As a share of one cell, so it stays right when you "
-            .. "change the icon size."])
-    end
+    -- ALWAYS BUILT, NEVER CONDITIONALLY. It used to appear only when the bar
+    -- was already staggered - on a page that is built ONCE, which means that
+    -- for anybody who arrived with a grid bar the control could never appear
+    -- at all, however many times they switched the pattern afterwards.
+    --
+    -- So it is always here and the row says what it belongs to. That is the
+    -- owner's own triage rule: a "this needs the other thing switched on" is
+    -- a fact you act on and has to be readable without pointing at anything.
+    --
+    -- `format` and `scale`, not `suffix`. UI.Slider has no suffix - the first
+    -- version passed one and it did nothing, which is the exact defect this
+    -- addon spent a session removing.
+    UI.Slider(grid:Row(L["Shift every other line"]), {
+        min = 0, max = 100, step = 5,
+        format = function(value) return string.format("%d%%", value or 0) end,
+        get = function() return Number("staggerOffset", 50) end,
+        set = function(value) Set("staggerOffset", value) end,
+    })
+    grid:Note(L["Belongs to the staggered pattern and is ignored by the "
+        .. "others. As a share of one cell, so it stays right when you change "
+        .. "the icon size."])
 
     UI.Dropdown(grid:Row(L["Fills"]), ns.CD_FLOWS,
-        function() return bar.flow or "rows" end,
-        function(value) bar.flow = value; Refresh() end)
+        function() return Get("flow", "rows") end,
+        function(value) Set("flow", value) end)
     UI.Dropdown(grid:Row(L["Grows across"]), ns.CD_GROW_X,
-        function() return bar.growX or "right" end,
-        function(value) bar.growX = value; Refresh() end)
+        function() return Get("growX", "right") end,
+        function(value) Set("growX", value) end)
     UI.Dropdown(grid:Row(L["Grows down"]), ns.GROW_Y,
-        function() return bar.growY or "down" end,
-        function(value) bar.growY = value; Refresh() end)
+        function() return Get("growY", "down") end,
+        function(value) Set("growY", value) end)
 end
 
 local function BuildSize(grid)
     local L = ns.L
-    local bar = Page.Current()
-    if not bar then return end
 
     grid:Section(L["Size and spacing"], "size")
 
-    if bar.kind == "bar" then
-        UI.Slider(grid:Row(L["Bar width"]), {
-            min = 60, max = 500, step = 5,
-            get = function() return tonumber(bar.barWidth) or 200 end,
-            set = function(value) bar.barWidth = value; Refresh() end,
-        })
-        UI.Slider(grid:Row(L["Bar height"]), {
-            min = 8, max = 80, step = 1,
-            get = function() return tonumber(bar.barHeight) or 24 end,
-            set = function(value) bar.barHeight = value; Refresh() end,
-        })
-        -- WHERE THE SQUARE ICON SITS ON A BAR-SHAPED CELL, and it is here
-        -- rather than under the look because it decides GEOMETRY: without an
-        -- answer, an icon-shaped frame in a bar-shaped slot is a square
-        -- stretched across a quarter of the screen.
-        UI.Dropdown(grid:Row(L["Spell icon"]), {
-            { value = "left",   text = L["At the left"] },
-            { value = "right",  text = L["At the right"] },
-            { value = "hidden", text = L["Not shown"] },
-        }, function() return bar.iconPlacement or "left" end,
-           function(value) bar.iconPlacement = value; Refresh() end)
-    else
-        UI.Slider(grid:Row(L["Icon size"]), {
-            min = 16, max = 80, step = 1,
-            get = function() return tonumber(bar.iconSize) or 40 end,
-            set = function(value) bar.iconSize = value; Refresh() end,
-        })
-    end
+    -- ALL FOUR, ALWAYS, for the reason the stagger row carries: this page is
+    -- built once, so a block behind `if bar.kind == "bar"` is a block that can
+    -- never appear for anybody who arrived with an icon bar. The rows that do
+    -- not apply say so rather than hiding.
+    UI.Slider(grid:Row(L["Icon size"]), {
+        min = 16, max = 80, step = 1,
+        get = function() return Number("iconSize", 40) end,
+        set = function(value) Set("iconSize", value) end,
+    })
+    UI.Slider(grid:Row(L["Bar width"]), {
+        min = 60, max = 500, step = 5,
+        get = function() return Number("barWidth", 200) end,
+        set = function(value) Set("barWidth", value) end,
+    })
+    UI.Slider(grid:Row(L["Bar height"]), {
+        min = 8, max = 80, step = 1,
+        get = function() return Number("barHeight", 24) end,
+        set = function(value) Set("barHeight", value) end,
+    })
+    grid:Note(L["An icon place is square and uses the first of these; a bar "
+        .. "place is the other two. Which one a bar's places are is up under "
+        .. "Arrangement."])
+
+    -- WHERE THE SQUARE ICON SITS ON A BAR-SHAPED CELL, and it is here rather
+    -- than under the look because it decides GEOMETRY: without an answer, an
+    -- icon-shaped frame in a bar-shaped slot is a square stretched across a
+    -- quarter of the screen.
+    UI.Dropdown(grid:Row(L["Spell icon"]), {
+        { value = "left",   text = L["At the left"] },
+        { value = "right",  text = L["At the right"] },
+        { value = "hidden", text = L["Not shown"] },
+    }, function() return Get("iconPlacement", "left") end,
+       function(value) Set("iconPlacement", value) end)
 
     UI.Slider(grid:Row(L["Gap across"]), {
         min = 0, max = 40, step = 1,
-        get = function() return tonumber(bar.spacing) or 4 end,
-        set = function(value) bar.spacing = value; Refresh() end,
+        get = function() return Number("spacing", 4) end,
+        set = function(value) Set("spacing", value) end,
     })
     -- TWO GAPS, NOT ONE, and the second one is not decoration: two of his own
     -- four bars carry a row gap different from their column gap, and on the
     -- single-column one it is the only gap the bar has.
     UI.Slider(grid:Row(L["Gap down"]), {
         min = 0, max = 40, step = 1,
-        get = function() return tonumber(bar.lineSpacing) or tonumber(bar.spacing) or 4 end,
-        set = function(value) bar.lineSpacing = value; Refresh() end,
+        get = function() return Number("lineSpacing", Number("spacing", 4)) end,
+        set = function(value) Set("lineSpacing", value) end,
     })
     UI.Slider(grid:Row(L["Scale"]), {
         min = 0.5, max = 2, step = 0.05,
-        get = function() return tonumber(bar.scale) or 1 end,
-        set = function(value) bar.scale = value; Refresh() end,
+        format = function(value) return string.format("%.2f", value or 1) end,
+        get = function() return Number("scale", 1) end,
+        set = function(value) Set("scale", value) end,
     })
 end
 
@@ -616,7 +664,30 @@ function Page:BuildPage(page, width)
     BuildBars(grid)
     BuildArrangement(grid)
     BuildSize(grid)
+
+    -- WAVES 4 AND 5. Their own file, because eighteen look keys, four text
+    -- elements, twenty effects and eleven fill settings on this one would be
+    -- the 2 710-line page again - which the owner named as the defect.
+    local bar = Page.Current()
+    ns.OptionsCooldownsBar.BuildLook(grid, bar)
+    ns.OptionsCooldownsBar.BuildText(grid, bar)
+    ns.OptionsCooldownsBar.BuildEffects(grid, bar)
+    ns.OptionsCooldownsBar.BuildFill(grid, bar)
+
     BuildRivals(grid)
+
+    -- THE TWO LINES THIS PAGE HAS BEEN MISSING SINCE IT WAS WRITTEN, and
+    -- without them none of it works: Grid:Layout is what PLACES every row, and
+    -- Options.PaintView ends in `if page.Refresh then page.Refresh() end` -
+    -- so with that field nil, Grid:Refresh never ran, no row ever refreshed,
+    -- and band.Refresh - the preview lattice, the whole point of the page -
+    -- was never called once.
+    --
+    -- Every other options page in this addon does both. The desk guard that
+    -- says "every option on every page can be drawn" BUILDS a page; it does
+    -- not lay one out, so it was green over a page that put nothing anywhere.
+    grid:Layout()
+    page.Refresh = function() grid:Refresh() end
 
     return grid
 end
