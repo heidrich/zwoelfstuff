@@ -1,4 +1,4 @@
-﻿---------------------------------------------------------------------------
+---------------------------------------------------------------------------
 -- Options - the app window.
 --
 -- Three columns, fixed:
@@ -769,12 +769,14 @@ local PAGES = {
       },
       build = function(page, width) return ns.OptionsRaidBar:BuildPage(page, width) end },
 
-    -- THE COOLDOWN MANAGER, being rebuilt. Its page carries the one question
-    -- that has to be settled before any of it draws - whether another addon
-    -- is already holding Blizzard's cooldown frames - and the module switch
-    -- it belongs to. No third column: the spell picker arrives with the bars,
-    -- and it will come from SpellPane like the other two do.
+    -- THE COOLDOWN MANAGER, rebuilt. The bewaehrte layout: the lattice in a
+    -- sticky band at the top, the settings under it, and every spell this
+    -- character can be shown in the third column. The picker is SpellPane -
+    -- the same one the reminders and the death log use, which is the whole
+    -- reason it was lifted out of the old workspace rather than deleted with
+    -- it.
     { key = "cooldowns", title = "Cooldowns", glyph = "grid", module = "cooldowns",
+      cooldowns = true,
       subtitle = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
       actions = {
           { text = "What it holds",
@@ -1022,7 +1024,8 @@ end
 
 function Options.HasThirdColumn(entry)
     return (entry.side or entry.explain or entry.tanks or entry.reminders
-        or entry.deaths or entry.externals or entry.raidbar) and true or false
+        or entry.deaths or entry.externals or entry.raidbar
+        or entry.cooldowns) and true or false
 end
 
 function Options.PageWidth(entry, narrow, wide)
@@ -1521,6 +1524,7 @@ function Options:Create()
         deaths    = function() return ns.OptionsDeaths:BuildSide(sideHost, PAD) end,
         externals = function() return ns.OptionsExternals:BuildSide(sideHost, PAD) end,
         raidbar   = function() return ns.OptionsRaidBar:BuildSide(sideHost, PAD) end,
+        cooldowns = function() return ns.OptionsCooldowns:BuildSide(sideHost, PAD) end,
     }
     local panes = {}
 
@@ -1681,6 +1685,7 @@ function Options:Create()
         local withDeaths = entry.deaths and moduleOn or false
         local withExternals = entry.externals and moduleOn or false
         local withRaidBar = entry.raidbar and moduleOn or false
+        local withCooldowns = entry.cooldowns and moduleOn or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
@@ -1690,7 +1695,7 @@ function Options:Create()
         -- the half that is still live is the half that edits settings for
         -- something that is not running.
         local third = withExplain or withTanks or withReminders
-            or withDeaths or withExternals or withRaidBar
+            or withDeaths or withExternals or withRaidBar or withCooldowns
         SetStageWidth(third)
         sideHost:SetShown(third)
         explain:SetShown(withExplain)
@@ -1699,11 +1704,13 @@ function Options:Create()
         ShowPane("deaths", withDeaths)
         ShowPane("externals", withExternals)
         ShowPane("raidbar", withRaidBar)
+        ShowPane("cooldowns", withCooldowns)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
         if withDeaths then ns.OptionsDeaths:Refresh() end
         if withExternals then panes.externals.Refresh() end
         if withRaidBar then panes.raidbar.Refresh() end
+        if withCooldowns then panes.cooldowns.Refresh() end
 
         -- THROUGH L, and the fallback is what makes this free: a page whose
         -- title has no translation gets its own English word back, which is

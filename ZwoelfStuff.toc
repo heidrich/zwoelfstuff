@@ -130,6 +130,10 @@ Core\Cooldowns\Model.lua
 # Reading the bars still in the profile. Below Model, whose vocabulary it
 # translates into, and below Profiles - it reads ns.db and ns.SpecStore.
 Core\Cooldowns\Store.lua
+# Changing the bars - the write side of Store, and separate from it so
+# Store's promise ("it translates, it does not rewrite") stays true on its
+# own first line. Below Store, which it reads.
+Core\Cooldowns\Bars.lua
 # THE ONE FILE ALLOWED TO WRITE TO A FRAME BLIZZARD OWNS. Below Contract,
 # whose weak-keyed record it keeps its state in, and below CDM, whose viewers
 # hand it the frames. The desk guard names this path: every other file in the
