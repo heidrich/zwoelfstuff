@@ -183,6 +183,15 @@ Store.READERS = {
         -- without barWidth and barHeight, and it answers WRONGLY - which is
         -- worse - for two of his bars without lineSpacing.
         "lineSpacing", "barWidth", "barHeight",
+        -- MOVED UP FROM `look` in wave 2, and it is the same correction a
+        -- third time. `iconPlacement` reads like styling and is geometry: it
+        -- decides where an ICON-shaped frame sits inside a BAR-shaped slot,
+        -- and the alternative to answering it is stretching a square across
+        -- 250 pixels. Filed under the look wave, that would have shipped.
+        "iconPlacement",
+        -- Wave 2 reads these because they are where the bar IS. The rest of
+        -- `placement` is about being MOVED, which is the editor's wave.
+        "point", "relPoint", "x", "y", "scale",
     },
     -- Wave 2, Claim and Render: where the bar sits.
     --
@@ -195,8 +204,8 @@ Store.READERS = {
     -- circular references; all of that is real work that wave 2 owes
     -- somebody who is not him.
     placement = {
-        "point", "relPoint", "x", "y", "scale", "pinned", "locked",
-        "freeCount", "parked", "parkedBySpec", "raster", "anchor",
+        "pinned", "locked", "freeCount", "parked", "parkedBySpec", "raster",
+        "anchor",
     },
     -- Wave 4, the look.
     look = {
@@ -207,6 +216,7 @@ Store.READERS = {
         "fillTexture", "iconPlacement", "iconZoom", "inactiveAlpha",
         "inactiveDesaturate", "showEdge", "showSpark", "spellName",
         "swipeAlpha", "swipeColor",
+        -- `iconPlacement` used to be here. It is geometry - see `now`.
     },
     -- Wave 4 as well, but they are states rather than colours.
     effects = {

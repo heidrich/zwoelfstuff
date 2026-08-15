@@ -85,3 +85,23 @@ function Cooldowns.Held()
     for _ in pairs(records) do count = count + 1 end
     return count
 end
+
+-- EVERY FRAME WE ARE HOLDING, so all of them can be handed back at once.
+--
+-- Wave 2 needed this the moment "switch the module off" became a thing you
+-- can do without reloading: releasing means walking what we hold, and only
+-- this file knows what that is. Without it the switch would leave the frames
+-- pinned and stripped with nothing left able to name them - which is the
+-- release fault the old implementation shipped, arrived at from the other
+-- direction.
+--
+-- Collected into a list BEFORE fn is called. `fn` is Release, and Release
+-- calls Forget, and mutating a table you are walking with `next` is
+-- undefined in Lua - the one place in this file where the ordinary way round
+-- is the wrong way round.
+function Cooldowns.Each(fn)
+    local held = {}
+    for frame in pairs(records) do held[#held + 1] = frame end
+    for _, frame in ipairs(held) do fn(frame) end
+    return #held
+end

@@ -74,11 +74,14 @@ local LIST = {
         -- defensives out of its catalogue, so it comes up before both - the
         -- same position the bars held before they were removed.
         --
-        -- NO Boot AND NO Apply YET, and that is a statement of where the
-        -- rebuild has got to rather than an omission: nothing draws until
-        -- Claim and Render land. What the switch decides TODAY is whether we
-        -- intend to manage these frames at all, which is exactly the question
-        -- that has to be settled before another addon is already holding them.
+        -- OFF DOES NOT MEAN "STOP REFRESHING" HERE, and this is the one
+        -- module where that distinction has teeth. Every frame on screen
+        -- belongs to Blizzard; we have moved it, resized it and taken its
+        -- border off. A switch that merely stopped the render pass would
+        -- leave all of that exactly as it is, with nothing left running that
+        -- knows how to undo it - which is the fault the last implementation
+        -- shipped, reached from the other direction. So Apply RELEASES: every
+        -- frame back at the decoration it had before we touched it.
         --
         -- OFF BY DEFAULT WHEN SOMEBODY ELSE IS DOING IT. Modules:IsOn answers
         -- "on" for anything unanswered, so the default is written into the
@@ -92,6 +95,11 @@ local LIST = {
         key = "cooldowns", title = "Cooldowns", glyph = "grid", since = 5,
         blurb = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
         detail = "Off, we leave Blizzard's cooldown frames alone entirely.",
+        Boot = function() ns.Cooldowns.Render.Start() end,
+        -- The switch in both directions, and they are not symmetrical: on is
+        -- a render pass, off is a release. Refresh answers Stop for a module
+        -- that is off, so this reads as one call and is two.
+        Apply = function() ns.Cooldowns.Render.Refresh() end,
     },
     {
         key = "cotanks", title = "Co-Tanks", glyph = "tanks", since = 1,

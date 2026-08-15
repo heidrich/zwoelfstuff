@@ -7684,6 +7684,367 @@ local function TestCooldownStore()
         #strange == 1 and strange[1] == "somethingNobodyDeclared")
 end
 
+---------------------------------------------------------------------------
+-- CLAIMING A FRAME AND LETTING GO OF IT
+--
+-- THE ONE THING WAVE 2 IS MEASURED BY. The implementation this replaces
+-- recorded nothing before it stripped a decoration, so releasing a frame left
+-- every one of them pinned at zero for the rest of the session: Blizzard's
+-- own Cooldown Manager left permanently stripped by an addon that had just
+-- said it let go. Nothing caught it, because from the inside a frame we no
+-- longer hold and a frame we handed back damaged look identical.
+--
+-- So this suite does not check that Strip strips. It checks that GIVE PUTS
+-- EVERY SINGLE THING BACK, and it gives each decoration a DIFFERENT alpha
+-- first - a restore that simply set them all to 1 would pass a test written
+-- the lazy way, and 1 is what most of them happen to be.
+--
+-- The frames are ours, built here. Nothing in this suite touches a frame
+-- Blizzard owns, which is what makes it safe to run in his client.
+---------------------------------------------------------------------------
+local function TestCooldownClaim()
+    local Claim = ns.Cooldowns and ns.Cooldowns.Claim
+    if not Claim then
+        Skip("Claiming and letting go", "Cooldowns/Claim.lua is not loaded")
+        return
+    end
+
+    -- A STAND-IN FOR ONE OF BLIZZARD'S ITEM FRAMES, built out of the parts
+    -- the stripper actually reaches for. Every alpha is a different number on
+    -- purpose - see the header.
+    local item = CreateFrame("Frame")
+    item.Icon = item:CreateTexture()
+    item.Cooldown = CreateFrame("Frame", nil, item)
+
+    -- DebuffBorder is deliberately NOT in this list - see below.
+    local before = {
+        Border = 0.90, Shadow = 0.35, IconShadow = 0.62,
+        CooldownFlash = 0.44,
+    }
+    for key, alpha in pairs(before) do
+        item[key] = item:CreateTexture()
+        item[key]:SetAlpha(alpha)
+        item[key]:Show()
+    end
+    item.SpellActivationAlert = CreateFrame("Frame", nil, item)
+    item.SpellActivationAlert:SetAlpha(0.8)
+    item.SpellActivationAlert:Show()
+
+    -- THE CHROME, matched by atlas prefix rather than by name - which is how
+    -- the out-of-range veil was found on his client at all. One that must go
+    -- and one that must not, so a matcher that dims everything is caught.
+    local veil = item:CreateTexture()
+    veil:SetAtlas("UI-CooldownManager-OORshadow")
+    veil:SetAlpha(0.5)
+    veil:Show()
+
+    local stranger = item:CreateTexture()
+    stranger:SetAtlas("SomebodyElses-Decoration")
+    stranger:SetAlpha(0.7)
+    stranger:Show()
+
+    -- The rounded corners. The mask belongs to the TEXTURE it masks, so it
+    -- has to come off the icon rather than be redefined - measured with
+    -- /zs skin, and the reason a whole release of icons stayed round.
+    local mask = item:CreateMaskTexture()
+    item.Icon:AddMaskTexture(mask)
+
+    Check("An icon starts out wearing Blizzard's mask",
+        item.Icon:GetNumMaskTextures() == 1)
+
+    -- A DECORATION THIS TEMPLATE DOES NOT HAVE. Blizzard's item templates are
+    -- not one shape - CooldownFlash is on some and not others - so "absent"
+    -- is the ordinary case rather than the broken one and has to cost exactly
+    -- nothing. No fixture covered it until it was written down.
+    --
+    -- ASSERTED BY BEHAVIOUR RATHER THAN BY `== nil`, because out on the desk
+    -- the harness cannot tell a Blizzard FIELD from a method: every unread
+    -- PascalCase key answers with a function there, and in the client it
+    -- answers nil. Both are things that are not a region, which is the only
+    -- distinction this code makes and therefore the only one worth asking
+    -- about.
+
+    ---------------------------------------------------------------------
+    -- Taking it
+    ---------------------------------------------------------------------
+    Claim.Strip(item)
+
+    Check("Every named decoration goes quiet",
+        item.Border:GetAlpha() == 0 and item.Shadow:GetAlpha() == 0
+        and item.IconShadow:GetAlpha() == 0
+        and item.CooldownFlash:GetAlpha() == 0)
+    Check("A decoration this template does not have costs nothing",
+        pcall(Claim.Strip, item) and item.Border:GetAlpha() == 0)
+    Check("And the alert is hidden as well as silenced",
+        item.SpellActivationAlert:GetAlpha() == 0
+        and not item.SpellActivationAlert:IsShown())
+    Check("The out-of-range veil goes with them, matched by its atlas",
+        veil:GetAlpha() == 0)
+    Check("Somebody else's texture is left exactly alone",
+        stranger:GetAlpha() == 0.7, tostring(stranger:GetAlpha()))
+    Check("The mask comes OFF the icon, not redefined",
+        item.Icon:GetNumMaskTextures() == 0)
+
+    -- BLIZZARD WRITES THE ALPHA BACK. The out-of-range veil is driven by
+    -- range, so a single SetAlpha(0) returns the moment you walk anywhere.
+    -- This is the one hook that cannot be checked by reading the source.
+    item.Border:SetAlpha(0.9)
+    Check("A decoration Blizzard turns back on goes quiet again",
+        item.Border:GetAlpha() == 0, tostring(item.Border:GetAlpha()))
+
+    ---------------------------------------------------------------------
+    -- Holding it where we put it
+    ---------------------------------------------------------------------
+    local slot = CreateFrame("Frame")
+    Claim.Place(item, { "CENTER", slot, "CENTER", 0, 0 }, 40, 40)
+    Claim.Reveal(item)
+
+    local point, relativeTo = item:GetPoint(1)
+    Check("A claimed frame sits on the slot we gave it",
+        point == "CENTER" and relativeTo == slot)
+    Check("At the size we asked for", item:GetWidth() == 40)
+    Check("And it is on screen", item:GetAlpha() == 1)
+    Check("One frame is placed", Claim.Placed() == 1)
+
+    -- BLIZZARD'S OWN LAYOUT PASS. There is no event for it and no polling
+    -- either - the hook re-asserts from inside their own SetPoint, and this
+    -- assertion is the whole mechanism wave 2 stands on.
+    --
+    -- CLEARED FIRST, exactly as their layout pass does, and the first draft of
+    -- this line did not - so it appended a second anchor, GetPoint(1) went on
+    -- answering with OUR one, and the check passed with the hook removed
+    -- entirely. A check that cannot fail is not a check; this was proved by
+    -- putting the no-op hook back and watching this line stay green.
+    item:ClearAllPoints()
+    item:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 500, -500)
+    point, relativeTo = item:GetPoint(1)
+    Check("A relayout by Blizzard does not move it",
+        point == "CENTER" and relativeTo == slot, tostring(point))
+
+    item:SetSize(999, 999)
+    Check("And nor does a resize", item:GetWidth() == 40,
+        tostring(item:GetWidth()))
+
+    Claim.Veil(item)
+    item:SetAlpha(0.5)
+    Check("A veiled frame stays veiled", item:GetAlpha() == 0)
+
+    ---------------------------------------------------------------------
+    -- LETTING GO. Everything above, undone.
+    ---------------------------------------------------------------------
+    Check("Giving a frame back reports that it had one", Claim.Give(item))
+
+    local restored = true
+    for key, alpha in pairs(before) do
+        if item[key]:GetAlpha() ~= alpha then restored = false end
+    end
+    Check("Every decoration comes back at the alpha it HAD, not at 1",
+        restored, string.format("border %s, wanted %s",
+            tostring(item.Border:GetAlpha()), tostring(before.Border)))
+    Check("The alert is shown again too",
+        item.SpellActivationAlert:GetAlpha() == 0.8
+        and item.SpellActivationAlert:IsShown())
+    Check("So does the out-of-range veil", veil:GetAlpha() == 0.5)
+    Check("The rounded corners go back on", item.Icon:GetNumMaskTextures() == 1)
+    Check("The frame is visible again", item:GetAlpha() == 1)
+    Check("Nothing is placed any more", Claim.Placed() == 0)
+    Check("And we hold no record of it", ns.Cooldowns.Known(item) == nil)
+
+    -- THE HOOKS CANNOT BE REMOVED, so the proof that letting go is real is
+    -- that they no longer DO anything. Blizzard drives the frame again.
+    item.Border:SetAlpha(0.25)
+    Check("A released decoration is Blizzard's to drive again",
+        item.Border:GetAlpha() == 0.25, tostring(item.Border:GetAlpha()))
+
+    -- CLEARED FIRST, because SetPoint ADDS a point rather than replacing one -
+    -- in the client and in the harness alike. Asserting on GetPoint(1) after a
+    -- bare SetPoint reads the anchor that was already there and would pass
+    -- against a frame that is still being re-asserted, which is the opposite
+    -- of what this line is for.
+    item:ClearAllPoints()
+    item:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 7, 7)
+    Check("And a released frame can be moved by anyone",
+        (item:GetPoint(1)) == "TOPLEFT", tostring((item:GetPoint(1))))
+
+    Check("Giving back something we never held says so",
+        Claim.Give(CreateFrame("Frame")) == false)
+end
+
+---------------------------------------------------------------------------
+-- PLACING A WHOLE BAR
+--
+-- The three files in one pass: Store reads the bar, Model says where each
+-- cell goes, Claim writes it. Run against a Cooldown Manager built here out
+-- of frames of ours.
+--
+-- NOT RUN IN HIS CLIENT, and that is a safety rule rather than a limitation.
+-- Faking the viewers means writing four globals that Blizzard owns, and a
+-- suite that threw halfway would leave his Cooldown Manager replaced by a
+-- stub for the rest of the session. Where the real ones exist, the real ones
+-- win and this says so.
+---------------------------------------------------------------------------
+local function TestCooldownRender()
+    local Render = ns.Cooldowns and ns.Cooldowns.Render
+    if not Render then
+        Skip("Placing a bar", "Cooldowns/Render.lua is not loaded")
+        return
+    end
+
+    for _, viewer in ipairs(ns.CDM.VIEWERS) do
+        if _G[viewer.global] then
+            Skip("Placing a bar", "the real Cooldown Manager is up - a fake "
+                .. "one would have to overwrite it")
+            return
+        end
+    end
+
+    -- THE WORLD, built and taken down again. Three spells; the middle one has
+    -- no frame, which is the case that has to leave a HOLE rather than close
+    -- up - a fixed grid means a spell is always in the same place.
+    -- Icon AND Cooldown, because Blizzard's item template carries both and
+    -- the stripper reaches for both. A fixture missing one is a fixture that
+    -- proves the code survives a frame nobody has.
+    local function FakeItem(spellID)
+        local item = CreateFrame("Frame")
+        item.GetSpellID = function() return spellID end
+        item.Icon = item:CreateTexture()
+        item.Cooldown = CreateFrame("Frame", nil, item)
+        return item
+    end
+
+    local first, third, spare = FakeItem(1022), FakeItem(31850), FakeItem(642)
+
+    local pool = { items = { first, third, spare } }
+    function pool:EnumerateActive()
+        local index = 0
+        return function()
+            index = index + 1
+            return self.items[index]
+        end
+    end
+
+    local viewer = CreateFrame("Frame")
+    viewer.itemFramePool = pool
+    viewer:Show()
+
+    local saved = {
+        bars = ns.db.bars,
+        module = ns.db.modules and ns.db.modules.cooldowns,
+        takeover = ns.db.takeOverCDM,
+        available = ns.CDM.available,
+        built = ns.CDM.indexBuilt,
+        started = Render.started,
+    }
+
+    _G[ns.CDM.VIEWERS[1].global] = viewer
+    ns.db.modules = ns.db.modules or {}
+    ns.db.modules.cooldowns = true
+    ns.db.takeOverCDM = true
+    ns.CDM.available = nil
+    -- AND THE INDEX HAS TO BE INVALIDATED, which is the whole reason the
+    -- first run of this suite reported that a three-cell bar found nothing.
+    -- ItemForSpell rebuilds on the FIRST read and then trusts itself, and by
+    -- the time this suite runs an earlier one has already marked it built -
+    -- against a world with no viewers in it. A stale empty index and a spell
+    -- Blizzard genuinely is not showing are the same answer.
+    ns.CDM.indexBuilt = nil
+
+    -- HIS OWN BAR'S SHAPE: three across, 40px icons, a gap of 4.
+    ns.db.bars = { {
+        id = 9001, name = "desk", enabled = true,
+        rows = 1, columns = 3, kind = "icon",
+        iconSize = 40, spacing = 4, lineSpacing = 4,
+        layout = "grid", flow = "rows", growX = "right", growY = "down",
+        point = "CENTER", relPoint = "CENTER", x = 0, y = -200, scale = 1,
+        cells = { 1022, 86659, 31850 },
+    } }
+
+    local ok, err = pcall(function()
+        local drawn = Render.Refresh()
+        Check("Two of the three cells found a live frame", drawn == 2,
+            tostring(drawn))
+
+        local container = Render.Containers()[9001]
+        Check("The bar got a container", container ~= nil)
+        if not container then return end
+
+        -- 3 cells of 40 with two gaps of 4 = 128 wide.
+        Check("Sized to what the model measured, not to a formula",
+            container:GetWidth() == 128 and container:GetHeight() == 40,
+            string.format("%sx%s", tostring(container:GetWidth()),
+                tostring(container:GetHeight())))
+
+        local point, relativeTo, _, x, y = container:GetPoint(1)
+        Check("And placed where the profile says",
+            point == "CENTER" and relativeTo == UIParent and x == 0
+            and y == -200)
+
+        -- Cell 1 sits 44 left of the box centre, cell 3 sits 44 right.
+        local _, _, _, x1 = container.cells[1]:GetPoint(1)
+        local _, _, _, x3 = container.cells[3]:GetPoint(1)
+        Check("The first and last cell straddle the centre evenly",
+            x1 == -44 and x3 == 44,
+            string.format("%s and %s", tostring(x1), tostring(x3)))
+
+        -- THE HOLE. Its spell has no frame, and the cell stays exactly where
+        -- it was: closing the gap is a setting, and it belongs to the wave
+        -- that owns the setting.
+        local _, _, _, x2 = container.cells[2]:GetPoint(1)
+        Check("A cell with no frame leaves a hole rather than closing up",
+            x2 == 0, tostring(x2))
+
+        local anchored, onCell = first:GetPoint(1)
+        Check("Blizzard's frame is anchored to OUR cell",
+            onCell == container.cells[1], tostring(anchored))
+        Check("At an offset of zero, which is the same in every scale",
+            select(4, first:GetPoint(1)) == 0)
+        Check("Sized to the slot", first:GetWidth() == 40)
+        Check("The claimed frames are on screen",
+            first:GetAlpha() == 1 and third:GetAlpha() == 1)
+
+        -- THE TAKEOVER. A frame the user never placed is veiled, never
+        -- hidden - hiding one is what taints it.
+        Check("A cooldown nobody placed is veiled, not hidden",
+            spare:GetAlpha() == 0 and spare:IsShown() == false
+                or spare:GetAlpha() == 0)
+        Check("Three frames are held", ns.Cooldowns.Held() == 3)
+
+        ---------------------------------------------------------------
+        -- SWITCHING IT OFF, which is the release condition again
+        ---------------------------------------------------------------
+        ns.db.modules.cooldowns = false
+        Render.Refresh()
+
+        Check("Switching the module off hands every frame back",
+            ns.Cooldowns.Held() == 0, tostring(ns.Cooldowns.Held()))
+        Check("Including the ones it had only veiled",
+            spare:GetAlpha() == 1, tostring(spare:GetAlpha()))
+        Check("And our own scaffolding leaves the screen",
+            container:IsShown() == false)
+    end)
+
+    -- PUT THE WORLD BACK WHATEVER HAPPENED. A suite that throws halfway and
+    -- leaves a fake viewer in a global is the "a test that writes must put it
+    -- back" lesson with a Blizzard frame on the end of it.
+    --
+    -- Render.Stop is itself pcall'd, and that is not belt and braces: it was
+    -- the FIRST line here, it threw on a fixture of mine, and every line below
+    -- it - the fake viewer, his bars, his module switch - was never reached.
+    -- The profile guard caught it and said "db.modules.cooldowns: true became
+    -- false", which is a settings change left behind by a test. Cleanup that
+    -- can throw has to be cleanup that cannot stop the rest of the cleanup.
+    pcall(Render.Stop)
+    _G[ns.CDM.VIEWERS[1].global] = nil
+    ns.db.bars = saved.bars
+    if ns.db.modules then ns.db.modules.cooldowns = saved.module end
+    ns.db.takeOverCDM = saved.takeover
+    ns.CDM.available = saved.available
+    ns.CDM.indexBuilt = saved.built
+    Render.started = saved.started
+
+    if not ok then error(err, 0) end
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -7722,6 +8083,8 @@ function Test:Run()
         { "Other cooldown addons", TestRivals },
         { "Cooldown lattice", TestCooldownModel },
         { "Reading a stored bar", TestCooldownStore },
+        { "Claiming and letting go", TestCooldownClaim },
+        { "Placing a bar", TestCooldownRender },
     }
 
     for _, suite in ipairs(suites) do

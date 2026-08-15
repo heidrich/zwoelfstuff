@@ -75,6 +75,29 @@ function CDM:GetViewer(key)
     return nil
 end
 
+-- WHICH OF BLIZZARD'S VIEWERS ARE SWITCHED OFF, as a list of their names.
+--
+-- An adopted icon stays Blizzard's child - rule 1 forbids reparenting it - so
+-- a viewer the user switched off in Blizzard's own Edit Mode takes our icons
+-- down with it. The frames exist, they are pooled, they are pinned to exactly
+-- the right cell, and nothing whatsoever is on screen.
+--
+-- Worth its own answer, and it came back with wave 2 for that reason: "my bar
+-- is empty" and "the Cooldown Manager is missing" look identical from the
+-- outside and have completely different fixes. Nil when they are all on.
+function CDM:HiddenViewers()
+    local hidden
+
+    for _, viewer in ipairs(self.VIEWERS) do
+        local frame = _G[viewer.global]
+        if frame and not frame:IsShown() then
+            hidden = hidden and (hidden .. ", " .. viewer.label) or viewer.label
+        end
+    end
+
+    return hidden
+end
+
 -- The Cooldown Manager shipped well before the aura restrictions, so unlike
 -- the aura engine this is expected to be present. It can still be missing on
 -- an older client, so callers check.
@@ -674,6 +697,19 @@ end
 ---------------------------------------------------------------------------
 local itemBySpell = {}
 
+-- WHICH VIEWER EACH LIVE FRAME CAME OUT OF, and it decides its SHAPE.
+--
+-- Blizzard's two templates are not interchangeable: a BuffBar item is a whole
+-- bar - a square icon at one end, a StatusBar, its own name and timer - and
+-- an Essential item is an icon. Told to fill a 250-wide slot, the bar
+-- template is right and the icon template smears its art across a quarter of
+-- the screen. That is the one thing a tracking bar must never look like, and
+-- it is what the owner saw the first time one was on screen.
+--
+-- Weak keys: these are pooled frames and a strong reference here would keep
+-- every frame the session ever saw.
+local itemViewer = setmetatable({}, { __mode = "k" })
+
 function CDM:RebuildItemIndex()
     wipe(itemBySpell)
     self.indexBuilt = true
@@ -692,6 +728,13 @@ function CDM:RebuildItemIndex()
 
     for _, viewer in ipairs(self.VIEWERS) do
         self:ForEachItem(viewer.key, function(item)
+            -- BEFORE the spell is resolved, not after. A frame whose spell
+            -- cannot be read this second - an active aura hands back a secret
+            -- - is still a frame of a known SHAPE, and returning early with
+            -- the shape unrecorded is how one buff bar in a row comes back as
+            -- a square for exactly as long as its buff is up.
+            itemViewer[item] = viewer
+
             local spellID = self:ItemSpellID(item)
             if not spellID then return end
 
@@ -704,6 +747,21 @@ function CDM:RebuildItemIndex()
             end
         end)
     end
+end
+
+-- Which viewer this frame belongs to, as the VIEWERS entry.
+function CDM:ItemViewer(item)
+    return item and itemViewer[item] or nil
+end
+
+-- "icon" or "bar" - what Blizzard's own template makes this frame.
+--
+-- Defaults to "icon" for a frame we have never indexed, because three of the
+-- four viewers are icons and an icon told to be an icon is the harmless half
+-- of being wrong.
+function CDM:ItemShape(item)
+    local viewer = self:ItemViewer(item)
+    return (viewer and viewer.kind) or "icon"
 end
 
 -- The live frame for a spell, or nil.
