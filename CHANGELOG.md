@@ -26,6 +26,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **The licence is All Rights Reserved.** The store page has always said so;
+  the folder that shipped carried an MIT `LICENSE` beside it, which is the kind
+  of contradiction that only gets found by somebody acting on the wrong half of
+  it. The About page states the terms now, so they are readable without opening
+  a file. The libraries under `Libs/` keep their own — LibStub public domain,
+  CallbackHandler BSD, LibSharedMedia LGPL 2.1, LibSerialize MIT, LibDeflate
+  zlib. **Releases up to and including 4.82.0 stay MIT**: that grant was given
+  and is not being withdrawn.
 - **"Active for" moved to the death log page.** It was on the cooldowns
   page — say how long a trinket, potion or racial lasts, because the game
   does not report it — and the death replay still reads it first for every

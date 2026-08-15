@@ -502,6 +502,33 @@ local function BuildAboutPage(page, width)
     for _, paragraph in ipairs(ABOUT_CREDIT) do grid:Note(paragraph) end
 
     ---------------------------------------------------------------------
+    -- WHO OWNS THIS, said in the addon rather than only in a file nobody
+    -- opens. The store page has always said All Rights Reserved; the folder
+    -- that ships shipped an MIT LICENSE beside it until 4.83.0, which is the
+    -- kind of contradiction that only ever gets found by somebody acting on
+    -- the wrong half of it.
+    --
+    -- The libraries are named separately on purpose: their terms are theirs,
+    -- they travel with the files, and claiming them under ours would be
+    -- exactly the mistake the LibDeflate note in the README is about.
+    ---------------------------------------------------------------------
+    grid:Section("Licence")
+
+    grid:Note("ZwoelfStuff is |cffffd100All Rights Reserved|r, "
+        .. "\194\169 2026 Christian McCain. Download it, install it, play "
+        .. "with it, keep your own backup. Republishing it, selling it or "
+        .. "handing out a changed copy needs written permission first.")
+
+    grid:Note("The libraries under Libs/ keep their own terms and are not "
+        .. "covered by that: LibStub is public domain, CallbackHandler is "
+        .. "BSD, LibSharedMedia is LGPL 2.1, LibSerialize is MIT and "
+        .. "LibDeflate is zlib.")
+
+    grid:Note("Releases up to 4.82.0 went out under the MIT License. That "
+        .. "was given and is not being taken back - it still applies to "
+        .. "those versions. These terms start at 4.83.0.")
+
+    ---------------------------------------------------------------------
     -- Commands
     --
     -- FROM ns.COMMANDS, which the chat help prints from as well. This page

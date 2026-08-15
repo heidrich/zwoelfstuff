@@ -602,10 +602,17 @@ tell whose fault it was.
 > own header. Copying the file that happens to sit next to a library is how a
 > project ends up claiming the wrong terms.
 
-Their licences stay with them; our own code is MIT.
+Their licences stay with them. Our own code is **All Rights Reserved** — see
+[LICENSE](LICENSE).
 
 ## Credits
 
 Addon Author: **Zwölf** — EU Destromath
 
-License: MIT
+License: **All Rights Reserved**, © 2026 Christian McCain. Play with it, back
+it up, take it apart to see how it works. Republishing it, selling it or
+distributing a changed copy needs written permission first. The libraries under
+`Libs/` keep their own terms.
+
+Releases up to and including 4.82.0 were published under the MIT License. That
+grant stands for those versions; these terms begin at 4.83.0.

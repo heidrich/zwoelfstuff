@@ -7,7 +7,7 @@
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
-## X-License: MIT
+## X-License: All Rights Reserved
 ## X-Category: Buffs & Debuffs
 # Which CurseForge project a tag uploads to. The BigWigs packager reads this
 # line and nothing else to find the project - without it a tagged build runs,
