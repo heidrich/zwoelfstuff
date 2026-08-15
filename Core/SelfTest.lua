@@ -7924,9 +7924,42 @@ local function TestCooldownClaim()
     Check("A veiled frame stays veiled", item:GetAlpha() == 0)
 
     ---------------------------------------------------------------------
+    -- THE ONE REGION ON THE FRAME THAT HAS NO NAME
+    --
+    -- Blizzard's countdown number is a FontString the Cooldown owns and does
+    -- not publish. Text.lua reaches it by walking GetRegions and changes
+    -- three things about it - font, colour and where it sits - and Claim.Give
+    -- walked a list of NAMED parts, so none of the three was coming back.
+    -- Rule 4 held for everything with a name and quietly did not for this.
+    ---------------------------------------------------------------------
+    local counter = item.Cooldown:CreateFontString(nil, "OVERLAY")
+    counter:SetFont([[Fonts\FRIZQT__.TTF]], 14, "OUTLINE")
+    counter:SetTextColor(1, 1, 1, 1)
+    counter:ClearAllPoints()
+    counter:SetPoint("CENTER", item.Cooldown, "CENTER", 0, 0)
+
+    Claim.Set(counter, "SetFont", [[Fonts\ARIALN.TTF]], 22, "")
+    Claim.Set(counter, "SetTextColor", 1, 0, 0, 1)
+    Claim.Anchor(counter, "BOTTOMRIGHT", item, "BOTTOMRIGHT", -3, 3)
+
+    local _, styledSize = counter:GetFont()
+    local styledPoint = counter:GetPoint(1)
+    Check("A counter takes our font and our place",
+        styledSize == 22 and styledPoint == "BOTTOMRIGHT",
+        tostring(styledSize) .. " " .. tostring(styledPoint))
+
+    ---------------------------------------------------------------------
     -- LETTING GO. Everything above, undone.
     ---------------------------------------------------------------------
     Check("Giving a frame back reports that it had one", Claim.Give(item))
+
+    local _, counterSize = counter:GetFont()
+    local counterRed = counter:GetTextColor()
+    Check("An unnamed counter gets its font, colour and place back too",
+        counterSize == 14 and Same(counterRed, 1)
+        and (counter:GetPoint(1)) == "CENTER",
+        string.format("size %s, red %s, point %s", tostring(counterSize),
+            tostring(counterRed), tostring((counter:GetPoint(1)))))
 
     local restored = true
     for key, alpha in pairs(before) do

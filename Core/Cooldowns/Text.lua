@@ -307,7 +307,7 @@ local function Paint(cooldown, text)
             -- NOT reparented, only re-anchored. Moving one of these strings to
             -- another parent makes the engine re-centre it and ignore both the
             -- position and the offset.
-            Claim.MoveCounter(fontString, text.anchor, cooldown, text.anchor,
+            Claim.Anchor(fontString, text.anchor, cooldown, text.anchor,
                 x, y)
         end
     end
@@ -397,7 +397,7 @@ local function Counters(item, style)
             -- than on the square, and moving it now would move a number he
             -- has already placed.
             local x, y = Text.Offset(text)
-            Claim.MoveCounter(widget, text.anchor, item, text.anchor, x, y)
+            Claim.Anchor(widget, text.anchor, item, text.anchor, x, y)
         end
     end
 end

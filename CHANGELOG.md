@@ -101,6 +101,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     correct, and was registered nowhere: it drew once when the page was built
     and never again, so picking a second bar left the first one's cells on
     screen under the first one's name.
+- **Clicking a bar in the list did nothing, and said so eight times a paint.**
+  A row is a frame, and a frame has no click handler at all — the client threw
+  the assignment back every time the page was drawn. Rows now have a proper
+  way to be clicked, in the one place that knows a frame hears it as a mouse
+  release.
+- **Every cooldown change threw an error.** The text layer called
+  `Claim.MoveCounter`, which does not exist: the name was taken out of a
+  comment describing what the *old* implementation used to do by hand. The
+  door that does exist is `Claim.Anchor`.
+- **Three whole features were silently doing nothing.** Writing to one of
+  Blizzard's frames goes through a door that refuses anything it cannot put
+  back — which is right, and is silent, so a missing entry is not a warning
+  but a dead control. Three were missing: the **font, size and outline of
+  every counter** (four text elements, three controls each), **"show
+  Blizzard's own countdown"**, and **every gradient on a fill**.
+- **The countdown number was never given back.** Blizzard's own counter is a
+  region its cooldown owns under no name at all, so the list of parts to
+  return on release could not name it — its font, its colour and its position
+  stayed ours after the bar let the frame go.
 - **The desk now lays a page out instead of only building one.** Every guard
   that watched these pages stopped at "it did not throw", which all three
   faults above pass. The new one asks what is actually on the page: that the

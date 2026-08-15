@@ -298,9 +298,20 @@ local function BuildBars(grid)
         -- passed `accent = true`, which the row does not read - so it would
         -- have marked nothing at all, silently, which is exactly the kind of
         -- control that does nothing this addon spent a session removing.
+        --
+        -- `onClick`, and it is not a synonym for SetScript("OnClick"): a row
+        -- is a FRAME and a frame has no OnClick at all. This asked for one
+        -- and the client threw it back eight times on every paint, so
+        -- picking a bar by clicking its row has never once worked. UI.Row
+        -- hears it as OnMouseUp, which is the handler a frame has.
         local row = grid:Row(bar.name or L["Bar"], {
             sublabel = (Page.barID == id)
                 and L["Shown in the preview above"] or nil,
+            onClick = function()
+                Page.barID = id
+                Page.cell = nil
+                Refresh()
+            end,
         })
         UI.Toggle(row,
             function() return bar.enabled ~= false end,
@@ -308,11 +319,6 @@ local function BuildBars(grid)
                 bar.enabled = on and true or false
                 Refresh()
             end)
-        row:SetScript("OnClick", function()
-            Page.barID = id
-            Page.cell = nil
-            Refresh()
-        end)
     end
 
     grid:Buttons({

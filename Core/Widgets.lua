@@ -716,6 +716,26 @@ function UI.Row(parent, text, opts)
     row:SetScript("OnEnter", function(self) self.bg:Show() end)
     row:SetScript("OnLeave", function(self) self.bg:Hide() end)
 
+    -- A ROW THAT DOES SOMETHING WHEN YOU CLICK IT, and the whole reason this
+    -- is here rather than at the call site is the SPELLING.
+    --
+    -- A row is a Frame, and a Frame has no OnClick. The client refuses the
+    -- handler outright - "Cannot assign script handler for 'onclick' (script
+    -- type not supported by this object)" - so the row is simply dead, and
+    -- the only sign of it is an error the page throws eight times on every
+    -- paint. Owner, in game, on the cooldowns page: exactly that, eight
+    -- times, on the rows that pick which bar you are editing.
+    --
+    -- The three other pages that make a row clickable all use UI.SpellRow,
+    -- which IS a Button, so none of them ever met this. There is now a door
+    -- for the ordinary kind, and it is the one place that knows a Frame has
+    -- to hear the click as OnMouseUp.
+    if opts.onClick then
+        row:SetScript("OnMouseUp", function(self, button)
+            if button == "LeftButton" then opts.onClick(self) end
+        end)
+    end
+
     row.SetRelevant = function(self, relevant)
         self.dkSkip = not relevant
         self:SetShown(relevant)

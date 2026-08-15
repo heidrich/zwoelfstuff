@@ -403,6 +403,35 @@ local function Parts(item)
         parts[#parts + 1] = item.Icon.Applications
         parts[#parts + 1] = item.Icon.ChargeCount
     end
+
+    -- AND THE STRINGS NOBODY CAN NAME.
+    --
+    -- Blizzard's countdown number is a FontString the Cooldown owns and
+    -- publishes under no key at all - Text.lua finds it by walking
+    -- GetRegions, and changes its font, its colour and its ANCHOR. None of
+    -- that was coming back: the list above names the Cooldown, and putting a
+    -- frame back says nothing about the strings inside it. So the rule-4
+    -- promise held for everything that has a name and quietly did not for the
+    -- one region on the frame that has none.
+    --
+    -- Unset on something we never touched is a no-op, which is what makes
+    -- walking all of them the safe way rather than a wider one.
+    for _, owner in ipairs({ item, item.Cooldown }) do
+        if type(owner) == "table" and type(owner.GetRegions) == "function" then
+            local ok, regions = pcall(function()
+                return { owner:GetRegions() }
+            end)
+            if ok then
+                for _, region in ipairs(regions) do
+                    if type(region) == "table" and region.IsObjectType
+                        and region:IsObjectType("FontString") then
+                        parts[#parts + 1] = region
+                    end
+                end
+            end
+        end
+    end
+
     return parts
 end
 
@@ -506,16 +535,54 @@ local UNDO = {
     -- question.
     SetOrientation        = "GetOrientation",
     SetReverseFill        = "GetReverseFill",
+
+    -- THE THREE THAT WERE MISSING, and every one of them was a feature that
+    -- did nothing at all. Claim.Set refuses a setter it cannot undo - which
+    -- is right - so a setter left off this list is not a warning, it is a
+    -- control that quietly never writes:
+    --
+    --   SetFont                    the size, face and outline of every
+    --                              counter on a bar. Four text elements,
+    --                              three controls each, all dead.
+    --   SetHideCountdownNumbers    "show Blizzard's own countdown".
+    --   SetGradient                every gradient on a fill.
+    --
+    -- Found by a self test that styled a counter and read the size back: 14
+    -- before, 14 after. There is now a guard on the desk that reads every
+    -- setter handed to Claim.Set and checks it is spelled here or below, so
+    -- a fourth cannot happen quietly.
+    SetFont                  = "GetFont",
+    SetHideCountdownNumbers  = "GetHideCountdownNumbers",
 }
 
 -- SETTERS WITH NO READER AT ALL, and they are not an oversight. A Cooldown's
 -- swipe colour and draw-edge can be written and cannot be asked for; there is
 -- no GetSwipeColor on any build. So the value before us is unknowable, and
 -- the honest undo is Blizzard's own default rather than a remembered one.
+--
+-- A setter may stand in BOTH tables, and one of them does. Claim.Set reads
+-- the getter first and falls back to the default when there is no such
+-- function on this build - so `SetHideCountdownNumbers` remembers the real
+-- value where GetHideCountdownNumbers exists and returns to Blizzard's own
+-- "numbers shown" where it does not. That is better than guessing which
+-- build has it.
+local WHITE = { r = 1, g = 1, b = 1, a = 1 }
+
 local DEFAULTS = {
     SetSwipeColor = { 0, 0, 0, 0.8 },
     SetDrawEdge   = { false },
     SetDrawSwipe  = { true },
+
+    -- A GRADIENT IS CLEARED BY BEING SET FLAT. There is no GetGradient on any
+    -- build and no "off" switch either, so the undo is the one thing that
+    -- reliably means no tint: white to white, which multiplies by one.
+    --
+    -- Plain tables rather than CreateColor, for the reason Fill.lua gives at
+    -- its own pair: a colour object IS four fields, those four are all
+    -- SetGradient reads, and CreateColor does not exist on the desk.
+    SetGradient   = { "HORIZONTAL", WHITE, WHITE },
+
+    SetHideCountdownNumbers = { false },
 }
 
 -- What we changed on which object, and what it was. Weak keys: Blizzard's
