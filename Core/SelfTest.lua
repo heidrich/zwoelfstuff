@@ -3691,6 +3691,32 @@ local function TestCoTanks()
     -- would go green on a PAGES table that had lost the flags entirely.
     Check("Some page does carry a third column", carried >= 2, tostring(carried))
 
+    -- THE RAIL AND THE PAGES, AGAINST EACH OTHER, BOTH WAYS.
+    --
+    -- Neither direction throws on its own, and that is the whole reason for
+    -- checking. A rail entry naming a page that is gone gets nil back from
+    -- the lookup, falls back to the empty label and calls ShowPage(nil): a
+    -- blank row you can click that does nothing. A page nobody names is the
+    -- opposite - it builds, it works, and there is no way in.
+    --
+    -- Removing the Bars entry was one edit away from each of those, which is
+    -- why this is here rather than in the list of things to remember.
+    local inPages, inRail = {}, {}
+    for _, entry in ipairs(ns.Options.PAGES) do inPages[entry.key] = true end
+    for _, entry in ipairs(ns.Options.NAV) do
+        if entry.page then
+            inRail[entry.page] = true
+            Check("The rail entry '" .. entry.page .. "' opens a page that exists",
+                inPages[entry.page] == true,
+                "no such key in Options.PAGES - a blank row that clicks nowhere")
+        end
+    end
+    for _, entry in ipairs(ns.Options.PAGES) do
+        Check("The page '" .. entry.key .. "' has a way in from the rail",
+            inRail[entry.key] == true,
+            "it builds and nothing opens it")
+    end
+
     -- The rail's own mark. PAGES names icons and was NOT among the data
     -- tables this file walks - which is the same gap that let four wrong
     -- icons ship, because an unknown name never throws: it falls back to four
@@ -4680,15 +4706,29 @@ local function TestModules()
         ns.DEFAULTS.modules.raidbar == false
             and ns.DEFAULTS.modules.invites == false)
 
-    -- AND THE OTHER SIX ARE STILL ON. Written out rather than "every other
+    -- AND THE OTHER FIVE ARE STILL ON. Written out rather than "every other
     -- entry", because the list of features that may arrive switched on is a
     -- decision and not a default: the next module added has to be argued for
     -- in one of the two directions rather than inheriting whichever way this
     -- loop happened to be written.
-    for _, key in ipairs({ "cooldowns", "cotanks", "reminders", "externals",
+    for _, key in ipairs({ "cotanks", "reminders", "externals",
         "answers", "deaths" }) do
         Check("Module '" .. key .. "' still defaults to ON",
             ns.DEFAULTS.modules[key] == true)
+    end
+
+    -- EVERY DEFAULT NAMES A MODULE THAT EXISTS, and this is the check the
+    -- list above could never be. `cooldowns = true` shipped in the defaults
+    -- for a version after the cooldown bars were removed, and the loop above
+    -- asserted it - two dead things agreeing with each other, green the whole
+    -- time. Nothing was wrong with either statement; the fault was that
+    -- neither of them asked Modules.
+    local known = {}
+    for _, entry in ipairs(ns.Modules:All()) do known[entry.key] = true end
+    for key in pairs(ns.DEFAULTS.modules) do
+        Check("The default for '" .. key .. "' names a real module",
+            known[key] == true,
+            "Modules:All() has no such key - a switch for nothing")
     end
     Check("The welcome flag is NOT in the defaults",
         ns.DEFAULTS.welcomeSeen == nil,

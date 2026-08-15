@@ -816,6 +816,51 @@ local PAGES = {
 -- be checked without building a window.
 Options.PAGES = PAGES
 
+---------------------------------------------------------------------------
+-- The rail, in the order it reads
+--
+-- AT FILE SCOPE SO IT CAN BE CHECKED. It was built inside the window, where
+-- nothing could look at it, and a `page` naming a key PAGES no longer has
+-- costs a blank row: the lookup answers nil, the label falls back to the
+-- empty string and the click calls ShowPage(nil). A dead row in the rail
+-- that says nothing about itself - which is what "the Bars entry can go" was
+-- one bad edit away from leaving behind.
+--
+-- Every entry is either an `eyebrow` heading or a `page`. The one row that is
+-- neither - Edit mode, which CLOSES this window rather than opening a page -
+-- is added by the builder, because its action needs the frame it closes. It
+-- goes at the head: it is the entry used most often, and a door belongs at
+-- the top.
+---------------------------------------------------------------------------
+local NAV = {
+    { eyebrow = "M+ and raid stuff" },
+    { page = "cotanks" },
+    { page = "reminders" },
+    { page = "externals" },
+    { page = "answers" },
+    { page = "deaths" },
+    -- THE TWO NEWEST GO AT THE END, at the owner's word: "raid bar bitte
+    -- unter death log stellen".
+    --
+    -- The first draft put the raid bar at the head of this group on the
+    -- argument that it is the entry about the whole group rather than about
+    -- you. That argument is fine and it loses to a better one: the five above
+    -- it have not moved since they were added, and a rail somebody has been
+    -- reading for weeks is a list they no longer read - they go to the place.
+    -- Inserting a row at the top moves every one of those places by one, to
+    -- save one row of travel on a page that is new to everybody anyway.
+    { page = "raidbar" },
+    { page = "invites" },
+    { eyebrow = "System" },
+    { page = "settings" },
+    { page = "profiles" },
+    { page = "diagnostics" },
+    { eyebrow = "Info" },
+    { page = "about" },
+    { page = "changelog" },
+}
+Options.NAV = NAV
+
 -- A PAGE IS BUILT AT THE WIDTH IT WILL BE SHOWN AT, not at the widest one
 -- there is.
 --
@@ -1491,43 +1536,24 @@ function Options:Create()
     -- It was filed under Bars, which reads as "one of the bar pages" - and it
     -- is not a page at all. Every other entry opens something inside this
     -- window; this one CLOSES the window and puts you on the screen with your
-    -- bars in your hands. That is a different kind of thing, and a heading
+    -- panels in your hands. That is a different kind of thing, and a heading
     -- over it would be a promise that the entries under it behave alike.
     --
     -- It is also the entry that gets used most often and it was five rows
     -- down. A door belongs at the top.
-    local NAV = {
+    --
+    -- The rest of the rail is the NAV table at the top of this file, where the
+    -- self test can read it. Only this one row is built here, because closing
+    -- the window needs the window.
+    local rail_entries = {
         { title = "Edit mode", glyph = "move", onClick = function()
             frame:Hide()
             ns.EditMode:SetUnlocked(true)
         end },
-        { eyebrow = "M+ and raid stuff" },
-        { page = "cotanks" },
-        { page = "reminders" },
-        { page = "externals" },
-        { page = "answers" },
-        { page = "deaths" },
-        -- THE TWO NEWEST GO AT THE END, at the owner's word: "raid bar bitte
-        -- unter death log stellen".
-        --
-        -- The first draft put the raid bar at the head of this group on the
-        -- argument that it is the entry about the whole group rather than
-        -- about you. That argument is fine and it loses to a better one: the
-        -- five above it have not moved since they were added, and a rail
-        -- somebody has been reading for weeks is a list they no longer read -
-        -- they go to the place. Inserting a row at the top moves every one of
-        -- those places by one, to save one row of travel on a page that is
-        -- new to everybody anyway.
-        { page = "raidbar" },
-        { page = "invites" },
-        { eyebrow = "System" },
-        { page = "settings" },
-        { page = "profiles" },
-        { page = "diagnostics" },
-        { eyebrow = "Info" },
-        { page = "about" },
-        { page = "changelog" },
     }
+    for _, entry in ipairs(NAV) do
+        rail_entries[#rail_entries + 1] = entry
+    end
 
     local pageByKey = {}
     for index, entry in ipairs(PAGES) do pageByKey[entry.key] = index end
@@ -1537,7 +1563,7 @@ function Options:Create()
     -- function, from what the loop below turns out to need - and an offset
     -- from the rail's top would have to be recomputed then.
     local y = UI.PAD
-    for position, entry in ipairs(NAV) do
+    for position, entry in ipairs(rail_entries) do
         if entry.eyebrow then
             -- Air ABOVE the heading, and none under it. A heading belongs to
             -- what follows; spaced evenly it belongs to neither side.

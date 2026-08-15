@@ -159,7 +159,6 @@ ns.DEFAULTS = {
     -- switched off and the welcome window offers them, which is what the
     -- generation counter above exists for.
     modules    = {
-        cooldowns = true,
         cotanks   = true,
         reminders = true,
         externals = true,
