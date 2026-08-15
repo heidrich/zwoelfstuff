@@ -368,6 +368,25 @@ function Claim.Strip(item)
     end
 end
 
+---------------------------------------------------------------------------
+-- BEING TOLD WHEN A FRAME GOES BACK
+--
+-- Look and Fill hang textures of their own on an adopted frame - a plate
+-- under it, a border around it - and those are OURS, so Claim.Unset knows
+-- nothing about them. They still have to come off a frame we have just said
+-- we let go, or it is failure mode 4 reached from our own side.
+--
+-- A registered hook rather than a direct call, because this file loads ABOVE
+-- every file that needs it and cannot name one at file scope. Three different
+-- callers hand frames back - the takeover pass, the module switch and
+-- Render.Stop - and none of them should have to remember a list.
+---------------------------------------------------------------------------
+local givers = {}
+
+function Claim.OnGive(fn)
+    if type(fn) == "function" then givers[#givers + 1] = fn end
+end
+
 -- EVERY PART OF AN ITEM FRAME THAT ANYTHING MIGHT RESTYLE, in one list.
 --
 -- Read by the restore walk so that giving a frame back does not depend on
@@ -406,6 +425,11 @@ function Claim.Give(item)
         state.alpha = nil
         pcall(item.SetAlpha, item, 1)
     end
+
+    -- WHATEVER THE LATER WAVES HUNG ON IT THAT IS OURS. Run BEFORE the record
+    -- is forgotten, because a hook that wants to know which cell this was has
+    -- one line left in which to ask.
+    for _, fn in ipairs(givers) do pcall(fn, item) end
 
     -- EVERYTHING THE LATER WAVES RESTYLED, put back before the decorations.
     -- Order matters only in that it must happen at all: a part styled by a
@@ -472,7 +496,16 @@ local UNDO = {
     SetStatusBarTexture   = "GetStatusBarTexture",
     SetStatusBarColor     = "GetStatusBarColor",
     SetTextColor          = "GetTextColor",
-    SetSwipeColor         = nil,   -- see below
+    -- THE TWO HALVES OF "WHICH WAY THE FILL RUNS", and they are two because
+    -- SetReverseFill only ever flips a HORIZONTAL bar - up and down are
+    -- unreachable without the orientation. Both have real getters.
+    --
+    -- SetReverseFill is NOT "fill up". Wiring it to that is a defect this
+    -- addon has already shipped once: reverse moves the fill to the other
+    -- END, growing as time passes is the clock, and they are not the same
+    -- question.
+    SetOrientation        = "GetOrientation",
+    SetReverseFill        = "GetReverseFill",
 }
 
 -- SETTERS WITH NO READER AT ALL, and they are not an oversight. A Cooldown's
@@ -526,15 +559,104 @@ function Claim.Set(object, setter, ...)
                 held[setter] = read
             end
         end
-        -- Still nothing? Then the default is what we will hand back, and it
-        -- is recorded as such rather than left absent - an absent record is
-        -- indistinguishable from "we never touched this".
-        if held[setter] == nil then held[setter] = fallback or false end
+        -- Still nothing readable? Then the DEFAULT is the undo, if there is
+        -- one for this setter.
+        if held[setter] == nil then held[setter] = fallback end
+
+        -- AND IF THERE IS NO UNDO AT ALL, NOTHING IS WRITTEN.
+        --
+        -- The comment above UNDO has always said "refused rather than
+        -- applied"; the code recorded `false` and applied anyway, which is
+        -- the same sentence pointed at nothing. Found by reading, before a
+        -- line of wave 4 existed - and it matters most exactly where it is
+        -- hardest to notice: the harness stub answers a getter it has not
+        -- implemented with nil, so every restyled region on this desk would
+        -- have looked recorded, applied and handed back while none of it
+        -- happened. Six swallowed setters cost a day once already.
+        --
+        -- An entry left behind would say "we touched this", so it goes.
+        if held[setter] == nil then
+            if next(held) == nil then touched[object] = nil end
+            return false
+        end
     end
 
     pcall(object[setter], object, ...)
     return true
 end
+
+---------------------------------------------------------------------------
+-- ANCHORS, WHICH ARE NOT ONE VALUE
+--
+-- Claim.Set is one getter per setter, and an anchor cannot be spelled that
+-- way: reading one is GetNumPoints() followed by GetPoint(i) i times, and
+-- putting it back is ClearAllPoints() followed by SetPoint per point. So it
+-- gets its own door rather than a fake getter.
+--
+-- Wave 4 needs it twice on an icon-shaped frame - the icon texture and the
+-- cooldown both have to be told to fill their frame, because each viewer's
+-- template anchors its own icon its own way and six adopted icons came out
+-- at six sizes. Wave 4's counters need it again. The old implementation wrote
+-- that pair by hand as MoveCounter/RestoreCounter and it was the only thing
+-- of its kind; there are four now, which is what makes it a door.
+---------------------------------------------------------------------------
+
+-- The reserved key an anchor list is filed under. A string nothing can be a
+-- setter for, so it can share `touched` with everything else and can never
+-- collide with one.
+local POINTS = "\0points"
+
+local function RememberPoints(object)
+    local held = touched[object]
+    if not held then
+        held = {}
+        touched[object] = held
+    end
+    if held[POINTS] ~= nil then return end
+
+    local list = {}
+    local ok, count = pcall(object.GetNumPoints, object)
+    if ok and type(count) == "number" then
+        for index = 1, count do
+            local read = { pcall(object.GetPoint, object, index) }
+            if read[1] then
+                table.remove(read, 1)
+                list[#list + 1] = read
+            end
+        end
+    end
+    -- An empty list is a real answer - a region with no points of its own -
+    -- and it is recorded as such. Absent would mean "never touched".
+    held[POINTS] = list
+end
+
+-- Anchors a region of theirs somewhere of ours, remembering where it was.
+function Claim.Anchor(object, point, relativeTo, relativePoint, x, y)
+    if type(object) ~= "table" or type(object.SetPoint) ~= "function" then
+        return false
+    end
+    RememberPoints(object)
+    pcall(object.ClearAllPoints, object)
+    pcall(object.SetPoint, object, point, relativeTo, relativePoint, x, y)
+    return true
+end
+
+-- The whole of a region told to fill its parent, which is the case wave 4
+-- actually has: two points rather than one, and SetAllPoints does not take
+-- an inset.
+function Claim.Fill(object, frame, inset)
+    if type(object) ~= "table" or type(object.SetPoint) ~= "function" then
+        return false
+    end
+    inset = tonumber(inset) or 0
+    RememberPoints(object)
+    pcall(object.ClearAllPoints, object)
+    pcall(object.SetPoint, object, "TOPLEFT", frame, "TOPLEFT", inset, -inset)
+    pcall(object.SetPoint, object, "BOTTOMRIGHT", frame, "BOTTOMRIGHT",
+        -inset, inset)
+    return true
+end
+
 
 -- Everything we changed on this object, put back.
 --
@@ -548,7 +670,15 @@ function Claim.Unset(object)
     touched[object] = nil
 
     for setter, value in pairs(held) do
-        if value then
+        if setter == POINTS then
+            -- Where it hung before us. Cleared first, because SetPoint ADDS
+            -- a point rather than replacing one, and a region put back
+            -- without the clear would wear its old anchors AND ours.
+            pcall(object.ClearAllPoints, object)
+            for _, at in ipairs(value) do
+                pcall(object.SetPoint, object, unpack(at))
+            end
+        elseif value then
             -- `unpack`, not `table.unpack`: this client runs Lua 5.1, where
             -- the second one does not exist at all. The harness answers to
             -- both, which is exactly how a 5.4-ism gets shipped.
