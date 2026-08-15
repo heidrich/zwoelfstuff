@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to ZwoelfStuff are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -8,7 +8,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Removed
 
-- **The cooldown bars are gone.** In the owner's words: *"CDM is gone. I will
+> The bars were taken out and are being **rebuilt from the ground up** in this
+> same version — see Added. What follows is what the old implementation cost
+> and what it left behind, because the rebuild reads the settings it wrote.
+
+- **The old cooldown bars are gone.** In the owner's words: *"CDM is gone. I will
   put my focus on tank and group play features, and there are a lot of other
   very good CDM addons that do the job better."* Out with them went the
   renderer, the bar editor and its options page, the bar movers in Edit Mode
@@ -25,6 +29,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `bars` in your saved variables. Roll back and they are where you left them.
 
 ### Added
+
+- **The cooldown bars are back, rebuilt.** Blizzard's Cooldown Manager draws
+  the icons and knows the timing — on this patch no addon can do either for
+  itself — and this arranges them on bars you build. What is in this release:
+  - **A page you can actually see the bar on.** The lattice sits in a band at
+    the top, every spell this character can be shown is in the third column,
+    and the settings are underneath. The preview is drawn by the same function
+    that draws the screen, so a staggered pattern, a bar that fills downwards
+    or one that grows leftwards looks here exactly like it looks in play.
+  - **Bars, cells, arrangement.** New, duplicate and delete; icons or tracking
+    bars; across and down, the pattern, which way it fills and which way it
+    grows; sizes, both gaps, and the scale. Deleting a bar releases anything
+    that was following it rather than leaving it pointing at nothing.
+  - **Your layout is shared, your spells are not.** The arrangement follows the
+    bar; which cooldowns sit on it follows the specialisation you are playing,
+    the way defensives and reminders already do.
+  - **The cooldowns you did not place are made invisible, never hidden.** They
+    are Blizzard's frames, and hiding one is what breaks it for the rest of the
+    session. There is a switch for it on the page.
+  - **Everything is given back.** Switch the module off and every frame goes
+    back to Blizzard with the border, shadow and range veil it had before we
+    touched it, and its rounded corners back on. The version that shipped
+    before the removal recorded nothing before stripping those, so letting go
+    left Blizzard's own Cooldown Manager stripped for the rest of the session.
+  - **Your bars from 4.82.0 are read as they are.** Nothing rewrites your saved
+    variables, so rolling back finds them exactly where you left them.
 
 - **The addon now notices when another one is managing your cooldowns.** Two
   addons cannot both hold Blizzard's cooldown frames — whichever loads second
@@ -51,6 +81,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   frames somebody else may already be holding. The bars themselves are being
   rebuilt — until they land, the switch decides only whether we intend to
   touch those frames at all.
+
+### Fixed
+
+- **Every language this addon ships was showing mangled text.** All ten
+  translated tables had been read as Windows-1252 and written back as UTF-8 at
+  some point, which turns each accented letter into two — German showed
+  "fÃ¼r" where "für" belonged, and Russian, Korean and both Chinese showed
+  whole lines of it. 408 lines across every language. It survived this long
+  because the strings are data rather than code, so nothing ever failed, and
+  because the self test compared translations against the English list, which
+  has no accented letters in it and was perfectly happy.
+  - 357 lines are repaired exactly. **51 could not be**: the damage destroyed
+    five byte values outright, and no reversal brings back a byte that is not
+    there. Those entries have been removed, so they fall back to their English
+    original — which is correct text rather than a word with a hole in it —
+    and they are listed for re-translation. Russian lost 44, Korean 6, Simplified Chinese 1.
 
 ### Changed
 
