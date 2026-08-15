@@ -53,6 +53,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   list to `nil` to establish a state and left it that way, in a file whose
   own header promises it never touches your settings. Reported as "it does
   not save" — and from the outside that is exactly what it looked like.
+- **`/zs test` was also taking spells out of your request panel**, and it
+  reported eight failures while doing it. The slot checks used to empty
+  `cells` on your own profile, run, and put the old table back. That worked
+  until the slots became per-spec: the panel's config now hands out the table
+  for the spec you are playing and re-points it on every read, so the empty
+  one was discarded by the next line — and the picks and clears that followed
+  went into your panel. It deleted Blessing of Sacrifice out of slot 2, put
+  Ironbark over slot 3, and overwrote the pre-spec list that a spec you have
+  not played yet inherits. Every one of those checks now runs on a profile
+  built for it, and the desk harness fails the run if a self test leaves any
+  setting changed.
+- **The checks for per-spec settings had never run outside the game.** The
+  desk harness left the specialisation API missing, which the addon reads as
+  "the client has not said yet" — and in that state every per-spec setting
+  falls back to the profile-wide path. The request slots, the defensives and
+  the reminders were all being checked through a door they never use in a
+  real client. The harness now plays a specialisation, and the eight
+  failures above reproduce on the desk instead of in your raid.
 - **The changelog page in the options window was blank.** One list, two
   readers, and the older one still called `SetText` on an entry that had
   become a table.

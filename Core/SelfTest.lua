@@ -74,6 +74,52 @@ local function PretendSpec(key, known)
     return was
 end
 
+---------------------------------------------------------------------------
+-- A PROFILE THAT IS NOT HIS, FOR EVERYTHING THAT WRITES
+--
+-- Owner's client, 2026-08-15: eight red checks that were all green on the
+-- desk, and one cause under every one of them.
+--
+-- A setting that belongs to the spec is not a value on the profile any more,
+-- it is a VIEW: ns.Externals.Config() re-points cfg.cells at the table for
+-- the spec being played, on every single call. So the old opening move -
+-- "remember cfg.cells, put an empty one there, do the test, put the
+-- remembered one back" - stopped working the day the slots moved. The empty
+-- table was thrown away by the next reader, and every Pick, SetSlot and
+-- ClearSlot after it went into HIS panel. The restore at the end could not
+-- notice: what it saved and what it wrote through had become the same table.
+-- It cost him a spell out of slot 3.
+--
+-- The fix is not a more careful restore. It is not writing there at all.
+--
+-- `body` runs against a profile built for it, with the defaults applied and
+-- a spec that is ANSWERED - so the per-spec path is exercised rather than
+-- skipped, which is the other half of what went wrong: the desk harness has
+-- no specialisation, ns.SpecStore returns nil out there, and none of this
+-- code ran until it reached a real client.
+--
+-- Wrapped in pcall on purpose. An error escaping with ns.db still swapped
+-- would leave the running game pointed at a fixture - the one failure this
+-- helper must not be able to cause.
+---------------------------------------------------------------------------
+local function OnStandInProfile(externals, body)
+    local realDB, realKey = ns.db, ns.SpecKey
+    local stand = { externals = externals or {} }
+    ns.ApplyDefaults(stand, ns.DEFAULTS)
+    ns.db = stand
+    ns.SpecKey = function() return "DEATHKNIGHT:250", true end
+
+    local ok, err = pcall(body, stand)
+
+    ns.db, ns.SpecKey = realDB, realKey
+    -- The panel on screen was drawn from the stand-in while that ran; this
+    -- puts his own back on it.
+    if ns.Externals and ns.Externals.Refresh then ns.Externals.Refresh() end
+
+    if not ok then Check("The stand-in profile ran to the end", false, tostring(err)) end
+    return ok
+end
+
 local function Fresh(overrides)
     local cfg = {
         enabled = true,
@@ -4845,35 +4891,34 @@ local function TestExternals()
     -- the profile - a request panel that jumps across the screen on a spec
     -- change would be a worse bug than the one this fixes.
     -----------------------------------------------------------------------
-    if ns.db then
-        local kept = {
-            cells = ns.db.externalCellsBySpec,
-            assigned = ns.db.externalAssignedBySpec,
-        }
-        local realKey = ns.SpecKey
-        ns.db.externalCellsBySpec, ns.db.externalAssignedBySpec = nil, nil
-
+    -- ON A PROFILE OF ITS OWN, and the version before this one is the reason
+    -- why. It emptied his real per-spec store, ran the checks and put the
+    -- store back - honest enough - and then asked "is the other spec's first
+    -- slot empty" against the LEGACY list, which is his and is not empty.
+    -- Green on an empty desk, red in his client, and the check was asking
+    -- about the world rather than about the code. A fixture states what the
+    -- old list held, so the answer cannot depend on who runs it.
+    OnStandInProfile({ cells = { [1] = 6940 }, rows = 2, columns = 5, x = 120 },
+    function()
         PretendSpec("WARRIOR:73")
         local mine = ns.Externals.Config()
+        Check("A spec nobody has played yet starts from the old list",
+            mine.cells[1] == 6940, tostring(mine.cells[1]))
+
         mine.cells[1] = 97462
         local wasX, wasColumns = mine.x, mine.columns
 
         PretendSpec("WARRIOR:72")
         local other = ns.Externals.Config()
         Check("The other spec asks for its own cooldowns",
-            other.cells[1] == nil)
+            other.cells[1] == 6940, tostring(other.cells[1]))
         Check("And the panel itself did not move with the spec",
             other.x == wasX and other.columns == wasColumns)
 
         PretendSpec("WARRIOR:73")
         Check("Coming back finds what this spec picked",
             ns.Externals.Config().cells[1] == 97462)
-
-        ns.SpecKey = realKey
-        ns.db.externalCellsBySpec = kept.cells
-        ns.db.externalAssignedBySpec = kept.assigned
-        ns.Externals.Config()
-    end
+    end)
 
     local X = ns.Externals
     Check("The externals list exists", X ~= nil)
@@ -5438,56 +5483,60 @@ local function TestExternals()
 
     ---------------------------------------------------------------------
     -- Slots
-    ---------------------------------------------------------------------
-    local keptCells = X.Config().cells
-    local keptRows, keptColumns = X.Config().rows, X.Config().columns
-    X.Config().cells = {}
-    X.SetRows(1)
-    X.SetColumns(4)
-
-    Check("An empty panel has nothing on it", #X.Picked() == 0)
-
-    local landed = X.Pick(6940)
-    Check("A spell lands in the first free slot", landed == 1, tostring(landed))
-    Check("And it is on the panel", X.IsPicked(6940))
-
-    landed = X.Pick(102342, 3)
-    Check("A marked slot is used when there is one", landed == 3,
-        tostring(landed))
-    Check("The slot between them is still empty", X.SpellAt(2) == nil)
-
-    -- One spell, one slot. A second copy would whisper twice for one click.
-    X.SetSlot(2, 6940)
-    Check("Putting a spell somewhere else MOVES it", X.SpellAt(1) == nil)
-    Check("And it is in its new place", X.SpellAt(2) == 6940)
-
-    -- What falls off the end stays put. The same rule a shrunk bar follows.
-    X.SetColumns(2)
-    Check("A slot outside the lattice keeps what is in it",
-        X.SpellAt(3) == 102342)
-    Check("But it is not on the panel", #X.Picked() == 1)
-    X.SetColumns(4)
-    Check("Making the lattice bigger gives it back", #X.Picked() == 2)
-
-    X.ClearSlot(2)
-    Check("Clearing a slot empties it", X.SpellAt(2) == nil)
-
-    ---------------------------------------------------------------------
-    -- ROWS AND COLUMNS, the shape itself
     --
-    -- Owner: "anzahl rows fehlt! wie die cdm einstellungen, reihe und spalten
-    -- anzahl." So the count is not a setting any more - it is what the two
-    -- of them multiply to, and there is no third number that can disagree.
+    -- Every check below writes, so all of it runs on a stand-in profile
+    -- (see OnStandInProfile). It used to run on HIS, and emptying cfg.cells
+    -- first stopped being enough the day the slots became per-spec.
     ---------------------------------------------------------------------
-    X.SetRows(3)
-    X.SetColumns(4)
-    Check("Rows times columns is how many places there are", X.Count() == 12,
-        tostring(X.Count()))
+    OnStandInProfile({ cells = {}, rows = 1, columns = 4 }, function()
+        Check("An empty panel has nothing on it", #X.Picked() == 0)
 
-    X.SetRows(0)
-    Check("Neither ever goes below one", X.Rows() == 1)
-    X.SetColumns(999)
-    Check("And neither past its ceiling", X.Columns() == X.MAX_COLUMNS)
+        local landed = X.Pick(6940)
+        Check("A spell lands in the first free slot", landed == 1,
+            tostring(landed))
+        Check("And it is on the panel", X.IsPicked(6940))
+
+        landed = X.Pick(102342, 3)
+        Check("A marked slot is used when there is one", landed == 3,
+            tostring(landed))
+        Check("The slot between them is still empty", X.SpellAt(2) == nil)
+
+        -- One spell, one slot. A second copy would whisper twice for one
+        -- click.
+        X.SetSlot(2, 6940)
+        Check("Putting a spell somewhere else MOVES it", X.SpellAt(1) == nil)
+        Check("And it is in its new place", X.SpellAt(2) == 6940)
+
+        -- What falls off the end stays put. The same rule a shrunk bar
+        -- follows.
+        X.SetColumns(2)
+        Check("A slot outside the lattice keeps what is in it",
+            X.SpellAt(3) == 102342)
+        Check("But it is not on the panel", #X.Picked() == 1)
+        X.SetColumns(4)
+        Check("Making the lattice bigger gives it back", #X.Picked() == 2)
+
+        X.ClearSlot(2)
+        Check("Clearing a slot empties it", X.SpellAt(2) == nil)
+
+        -----------------------------------------------------------------
+        -- ROWS AND COLUMNS, the shape itself
+        --
+        -- Owner: "anzahl rows fehlt! wie die cdm einstellungen, reihe und
+        -- spalten anzahl." So the count is not a setting any more - it is
+        -- what the two of them multiply to, and there is no third number
+        -- that can disagree.
+        -----------------------------------------------------------------
+        X.SetRows(3)
+        X.SetColumns(4)
+        Check("Rows times columns is how many places there are",
+            X.Count() == 12, tostring(X.Count()))
+
+        X.SetRows(0)
+        Check("Neither ever goes below one", X.Rows() == 1)
+        X.SetColumns(999)
+        Check("And neither past its ceiling", X.Columns() == X.MAX_COLUMNS)
+    end)
 
     -- WHERE EACH SLOT SITS. Pure, and the same answer the panel and the
     -- preview both draw from - a preview that disagrees with the screen is
@@ -5531,38 +5580,49 @@ local function TestExternals()
     -- getting it wrong means somebody's arranged panel comes back as a
     -- default - which is the same thing as losing it.
     ---------------------------------------------------------------------
-    local cfg = X.Config()
-    local savedRows, savedColumns = cfg.rows, cfg.columns
-    cfg.rows, cfg.columns = nil, nil
-    cfg.count, cfg.perLine = 12, 4
-    X.Config()
-    Check("An old count of twelve in lines of four is 3 x 4",
-        cfg.rows == 3 and cfg.columns == 4,
-        tostring(cfg.rows) .. "x" .. tostring(cfg.columns))
-    Check("And the two old keys are gone rather than kept in step",
-        cfg.count == nil and cfg.perLine == nil)
+    -- Each shape gets a profile of its own rather than one profile being bent
+    -- back into an older shape between the two: a migration is something that
+    -- happens ONCE to a profile, and a fixture that has already run one of
+    -- them is not the thing being tested.
+    OnStandInProfile({ count = 12, perLine = 4 }, function(stand)
+        local cfg = X.Config()
+        Check("An old count of twelve in lines of four is 3 x 4",
+            cfg.rows == 3 and cfg.columns == 4,
+            tostring(cfg.rows) .. "x" .. tostring(cfg.columns))
+        Check("And the two old keys are gone rather than kept in step",
+            cfg.count == nil and cfg.perLine == nil)
+        Check("And it is the profile's own table that was rewritten",
+            stand.externals == cfg)
+    end)
+
     -- THE OLDEST PROFILE OF ALL: an ordered `picked` list AND a count. Both
     -- migrations run in one call, and reading them in the wrong order threw
     -- on login - the lattice one deletes cfg.count, and the list one was
     -- doing arithmetic on it afterwards.
-    cfg.rows, cfg.columns = nil, nil
-    cfg.count, cfg.perLine = 6, 6
-    cfg.cells = {}
+    --
     -- A profile that old has no record of the pre-spec slots either, because
     -- there were none: cellsWere is written the first time Config runs on a
-    -- profile that HAS slots. Leaving it set here would be a fixture that
-    -- could not exist, and it would hide the migration behind it.
-    cfg.cellsWere = nil
-    cfg.picked = { 6940, 102342 }
-    local ok = pcall(X.Config)
-    Check("A profile from before the slots still opens", ok)
-    Check("And its spells are in the first two slots",
-        cfg.cells[1] == 6940 and cfg.cells[2] == 102342)
-    Check("And it has a lattice big enough to hold them",
-        (cfg.rows or 0) * (cfg.columns or 0) >= 2)
-    cfg.picked = nil
-
-    cfg.rows, cfg.columns = savedRows, savedColumns
+    -- profile that HAS slots. Setting it here would be a fixture that could
+    -- not exist, and it would hide the migration behind it.
+    --
+    -- THE HAND-OFF IS PART OF THE MIGRATION NOW, and this is where his client
+    -- said so: what the list migration writes lands in cfg.cells, and the
+    -- last thing Config does is re-point cfg.cells at the table for the spec
+    -- being played. If those two are the wrong way round, the migration runs,
+    -- succeeds, and is thrown away in the same call - and nobody sees it,
+    -- because the desk has no spec and never reaches the hand-off.
+    OnStandInProfile({ count = 6, perLine = 6, picked = { 6940, 102342 } },
+    function()
+        local ok, cfg = pcall(X.Config)
+        Check("A profile from before the slots still opens", ok, tostring(cfg))
+        cfg = ok and cfg or {}
+        Check("And its spells are in the first two slots",
+            (cfg.cells or {})[1] == 6940 and (cfg.cells or {})[2] == 102342)
+        Check("And it has a lattice big enough to hold them",
+            (cfg.rows or 0) * (cfg.columns or 0) >= 2)
+        Check("And the ordered list is gone rather than read twice",
+            cfg.picked == nil)
+    end)
 
     ---------------------------------------------------------------------
     -- WHAT A LOGIN DOES TO A PANEL SOMEBODY HAS ARRANGED
@@ -5622,9 +5682,12 @@ local function TestExternals()
             tostring(P(6, 12, 200, 60)))
     end
 
-    X.Config().cells = keptCells
-    X.SetRows(keptRows)
-    X.SetColumns(keptColumns)
+    -- Nothing to put back. The three lines that used to stand here saved
+    -- cfg.cells, cfg.rows and cfg.columns at the top of this suite and wrote
+    -- them again down here - and the first of the three had become a no-op:
+    -- what it saved was the per-spec table itself, so it handed back the very
+    -- table the checks had been editing. A restore that cannot fail is worth
+    -- less than no restore, because it reads like a promise.
 end
 
 ---------------------------------------------------------------------------
