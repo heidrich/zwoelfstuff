@@ -234,6 +234,7 @@ local function CardStyle(bar, height, index)
     merged.fillAlpha = wear.alpha
     merged.fillGradient = wear.gradient
     merged.fillDirection = wear.direction
+    merged.fillBack = wear.back
     merged.spellName = text and text.spellName or nil
     return merged
 end

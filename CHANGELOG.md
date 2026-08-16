@@ -74,6 +74,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   - **What that gives you back:** the name, the stack count, the charge count
     and the remaining time all on one bar, at the size, colour, texture,
     typeface and position you set, with the fill exactly as tall as the bar.
+  - **A colour for the part of the bar that is not filled yet.** New on the
+    Fill tab: a switch, a colour and an opacity. Until now the empty part of a
+    bar showed the plate behind the whole place — the same plate the icon sits
+    on — so there was no way to have a dark trough under a bar without
+    darkening the icon's background with it. **Off by default**, so no bar you
+    have already arranged changes.
   - **Fixed: a flat fill colour drew as pure white.** A bar with no gradient
     was being given a white-to-white ramp on top of its colour, and that ramp
     replaces the colour rather than tinting it. Every flat fill in the addon

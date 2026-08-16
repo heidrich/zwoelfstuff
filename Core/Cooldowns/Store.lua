@@ -267,6 +267,10 @@ Store.READERS = {
         "fillAlpha", "fillColor", "fillDirection", "fillGradient", "fillGrow",
         "fillSide", "fillTexture", "showSpark", "chargeMarks",
         "chargeMarkColor", "stackThresholds",
+
+        -- The trough under the fill, wave 6. Absent from every bar written
+        -- before it, which is why it defaults to OFF rather than to a colour.
+        "fillBack", "fillBackAlpha", "fillBackColor",
     },
 
     -- WHAT NOTHING READS YET, and there are six left.

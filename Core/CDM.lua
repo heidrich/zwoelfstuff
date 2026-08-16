@@ -783,14 +783,25 @@ function CDM:Dump()
                         local tall = math.abs(fh - ch) < 1
                         local seam = math.abs((cw - iw) - fw) < 1
 
+                        -- WHETHER THE TROUGH IS ACTUALLY THERE, asked of the
+                        -- texture rather than of the setting: "it is switched
+                        -- on" and "there is something behind the bar" have
+                        -- been different answers often enough in this addon
+                        -- that the diagnostic asks the second one.
+                        local trough = ns.Cooldowns.Fill.Trough
+                            and ns.Cooldowns.Fill.Trough(cell.dkItem)
+                        local behind = (trough and trough:IsShown())
+                            and "|cff888888trough|r" or ""
+
                         ns.Print(string.format(
                             "   cell |cffffd100%.0fx%.0f|r  fill %.0fx%.0f  "
-                            .. "icon %.0f  %s  %s",
+                            .. "icon %.0f  %s  %s  %s",
                             cw, ch, fw, fh, iw,
                             tall and "|cff40ff40height ok|r"
                                 or "|cffff4040FILL IS NOT AS TALL AS THE CELL|r",
                             seam and "|cff40ff40seam ok|r"
-                                or "|cffff4040FILL DOES NOT MEET THE ICON|r"))
+                                or "|cffff4040FILL DOES NOT MEET THE ICON|r",
+                            behind))
                         shown = shown + 1
                     end
                 end

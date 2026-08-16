@@ -1057,7 +1057,7 @@ end
 local FILL_KEYS = {
     "fillAlpha", "fillColor", "fillDirection", "fillGradient", "fillGrow",
     "fillSide", "fillTexture", "showSpark", "chargeMarks", "chargeMarkColor",
-    "stackThresholds",
+    "stackThresholds", "fillBack", "fillBackAlpha", "fillBackColor",
 }
 
 -- HOW MANY BANDS ONE BAR CARRIES.
@@ -1231,6 +1231,23 @@ function Panel.BuildFill(grid, bar)
     GradientRows(grid, bar, "fillGradient", groups)
     Picture(grid, bar, L["Texture"], "statusbar", "fillTexture", nil,
         "media-texture", L["Same as behind the icon"])
+
+    -- THE TROUGH. Its colour and its opacity only appear once it is on, the
+    -- same shape the gradient trio above uses - two rows that can change
+    -- nothing are two rows to read past on every visit.
+    local backOn = Get(bar, "fillBack", false)
+    Switch(grid, bar, L["Background"], "fillBack", false,
+        { sublabel = L["Behind the fill, where the bar is not full yet"] })
+    groups[#groups + 1] = {
+        when = backOn,
+        rows = {
+            Colour(grid, bar, L["Background colour"], "fillBackColor",
+                { 0, 0, 0 }),
+            Slide(grid, bar, L["Background opacity"], "fillBackAlpha",
+                { min = 0, max = 1, step = 0.05, format = Percent,
+                  scale = 100, fallback = 0.5 }),
+        },
+    }
 
     -- ONE CONTROL WITH FOUR ANSWERS rather than two switches to combine in
     -- your head. Two of the four were unreachable before it: SetReverseFill

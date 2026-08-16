@@ -8385,6 +8385,32 @@ local function TestCooldownOwn()
         string.format("%s -> %s", tostring(back[3]), tostring(front[1])))
 
     ---------------------------------------------------------------------
+    -- THE TROUGH BEHIND THE FILL
+    --
+    -- Owner, with the Fill tab open: "wir brauchen hier eine bg farbe fuer den
+    -- bar fill." OFF for a bar that never said, and that is the half worth a
+    -- check: every bar he has arranged looks the way it does because the empty
+    -- part shows the cell's backdrop, and a default of ON would have repainted
+    -- all nine of them for a setting nobody chose.
+    ---------------------------------------------------------------------
+    Check("A bar that never asked for a trough does not get one",
+        Fill.Paint({}, 1).back.on == false)
+
+    local trough = Fill.Paint({ fillBack = true, fillBackColor = { 0, 0, 1 },
+        fillBackAlpha = 0.4 }, 1).back
+    Check("One that did gets its own colour and opacity",
+        trough.on == true and trough.color[3] == 1 and trough.alpha == 0.4,
+        string.format("%s %s", tostring(trough.color[3]),
+            tostring(trough.alpha)))
+
+    -- AND THE CELL'S OWN ANSWER WINS, like every other key on this tab. His
+    -- "Bars 2" carries five look keys on cell 1 alone, so a reader that only
+    -- looked at bar level would throw away styling he set by hand.
+    local perCell = Fill.Paint({ fillBack = false,
+        cellOpts = { [2] = { look = { fillBack = true } } } }, 2).back
+    Check("and a place with its own answer keeps it", perCell.on == true)
+
+    ---------------------------------------------------------------------
     -- AND NOW ONE, DRAWN, THROUGH THE WHOLE RENDER PASS
     ---------------------------------------------------------------------
     for _, viewer in ipairs(ns.CDM.VIEWERS) do
@@ -8610,6 +8636,13 @@ local function TestCooldownOwn()
             Skip("The fill colour reaches the texture",
                 "this client cannot read a gradient back")
         end
+
+        -- THE TROUGH IS A TEXTURE, NOT A SETTING. The fixture bar does not
+        -- ask for one, so there must not be one behind its fill: a switch
+        -- that draws whatever it is set to is the other half of the same
+        -- check, and this is the half that catches a trough painted always.
+        Check("A bar that did not ask for a trough has none behind its fill",
+            Fill.Trough(bars) == nil or Fill.Trough(bars):IsShown() == false)
 
         -- AND FILL.LUA IS DRESSING OURS, not looking for one of theirs. The
         -- whole reason this file draws no texture and no spark of its own.

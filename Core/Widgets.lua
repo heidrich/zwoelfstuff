@@ -3378,6 +3378,13 @@ function UI.CellGrid(parent, cfg)
         -- nothing about the texture you just picked. It runs the WHOLE length
         -- of the bar - see the note where it is anchored, which is the third
         -- and last word on why there is no part-full fill here any more.
+        -- THE TROUGH, under the fill and over the plate. Sublevel 0 against
+        -- the fill's 1: they share a draw layer on purpose, because they are
+        -- two halves of one bar and anything that comes between them - the
+        -- plate, the border - would be visible through the gap.
+        cell.track = cell:CreateTexture(nil, "ARTWORK", nil, 0)
+        cell.track:Hide()
+
         cell.fill = cell:CreateTexture(nil, "ARTWORK", nil, 1)
         cell.fill:Hide()
 
@@ -3629,6 +3636,18 @@ function UI.CellGrid(parent, cfg)
                     }
                     ApplyPreviewFill(cell, 1)
 
+                    -- THE TROUGH IS THE WHOLE BAR, so it is placed here and
+                    -- not in ApplyPreviewFill: that runs sixty times a second
+                    -- to move the fill, and the thing behind the fill does not
+                    -- move. Asked of the same function at portion 1, so the
+                    -- two rectangles cannot drift apart.
+                    local tCorner, tPad, tW, tH = ns.Layout.PreviewFill(
+                        cell.run.direction, leftPad, rightPad,
+                        cell.run.area, h, 1)
+                    cell.track:ClearAllPoints()
+                    cell.track:SetPoint(tCorner, cell, tCorner, tPad, 0)
+                    cell.track:SetSize(tW, tH)
+
                     if style then
                         local fill = style.fillTexture
                         if fill and ns.Media.IsKnown("statusbar", fill) then
@@ -3647,6 +3666,22 @@ function UI.CellGrid(parent, cfg)
                         local colour = style.fillColor
                         ns.Tint(cell.fill, colour, style.fillAlpha,
                             style.fillGradient)
+
+                        -- AND WHAT IS BEHIND IT. This card's own header says a
+                        -- still bar "says nothing about which way the fill
+                        -- goes, WHAT IS BEHIND IT, where the leading edge sits"
+                        -- - the running preview was built for exactly this and
+                        -- there was nothing behind the fill to show until now.
+                        local back = style.fillBack
+                        if type(back) == "table" and back.on then
+                            cell.track:SetTexture(cell.fill:GetTexture())
+                            ns.Tint(cell.track, back.color, back.alpha, nil)
+                            cell.track:Show()
+                        else
+                            cell.track:Hide()
+                        end
+                    else
+                        cell.track:Hide()
                     end
                     cell.fill:Show()
 
@@ -3680,6 +3715,7 @@ function UI.CellGrid(parent, cfg)
                     cell.icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 0, 0)
                     cell.icon:Show()
                     cell.fill:Hide()
+                    cell.track:Hide()
                     cell.caption:Hide()
                     -- An icon cell has no fill to run. Cleared rather than
                     -- left behind: cells are reused, and a cell that turns
@@ -3694,6 +3730,7 @@ function UI.CellGrid(parent, cfg)
             else
                 cell.icon:Hide()
                 cell.fill:Hide()
+                cell.track:Hide()
                 cell.caption:Hide()
                 cell.run = nil
                 cell.plus:Show()

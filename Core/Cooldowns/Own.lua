@@ -296,6 +296,11 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
     local own = Build(cell)
     local parts = Own.Parts(slot, bar and bar.iconPlacement)
 
+    -- WHICH OF BLIZZARD'S FRAMES THIS CELL STANDS FOR. On OUR cell, so rule 3
+    -- is not in question, and it is what lets a diagnostic ask Fill about this
+    -- place without walking every bar to find out which item it holds.
+    cell.dkItem = item
+
     -- 1. THE PLATE AND THE BORDER. A bar frames itself from just OUTSIDE and
     --    an icon from just inside - one decision, taken in ns.PaintBorder,
     --    because two renderers on one bar disagreeing about it is exactly the

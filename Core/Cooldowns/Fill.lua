@@ -546,6 +546,43 @@ end
 -- Returns whether the span was real. A mark placed against a span of zero lands
 -- on pixel 0, which is a stack of hairlines on one edge - so it is HIDDEN until
 -- the bar can be measured rather than drawn in the wrong place.
+-- THE TRACK: THE PART OF THE BAR THAT IS NOT FILLED YET.
+--
+-- A texture of OURS on the fill, at BACKGROUND, covering the whole bar. The
+-- StatusBar's own texture draws at ARTWORK and shrinks with the value, so a
+-- texture underneath it is exactly "everything the fill is not covering" with
+-- no arithmetic at all - which matters, because the value may be a secret and
+-- working out how much of the bar is empty is precisely the sum nobody may do.
+--
+-- ON THE FILL RATHER THAN ON THE CELL, and that is the whole reason this is
+-- not just the backdrop turned up. The cell's plate sits behind the icon too;
+-- this sits behind the bar only, so a dark trough under the fill no longer
+-- costs you a dark plate under the picture.
+--
+-- The SAME MATERIAL as the fill, from the same resolver the thresholds use: a
+-- bar whose empty half is a different texture from its full half reads as two
+-- objects that happen to be adjacent.
+local function Track(fill, note, back, material)
+    local track = note.track
+
+    if not (type(back) == "table" and back.on) then
+        if track then track:Hide() end
+        return
+    end
+
+    if not track then
+        track = fill:CreateTexture(nil, "BACKGROUND")
+        track:SetAllPoints(fill)
+        note.track = track
+    end
+
+    track:SetTexture(material or ns.WHITE)
+    -- Through ns.Tint like every other surface in the addon. Ours, created by
+    -- us, so it is written directly - there is nothing to give back.
+    ns.Tint(track, back.color, back.alpha, nil)
+    track:Show()
+end
+
 local function Marks(host, fill, note, wanted, colour, vertical)
     local pool = note.marks
 
@@ -733,6 +770,20 @@ function Fill.Paint(bar, index)
     local colour = Fill.Option(bar, index, "fillColor")
     local markColour = Fill.Option(bar, index, "chargeMarkColor")
 
+    -- THE TRACK - what shows through where the bar is not filled yet.
+    --
+    -- Owner, with the Fill tab open: "wir brauchen hier eine bg farbe fuer den
+    -- bar fill." Until now the empty part of a bar showed the CELL's backdrop,
+    -- which is the plate behind the icon as well - so there was no way to have
+    -- a dark trough under a bar without darkening the icon's plate with it.
+    --
+    -- OFF BY DEFAULT, and that is not timidity. Every bar he has arranged
+    -- looks the way it looks today because the empty part shows the backdrop;
+    -- shipping a track switched on would repaint all nine of them for a
+    -- setting nobody had chosen. Store's promise is about the saved file and
+    -- this is the same promise about the picture.
+    local backColour = Fill.Option(bar, index, "fillBackColor")
+
     return {
         texture   = key,
         color     = type(colour) == "table" and colour or { 1.00, 0.478, 0.239 },
@@ -742,6 +793,12 @@ function Fill.Paint(bar, index)
         spark     = Fill.Option(bar, index, "showSpark") and true or false,
         marks     = Fill.Option(bar, index, "chargeMarks") and true or false,
         markColor = type(markColour) == "table" and markColour or { 0, 0, 0 },
+
+        back = {
+            on    = Fill.Option(bar, index, "fillBack") and true or false,
+            color = type(backColour) == "table" and backColour or { 0, 0, 0 },
+            alpha = tonumber(Fill.Option(bar, index, "fillBackAlpha")) or 0.5,
+        },
     }
 end
 
@@ -790,6 +847,11 @@ local function Dress(item, fill, bar, index, spellID)
         path = ns.Media.Statusbar(wear.texture)
         Put(fill, "SetStatusBarTexture", path)
     end
+
+    -- 1b. THE TRACK, under everything else on this bar. Before the colour so
+    --    that a bar whose fill is see-through has something to be seen
+    --    through onto - and after the texture, because it wears the same one.
+    Track(fill, note, wear.back, Material(fill, path))
 
     -- 2 and 3. THE BAR COLOUR, THEN THE RAMP. Nothing may set the bar colour
     --    after this point.
@@ -961,6 +1023,7 @@ local function Undress(fill)
 
     local note = parts[fill]
     if note then
+        if note.track then note.track:Hide() end
         if note.spark then note.spark:Hide() end
         for _, mark in ipairs(note.marks) do mark:Hide() end
         for _, overlay in ipairs(note.thresholds) do overlay:Hide() end
@@ -1026,6 +1089,20 @@ function Fill.Watching()
     for item in pairs(measuring) do seen[item] = true end
     for _ in pairs(seen) do count = count + 1 end
     return count
+end
+
+-- THE TROUGH UNDER ONE BAR'S FILL, or nil.
+--
+-- Its own reader because it lives in this file's private note and two things
+-- outside need it: the self test, which has to prove the switch reaches a
+-- texture rather than merely being stored, and /zs cdm, which says on the line
+-- for each bar whether one is on. Both would otherwise have to go looking
+-- through the fill's regions for "the one at BACKGROUND", which is a second
+-- finder and would answer differently the day anything else is drawn there.
+function Fill.Trough(item)
+    local fill = Fill.Bar(item)
+    local note = fill and parts[fill] or nil
+    return note and note.track or nil
 end
 
 -- How many StatusBars we are holding a note about.
