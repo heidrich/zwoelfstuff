@@ -118,6 +118,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   answers "cannot tell", which every caller already knew how to handle: on a
   place the addon draws itself, that means it writes the number itself.
 
+- **Fixed: the icon's opacity dimmed the whole place.** "Opacity" and "While
+  inactive" sit under **The icon** and faded everything — the plate, the fill,
+  the border, the name and the numbers. They reach the icon now. Every other
+  part already had its own: the fill under Fill, the plate under Behind the
+  icon, and each piece of text through its colour.
+
+- **Fixed: a paragraph of explaining text was drawn over the row under it.** On
+  pages that show explanations on hover, a note is not laid out at all — and a
+  block that folded away and came back brought its notes back onto the page
+  with no height, so the next row landed on top of them.
+
 - **Fixed: a bar built before the direction setting could run the wrong way.**
   Which way a fill drains used to be worked out in two places, and only one of
   them knew about the older key — so a bar you set to run right-to-left in

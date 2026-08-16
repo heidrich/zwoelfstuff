@@ -442,14 +442,33 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
         own.timer:Hide()
     end
 
-    -- 5. HOW BRIGHT. On OUR frames, so the whole 0-1 range is available -
-    --    contract rule 4 is about frames Blizzard owns, and the veil texture
-    --    an adopted cell needs is a workaround for exactly that rule. Every
-    --    part above is a child or a region of the cell, so one call carries
-    --    the plate, the icon, the fill, the border, the name and the numbers.
+    -- 5. HOW BRIGHT, AND THE TWO OPACITIES ARE NOT THE SAME QUESTION.
+    --
+    --    Owner, with the Look tab open: "wenn ich hier while inactive die
+    --    opacity ändere, ändert sich der bar bg und das icon ... das sollten
+    --    wir hier trennen, denn die option heisst ja icon." He is right, and
+    --    it is the only part of a place that had no opacity of its own: the
+    --    plate has backdropAlpha, the trough has fillBackAlpha, the fill has
+    --    fillAlpha, every text element carries its own in its colour. The
+    --    icon had the CELL's, which is every one of those at once.
+    --
+    --    So the two settings under "The icon" are the ICON's now, and the
+    --    whole place keeps only what is genuinely about the whole place: the
+    --    show rules' factor, which is not a look setting at all and is the
+    --    difference between a place being half-way off screen and a picture
+    --    being faint.
+    --
+    --    ON A BORROWED PLACE NOTHING MOVES. There the cell IS the icon -
+    --    Look.Apply spends the same number through Claim on Blizzard's frame -
+    --    so "the icon's opacity" and "the cell's" were always one answer, and
+    --    this only splits them where there are two things to tell apart.
     local alpha = Look.Opacity(look, active ~= false)
-    if factor and factor < 1 then alpha = alpha * factor end
-    cell:SetAlpha(alpha)
+    own.icon:SetAlpha(alpha)
+
+    -- THE PLACE ITSELF carries the show rules and nothing else. Written every
+    -- pass rather than only when it is not 1: a cell comes back out of Render's
+    -- pool still wearing whatever the last place on it faded to.
+    cell:SetAlpha((factor and factor < 1) and factor or 1)
 
     -- 6. AND GREYED OUT WHEN IT IS DOWN, if that is what was asked for.
     own.icon:SetDesaturated(look.inactiveDesaturate and active == false)
@@ -470,6 +489,7 @@ function Own.Hide(cell)
 
     own.fill:SetScript("OnUpdate", nil)
     own.fill:Hide()
+    own.icon:SetAlpha(1)
     own.icon:Hide()
     own.bg:Hide()
     own.chrome:Hide()

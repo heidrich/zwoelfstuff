@@ -269,8 +269,21 @@ local function Reveal(groups)
     for _, group in ipairs(groups) do
         local shown = group.when() and true or false
         for _, region in ipairs(group.rows) do
-            region.dkSkip = not shown
-            region:SetShown(shown)
+            -- A NOTE THAT BECAME A TOOLTIP IS NEVER BROUGHT BACK.
+            --
+            -- On a page with a third column a note is not laid out - it is the
+            -- hover text of the row above it, recorded at height nought. Shown
+            -- anyway, it paints a three-line paragraph into no height at all
+            -- and every row under it lands on top: the owner's picture of
+            -- "Colour" written through the middle of the size note.
+            --
+            -- These groups sweep up whole blocks by design, notes included, so
+            -- this is the group machinery meeting a region that has already
+            -- decided it has no place on the page.
+            if not region.dkTooltipOnly then
+                region.dkSkip = not shown
+                region:SetShown(shown)
+            end
         end
     end
 end
@@ -597,9 +610,18 @@ function Panel.BuildLook(grid, bar)
           fallback = 0.55 })
     Switch(grid, bar, L["Grey out while it is down"], "inactiveDesaturate",
         true)
-    grid:Note(L["A tracked buff BAR stays on screen while its aura is down, "
-        .. "so these two reach it. A buff ICON does not - Blizzard takes the "
-        .. "frame away entirely and there is nothing left to dim."])
+    -- THE SENTENCE HAD TO CHANGE WITH THE CODE. These two used to fade the
+    -- whole place - plate, fill, border, name and numbers - from a section
+    -- headed "The icon". Owner: "das sollten wir hier trennen, denn die option
+    -- heisst ja icon", and then where the other half belongs: "dann brauchen
+    -- wir die option wohl nochmal unter fill fuer die bar". It was already
+    -- there; what was missing was these two meaning what they say.
+    grid:Note(L["These reach the ICON. The fill has its own opacity under "
+        .. "Fill, the plate has one under Behind the icon, and a whole place "
+        .. "going faint is a show rule rather than a look. A tracked buff BAR "
+        .. "stays on screen while its aura is down, so 'while inactive' has "
+        .. "something to dim; a buff ICON does not - Blizzard takes the frame "
+        .. "away entirely."])
 
     grid:Section(L["Border"], "cd-look-border", true)
 

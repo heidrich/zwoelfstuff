@@ -402,7 +402,7 @@ Register("enUS", {
     ["A pulse the moment the cooldown ends"] = true,
     ["A spell that has been ready this long IN COMBAT starts pulsing. For the defensive you keep forgetting."] =
         true,
-    ["A tracked buff BAR stays on screen while its aura is down, so these two reach it. A buff ICON does not - Blizzard takes the frame away entirely and there is nothing left to dim."] =
+    ["These reach the ICON. The fill has its own opacity under Fill, the plate has one under Behind the icon, and a whole place going faint is a show rule rather than a look. A tracked buff BAR stays on screen while its aura is down, so 'while inactive' has something to dim; a buff ICON does not - Blizzard takes the frame away entirely."] =
         true,
     ["Add a band"] = true,
     ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
@@ -907,8 +907,8 @@ Register("deDE", {
         "Ein Puls in dem Moment, in dem der Cooldown endet",
     ["A spell that has been ready this long IN COMBAT starts pulsing. For the defensive you keep forgetting."] =
         "Ein Zauber, der IM KAMPF so lange bereit war, beginnt zu pulsieren. Für den Defensiven, den du immer vergisst.",
-    ["A tracked buff BAR stays on screen while its aura is down, so these two reach it. A buff ICON does not - Blizzard takes the frame away entirely and there is nothing left to dim."] =
-        "Eine verfolgte Buff-LEISTE bleibt auf dem Bildschirm, während ihre Aura aus ist - diese beiden erreichen sie also. Ein Buff-SYMBOL nicht: Blizzard nimmt das Frame ganz weg, und dann ist nichts mehr da, was man dimmen könnte.",
+    ["These reach the ICON. The fill has its own opacity under Fill, the plate has one under Behind the icon, and a whole place going faint is a show rule rather than a look. A tracked buff BAR stays on screen while its aura is down, so 'while inactive' has something to dim; a buff ICON does not - Blizzard takes the frame away entirely."] =
+        "Diese erreichen das SYMBOL. Die Füllung hat ihre eigene Deckkraft unter Füllung, die Platte eine unter Hinter dem Symbol, und dass ein ganzer Platz blasser wird, ist eine Anzeigeregel und kein Aussehen. Eine verfolgte Buff-LEISTE bleibt auf dem Bildschirm, während ihre Aura aus ist - \"während inaktiv\" hat dort also etwas zum Dimmen; ein Buff-SYMBOL nicht: Blizzard nimmt das Frame ganz weg.",
     ["Add a band"] = "Band hinzufügen",
     ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
         "Ein Symbolplatz ist quadratisch und nutzt den ersten Wert; ein Leistenplatz die anderen beiden. Welche Art die Plätze einer Leiste sind, steht oben unter Anordnung.",

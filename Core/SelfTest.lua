@@ -8984,6 +8984,38 @@ local function TestCooldownOwn()
             tostring(own.icon:GetWidth()))
 
         -----------------------------------------------------------------
+        -- THE ICON'S OPACITY IS THE ICON'S
+        --
+        -- Owner, with the Look tab open: "wenn ich hier while inactive die
+        -- opacity ändere, ändert sich der bar bg und das icon ... das sollten
+        -- wir hier trennen, denn die option heisst ja icon." Both sliders sat
+        -- under a heading that said "The icon" and faded the whole place -
+        -- plate, fill, border, name and numbers - because they were spent as
+        -- one SetAlpha on the cell.
+        --
+        -- Every other part of a place already had its own: backdropAlpha,
+        -- fillAlpha, fillBackAlpha, and a colour per text element. The icon
+        -- was the one that did not.
+        --
+        -- The fixture bar asks for no opacity at all, so both are at their
+        -- defaults - which is exactly the state where "it went on the wrong
+        -- object" is invisible, and why this asks the two SEPARATELY.
+        -----------------------------------------------------------------
+        Check("The cell itself is not what the icon's opacity dims",
+            cell:GetAlpha() == 1, tostring(cell:GetAlpha()))
+
+        local wasAlpha = ns.db.bars[1].alpha
+        ns.db.bars[1].alpha = 0.4
+        Render.Refresh()
+        Check("The icon's opacity reaches the icon",
+            math.abs(own.icon:GetAlpha() - 0.4) < 0.01,
+            tostring(own.icon:GetAlpha()))
+        Check("and the place around it stays where it was",
+            cell:GetAlpha() == 1, tostring(cell:GetAlpha()))
+        ns.db.bars[1].alpha = wasAlpha
+        Render.Refresh()
+
+        -----------------------------------------------------------------
         -- AND BLIZZARD'S FRAME IS NOT TOUCHED
         --
         -- Not claimed, not moved, not stripped - veiled by the takeover pass

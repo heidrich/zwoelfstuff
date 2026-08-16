@@ -4670,6 +4670,20 @@ function Grid:Note(text, height)
     if (self.explain or self.tooltipNotes) and self.lastRow then
         note.dkSkip = true
         note:Hide()
+        -- AND IT MUST STAY OFF THE PAGE WHATEVER ELSE ASKS.
+        --
+        -- This note is recorded at height NOUGHT, because on this kind of page
+        -- it is not laid out at all - it is the row's tooltip. Anything that
+        -- then SHOWS it puts a three-line paragraph in a space no lines high,
+        -- and everything below it is drawn on top: the owner's screenshot of
+        -- "Colour" written through the middle of the size note.
+        --
+        -- That is not hypothetical and it is not the caller being careless.
+        -- Every reveal group in these pages exists to bring a block back when
+        -- its switch is on, and a note swept into one is force-shown with the
+        -- rows around it. The note is the thing that knows it has no height,
+        -- so the note is where the answer belongs.
+        note.dkTooltipOnly = true
         self.lastRow.dkNote = note
         if self.tooltipNotes then self:WireTooltip(self.lastRow) end
         return self:Wide(note, 0, 0, 0, NOTE_INDENT)
