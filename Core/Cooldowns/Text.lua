@@ -655,9 +655,15 @@ end
 local NUMBERS = {
     { key = "stacks",  member = "Applications", field = "stackCount",
       Value = function(item, spellID, ours)
+          -- NOT `ItemStacks(item) or nil`. The count this answers can be a
+          -- SECRET, and `X or nil` is a boolean test on X - the same raise
+          -- as CDM.lua:1103, four times in his chat, one wave ago. The
+          -- `and .. or` shape cannot carry a secret for the same reason it
+          -- cannot carry false.
+          local count
+          if ns.CDM.ItemStacks then count = ns.CDM:ItemStacks(item) end
           return Text.StackToShow(
-              ns.CDM:CounterShown(item, "Applications"),
-              ns.CDM.ItemStacks and ns.CDM:ItemStacks(item) or nil, ours)
+              ns.CDM:CounterShown(item, "Applications"), count, ours)
       end },
     { key = "charges", member = "ChargeCount", field = "chargeCount",
       Value = function(item, spellID, ours)
@@ -704,8 +710,15 @@ function Text.Count(cell, item, style, spellID, ours)
             end
         end
 
-        local value = text and text.show
-            and number.Value(item, spellID, ours) or nil
+        -- A PLAIN if, NOT `.. and Value() or nil`. Value can answer a SECRET
+        -- - that is the whole CanDisplay branch of StackToShow - and the
+        -- `or` would boolean-test it, which raises. This function's entire
+        -- promise is that a secret passes through it into SetFormattedText
+        -- and is never looked at on the way.
+        local value
+        if text and text.show then
+            value = number.Value(item, spellID, ours)
+        end
 
         if value == nil then
             Away()
