@@ -32,8 +32,18 @@ local frame
 
 -- The plot. The axis runs the full width between these margins, time
 -- flowing left to right and ending at the killing blow on the right edge.
-local PLOT_L, PLOT_R = 30, 30
-local FRAME_W, FRAME_H = 780, 476
+-- THE PANEL DOWN THE LEFT, same as the death window's: what you pressed,
+-- what you still had, what else you cast, as rows with icons (owner,
+-- 2026-08-16: "fuege auch hier links ein neues panel ein, mit auflistung
+-- welche def cds man hatte und was geused wurde (scrollbar)"). It took the
+-- place of the "Defensives used:" chip strip under the plot. The plot
+-- keeps its width and moves right by the panel and its gutters; every x
+-- in this file is measured from PLOT_L, so nothing else had to move.
+local PANEL_W = 186
+local PANEL_X = 16
+local PLOT_R = 30
+local PLOT_L = PANEL_X + PANEL_W + 16 + PLOT_R
+local FRAME_W, FRAME_H = PLOT_L + 720 + PLOT_R, 476
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
 local AXIS_Y = 268          -- from the top of the frame
 local COLUMN_MAX = 70       -- tallest an incoming column may draw
@@ -142,6 +152,16 @@ function Replay.Fraction(t, from, to)
 end
 
 -- Is this moment on screen at all?
+-- The moment under a fraction of the plot's width - the inverse of
+-- Fraction, clamped to the band on screen. 0 is the left edge (`from`,
+-- the oldest moment shown), 1 the right edge (`to`).
+function Replay.Scrub(fraction, from, to)
+    from = from or 1
+    to = to or 0
+    fraction = math.max(0, math.min(1, fraction or 0))
+    return from - fraction * (from - to)
+end
+
 function Replay.Visible(t, from, to)
     return (t or 0) <= (from or 0) + 0.001 and (t or 0) >= (to or 0) - 0.001
 end
@@ -456,6 +476,11 @@ local function BuildMark(parent, kind)
     local C = UI.C
     local mark = CreateFrame("Frame", nil, parent)
     mark:SetSize(24, 24)
+    -- Two above the window, so a mark is over the scrub surface (one
+    -- above) and keeps its own tooltip and click. Left to the default the
+    -- two sat at the same level and which one got the mouse was whichever
+    -- had been created later.
+    mark:SetFrameLevel(parent:GetFrameLevel() + 2)
 
     mark.column = mark:CreateTexture(nil, "ARTWORK")
     mark.column:SetWidth(kind == "in" and 8 or 3)
@@ -511,6 +536,9 @@ local function BuildMark(parent, kind)
     mark:Hide()
     return mark
 end
+
+-- Written further down; the scrub surface built above needs to call it.
+local Paint
 
 local function BuildWindow()
     UI = ns.UI
@@ -591,90 +619,82 @@ local function BuildWindow()
     frame:EnableMouseWheel(true)
     frame:SetScript("OnMouseWheel", Scroll)
 
-    -----------------------------------------------------------------------
-    -- DRAGGING THE PLOT ALONG. Owner, 2026-08-09: "ich haette nur gern, dass
-    -- wenn ich beim replay reinzoome, die timeline mit der maus verschieben
-    -- kann".
+    -- THE SCRUB SURFACE. Left button held over the plot moves the
+    -- PLAYHEAD - the yellow line - to wherever the mouse is, and keeps
+    -- moving it while the button is down. Owner, 2026-08-16: "es waere
+    -- intuitiver wenn ich es mit linker maustaste gedrueckt halte ziehen
+    -- kann. es waere auch gut, wenn man dann den gelben strich zieht.
+    -- nicht einfach nur die bar." So the drag is a scrub, not a pan: the
+    -- line goes where the hand goes, the replay pauses under it, and when
+    -- zoomed in the view follows the line - which IS the band moving. The
+    -- wheel still pans the view on its own.
     --
-    -- A pane over the plot, and it does BOTH gestures rather than stealing
-    -- one: zoomed in it pans, and at zoom 1 - where there is nothing to pan
-    -- to - it moves the window, which is what grabbing this area did before
-    -- it existed. Taking that away to add panning would be a trade, not a
-    -- feature.
-    --
-    -- AT THE PARENT'S OWN LEVEL, which puts it UNDER every mark: a child
-    -- frame sits one level above its parent by default, so the icons keep
-    -- their tooltips and this pane only ever gets the empty space between
-    -- them - which is most of the plot.
-    --
-    -- The cursor is divided by THIS frame's effective scale, not UIParent's.
-    -- The two only agree while the window is at 100%, and the size slider on
-    -- this very window makes that the exception rather than the rule.
-    -----------------------------------------------------------------------
-    local pan = CreateFrame("Frame", nil, frame)
-    pan:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 20))
-    pan:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
+    -- ONE ABOVE THE WINDOW. It used to sit at the window's own level, and
+    -- the window is registered for drag: which of the two got a left
+    -- button was whichever had been created later, and it was the window
+    -- - the drag moved the whole replay across the screen instead of
+    -- doing anything to the plot. The marks sit one higher still, so
+    -- their tooltips and clicks are untouched.
+    local scrub = CreateFrame("Frame", nil, frame)
+    scrub:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 20))
+    scrub:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
         -PLOT_BOTTOM)
-    pan:SetFrameLevel(frame:GetFrameLevel())
-    pan:EnableMouse(true)
+    scrub:SetFrameLevel(frame:GetFrameLevel() + 1)
+    scrub:EnableMouse(true)
 
     local function CursorX()
         local x = GetCursorPosition()
         return x / (frame:GetEffectiveScale() or 1)
     end
 
-    pan:SetScript("OnMouseDown", function(self, button)
+    -- Where the mouse is, as a moment on the plot: the inverse of the
+    -- Fraction the marks are placed by, clamped to the visible band.
+    local function MomentUnderCursor()
+        local state = Replay.state
+        if not state then return nil end
+        local from, to = state.viewFrom or state.span, state.viewTo or 0
+        local left = frame:GetLeft() or 0
+        local frac = (CursorX() - left - PLOT_L) / PLOT_W
+        return Replay.Scrub(frac, from, to)
+    end
+
+    scrub:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
         local state = Replay.state
-        if not (state and state.zoom > 1) then
-            -- Nothing to pan to. The gesture goes back to what it was.
-            self.moving = true
-            frame:StartMoving()
-            return
-        end
-        state.following = false
-        self.grabAt = CursorX()
-        self.grabPan = state.pan or state.now
+        if not state then return end
+        state.paused = true
+        state.following = true
+        frame.playButton.label:SetText("Play")
         self.dragging = true
+        local at = MomentUnderCursor()
+        if at then
+            state.now = at
+            Replay.Redraw()
+            Paint(state.now)
+        end
     end)
 
-    local function StopPan(self)
-        if self.moving then
-            frame:StopMovingOrSizing()
-            self.moving = nil
-        end
+    local function StopScrub(self)
         self.dragging = nil
     end
-    pan:SetScript("OnMouseUp", StopPan)
-    -- The button can be released outside the pane - over the buttons, off
-    -- the window, anywhere. Without this the plot keeps following a cursor
-    -- nobody is pressing any more.
-    pan:SetScript("OnHide", StopPan)
+    scrub:SetScript("OnMouseUp", StopScrub)
+    scrub:SetScript("OnHide", StopScrub)
 
-    pan:SetScript("OnUpdate", function(self)
+    scrub:SetScript("OnUpdate", function(self)
         if not self.dragging then return end
-        local state = Replay.state
-        if not (state and state.zoom > 1) then
-            StopPan(self)
+        if not (Replay.state and IsMouseButtonDown("LeftButton")) then
+            StopScrub(self)
             return
         end
-        if not IsMouseButtonDown("LeftButton") then
-            StopPan(self)
-            return
+        local at = MomentUnderCursor()
+        if at and at ~= Replay.state.now then
+            Replay.state.now = at
+            Replay.Redraw()
+            Paint(Replay.state.now)
         end
-
-        local visible = state.span / state.zoom
-        -- Dragging RIGHT pulls the plot right, which brings EARLIER seconds
-        -- into view - the axis runs oldest on the left. The content follows
-        -- the hand; a plot that moves the other way feels like a scrollbar
-        -- nailed to the wrong end.
-        local moved = (CursorX() - (self.grabAt or 0)) / PLOT_W * visible
-        state.pan = math.max(visible / 2, math.min(state.span - visible / 2,
-            (self.grabPan or state.now) + moved))
-        Replay.Redraw()
     end)
 
-    frame.pan = pan
+    frame.scrub = scrub
 
     frame.healthText = UI.Label(frame.health, "", 11, C.text)
     frame.healthText:SetPoint("LEFT", frame.health, "LEFT", 6, 0)
@@ -816,18 +836,18 @@ local function BuildWindow()
     -- spells: an icon in front of the name and a tooltip on hover. The
     -- owner's rule - "immer wenn eine faehigkeit einen tooltip und icon hat,
     -- muss das angezeigt werden. egal bei was".
-    frame.legend = UI.Label(frame, "", 11, C.textFaint)
-    frame.legend:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 46)
-    frame.legend:SetJustifyH("LEFT")
-    frame.legend:SetWordWrap(false)
+    -- The panel down the left, and the hairline between it and the plot.
+    -- What used to be a caption and a strip of chips under the plot -
+    -- "Defensives used:" - is the first of its three lists.
+    local divider = frame:CreateTexture(nil, "ARTWORK")
+    divider:SetColorTexture(C.edge[1], C.edge[2], C.edge[3], 1)
+    divider:SetPoint("TOPLEFT", frame, "TOPLEFT", PANEL_X + PANEL_W + 16, -14)
+    divider:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PANEL_X + PANEL_W + 16, 14)
+    divider:SetWidth(1)
 
-    -- The same strip the death window's footer uses. One implementation of
-    -- "a list of spells", or the two would drift into two answers to the
-    -- same question.
-    frame.chips = UI.SpellChips(frame, {
-        width = PLOT_W - 140, max = 10, size = 11,
-    })
-    frame.chips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PLOT_L, 46)
+    frame.panel = ns.Death.BuildDefensivePanel(frame, PANEL_W)
+    frame.panel:SetPoint("TOPLEFT", frame, "TOPLEFT", PANEL_X, -16)
+    frame.panel:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PANEL_X, 14)
 
     -- NO "CLOSE" BUTTON here either: the X closes it, and the two sliders
     -- beside it needed the room. Both of them were unreadable - "1x" twice
@@ -835,28 +855,10 @@ local function BuildWindow()
     -- over its own label. See UI.FitRow.
 end
 
--- The legend, as a label and a row of spell chips beside it. Names alone
--- were there before and they read as a list of words; this reads as the
--- abilities they are.
-local function PaintLegend(analysis)
-    local used = (analysis and analysis.defensivesUsed) or {}
-
-    frame.legend:SetText(#used > 0 and "Defensives used:"
-        or "|cffe0a05eNo defensive was used in these seconds.|r")
-
-    -- Measured, not guessed: the caption's own width decides where the
-    -- chips start, so a long caption in another language cannot run under
-    -- the first icon.
-    local _, dropped = frame.chips.Paint(used)
-    frame.chips:ClearAllPoints()
-    frame.chips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT",
-        PLOT_L + (#used > 0 and ((frame.legend:GetStringWidth() or 90) + 12)
-            or 0), 40)
-
-    if dropped > 0 then
-        frame.legend:SetText(string.format("Defensives used: (+%d more)",
-            dropped))
-    end
+-- The panel on the left says what was used and what was not; it replaced
+-- the one-line legend under the plot, which could only ever say the first.
+local function PaintLegend(snapshot)
+    frame.panel.Paint(snapshot)
 end
 
 -- "0.25x" without a trailing zero pretending to be precision. The word
@@ -963,12 +965,14 @@ local function Place(snapshot, from, to)
             local duration, source = Replay.BarLength(cast)
             bars[#bars + 1] = {
                 t = cast.t, name = cast.name, spellID = cast.spellID,
+                itemID = cast.itemID,
                 cast = true, defensive = true,
                 duration = duration, source = source,
             }
         else
             others[#others + 1] = {
                 t = cast.t, name = cast.name, spellID = cast.spellID,
+                itemID = cast.itemID,
                 cast = true,
             }
         end
@@ -999,8 +1003,7 @@ local function Place(snapshot, from, to)
                 mark.icon:ClearAllPoints()
                 mark.icon:SetSize(18, 18)
                 mark.icon:SetPoint("TOP", mark.column, "BOTTOM", 0, -1)
-                mark.icon:SetTexture(item.spellID
-                    and ns.SpellTexture(item.spellID))
+                mark.icon:SetTexture(ns.Death.PanelIcon(item))
                 mark.value:SetText("")
                 mark:Show()
             end
@@ -1059,8 +1062,10 @@ local function Place(snapshot, from, to)
                 mark.icon:ClearAllPoints()
                 mark.icon:SetPoint("LEFT", mark, "LEFT", 0, 0)
                 mark.icon:SetSize(BAR_H, BAR_H)
-                mark.icon:SetTexture(bar.spellID
-                    and ns.SpellTexture(bar.spellID))
+                -- The ITEM's icon for a potion or a stone - the picture
+                -- you pressed - and the spell's for a spell. Same door the
+                -- panel's rows read, so plot and panel show one potion.
+                mark.icon:SetTexture(ns.Death.PanelIcon(bar))
                 mark.value:SetText("")
 
                 -- The drop line: from the axis down to this bar's own row,
@@ -1143,7 +1148,7 @@ local function Place(snapshot, from, to)
 end
 
 -- What is lit and what is waiting, for the clock's current position.
-local function Paint(now)
+function Paint(now)
     local state = Replay.state
     local from, to = state.viewFrom or state.span, state.viewTo or 0
 
@@ -1246,7 +1251,7 @@ function Replay:Open(snapshot)
     -- is gone: every hit carries its own face now. One face for a death
     -- with twenty mobs in it answered for all of them, which is the owner's
     -- objection and it is right.
-    PaintLegend(snapshot.analysis)
+    PaintLegend(snapshot)
 
     frame.playButton.label:SetText("Pause")
     frame.speedRow.Refresh()
@@ -1302,6 +1307,11 @@ function Replay:Rewind()
         frame.playButton.label:SetText("Play")
         Paint(state.now)
     end
+end
+
+-- The window, for the desk: it drives the scrub surface by hand.
+function Replay.Frame()
+    return frame
 end
 
 function Replay:Close()

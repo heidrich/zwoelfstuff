@@ -1158,6 +1158,122 @@ local function TestDeath()
         #avail.unknownDefensives == 1
             and avail.unknownDefensives[1].name == "Lichborne")
 
+    ---------------------------------------------------------------------
+    -- The verdict is the judgement alone; the lists went to the panel.
+    ---------------------------------------------------------------------
+    local judged = Death.Analyse({
+        { t = 3, amount = 500000, name = "Smash", hp = 100 },
+    }, 1000000, {
+        { spellID = 1, name = "Icebound Fortitude", remaining = 0 },
+    }, {
+        { t = 5, spellID = 9, name = "Death Strike" },
+        { t = 4, spellID = 7, itemID = 5512, name = "Use Healthstone",
+          defensive = true },
+    })
+    local function Has(list, prefix)
+        for _, line in ipairs(list) do
+            if tostring(line):find(prefix, 1, true) == 1 then return true end
+        end
+        return false
+    end
+    Check("The full story still carries the lists, for chat",
+        Has(judged.lines, "Defensives used: ")
+            and Has(judged.lines, "Your casts: ")
+            and Has(judged.lines, "Ready and unused"))
+    Check("The verdict carries the judgement and none of the lists",
+        #judged.verdict > 0
+            and not Has(judged.verdict, "Defensives used: ")
+            and not Has(judged.verdict, "Your casts: ")
+            and not Has(judged.verdict, "Ready and unused"))
+    Check("The window reads the verdict off a new analysis",
+        Death.VerdictLines(judged) == judged.verdict)
+    Check("and sorts an OLD one by what its lines begin with",
+        #Death.VerdictLines({ lines = { "One hit did most of it.",
+            "Defensives used: x.", "Your casts: y.",
+            "Ready and unused (by our own clock): z." } }) == 1)
+    Check("A used consumable is pictured as the ITEM in the story",
+        judged.defensivesUsed[1].itemID == 5512)
+
+    ---------------------------------------------------------------------
+    -- Which cast was an item. Two doors: the spell the client says the
+    -- item casts, and the item's name inside the cast's name - because a
+    -- Healthstone on this patch fires "Use Healthstone" (462156), which
+    -- is not the spell GetItemSpell names. Read off the owner's log.
+    ---------------------------------------------------------------------
+    local map = Death.DefensiveMap({ [48792] = true },
+        { [5512] = true, [212263] = true },
+        function(itemID) return itemID == 5512 and 6262 or 1234768 end,
+        function(itemID)
+            return itemID == 5512 and "Healthstone" or "Silvermoon Health Potion"
+        end)
+    Check("A picked spell is a defensive", Death.CastItem(map, 48792) == nil
+        and map[48792] == true)
+    Check("The item's own spell names the item",
+        Death.CastItem(map, 6262, "Healthstone") == 5512)
+    Check("So does the item's name inside a stranger spell's name",
+        Death.CastItem(map, 462156, "Use Healthstone") == 5512)
+    Check("A cast that is neither is nothing",
+        Death.CastItem(map, 49998, "Death Strike") == nil)
+    Check("The potion by its spell",
+        Death.CastItem(map, 1234768, "Silvermoon Health Potion") == 212263)
+
+    ---------------------------------------------------------------------
+    -- The panel's rows: used, unused, the rest - and a used one does not
+    -- also stand in the unused list with its cooldown.
+    ---------------------------------------------------------------------
+    local rows = Death.PanelEntries({
+        casts = {
+            { t = 2, spellID = 9, name = "Death Strike" },
+            { t = 6, spellID = 7, itemID = 5512, name = "Use Healthstone",
+              defensive = true },
+            { t = 4, spellID = 48792, name = "Icebound Fortitude",
+              defensive = true },
+        },
+        avail = {
+            { spellID = 48792, name = "Icebound Fortitude", remaining = 25 },
+            { spellID = 55233, name = "Vampiric Blood", remaining = 0 },
+            { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 },
+            { itemID = 212263, name = "Silvermoon Health Potion", count = 0 },
+        },
+    })
+    local heads, items = {}, {}
+    for _, row in ipairs(rows) do
+        if row.kind == "head" then
+            heads[#heads + 1] = row.text
+            items[row.text] = {}
+        elseif row.kind == "item" then
+            local list = items[heads[#heads]]
+            list[#list + 1] = row
+        end
+    end
+    Check("Three headings, in the order they are read",
+        heads[1] == "Defensives used" and heads[2] == "Unused defensives"
+            and heads[3] == "Your casts")
+    Check("Used, oldest first, with how long before the end",
+        #items["Defensives used"] == 2
+            and items["Defensives used"][1].name == "Use Healthstone"
+            and items["Defensives used"][1].suffix == "-6.0s"
+            and items["Defensives used"][2].name == "Icebound Fortitude")
+    Check("Unused leaves out what was pressed - by id and by name",
+        #items["Unused defensives"] == 2
+            and items["Unused defensives"][1].name == "Vampiric Blood"
+            and items["Unused defensives"][2].name == "Silvermoon Health Potion")
+    Check("and says ready, or none in the bags",
+        items["Unused defensives"][1].suffix:find("ready", 1, true) ~= nil
+            and items["Unused defensives"][2].suffix:find("none", 1, true) ~= nil)
+    Check("The rest of the casts are their own list",
+        #items["Your casts"] == 1 and items["Your casts"][1].name == "Death Strike")
+    Check("A snapshot with nothing readable says so in the panel",
+        (function()
+            local out = Death.PanelEntries({ reason = "The recap was empty." })
+            for _, row in ipairs(out) do
+                if row.kind == "none" and row.text == "The recap was empty." then
+                    return true
+                end
+            end
+            return false
+        end)())
+
 
     -- CONSUMABLES ARE PICKED, NOT SHIPPED - and this check used to prove it
     -- by DELETING his list and leaving it deleted. Every /zs test threw away
@@ -1493,6 +1609,18 @@ local function TestDeath()
         Check("What is on screen and what is not is its own question",
             Replay.Visible(5, 10, 0) and not Replay.Visible(12, 10, 0)
                 and not Replay.Visible(-1, 10, 0))
+        -- The scrub is the inverse of the fraction: a hand at the left
+        -- edge is the oldest moment shown, at the right edge the death,
+        -- and off the plot it is clamped to the edge it went past.
+        Check("The scrub is the inverse of the fraction",
+            math.abs(Replay.Scrub(Replay.Fraction(3, 10, 0), 10, 0) - 3) < 0.001)
+        Check("The left edge is the oldest moment shown",
+            math.abs(Replay.Scrub(0, 10, 4) - 10) < 0.001)
+        Check("The right edge is the newest",
+            math.abs(Replay.Scrub(1, 10, 4) - 4) < 0.001)
+        Check("Off the plot is clamped to the edge",
+            math.abs(Replay.Scrub(-2, 10, 0) - 10) < 0.001
+                and math.abs(Replay.Scrub(7, 10, 0)) < 0.001)
 
         -- The view: zoom 1 is everything, and zooming in follows a centre
         -- without ever running off either end of the story.

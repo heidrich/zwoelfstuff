@@ -256,8 +256,6 @@ Register("enUS", {
     -- last English left on three pages whose labels had been translated
     -- for months - which reads as an addon that gave up half way rather
     -- than one that is honestly unfinished.
-    ["|cffffd100Marker, world marker and ping buttons are the game's own protected kind|r - the addon cannot press them for you, and the bar cannot be rearranged while you are in combat. Changes made in a fight appear the moment it ends."] = 
-        true,
     ["Out in the world there is nothing to mark. Off, the bar is there whenever you are in a group."] = 
         true,
     ["The countdown is the game's own - the one Blizzard added for exactly this - so a boss mod picks it up by itself and everybody without one still sees the numbers. Right-click the Pull button on the bar to cancel it. The game refuses to start one in combat."] = 
@@ -761,8 +759,6 @@ Register("deDE", {
     -- last English left on three pages whose labels had been translated
     -- for months - which reads as an addon that gave up half way rather
     -- than one that is honestly unfinished.
-    ["|cffffd100Marker, world marker and ping buttons are the game's own protected kind|r - the addon cannot press them for you, and the bar cannot be rearranged while you are in combat. Changes made in a fight appear the moment it ends."] = 
-        "|cffffd100Markierungen, Weltmarkierungen und Pings sind geschützte Knöpfe des Spiels|r - das Addon kann sie nicht für dich drücken, und die Leiste lässt sich im Kampf nicht umbauen. Änderungen im Kampf erscheinen, sobald er vorbei ist.",
     ["Out in the world there is nothing to mark. Off, the bar is there whenever you are in a group."] = 
         "Draußen in der Welt gibt es nichts zu markieren. Aus, ist die Leiste da, sobald du in einer Gruppe bist.",
     ["The countdown is the game's own - the one Blizzard added for exactly this - so a boss mod picks it up by itself and everybody without one still sees the numbers. Right-click the Pull button on the bar to cancel it. The game refuses to start one in combat."] = 

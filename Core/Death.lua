@@ -268,6 +268,7 @@ function Death.Persist(snapshot)
         casts[#casts + 1] = {
             t = Plain(cast.t, "number") or 0,
             spellID = Plain(cast.spellID, "number"),
+            itemID = Plain(cast.itemID, "number"),
             name = Plain(cast.name, "string") or "?",
             defensive = cast.defensive and true or nil,
             -- The measured window, so a bar drawn today is the same length
@@ -401,6 +402,7 @@ function Death.Analyse(events, maxHP, avail, casts)
         totalIn = 0, totalHealed = 0, hits = 0,
         biggest = nil,          -- { amount, name, pct }
         lastHealAgo = nil,      -- seconds before death the last heal landed
+        verdict = {},           -- the judgement lines alone - see below
         readyDefensives = {},   -- { spellID, name }, ready and unpressed
         unknownDefensives = {}, -- { spellID, name } we cannot judge
         lines = {},             -- the verdict, one sentence per line
@@ -478,17 +480,33 @@ function Death.Analyse(events, maxHP, avail, casts)
     -- this patch, but a live event that survived it.
     local pressed, defensives = {}, {}
     for _, cast in ipairs(casts or {}) do
-        local named = { spellID = cast.spellID, name = cast.name }
+        -- The item id rides along when the press was a consumable, so the
+        -- line is pictured with the ITEM's icon - the potion you drank -
+        -- and not the generic icon of the spell the drink casts. The chips
+        -- at the bottom always read the item; the sentence at the top did
+        -- not, and the two showed two different potions for one press.
+        local named = { spellID = cast.spellID, itemID = cast.itemID,
+            name = cast.name, t = cast.t }
         pressed[#pressed + 1] = named
         if cast.defensive then defensives[#defensives + 1] = named end
     end
     out.pressed, out.defensivesUsed = pressed, defensives
 
+    -- THE VERDICT AND THE LISTS ARE TWO THINGS. `lines` is the whole story
+    -- in sentences - what chat gets, what the snapshot keeps. `verdict` is
+    -- the judgement alone: the window shows THAT over the table, and the
+    -- lists go down the panel on the left as rows with icons, where six
+    -- inline icons cannot wrap a name onto the next line without one.
+    local verdict = out.verdict
+    for _, line in ipairs(lines) do verdict[#verdict + 1] = line end
+
     if out.hits > 0 then
         if #pressed == 0 then
             lines[#lines + 1] = "You pressed nothing in those seconds."
+            verdict[#verdict + 1] = lines[#lines]
         elseif #defensives == 0 then
             lines[#lines + 1] = "No defensive was used."
+            verdict[#verdict + 1] = lines[#lines]
         else
             lines[#lines + 1] = "Defensives used: "
                 .. Death.SpellList(defensives) .. "."
@@ -512,8 +530,27 @@ function Death.Analyse(events, maxHP, avail, casts)
 
     if #lines == 0 then
         lines[#lines + 1] = "Not enough was readable to say anything useful."
+        verdict[#verdict + 1] = lines[#lines]
     end
 
+    return out
+end
+
+-- The judgement lines alone, for the window. A snapshot written before the
+-- lists moved to the panel carries no `verdict`; its lines are sorted by
+-- what they begin with, which is how those lines were always told apart.
+function Death.VerdictLines(analysis)
+    if type(analysis) ~= "table" then return {} end
+    if type(analysis.verdict) == "table" then return analysis.verdict end
+    local out = {}
+    for _, line in ipairs(analysis.lines or {}) do
+        local plain = tostring(line)
+        if not (plain:find("^Defensives used: ")
+            or plain:find("^Your casts: ")
+            or plain:find("^Ready and unused")) then
+            out[#out + 1] = line
+        end
+    end
     return out
 end
 
@@ -557,6 +594,7 @@ function Death.Storyline(events, casts)
     for _, cast in ipairs(casts or {}) do
         out[#out + 1] = {
             t = cast.t, name = cast.name, spellID = cast.spellID,
+            itemID = cast.itemID,
             cast = true, defensive = cast.defensive,
         }
     end
@@ -931,18 +969,54 @@ end
 -- a potion is a cast like any other on this patch - UNIT_SPELLCAST_SUCCEEDED
 -- fires with the item's own spell - so without this the potion showed up in
 -- the rotation row as an unnamed press instead of as the defensive it is.
-local function DefensiveSpells()
-    local out = {}
-    for spellID in pairs(Death.Defensives()) do
-        out[spellID] = true
-    end
-    if C_Item and C_Item.GetItemSpell then
-        for itemID in pairs(Death.PickedItems()) do
-            local ok, _, spellID = pcall(C_Item.GetItemSpell, itemID)
-            if ok and type(spellID) == "number" then out[spellID] = true end
+--
+-- A picked spell maps to `true`; a picked ITEM maps to its item id, so the
+-- press can be pictured as the item. Two doors for the item: the spell the
+-- client says it casts, and - because a Healthstone on this patch fires
+-- "Use Healthstone" (462156), which is not the spell GetItemSpell names -
+-- the item's own name inside the cast's name. Read off the owner's saved
+-- deaths: the stone sat in the rotation row twice while the log called it
+-- ready and unused. Pure below the API line, so the desk can walk it.
+function Death.DefensiveMap(spells, items, itemSpell, itemName)
+    local out, names = {}, {}
+    for spellID in pairs(spells or {}) do out[spellID] = true end
+    for itemID in pairs(items or {}) do
+        local spellID = itemSpell and itemSpell(itemID)
+        if type(spellID) == "number" then out[spellID] = itemID end
+        local name = itemName and itemName(itemID)
+        if type(name) == "string" and name ~= "" then
+            names[#names + 1] = { name = name:lower(), itemID = itemID }
         end
     end
+    -- Longest item name first, so "Greater Healthstone" wins over
+    -- "Healthstone" when both are picked and the cast says the longer one.
+    table.sort(names, function(a, b) return #a.name > #b.name end)
+    out.byName = names
     return out
+end
+
+-- Which item a cast was, if any: the id door first, then the name door.
+function Death.CastItem(map, spellID, castName)
+    local hit = map[spellID]
+    if type(hit) == "number" then return hit end
+    if hit == true then return nil end
+    if type(castName) == "string" then
+        local lower = castName:lower()
+        for _, entry in ipairs(map.byName or {}) do
+            if lower:find(entry.name, 1, true) then return entry.itemID end
+        end
+    end
+    return nil
+end
+
+local function DefensiveSpells()
+    return Death.DefensiveMap(Death.Defensives(), Death.PickedItems(),
+        function(itemID)
+            if not (C_Item and C_Item.GetItemSpell) then return nil end
+            local ok, _, spellID = pcall(C_Item.GetItemSpell, itemID)
+            return ok and spellID or nil
+        end,
+        Death.ItemName)
 end
 
 local function CastsBefore(diedAt, window)
@@ -952,11 +1026,15 @@ local function CastsBefore(diedAt, window)
     for _, cast in ipairs(ns.History.casts or {}) do
         local ago = diedAt - cast.at
         if ago >= 0 and ago <= window then
+            local name = ns.SpellName(cast.spellID)
+                or ("Spell " .. cast.spellID)
+            local itemID = Death.CastItem(picked, cast.spellID, name)
             local entry = {
                 t = ago,
                 spellID = cast.spellID,
-                name = ns.SpellName(cast.spellID) or ("Spell " .. cast.spellID),
-                defensive = picked[cast.spellID] and true or nil,
+                itemID = itemID,
+                name = name,
+                defensive = (itemID or picked[cast.spellID]) and true or nil,
             }
 
             -- HOW LONG IT WAS ACTUALLY UP, for this press, measured while
@@ -1382,7 +1460,19 @@ local MAIN_W = 510
 local LIST_W = MAIN_W - LIST_GUTTER
 local SIDE_W = 186
 local GUTTER = 16
-local DIVIDER_X = 16 + MAIN_W + GUTTER
+
+-- THE THIRD COLUMN, DOWN THE LEFT. Owner, 2026-08-16, looking at the header
+-- of this window: "das ist alles sehr gedrungen und zusammengeklatscht. ich
+-- wuerde LINKS eine Liste (panel) wie rechts einbauen, wo man das schoen
+-- auflisten kann." The lists - what you pressed, what you still had, what
+-- else you cast - used to be sentences with icons in them over the table
+-- and a strip of chips under it. They are rows down the left now, one
+-- thing a line with its icon and its number, the way the session's deaths
+-- are rows down the right. Same width as that column, so the window is
+-- symmetrical about the analysis in the middle.
+local PANEL_W = SIDE_W
+local MAIN_X = 16 + PANEL_W + GUTTER + GUTTER
+local DIVIDER_X = MAIN_X + MAIN_W + GUTTER
 local SIDE_X = DIVIDER_X + GUTTER
 local SIDE_ROW_H = 34
 -- How many rows FIT beside the analysis. The list may hold fifty now, so
@@ -1650,6 +1740,256 @@ function Death.PaintEventRow(row, ev, maxHP)
     row:Show()
 end
 
+---------------------------------------------------------------------------
+-- THE DEFENSIVES PANEL - the column down the left of this window and of
+-- the replay. One builder, two windows, so the two cannot drift apart a
+-- row at a time.
+--
+-- Three lists, each a heading and rows: what you pressed that was a
+-- defensive (with how long before the end), what you still had and did
+-- not press (with ready / seconds left / none in the bags), and everything
+-- else you cast. Rows, not sentences: an inline icon in a wrapping line
+-- strands a name on the next line without its picture, and a strip of
+-- chips under the table grew into the table when there were many.
+---------------------------------------------------------------------------
+local PANEL_HEAD_H = 22
+local PANEL_ROW_H = 20
+local PANEL_GAP = 10          -- air above the second and third heading
+
+-- WHAT THE PANEL SHOWS, as a flat list of rows. Pure - the desk walks it.
+--
+--   { kind = "head", text }
+--   { kind = "item", spellID, itemID, name, suffix, t }
+--   { kind = "none", text }         one dim line where a list is empty
+function Death.PanelEntries(snapshot)
+    local out = {}
+    if type(snapshot) ~= "table" then return out end
+
+    local used, others = {}, {}
+    for _, cast in ipairs(snapshot.casts or {}) do
+        if cast.defensive then used[#used + 1] = cast
+        else others[#others + 1] = cast end
+    end
+    -- Oldest first, the way the table reads: t is seconds BEFORE the end.
+    local function oldestFirst(a, b) return (a.t or 0) > (b.t or 0) end
+    table.sort(used, oldestFirst)
+    table.sort(others, oldestFirst)
+
+    local function Ago(t)
+        return string.format("-%.1fs", math.max(0, t or 0))
+    end
+
+    out[#out + 1] = { kind = "head", text = "Defensives used" }
+    if #used == 0 then
+        out[#out + 1] = { kind = "none", text = "None" }
+    end
+    for _, cast in ipairs(used) do
+        out[#out + 1] = { kind = "item", spellID = cast.spellID,
+            itemID = cast.itemID, name = cast.name, suffix = Ago(cast.t),
+            t = cast.t }
+    end
+
+    -- WHAT WAS NOT PRESSED. Owner, 2026-08-16: rename "What you had, by our
+    -- own clock" to "not used defensives" - and then it must not list the
+    -- ones you DID use, which the old footer did (with their cooldown, as
+    -- if the press had never happened). Matched by id and by name: a
+    -- snapshot written before presses carried an item id still names the
+    -- potion the same way in both lists.
+    out[#out + 1] = { kind = "head", text = "Unused defensives" }
+    if snapshot.reason then
+        out[#out + 1] = { kind = "none", text = snapshot.reason }
+    else
+        local usedBy = {}
+        for _, cast in ipairs(used) do
+            if cast.spellID then usedBy["s" .. cast.spellID] = true end
+            if cast.itemID then usedBy["i" .. cast.itemID] = true end
+            if type(cast.name) == "string" then
+                usedBy["n" .. cast.name:lower()] = true
+            end
+        end
+        local shown = 0
+        for _, entry in ipairs(snapshot.avail or {}) do
+            local pressed = (entry.spellID and usedBy["s" .. entry.spellID])
+                or (entry.itemID and usedBy["i" .. entry.itemID])
+                or (type(entry.name) == "string"
+                    and usedBy["n" .. entry.name:lower()])
+            if not pressed then
+                -- ONLY WHAT WE ACTUALLY KNOW gets written after the name.
+                -- "no known cooldown" and "not cast since login" are this
+                -- addon saying it cannot tell, and a column of non-answers
+                -- is worse than a bare name.
+                local suffix
+                if entry.remaining == 0 then
+                    suffix = "|cff67c971ready|r"
+                elseif entry.remaining then
+                    suffix = string.format("|cff9ba3af%ds|r",
+                        math.floor(entry.remaining + 0.5))
+                elseif entry.itemID and (entry.count or 0) == 0 then
+                    -- A potion you were not carrying is not "cannot tell"
+                    -- - it is a plain no, and the one case worth writing.
+                    suffix = "|cff626a76none|r"
+                end
+                shown = shown + 1
+                out[#out + 1] = { kind = "item", spellID = entry.spellID,
+                    itemID = entry.itemID, name = entry.name,
+                    suffix = suffix }
+            end
+        end
+        if shown == 0 then
+            out[#out + 1] = { kind = "none",
+                text = #(snapshot.avail or {}) == 0
+                    and "Nothing picked yet - the Deaths page has the list."
+                    or "None - you used them all." }
+        end
+    end
+
+    out[#out + 1] = { kind = "head", text = "Your casts" }
+    if #others == 0 then
+        out[#out + 1] = { kind = "none", text = "None" }
+    end
+    for _, cast in ipairs(others) do
+        out[#out + 1] = { kind = "item", spellID = cast.spellID,
+            itemID = cast.itemID, name = cast.name, suffix = Ago(cast.t),
+            t = cast.t }
+    end
+
+    return out
+end
+
+-- The icon for a row: the ITEM's when the row is one, else the spell's.
+function Death.PanelIcon(entry)
+    if entry.itemID then
+        local icon = Death.ItemIcon(entry.itemID)
+        if icon then return icon end
+    end
+    return entry.spellID and ns.SpellTexture and ns.SpellTexture(entry.spellID)
+        or nil
+end
+
+function Death.BuildDefensivePanel(parent, width)
+    local UI, C = ns.UI, ns.UI.C
+    local host = CreateFrame("Frame", nil, parent)
+    host:SetWidth(width)
+
+    -- The same caption weight as "This session" over the column on the
+    -- right, so the two columns read as a pair.
+    host.title = UI.Label(host, "Your defensives", 11, C.textDim)
+    host.title:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -2)
+
+    local area = CreateFrame("Frame", nil, host)
+    area:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -24)
+    area:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    local GUT = 8
+    host.scroll, host.content = UI.ScrollArea(area, width - GUT, GUT)
+    host.rows = {}
+    local rowWidth = width - GUT
+
+    local function Tip(self)
+        local entry = self.entry
+        if not (entry and GameTooltip) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local shown = false
+        if entry.itemID and GameTooltip.SetItemByID then
+            shown = pcall(GameTooltip.SetItemByID, GameTooltip, entry.itemID)
+        end
+        if not shown and entry.spellID then
+            shown = pcall(GameTooltip.SetSpellByID, GameTooltip, entry.spellID)
+        end
+        if not shown then
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine(entry.name or "", 1, 1, 1)
+        end
+        if entry.t then
+            GameTooltip:AddLine(string.format("%.1fs before the end", entry.t),
+                0.61, 0.64, 0.69)
+        end
+        GameTooltip:Show()
+    end
+
+    local function Build()
+        local row = CreateFrame("Frame", nil, host.content)
+        row:SetSize(rowWidth, PANEL_ROW_H)
+
+        row.head = UI.Eyebrow(row, "")
+        row.head:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 4)
+
+        row.icon = row:CreateTexture(nil, "ARTWORK")
+        row.icon:SetSize(16, 16)
+        row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        row.suffix = UI.Label(row, "", 11, C.textDim)
+        row.suffix:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+        row.suffix:SetJustifyH("RIGHT")
+
+        row.name = UI.Label(row, "", 11, C.text)
+        row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+        row.name:SetPoint("RIGHT", row.suffix, "LEFT", -6, 0)
+        row.name:SetJustifyH("LEFT")
+        row.name:SetWordWrap(false)
+
+        row.none = UI.Label(row, "", 11, C.textFaint)
+        row.none:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.none:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        row.none:SetJustifyH("LEFT")
+        row.none:SetWordWrap(false)
+
+        row:EnableMouse(true)
+        row:SetScript("OnEnter", Tip)
+        row:SetScript("OnLeave", function()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+        return row
+    end
+
+    host.Paint = function(snapshot)
+        local entries = Death.PanelEntries(snapshot)
+        local y, heads = 0, 0
+        for index, entry in ipairs(entries) do
+            local row = host.rows[index]
+            if not row then
+                row = Build()
+                host.rows[index] = row
+            end
+            row.entry = (entry.kind == "item") and entry or nil
+            row.head:SetShown(entry.kind == "head")
+            row.icon:SetShown(entry.kind == "item")
+            row.name:SetShown(entry.kind == "item")
+            row.suffix:SetShown(entry.kind == "item")
+            row.none:SetShown(entry.kind == "none")
+            row:EnableMouse(entry.kind == "item")
+
+            local height = PANEL_ROW_H
+            if entry.kind == "head" then
+                heads = heads + 1
+                if heads > 1 then y = y + PANEL_GAP end
+                height = PANEL_HEAD_H
+                row.head:SetText(entry.text)
+            elseif entry.kind == "item" then
+                row.icon:SetTexture(Death.PanelIcon(entry) or 134400)
+                row.name:SetText(entry.name or "?")
+                row.suffix:SetText(entry.suffix or "")
+            else
+                row.none:SetText(entry.text or "")
+            end
+            row:SetHeight(height)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", host.content, "TOPLEFT", 0, -y)
+            row:Show()
+            y = y + height
+        end
+        for index = #entries + 1, #host.rows do
+            host.rows[index].entry = nil
+            host.rows[index]:Hide()
+        end
+        host.content:SetHeight(math.max(1, y))
+        if host.scroll.Update then host.scroll.Update() end
+        return #entries
+    end
+
+    return host
+end
+
 local function BuildWindow()
     UI = ns.UI
     local C = UI.C
@@ -1679,7 +2019,7 @@ local function BuildWindow()
     -- the same kind of id. It is Hidden until one actually renders: an
     -- empty black square where a face should be is worse than no square.
     frame.portrait = Death.CreateFace(frame, 54)
-    frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -12)
+    frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -12)
 
     -- The killer's face at 54 pixels is a silhouette. Pointing at it gives
     -- the big one, with everything it did to you in these seconds - the same
@@ -1700,7 +2040,7 @@ local function BuildWindow()
     portraitEdge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
     frame.title = UI.Label(frame, "You died", 16, C.text)
-    frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -14)
+    frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -14)
 
     frame.sub = UI.Label(frame, "", 11, C.textFaint)
     frame.sub:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -3)
@@ -1732,7 +2072,7 @@ local function BuildWindow()
     -- The verdict block, above the event rows: the analysis is the point of
     -- the window, so it does not sit under a scroll.
     frame.verdict = UI.Label(frame, "", 12, C.text)
-    frame.verdict:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -HEADER_BOTTOM)
+    frame.verdict:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -HEADER_BOTTOM)
     frame.verdict:SetWidth(MAIN_W)
     frame.verdict:SetJustifyH("LEFT")
     frame.verdict:SetJustifyV("TOP")
@@ -1899,29 +2239,26 @@ local function BuildWindow()
     end
     frame:SetScript("OnHide", function() frame.disarmClear() end)
 
-    -- Availability footer: what was ready. A caption and then the spells
-    -- LAID OUT as chips - icon, name, the client's own tooltip - rather
-    -- than written into a wrapping sentence, where six inline icons wrap
-    -- wherever they like and strand a name on the next line without one.
-    -- The block grows UPWARDS from just above the buttons: the strip is
-    -- anchored by its bottom and the caption rides its top, so one row of
-    -- defensives or three both sit clear of the buttons instead of one
-    -- fitting and the other running over them.
-    frame.availChips = UI.SpellChips(frame, {
-        width = MAIN_W, max = 12, size = 11, colour = C.textDim,
-    })
-    frame.availChips:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 46)
+    -- THE PANEL DOWN THE LEFT: what you pressed, what you still had, what
+    -- else you cast. It replaced the availability footer that used to grow
+    -- upward from the buttons - a strip of chips under the table, with the
+    -- other two lists written as sentences over it. Built by the one
+    -- function the replay's panel comes out of; see BuildDefensivePanel.
+    local leftDivider = frame:CreateTexture(nil, "ARTWORK")
+    leftDivider:SetColorTexture(C.edge[1], C.edge[2], C.edge[3], 1)
+    leftDivider:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X - GUTTER, -14)
+    leftDivider:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", MAIN_X - GUTTER, 14)
+    leftDivider:SetWidth(1)
 
-    frame.avail = UI.Label(frame, "", 11, C.textDim)
-    frame.avail:SetPoint("BOTTOMLEFT", frame.availChips, "TOPLEFT", 0, 3)
-    frame.avail:SetWidth(MAIN_W)
-    frame.avail:SetJustifyH("LEFT")
-    frame.avail:SetWordWrap(false)
+    frame.panel = Death.BuildDefensivePanel(frame, PANEL_W)
+    frame.panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -16)
+    frame.panel:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 14)
 
     local share = UI.Button(frame, "Share in chat", 130, function()
         Death:Share()
     end, "primary")
-    share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 12)
+    share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", MAIN_X, 12)
+    frame.share = share
 
     -- The replay. The owner's words: "du kannst das live nachvollziehen".
     local replay = UI.Button(frame, "Replay", 90, function()
@@ -2127,7 +2464,16 @@ function Death.PaintFace(face, art)
     -- The older road, and it is not a failure - it is what is on screen while
     -- the display id is still coming back, and forever on a client that never
     -- answers with one.
+    --
+    -- UNLESS THE FACE IS FLAT-ONLY. The hover tip's picture is (owner,
+    -- 2026-08-16: "entferne den 3d avatar beim hover und ersetze ihn durch
+    -- den 2d avatar"): the model is still asked to load, because that is
+    -- the only road to the display id the flat portrait needs - but it
+    -- loads at alpha nought and the portrait takes its place the moment
+    -- OnModelLoaded answers. The square is reserved either way, so the
+    -- text beside it does not jump when the picture arrives.
     face.flat:Hide()
+    face.model:SetAlpha(face.flatOnly and 0 or 1)
     if Death.PaintArt(face.model, art) then
         face:Show()
         Death.faceStats.model = Death.faceStats.model + 1
@@ -2206,12 +2552,14 @@ local function BuildEnemyTip()
     edge:SetColor(C.overlayEdge[1], C.overlayEdge[2], C.overlayEdge[3], 1)
     UI.Shadow(enemyTip, 16, 0.6)
 
-    enemyTip.model = CreateFrame("PlayerModel", nil, enemyTip)
-    enemyTip.model:SetSize(FACE, FACE)
-    enemyTip.model:SetPoint("TOPLEFT", enemyTip, "TOPLEFT", 12, -12)
+    -- THE FLAT PORTRAIT, not the turning model. Owner, 2026-08-16. Same
+    -- face the rows wear, four times the size; see Death.CreateFace.
+    enemyTip.face = Death.CreateFace(enemyTip, FACE)
+    enemyTip.face.flatOnly = true
+    enemyTip.face:SetPoint("TOPLEFT", enemyTip, "TOPLEFT", 12, -12)
 
     enemyTip.name = UI.Label(enemyTip, "", UI.FS.card, C.text)
-    enemyTip.name:SetPoint("TOPLEFT", enemyTip.model, "TOPRIGHT", 12, -2)
+    enemyTip.name:SetPoint("TOPLEFT", enemyTip.face, "TOPRIGHT", 12, -2)
     enemyTip.name:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
     enemyTip.name:SetJustifyH("LEFT")
 
@@ -2224,7 +2572,7 @@ local function BuildEnemyTip()
     -- The abilities, under the picture and across the full width - a long
     -- name has the whole box rather than the column beside the model.
     enemyTip.what = UI.Eyebrow(enemyTip, "What it used here")
-    enemyTip.what:SetPoint("TOPLEFT", enemyTip.model, "BOTTOMLEFT", 0, -10)
+    enemyTip.what:SetPoint("TOPLEFT", enemyTip.face, "BOTTOMLEFT", 0, -10)
 
     enemyTip.spells = UI.Label(enemyTip, "", UI.FS.meta, C.textBody)
     enemyTip.spells:SetPoint("TOPLEFT", enemyTip.what, "BOTTOMLEFT", 0, -5)
@@ -2272,13 +2620,13 @@ function Death.ShowEnemyTip(owner, spec)
     enemyTip.what:SetShown(spells ~= "")
     enemyTip.note:SetText(spec.note or "")
 
-    local drawn = Death.PaintArt(enemyTip.model, spec.art)
+    local drawn = Death.PaintFace(enemyTip.face, spec.art)
     -- No picture is not an empty box: the text slides up into its place.
     enemyTip.name:ClearAllPoints()
     enemyTip.name:SetPoint("RIGHT", enemyTip, "RIGHT", -12, 0)
     if drawn then
-        enemyTip.name:SetPoint("TOPLEFT", enemyTip.model, "TOPRIGHT", 12, -2)
-        enemyTip.what:SetPoint("TOPLEFT", enemyTip.model, "BOTTOMLEFT", 0, -10)
+        enemyTip.name:SetPoint("TOPLEFT", enemyTip.face, "TOPRIGHT", 12, -2)
+        enemyTip.what:SetPoint("TOPLEFT", enemyTip.face, "BOTTOMLEFT", 0, -10)
     else
         enemyTip.name:SetPoint("TOPLEFT", enemyTip, "TOPLEFT", 12, -12)
         enemyTip.what:SetPoint("TOPLEFT", enemyTip.facts, "BOTTOMLEFT", 0, -10)
@@ -2416,13 +2764,17 @@ function Death:Show(index)
     -- other window in this addon uses.
     local hasPortrait = PaintPortrait(snapshot.killerArt)
     frame.title:ClearAllPoints()
-    frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", hasPortrait and 82 or 16, -14)
+    frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT",
+        MAIN_X + (hasPortrait and 66 or 0), -14)
 
     Death.sideOffset = Death.ScrollTo(index, #self.log,
         Death.sideOffset, SIDE_ROWS)
     PaintSideList()
 
-    frame.verdict:SetText(table.concat(snapshot.analysis.lines, "\n"))
+    -- The judgement over the table; the lists it used to carry are rows
+    -- down the panel on the left now.
+    frame.verdict:SetText(table.concat(
+        Death.VerdictLines(snapshot.analysis), "\n"))
 
     -- Rows: only what falls inside the promised window - the first live
     -- death showed hits from five minutes earlier under a subtitle saying
@@ -2442,17 +2794,18 @@ function Death:Show(index)
     -- The table's head, and the sentence that says what the fill behind the
     -- rows means. Both go with the table: no rows, no head.
     frame.tableNote:ClearAllPoints()
-    frame.tableNote:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -top)
+    frame.tableNote:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -top)
     frame.head:ClearAllPoints()
-    frame.head:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -(top + 17))
+    frame.head:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -(top + 17))
     if #events > 0 then
+        -- His words for the legend (2026-08-16): "grey your health, red
+        -- damage income" - two colours, two nouns, and the total.
         frame.tableNote:SetText(maxHP
-            and string.format("Oldest first. The bar is the health you had "
-                .. "going in - |cff8d97a6grey|r what was left, "
-                .. "|cffc45c5cred|r what the hit took - out of %s.",
+            and string.format("Oldest first - |cff8d97a6grey|r your health, "
+                .. "|cffc45c5cred|r the damage taken - out of %s.",
                 ns.ShortNumber(maxHP))
-            or "Oldest first. The bar is the health you had going in: grey "
-                .. "what was left, red what the hit took.")
+            or "Oldest first - |cff8d97a6grey|r your health, "
+                .. "|cffc45c5cred|r the damage taken.")
         frame.head:Show()
     else
         frame.tableNote:SetText("")
@@ -2465,12 +2818,14 @@ function Death:Show(index)
     -- there are to name, so the two can no longer be drawn over each other
     -- whatever either of them contains.
     frame.listHost:ClearAllPoints()
-    frame.listHost:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -top)
-    frame.listHost:SetPoint("TOPRIGHT", frame, "TOPLEFT", 16 + MAIN_W, -top)
+    frame.listHost:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -top)
+    frame.listHost:SetPoint("TOPRIGHT", frame, "TOPLEFT", MAIN_X + MAIN_W, -top)
     -- BOTTOMLEFT rather than BOTTOM: three points have to describe a
     -- rectangle without arguing about it, and a centre point next to a left
-    -- and a right one is a fourth opinion on where the left edge is.
-    frame.listHost:SetPoint("BOTTOMLEFT", frame.avail, "TOPLEFT", 0, 10)
+    -- and a right one is a fourth opinion on where the left edge is. On the
+    -- buttons now that the footer is gone: the table has the room the
+    -- chips used to take.
+    frame.listHost:SetPoint("BOTTOMLEFT", frame.share, "TOPLEFT", 0, 12)
     frame.listHost:SetShown(#events > 0)
 
     for i = 1, #events do
@@ -2516,39 +2871,8 @@ function Death:Show(index)
         if frame.list.Update then frame.list.Update() end
     end)
 
-    if snapshot.reason then
-        frame.avail:SetText("|cffff8040" .. snapshot.reason .. "|r")
-        frame.availChips.Paint({})
-    else
-        local chips = {}
-        for _, entry in ipairs(snapshot.avail or {}) do
-            -- ONLY WHAT WE ACTUALLY KNOW gets written after the name. The
-            -- other two answers - "no known cooldown", "not cast since
-            -- login" - are this addon saying it cannot tell, five times in
-            -- a row, in the space where the answer should be. The owner
-            -- read that footer and said they can go, and he is right: a
-            -- column of non-answers is worse than a bare list of names,
-            -- because it takes as long to read and says nothing.
-            local suffix
-            if entry.remaining == 0 then
-                suffix = "  |cff67c971ready|r"
-            elseif entry.remaining then
-                suffix = string.format("  |cff9ba3af%ds|r",
-                    math.floor(entry.remaining + 0.5))
-            elseif entry.itemID and (entry.count or 0) == 0 then
-                -- A potion you were not carrying is not "cannot tell" - it
-                -- is a plain no, and the one case worth writing out.
-                suffix = "  |cff626a76none|r"
-            end
-            chips[#chips + 1] = {
-                spellID = entry.spellID, itemID = entry.itemID,
-                name = entry.name, suffix = suffix,
-            }
-        end
-        frame.avail:SetText(#chips > 0 and "What you had, by our own clock"
-            or "Nothing picked yet - the Deaths page has the list.")
-        frame.availChips.Paint(chips)
-    end
+    -- The panel: what you pressed, what you still had, what else you cast.
+    frame.panel.Paint(snapshot)
 
     frame:Show()
 end

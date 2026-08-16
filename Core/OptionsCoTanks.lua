@@ -534,7 +534,7 @@ function OptionsCoTanks:BuildSide(parent, pad)
     title:SetWidth(width - 96)
     title:SetWordWrap(false)
 
-    local subtitle = UI.Eyebrow(side, "EVERY SETTING")
+    local subtitle = UI.Eyebrow(side, "SETTINGS")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     subtitle:SetWidth(width - 96)
     subtitle:SetWordWrap(false)
@@ -645,8 +645,13 @@ local function Switch(grid, label, key, sublabel)
         Get(key), Set(key))
 end
 
+-- A FULL ROW, LIKE EVERY OTHER CONTROL IN THIS COLUMN. The inspector is
+-- some 400 wide and lays out in two columns of 164; a half-row with the
+-- default 150 of control left the label six pixels, and "Colour" drew as a
+-- full stop (owner, 2026-08-16: "da scheint ein wort vor der farbauswahl zu
+-- fehlen"). The desk had been saying so under LOOK AT THESE IN GAME.
 local function Colour(grid, label, key)
-    return UI.Swatch(grid:Row(label),
+    return UI.Swatch(grid:FullRow(label, { controlWidth = 124 }),
         function()
             local colour = DB()[key] or { 0, 0, 0 }
             return colour[1], colour[2], colour[3]
@@ -747,10 +752,11 @@ function OptionsCoTanks:BuildLook(grid)
     -- THE RAIL GOES TO 1 NOW, AND IT HAD TO. It stopped at 0.6 while the
     -- setting ships at 1 - a control that cannot express its own default,
     -- which reads as "somebody has been in here and broken it".
+    -- ONE LINE THAT FITS. The sublabel stops at the slider and does not
+    -- wrap; the old sentence ran under the rail and was cut mid-word.
     Slide(grid, "Empty part", "trackAlpha", 0, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100,
-        "How solid the trough behind the fill is. At 100% it is the same "
-            .. "#1a1a1a as everything else the addon draws behind something")
+        "How solid the trough behind the fill is")
 
     UI.Dropdown(grid:FullRow("Runs", { controlWidth = 150 }),
         ns.FILL_DIRECTIONS,
@@ -996,7 +1002,7 @@ local function StripSection(grid, key, label, note)
         get = ElGet("borderSize", 1), set = function(v) El().borderSize = v end,
         min = 0, max = 4, step = 1, apply = Apply,
     })
-    UI.Swatch(grid:Row("Border colour"),
+    UI.Swatch(grid:FullRow("Border colour", { controlWidth = 124 }),
         function()
             local colour = El().borderColor or { 0, 0, 0 }
             return colour[1], colour[2], colour[3]

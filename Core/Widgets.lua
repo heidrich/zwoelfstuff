@@ -4624,8 +4624,10 @@ function Grid:Section(title, key, open)
     local padTop = (#self.items == 0) and 0 or SECTION_PAD_TOP
 
     if not key then
-        return self:Wide(UI.SectionHeader(self.content, title), UI.SECTION_H,
-            padTop, SECTION_PAD_BOTTOM)
+        local plain = self:Wide(UI.SectionHeader(self.content, title),
+            UI.SECTION_H, padTop, SECTION_PAD_BOTTOM)
+        self.items[#self.items].section = true
+        return plain
     end
 
     self.collapsed = self.collapsed or {}
@@ -4646,6 +4648,7 @@ function Grid:Section(title, key, open)
     -- when its own contents are folded away.
     self.group = nil
     self:Wide(header, UI.SECTION_H, padTop, SECTION_PAD_BOTTOM)
+    self.items[#self.items].section = true
     self.group = key
     return header
 end
@@ -4662,6 +4665,7 @@ end
 -- texte linksbuendig, oft ist viel platz vorn. das macht es super schwer zu
 -- lesen."
 local NOTE_INDENT = UI.ROW_PAD
+local NOTE_UNDER_HEADING = 16
 
 function Grid:Note(text, height)
     local note = UI.Hint(self.content, text)
@@ -4722,7 +4726,17 @@ function Grid:Note(text, height)
     -- still saying "these two belong together" is that the gap above is half
     -- the gap below. Keep that ratio: make them equal and the sentence drifts
     -- back to looking like the opening of whatever comes next.
-    return self:Wide(note, height or note:GetStringHeight(), 6, 16, NOTE_INDENT)
+    --
+    -- UNLESS IT IS THE FIRST THING UNDER A HEADING. Then there is no setting
+    -- above it - it is the section's blurb - and at 6 it sat on the rule
+    -- like a second line of the title (owner, 2026-08-16: "mehr platz
+    -- zwischen dem erklaertext und der line drueber"). Pads collapse with
+    -- the neighbour's, so a note under a row keeps the ratio above.
+    local last = self.items[#self.items]
+    local padTop = (last and last.section) and NOTE_UNDER_HEADING or 6
+
+    return self:Wide(note, height or note:GetStringHeight(), padTop, 16,
+        NOTE_INDENT)
 end
 
 -- On a page with a third column, every row publishes itself when pointed at,

@@ -63,6 +63,17 @@ ns.CHANGELOG = {
                     .. "to raids, and its macro button sits with its icon.",
                 link = { label = "Open the tank unitframes", page = "cotanks" },
             },
+            {
+                icon = "Interface\\Icons\\Ability_Rogue_Feint",
+                text = "|cffffd100The death window has a third column.|r "
+                    .. "What you pressed, what you still had, and everything "
+                    .. "else you cast are rows down the left now, with their "
+                    .. "icons - the same in the replay. Left button held on "
+                    .. "the replay's plot drags the yellow line. A potion is "
+                    .. "pictured as the potion you drank, and a Healthstone "
+                    .. "counts as a defensive.",
+                link = { label = "Open the death log", open = "death" },
+            },
             -- The one thing from that page a player can go looking for. Its
             -- number is untouched in your account file; only the row moved.
             {

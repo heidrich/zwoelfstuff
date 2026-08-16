@@ -182,14 +182,11 @@ function Page:BuildPage(page, width)
     -- open Edit mode" described the page's own furniture, and the owner
     -- struck it (2026-08-16) along with the same line on the externals page.
 
-    -- THE ONE SENTENCE NOBODY WOULD GUESS, and it is on the page rather than
-    -- in a tooltip because it explains a delay somebody will otherwise report
-    -- as a bug: the marker buttons are the game's own protected kind, and the
-    -- game freezes those for the length of a fight.
-    grid:Note(L["|cffffd100Marker, world marker and ping buttons are the "
-        .. "game's own protected kind|r - the addon cannot press them for "
-        .. "you, and the bar cannot be rearranged while you are in combat. "
-        .. "Changes made in a fight appear the moment it ends."])
+    -- NO SENTENCE ABOUT PROTECTED BUTTONS EITHER. It explained why the bar
+    -- cannot be rearranged in combat, and the owner struck it (2026-08-16):
+    -- "das liest und verstehen user nicht". The rule still holds - the
+    -- marker buttons are the game's own protected kind and changes made in a
+    -- fight appear when it ends - it is just not narrated on the page.
 
     ---------------------------------------------------------------------
     -- The bar

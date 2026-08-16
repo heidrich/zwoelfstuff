@@ -78,6 +78,30 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   side of an empty page. Each switch carries its one line underneath it now;
   the three things the page *does* — invite the guild, invite everyone back,
   disband — moved into its header.
+- **The death window has a third column.** What you pressed, what you still
+  had and did not press, and everything else you cast are rows down the
+  left now — icon, name, seconds before the end or *ready / 25s / none* —
+  the way the session's deaths are rows down the right. They used to be
+  sentences with icons in them over the table and a strip of chips under it,
+  and the header read as one block. *"What you had, by our own clock"* is
+  **Unused defensives**, and it no longer lists the ones you did use with a
+  cooldown as if the press had never happened. The legend under the table
+  says what it means in six words: *grey your health, red the damage taken*.
+- **A potion is pictured as the potion you drank.** The line at the top used
+  to show the generic icon of the spell a Silvermoon Health Potion casts;
+  the list at the bottom read the item and showed the bottle. One picture
+  now, everywhere — the panel, the verdict, the replay's bars.
+- **A Healthstone counts as a defensive.** On this patch pressing one fires
+  *"Use Healthstone"*, which is not the spell the client names for the item,
+  so the press sat in the rotation row of the replay while the log called
+  the stone ready and unused. It is recognised by name as well as by spell
+  now, and gets its bar in the defensives lane.
+- **The replay has the same panel down its left**, in place of the
+  *"Defensives used:"* strip under the plot. **Left button held over the plot
+  scrubs**: the yellow line goes where the hand goes, the replay pauses under
+  it, and zoomed in the band follows the line. The wheel still pans.
+- **The mob in the hover tip is a portrait, not a turning model** — in the
+  death window, the replay and the group death log.
 - **The reminder list shows which one is picked.** Each name sits on a chip
   and the chosen one is lit, the same way the filter chips over the spell
   list are; one orange word in a row of grey ones did not read as a choice.
