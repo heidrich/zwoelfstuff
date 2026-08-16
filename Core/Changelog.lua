@@ -36,9 +36,11 @@ ns.CHANGELOG = {
         lines = {
             {
                 icon = "Interface\\Icons\\INV_Misc_Wrench_01",
-                text = "|cffffd100CDM is gone.|r I will put my focus on tank "
-                    .. "and group play features, and there are a lot of other "
-                    .. "very good CDM addons that do the job better.",
+                text = "|cffffd100The Cooldown Manager is temporarily "
+                    .. "disabled|r - we are not satisfied with the result. "
+                    .. "The focus is on tank and group play features, and "
+                    .. "there are a lot of other very good CDM addons that "
+                    .. "do the job well.",
             },
             {
                 icon = "Interface\\Icons\\INV_Misc_Gem_Pearl_01",

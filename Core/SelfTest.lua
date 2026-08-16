@@ -6425,6 +6425,42 @@ local function TestPanelMovers()
 
     if wasOpen and ns.Options.frame then ns.Options.frame:Show() end
 
+    ---------------------------------------------------------------------
+    -- THE TOOL PANEL, BACK - the screen half of it. It went out whole with
+    -- the cooldown bars and the owner noticed: "im edit mode fehlen die
+    -- tools, wie grid groessen anpassen, snapping und und." Five screen
+    -- settings kept their defaults and their reader the whole time; this
+    -- is the check that they have their CONTROL again, and that every
+    -- named setter the rows call really reaches the profile.
+    ---------------------------------------------------------------------
+    local panel = ns.EditMode.toolsPanel
+    Check("Unlocking builds the tool panel", panel ~= nil)
+    if panel then
+        Check("with the five screen settings and the grid switch on it",
+            #panel.rows == 6, tostring(#panel.rows))
+    end
+
+    local prefs = ns.db.editMode or {}
+    local keptStep, keptSnap = prefs.gridStep, prefs.snapToGrid
+    local keptCatch, keptDim = prefs.snapDistance, prefs.dim
+    local keptCoords = prefs.showCoords
+
+    ns.EditMode:SetGridStep(24)
+    Check("Grid step reaches the profile", prefs.gridStep == 24,
+        tostring(prefs.gridStep))
+    ns.EditMode:SetSnapToGrid(false)
+    Check("Snap-to-grid reaches the profile", prefs.snapToGrid == false)
+    ns.EditMode:SetSnapCatch(7)
+    Check("The snap catch reaches the profile", prefs.snapDistance == 7)
+    ns.EditMode:SetDim(0.4)
+    Check("The dim reaches the profile", prefs.dim == 0.4)
+    ns.EditMode:SetCoordsShown(true)
+    Check("Coordinates reach the profile", prefs.showCoords == true)
+
+    prefs.gridStep, prefs.snapToGrid = keptStep, keptSnap
+    prefs.snapDistance, prefs.dim = keptCatch, keptDim
+    prefs.showCoords = keptCoords
+
     if not ns.EditMode.PanelMovers then
         Check("Edit mode can name its panel movers", false)
         return

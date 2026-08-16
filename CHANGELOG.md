@@ -79,6 +79,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The Edit Mode tools are back.** The grid and its step, snap-to-grid, how
+  far a snap catches, the screen dim and the coordinates had gone out with
+  the old bars page - though they are about placing panels, which Edit Mode
+  still does all day. A **Tools** button on the Edit Mode toolbar opens them
+  again.
 - **`/zs test` no longer fails during a fight.** Five checks moved real key
   bindings or asserted a bar "waiting for combat" — run *in* combat, the
   game refuses the former and grants the latter, and all five went red on a

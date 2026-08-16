@@ -53,7 +53,7 @@ local function Prefs()
 end
 
 local unlocked = false
-local overlay, toolbar, keyCatcher, inspector
+local overlay, toolbar, keyCatcher, inspector, tools
 local movers = {}
 local selected = nil           -- the selected MOVER
 ---@type table|nil
@@ -1296,6 +1296,150 @@ function RefreshInspector()
         .. snapLine)
 end
 
+---------------------------------------------------------------------------
+-- The tool panel, back - the SCREEN half of it
+--
+-- The old panel had two halves: the screen settings and the selected bar's.
+-- It went out whole with the cooldown bars ("Edit Mode keeps its panels" -
+-- the panels stayed, the panel of TOOLS did not), and the owner noticed the
+-- day the rest was finished: "im edit mode fehlen die tools, wie grid
+-- groessen anpassen, snapping und und. das ist irgendwie mit rausgeflogen."
+--
+-- He is right on both counts. The bar half belonged to the bars and stays
+-- gone; the SCREEN half - the grid and its step, snap-to-grid, how far a
+-- snap catches, the dim, the coordinates - is about placing PANELS, which is
+-- what Edit Mode still does all day. Its five settings kept their defaults,
+-- their reader and their store the whole time; what fell out was the one
+-- link in the chain a user can see, the control.
+--
+-- EVERY WRITE IS A NAMED SETTER ON EditMode, not a closure in a row: the
+-- desk cannot press a toggle, but it can call SetGridStep(24) and read the
+-- profile - so the rules are testable and the rows stay thin.
+---------------------------------------------------------------------------
+function EditMode:SetGridStep(value)
+    value = tonumber(value)
+    if not value then return end
+    Prefs().gridStep = math.max(4, math.floor(value))
+    DrawGrid()
+    RefreshInspector()
+end
+
+function EditMode:SetSnapToGrid(on)
+    Prefs().snapToGrid = on and true or false
+    RefreshInspector()
+end
+
+function EditMode:SetSnapCatch(value)
+    value = tonumber(value)
+    if not value then return end
+    Prefs().snapDistance = math.max(1, math.floor(value))
+end
+
+function EditMode:SetDim(value)
+    value = tonumber(value)
+    if not value then return end
+    if value < 0 then value = 0 elseif value > 0.8 then value = 0.8 end
+    Prefs().dim = value
+    if overlay and overlay.dim then
+        overlay.dim:SetColorTexture(0, 0, 0, value)
+    end
+end
+
+function EditMode:SetCoordsShown(on)
+    Prefs().showCoords = on and true or false
+    if unlocked then self:Refresh() end
+end
+
+local function BuildTools()
+    tools = CreateFrame("Frame", nil, overlay)
+    tools:SetSize(320, 236)
+    tools:SetPoint("LEFT", UIParent, "LEFT", 40, 0)
+    tools:SetFrameLevel(overlay:GetFrameLevel() + 40)
+    tools:EnableMouse(true)
+    tools:SetMovable(true)
+    tools:RegisterForDrag("LeftButton")
+    tools:SetScript("OnDragStart", tools.StartMoving)
+    tools:SetScript("OnDragStop", tools.StopMovingOrSizing)
+    tools:SetClampedToScreen(true)
+    tools:Hide()
+
+    UI.Fill(tools, "BACKGROUND", C.windowBg)
+    local edge = ns.CreateBorder(tools, 1, "BORDER")
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    local title = UI.Label(tools, "Tools", 13, C.text)
+    title:SetPoint("TOPLEFT", tools, "TOPLEFT", 12, -10)
+
+    local rule = UI.Separator(tools, true)
+    rule:SetPoint("TOPLEFT", tools, "TOPLEFT", 0, -32)
+    rule:SetPoint("TOPRIGHT", tools, "TOPRIGHT", 0, -32)
+
+    -- Untranslated like every other label on this surface - the toolbar's
+    -- buttons say "Grid" and "Done" in plain English too.
+    tools.rows = {}
+    local previous
+    local function Row(label, wire)
+        local row = UI.Row(tools, label)
+        row:SetHeight(30)
+        row:SetPoint("LEFT", tools, "LEFT", 10, 0)
+        row:SetPoint("RIGHT", tools, "RIGHT", -10, 0)
+        if previous then
+            row:SetPoint("TOP", previous, "BOTTOM", 0, -2)
+        else
+            row:SetPoint("TOP", tools, "TOP", 0, -40)
+        end
+        previous = row
+        wire(row)
+        tools.rows[#tools.rows + 1] = row
+        return row
+    end
+
+    Row("Grid", function(row)
+        UI.Toggle(row,
+            function() return gridLines and gridLines:IsShown() or false end,
+            function(value) EditMode:SetGridShown(value) end)
+    end)
+    Row("Snap to grid", function(row)
+        UI.Toggle(row, function() return Prefs().snapToGrid end,
+            function(value) EditMode:SetSnapToGrid(value) end)
+    end)
+    Row("Grid step", function(row)
+        UI.Slider(row, { min = 8, max = 160, step = 4,
+            get = function() return Prefs().gridStep end,
+            set = function(value) EditMode:SetGridStep(value) end })
+    end)
+    Row("Snap catch", function(row)
+        UI.Slider(row, { min = 2, max = 40, step = 1,
+            get = function() return Prefs().snapDistance end,
+            set = function(value) EditMode:SetSnapCatch(value) end })
+    end)
+    Row("Dim", function(row)
+        UI.Slider(row, { min = 0, max = 0.8, step = 0.05,
+            get = function() return Prefs().dim end,
+            set = function(value) EditMode:SetDim(value) end })
+    end)
+    Row("Coordinates", function(row)
+        UI.Toggle(row, function() return Prefs().showCoords end,
+            function(value) EditMode:SetCoordsShown(value) end)
+    end)
+
+    tools.Refresh = function()
+        for _, row in ipairs(tools.rows) do
+            if row.Refresh then row.Refresh() end
+        end
+    end
+    tools:SetScript("OnShow", tools.Refresh)
+
+    -- Published for the desk, which walks the rows rather than trusting
+    -- that a panel with a working title also has working controls.
+    EditMode.toolsPanel = tools
+end
+
+function EditMode:ToggleTools()
+    if not tools then return end
+    tools:SetShown(not tools:IsShown())
+end
+
 local function BuildToolbar()
     toolbar = CreateFrame("Frame", nil, overlay)
     -- WIDE ENOUGH FOR THE BOTTOM ROW, measured rather than chosen: Grid,
@@ -1335,6 +1479,14 @@ local function BuildToolbar()
     end)
     gridBtn:SetPoint("BOTTOMLEFT", toolbar, "BOTTOMLEFT", 12, 12)
 
+    -- The way into the restored panel. Next to Grid because the panel is
+    -- mostly ABOUT the grid; a screen setting you cannot reach from the
+    -- screen is the fault this button undoes.
+    local toolsBtn = UI.Button(toolbar, "Tools", 68, function()
+        EditMode:ToggleTools()
+    end)
+    toolsBtn:SetPoint("LEFT", gridBtn, "RIGHT", 6, 0)
+
     -- The label follows the state, because this button is the ONLY way back:
     -- hiding the overlay hides every mover with it, so the Shift-right-click
     -- that got you here is not available to get you out. A button that still
@@ -1346,7 +1498,7 @@ local function BuildToolbar()
             or "Show overlay")
     end)
     EditMode.overlayButton = overlayBtn
-    overlayBtn:SetPoint("LEFT", gridBtn, "RIGHT", 6, 0)
+    overlayBtn:SetPoint("LEFT", toolsBtn, "RIGHT", 6, 0)
 
     -- SET KEYS, IN THE BOX WITH THE REST. Owner: "set keys, die funktion,
     -- gehoert noch als button in den edit modus! in die grosse box." It is
@@ -1414,6 +1566,7 @@ local function Build()
 
     BuildGrid()
     BuildGuides()
+    BuildTools()
     BuildToolbar()
     BuildKeyCatcher()
 end
@@ -1486,6 +1639,9 @@ end
 
 function EditMode:SetGridShown(shown)
     if gridLines then gridLines:SetShown(shown and unlocked) end
+    -- The toolbar button and the panel's toggle both move this; whichever
+    -- one was pressed, the other must not keep saying yesterday's state.
+    if tools and tools:IsShown() and tools.Refresh then tools.Refresh() end
 end
 
 function EditMode:SetOverlayShown(shown)
