@@ -1127,10 +1127,11 @@ function Routes:Listen(seconds)
     local f = self.listener or CreateFrame("Frame")
     self.listener = f
     local said, left = 0, seconds or 20
-    local seenCast, saidSecret = {}, false
+    local seenCast, saidSecret, saidControl = {}, false, false
 
     ns.Print(string.format("|cffffd100listening for %d seconds|r for a cast on a "
-        .. "nameplate - pull something that casts", left))
+        .. "nameplate - cast something yourself first (the control), then "
+        .. "pull something that casts", left))
 
     -- The cast doors, ONE AT A TIME with a beat between them, and the
     -- client's refusal - ADDON_ACTION_FORBIDDEN, delivered as an event of
@@ -1165,6 +1166,16 @@ function Routes:Listen(seconds)
             return
         end
         if said >= LISTEN_LINES then return end
+        -- THE CONTROL: your own cast, once. Two runs against guard packs
+        -- heard nothing (2026-08-16), and "nothing" has two causes that look
+        -- alike - the mobs cast nothing, or the events never reach us. Your
+        -- own cast proves the wiring; after it, a silent mob is the mob.
+        if unit == "player" and not saidControl then
+            saidControl = true
+            ns.Print("   control: your own cast fired, id "
+                .. Describe(true, spellID) .. " - the listener works")
+            return
+        end
         -- A cast on a nameplate unit - the one door left (the combat log
         -- is refused outright, see the head of Progress).
         if not ns.CanCompute(unit) then
