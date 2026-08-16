@@ -559,6 +559,17 @@ local UNDO = {
     -- a fourth cannot happen quietly.
     SetFont                  = "GetFont",
     SetHideCountdownNumbers  = "GetHideCountdownNumbers",
+
+    -- THE COUNTER THROUGH THE VEIL. On a place we draw, Blizzard's item is
+    -- veiled at alpha 0 and its counter goes down with it - but the ENGINE
+    -- keeps writing the count into that counter's string, and it is the only
+    -- place the count exists that an addon may touch: reading it out and
+    -- relaying it was tried and delivered nothing, because the engine skips
+    -- writing text nobody can see. So the counter is told to ignore its
+    -- parent's alpha and is anchored onto our cell - Blizzard keeps feeding
+    -- its own string, on our bar, live. The getter is real on this build,
+    -- so a released frame gets its obedience back.
+    SetIgnoreParentAlpha     = "IsIgnoringParentAlpha",
 }
 
 -- SETTERS WITH NO READER AT ALL, and they are not an oversight. A Cooldown's

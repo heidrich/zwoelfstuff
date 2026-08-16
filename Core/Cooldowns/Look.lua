@@ -99,6 +99,10 @@ local Claim = Cooldowns.Claim
 -- twenty lines above this file in the list and holds the one resolver that
 -- decides whether a key comes from the place or from the bar.
 local Store = Cooldowns.Store
+-- Effects loads one line above this file, and it owns the one honest answer
+-- to "is this cooldown recharging" - the question the greying needs and
+-- item:IsActive does not answer.
+local Effects = Cooldowns.Effects
 
 ---------------------------------------------------------------------------
 -- The doors this wave adds to Claim
@@ -402,14 +406,28 @@ function Look.Apply(item, style)
     -- nil is "the client will not say", and it counts as ACTIVE. See
     -- Look.Opacity: unknown is never rounded into the dimmer answer.
     --
-    -- ItemLooksActive rather than ItemIsActive, and the sentence above is
-    -- still exactly true - it just asks one question first. If the client HAS
-    -- answered for this frame before, that answer is used instead of the
-    -- default; only a frame nobody has ever had an answer for still lands on
-    -- "active". Rounding unknown into the flattering answer once is a wrong
-    -- picture; doing it on every second frame is a picture that flickers,
-    -- which is what the owner reported.
-    local active = ns.CDM:ItemLooksActive(item) ~= false
+    -- TWO KINDS OF FRAME, TWO SOURCES, and asking one question of both is
+    -- the bug he reported twice: "ausgegraut wenn man ein target hat und
+    -- nicht ausgegraut wenn man keins hat."
+    --
+    -- A BUFF item's IsActive means what it says - "is the aura up" - and
+    -- ItemLooksActive remembers it across frames the client refuses.
+    --
+    -- A COOLDOWN item's IsActive means no such thing. Effects.lua measured
+    -- it in his client and wrote it down: true on all four cooldowns, still
+    -- true once they were ready - "this item is being tracked", not "it is
+    -- running" - and on this build it ALSO moves with what he has targeted,
+    -- which dressed a target-selection up as a grey icon. Nothing in this
+    -- addon has ever wanted that answer. For a cooldown, "inactive" is "it
+    -- is recharging", and Effects.CellState already answers that from the
+    -- spell's own cooldown API - readable, and blind to the target.
+    local active
+    if ns.CDM:ItemTracks(item) == "buff" then
+        active = ns.CDM:ItemLooksActive(item) ~= false
+    else
+        local state = Effects.CellState(item, ns.CDM:ItemSpellID(item), nil)
+        active = state ~= "cooling"
+    end
 
     local zoom = style.iconZoom
 

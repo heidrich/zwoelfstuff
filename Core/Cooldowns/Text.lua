@@ -402,7 +402,7 @@ local COUNTERS = {
     { key = "Applications", element = "stacks"  },
 }
 
-local function Counters(item, style)
+local function Counters(item, style, cell)
     for _, pair in ipairs(COUNTERS) do
         local widget = ns.CDM:Counter(item, pair.key)
         local text = style[pair.element]
@@ -428,18 +428,40 @@ local function Counters(item, style)
             -- that puts a bottom-right counter at the end of the bar rather
             -- than on the square, and moving it now would move a number he
             -- has already placed.
+            --
+            -- ON A PLACE WE DRAW, THE ANCHOR IS OUR CELL AND THE VEIL IS
+            -- PIERCED. The item there is at alpha 0 and its counter goes
+            -- down with it - and the engine, reasonably, does not write text
+            -- nobody can see: relaying the string was tried and arrived
+            -- blank with the stacks plainly up ("es wird nix angezeigt").
+            -- SetIgnoreParentAlpha lets the counter draw at its OWN alpha
+            -- while the item stays veiled, and anchoring it to our cell puts
+            -- it where his setting says. Blizzard keeps feeding its own
+            -- string - live, formatted inside the engine, never read by us.
+            -- Both writes go through Claim, so Give puts both back.
             local x, y = Text.Offset(text)
-            Claim.Anchor(widget, text.anchor, item, text.anchor, x, y)
+            if cell then
+                Claim.Set(widget, "SetIgnoreParentAlpha", true)
+                Claim.Anchor(widget, text.anchor, cell, text.anchor, x, y)
+            else
+                Claim.Anchor(widget, text.anchor, item, text.anchor, x, y)
+            end
         end
     end
 end
 
 -- THE THREE NUMBERS ON ONE ADOPTED FRAME. Font, colour, alpha and position -
 -- never the text.
-function Text.Apply(item, style)
+--
+-- `cell` is passed on a place WE draw - Own.lua - and reroutes the counters
+-- onto it, through the veil. Absent on an adopted place, where the item
+-- itself is visible and is the right thing to hang a number on.
+function Text.Apply(item, style, cell)
     if not (item and style) then return end
 
-    local cooldown = item.Cooldown
+    -- type-checked, not truth-checked: this is a member on somebody else's
+    -- frame, and "whatever is there" is the only honest assumption.
+    local cooldown = type(item.Cooldown) == "table" and item.Cooldown or nil
     if cooldown then
         -- Switched off at the source rather than hidden afterwards: the engine
         -- reads this before it builds the font string at all, so there is
@@ -458,7 +480,7 @@ function Text.Apply(item, style)
         end
     end
 
-    Counters(item, style)
+    Counters(item, style, cell)
 end
 
 ---------------------------------------------------------------------------
@@ -599,33 +621,22 @@ function Text.ChargesUp(spellID)
     return now
 end
 
--- `ours` says WE are drawing this place - Own.lua - which changes exactly one
--- of the four branches and would have silently emptied the corner it fills.
---
--- On a place we draw, Blizzard's frame for the same spell is veiled at alpha
--- 0. Its counter frame is still SHOWN in the sense the API means, so the old
--- first branch read "Blizzard is already drawing one" and stood down - and the
--- number the owner asked for three times would have gone missing again, on the
--- very wave that was supposed to bring it back. The frame being shown is not
--- the question. Whether the USER can see it is, and on our own place he cannot.
---
--- The other half of that branch survives untouched and has to: `shown ==
--- false` is Blizzard saying it looked at a count we may not look at ourselves
--- and decided it was not worth a number. That IS the comparison, it is the
--- only legal one on this patch, and it stays final on both kinds of place.
-function Text.StackToShow(shown, count, ours)
-    if shown == true and ours then
-        -- Blizzard would draw it and cannot be seen doing so. Its comparison
-        -- has already said yes, so the count goes straight out - possibly a
-        -- secret, which is why it reaches SetFormattedText and nothing else.
-        return count
-    end
-
+-- THE `ours` SPECIAL CASE IS GONE, and the reason is the counter now coming
+-- through the veil. It existed because on a place we draw, Blizzard's counter
+-- was "shown" in the API sense and invisible in the user's - so we passed the
+-- count out ourselves. Two things killed that: our own count readers answer
+-- nil on his buff-bar items (the count exists nowhere an addon may read),
+-- and the engine does not write text into a counter nobody can see, so even
+-- relaying its string arrived blank. Text.Counters pierces the veil instead
+-- - SetIgnoreParentAlpha, anchored to our cell - so Blizzard's counter IS
+-- visible on our own places now, and "shown" means seen again on both kinds.
+function Text.StackToShow(shown, count)
     -- BLIZZARD'S ANSWER IS FINAL EITHER WAY. `true` means it is already
-    -- drawing one and a second number in the same corner is worse than none;
-    -- `false` means it looked and decided there is nothing worth showing,
-    -- which IS the comparison this code may not make. Only nil - no counter
-    -- frame at all - leaves the question to us.
+    -- drawing one - visibly, on whichever kind of place - and a second
+    -- number in the same corner is worse than none; `false` means it looked
+    -- at a count we may not look at ourselves and decided there is nothing
+    -- worth showing, which IS the comparison this code may not make. Only
+    -- nil - no counter frame at all - leaves the question to us.
     if shown ~= nil then return nil end
     if count == nil then return nil end
 
@@ -654,7 +665,7 @@ end
 -- stack half landed first and the same hole was left under it.
 local NUMBERS = {
     { key = "stacks",  member = "Applications", field = "stackCount",
-      Value = function(item, spellID, ours)
+      Value = function(item, spellID)
           -- NOT `ItemStacks(item) or nil`. The count this answers can be a
           -- SECRET, and `X or nil` is a boolean test on X - the same raise
           -- as CDM.lua:1103, four times in his chat, one wave ago. The
@@ -663,10 +674,10 @@ local NUMBERS = {
           local count
           if ns.CDM.ItemStacks then count = ns.CDM:ItemStacks(item) end
           return Text.StackToShow(
-              ns.CDM:CounterShown(item, "Applications"), count, ours)
+              ns.CDM:CounterShown(item, "Applications"), count)
       end },
     { key = "charges", member = "ChargeCount", field = "chargeCount",
-      Value = function(item, spellID, ours)
+      Value = function(item, spellID)
           -- A DIFFERENT GATE FROM THE STACKS, AND THE ASYMMETRY IS THE POINT.
           --
           -- For a stack count we defer to Blizzard COMPLETELY, because the
@@ -683,51 +694,27 @@ local NUMBERS = {
           -- Which is why this asks `== true` and the stacks ask `~= nil`. The
           -- frame EXISTING is not the question - his own bar has one on all
           -- three places and shows no number on any of them.
-          -- AND NOT ON A PLACE WE DRAW. The only thing we owe Blizzard here
-          -- is not putting a second number beside one of its own; on our own
-          -- bar there is no visible first one to sit beside.
-          if not ours and ns.CDM:CounterShown(item, "ChargeCount") == true then
+          --
+          -- ON EVERY KIND OF PLACE now: the counter comes through the veil
+          -- on our own places too, so a shown counter is a VISIBLE first
+          -- number wherever it is, and ours would be the second.
+          if ns.CDM:CounterShown(item, "ChargeCount") == true then
               return nil
           end
           return Text.ChargesUp(spellID)
       end },
 }
 
--- BLIZZARD'S OWN STACK STRING, HANDED ON - the timer trick, applied to the
--- count, and it closed the door his /zs text dump named.
---
--- On a place we draw, Blizzard's frame for the same spell is veiled, and his
--- dump showed exactly this state on both buff bars: `blizzard shows it true,
--- reads blank` beside a bar drawing no number of its own. Blizzard's
--- comparison had said YES, its string was invisible under the veil, and OUR
--- count reader - auraDataCached, then C_UnitAuras - answered nil because
--- these items carry neither field on his client. Three readers, no number.
---
--- So when our own source is dry, the engine's finished STRING is copied
--- across, exactly as Own.lua copies the timer: formatted inside the game
--- where the count is readable, handed on untouched. It can be a secret
--- string - `== nil` is the only thing done to it, and it lands in SetText
--- through a pcall. Whatever Blizzard delivers, the bar now relays.
---
--- ONLY on a place we draw, and ONLY while Blizzard's counter is shown: on an
--- adopted place its string is already visible, and a hidden counter is
--- Blizzard answering "not worth a number", which stays final.
-local function Relay(item, ours)
-    if not ours then return nil end
-    if ns.CDM:CounterShown(item, "Applications") ~= true then return nil end
-
-    local fontString = ns.CDM:CounterText(item, "Applications")
-    if not fontString then return nil end
-
-    local ok, text = pcall(fontString.GetText, fontString)
-    if not ok then return nil end
-    return text
-end
-
--- `ours` is true when Own.lua drew this place rather than Claim adopting it.
--- It changes nothing about how a number is drawn and one thing about whether
--- one is - see Text.StackToShow.
-function Text.Count(cell, item, style, spellID, ours)
+-- THE RELAY THAT LIVED HERE FOR ONE VERSION IS GONE, and the reason is worth
+-- its epitaph: it read Blizzard's counter string off the veiled frame, and
+-- the string was empty WITH THE STACKS PLAINLY UP ("es wird nix angezeigt")
+-- - the engine does not write text into a counter nobody can see. You cannot
+-- copy what is never written. Text.Counters pierces the veil instead:
+-- SetIgnoreParentAlpha on the counter, anchored to our cell, and the engine
+-- writes into it BECAUSE it is visible. Blizzard feeds its own string, on
+-- our bar, live - and this function draws only what our readable sources
+-- answer, one rule for every kind of place.
+function Text.Count(cell, item, style, spellID)
     if not (cell and item and style) then return end
 
     for _, number in ipairs(NUMBERS) do
@@ -748,21 +735,10 @@ function Text.Count(cell, item, style, spellID, ours)
         -- and is never looked at on the way.
         local value
         if text and text.show then
-            value = number.Value(item, spellID, ours)
+            value = number.Value(item, spellID)
         end
 
-        -- OUR SOURCE DRY, BLIZZARD'S NOT: relay its finished string. `relayed`
-        -- is a STRING (possibly secret) and goes out through SetText; `value`
-        -- is a NUMBER (possibly secret) and goes out through
-        -- SetFormattedText. Both comparisons here are `== nil`, the one legal
-        -- question.
-        local relayed
-        if value == nil and text and text.show
-            and number.member == "Applications" then
-            relayed = Relay(item, ours)
-        end
-
-        if value == nil and relayed == nil then
+        if value == nil then
             Away()
         else
             if not cell[field] then
@@ -792,18 +768,8 @@ function Text.Count(cell, item, style, spellID, ours)
             -- is the raise. pcall because a font string with no face raises
             -- on being written to, and a missing media file is a user's
             -- problem rather than an error.
-            --
-            -- The relayed string goes through SetText for the same reason
-            -- the timer does: it is already formatted, and running it
-            -- through %d would be reading it.
-            local wrote
-            if value ~= nil then
-                wrote = pcall(cell[field].SetFormattedText, cell[field],
-                    "%d", value)
-            else
-                wrote = pcall(cell[field].SetText, cell[field], relayed)
-            end
-            if wrote then
+            if pcall(cell[field].SetFormattedText, cell[field],
+                    "%d", value) then
                 cell[field]:Show()
             else
                 Away()

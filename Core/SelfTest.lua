@@ -8733,28 +8733,32 @@ local function TestCooldownOwn()
         -- AND THE THIRD ANSWER REACHES THE DECISION IT WAS MADE FOR: nil is
         -- not false. False is Blizzard saying it looked at a count and decided
         -- it was not worth a number - final. Nil is nobody having said
-        -- anything, and on a place we draw that means we judge it ourselves,
-        -- which is the number he asked for three times.
-        Check("and a place we draw still writes its own number",
-            ns.Cooldowns.Text.StackToShow(said, 3, true) == 3)
+        -- anything, and that means we judge it ourselves, which is the
+        -- number he asked for three times.
+        Check("and with nobody saying anything we write our own number",
+            ns.Cooldowns.Text.StackToShow(said, 3) == 3)
     else
         Skip("A counter that will not say", "this client cannot make a secret")
     end
 
+    -- ONE RULE FOR EVERY KIND OF PLACE, and the `ours` special case is GONE.
+    -- It existed because Blizzard's counter was "shown" in the API sense and
+    -- invisible under the veil in the user's; Text.Counters pierces the veil
+    -- now - SetIgnoreParentAlpha, anchored onto our cell - so a shown
+    -- counter is a SEEN counter wherever it is, and a second number of ours
+    -- beside it would be exactly the fault the old branch guarded against,
+    -- committed by us.
     local Text = ns.Cooldowns.Text
-    Check("On a borrowed place we leave Blizzard's number alone",
+    Check("A counter Blizzard draws is left alone on every kind of place",
         Text.StackToShow(true, 3) == nil)
-    Check("On one we draw, that same number is ours to write",
-        Text.StackToShow(true, 3, true) == 3,
-        tostring(Text.StackToShow(true, 3, true)))
     -- AND THE HALF THAT MUST NOT MOVE. `false` is Blizzard saying it looked at
     -- a count we may not look at and decided it was not worth a number. That
     -- is the only legal comparison on this patch and it is final on both kinds.
     Check("Blizzard deciding a count is not worth showing is still final",
-        Text.StackToShow(false, 3, true) == nil)
+        Text.StackToShow(false, 3) == nil)
     Check("and with no counter frame at all we judge it ourselves",
-        Text.StackToShow(nil, 3, true) == 3
-            and Text.StackToShow(nil, 1, true) == nil)
+        Text.StackToShow(nil, 3) == 3
+            and Text.StackToShow(nil, 1) == nil)
 
     ---------------------------------------------------------------------
     -- A FLAT FILL IS A RAMP OF ONE COLOUR
@@ -9058,72 +9062,43 @@ local function TestCooldownOwn()
         -----------------------------------------------------------------
         Check("The spell name is on the bar",
             cell.caption ~= nil and cell.caption:IsShown() == true)
-        Check("The stack count is drawn by us, and reads what Blizzard has",
-            cell.stackCount ~= nil and cell.stackCount:GetText() == "3",
-            cell.stackCount and cell.stackCount:GetText() or "no string")
-
         -----------------------------------------------------------------
-        -- AND THE STATE HIS /zs text DUMP CAUGHT: our count reader DRY,
-        -- Blizzard's counter shown, its string carrying the number.
+        -- THE COUNTER COMES THROUGH THE VEIL, and this is the wave his
+        -- "es wird nix angezeigt" bought.
         --
-        --   "stacks ... blizzard shows it true  reads blank" - beside a
-        --   bar of ours drawing nothing, while the standalone Cooldown
-        --   Manager plainly showed a 2.
-        --
-        -- His buff-bar items carry neither auraDataCached nor an
-        -- auraInstanceID under the names ItemStacks reads, so all three of
-        -- our sources answered nil - and Blizzard's own string sat
-        -- invisible under the veil. The relay hands that string on, the
-        -- timer trick applied to the count: formatted inside the game,
-        -- never read, only delivered.
+        -- The count exists nowhere an addon may read it - all three of our
+        -- sources answer nil on his items - and RELAYING Blizzard's string
+        -- was tried and arrived blank with the stacks plainly up, because
+        -- the engine does not write text into a counter nobody can see.
+        -- You cannot copy what is never written. So the counter itself is
+        -- made visible: it ignores the veiled item's alpha and is anchored
+        -- onto OUR cell, and the engine feeds its own string there, live.
         -----------------------------------------------------------------
-        local cached = bars.auraDataCached
-        bars.auraDataCached = nil
+        local counter = ns.CDM:Counter(bars, "Applications")
+        Check("The veiled item's counter is anchored onto OUR cell",
+            counter ~= nil and (select(2, counter:GetPoint(1))) == cell,
+            tostring(counter and select(2, counter:GetPoint(1))))
+        Check("and it ignores the veil's alpha, so the engine keeps writing",
+            counter ~= nil and counter:IsIgnoringParentAlpha() == true)
+        -- Asserted against what the STYLE resolves, not a literal: his
+        -- profile says LEFT, this fixture bar says nothing and so gets the
+        -- stacks default - hardcoding either is a test that asserts the
+        -- world.
+        local askedAnchor = ns.Cooldowns.Text.Style(ns.db.bars[1], 24)
+            .stacks.anchor
+        Check("at the anchor the stacks setting names",
+            counter ~= nil and (counter:GetPoint(1)) == askedAnchor,
+            string.format("%s, asked %s",
+                tostring(counter and counter:GetPoint(1)),
+                tostring(askedAnchor)))
 
-        local counterString = ns.CDM:CounterText(bars, "Applications")
-        Check("The fixture's counter has a string to relay",
-            counterString ~= nil)
-        if counterString then
-            counterString:SetText("2")
-
-            local Txt = ns.Cooldowns.Text
-            Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
-            Check("A dry count reader relays Blizzard's own string",
-                cell.stackCount:GetText() == "2"
-                    and cell.stackCount:IsShown() == true,
-                tostring(cell.stackCount:GetText()))
-
-            -- BLANK RELAYS AS BLANK, which is his dump's exact moment: the
-            -- buff down, the counter frame still shown, nothing in it. A
-            -- relay that invented a mark here would draw noise on every
-            -- empty bar all evening.
-            counterString:SetText("")
-            Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
-            Check("and a blank string relays as nothing visible",
-                (cell.stackCount:GetText() or "") == "",
-                tostring(cell.stackCount:GetText()))
-
-            -- AND A SECRET STRING GOES THROUGH UNTOUCHED - the engine
-            -- formatted it where the count was readable; == nil and SetText
-            -- are the only two things that may happen to it on the way.
-            if _G.__SECRET and issecretvalue and issecretvalue(_G.__SECRET) then
-                counterString:SetText(_G.__SECRET)
-                local ok = pcall(Txt.Count, cell, bars,
-                    Txt.Style(ns.db.bars[1], 24), 77535, true)
-                Check("A protected count string is relayed without a raise",
-                    ok and cell.stackCount:GetText() == _G.__SECRET,
-                    tostring(ok))
-            end
-
-            counterString:SetText("")
-        end
-
-        bars.auraDataCached = cached
-        local Txt = ns.Cooldowns.Text
-        Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
-        Check("With the reader wet again, our own number wins over the relay",
-            cell.stackCount:GetText() == "3",
-            tostring(cell.stackCount:GetText()))
+        -- AND OUR OWN NUMBER STANDS DOWN BESIDE IT. Blizzard's counter is
+        -- SHOWN and now genuinely visible, so a number of ours in the same
+        -- corner would be the two-numbers fault the adopted places have
+        -- always guarded against - committed by us, on our own bar.
+        Check("With Blizzard's counter seen, our own string stays empty",
+            cell.stackCount == nil or cell.stackCount:IsShown() == false,
+            cell.stackCount and tostring(cell.stackCount:GetText()) or "none")
         Check("The remaining time is Blizzard's own, copied across",
             own.timer:GetText() == "12.3", own.timer:GetText())
 
@@ -9619,6 +9594,15 @@ local function TestCooldownOwn()
             own.fill:IsShown() == false and own.icon:IsShown() == false)
         Check("and gives Blizzard's frame its brightness back",
             bars:GetAlpha() == 1, tostring(bars:GetAlpha()))
+
+        -- AND THE COUNTER'S OBEDIENCE COMES BACK WITH IT. The veil-piercing
+        -- is a Claim write like any other: an addon that let go and left a
+        -- counter ignoring its parent's alpha would leave one bright number
+        -- floating over Blizzard's own display for the rest of the session.
+        local pierced = ns.CDM:Counter(bars, "Applications")
+        Check("and its counter obeys its parent's alpha again",
+            pierced ~= nil and pierced:IsIgnoringParentAlpha() == false,
+            tostring(pierced and pierced:IsIgnoringParentAlpha()))
     end)
 
     -- PUT THE WORLD BACK WHATEVER HAPPENED, and put it back in an order that
