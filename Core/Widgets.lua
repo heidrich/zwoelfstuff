@@ -3765,9 +3765,29 @@ function UI.CellGrid(parent, cfg)
                 cell.edge:Show()
             end
 
-            -- The selected cell is what the right column is editing, so it has
-            -- to be obvious which one that is.
+            -- THE SELECTED CELL, AND THE RING SAYS WHICH OF TWO THINGS IT IS.
+            --
+            -- On a place with a spell on it, selection means "this is what the
+            -- settings are editing" - the accent, the same mark the card wears
+            -- when the WHOLE bar is what they are editing, and never both at
+            -- once.
+            --
+            -- On an EMPTY place it cannot mean that: styling is filed under
+            -- the spell, so a place with nothing on it has nothing to carry.
+            -- There it means what this click has always meant - "your next
+            -- spell lands here" - and it is drawn quieter, because the owner's
+            -- report was exactly this pair being indistinguishable: "jetzt
+            -- wird immer beides angewählt und man weiss nicht was man
+            -- editiert."
             local isSelected = cfg.selected and cfg.selected() == index
+            if isSelected then
+                if spellID then
+                    cell.ring:SetColor(C.accent[1], C.accent[2], C.accent[3], 1)
+                else
+                    cell.ring:SetColor(C.controlHi[1], C.controlHi[2],
+                        C.controlHi[3], 1)
+                end
+            end
             cell.ring:SetShown(isSelected)
             if isSelected then cell.hover:Hide() end
 

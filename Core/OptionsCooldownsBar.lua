@@ -58,6 +58,7 @@
 local _, ns = ...
 
 local UI = ns.UI
+local C = UI.C
 
 local Panel = {}
 ns.OptionsCooldownsBar = Panel
@@ -347,7 +348,7 @@ local function PlaceRows(grid, bar)
     local page = ns.OptionsCooldowns
 
     local function Available()
-        return page and page.PlaceAvailable and page.PlaceAvailable() or nil
+        return page and page.Place and page.Place() or nil
     end
 
     -- WHAT THE PLACE IS CALLED, because "place 3" is a number on a page and
@@ -367,23 +368,28 @@ local function PlaceRows(grid, bar)
         return name or L("Place %d", index)
     end
 
+    -- IT SAYS WHAT IS BEING EDITED. IT DOES NOT DECIDE IT.
+    --
+    -- This was a dropdown, and the dropdown was the mistake: the card already
+    -- had a highlight and the place already had a ring, so there were three
+    -- things claiming to answer one question and two of them could disagree.
+    -- The gesture decides now - click the card for the whole bar, click a
+    -- place for that place - and this line is the same answer written in
+    -- words, beside the rows it applies to.
+    --
+    -- BOTH ENDS SAY IT, which is what §3 of the plan asked for and what he
+    -- asked for in his own words: a mark on the place, and the same fact next
+    -- to the block being edited. The eye that is on the settings column should
+    -- not have to travel back to the picture to know what it is changing.
     local row = grid:Row(L["Changing"])
-    local menu = UI.Dropdown(row,
-        function()
-            local out = { { value = false, text = L["The whole bar"] } }
-            local name = PlaceName()
-            if name then out[#out + 1] = { value = true, text = name } end
-            return out
-        end,
-        function() return page and page.editPlace and true or false end,
-        function(value)
-            if page then page.editPlace = value and true or false end
-        end,
-        { apply = Refresh })
+    local what = UI.Label(row.slot, "", UI.FS.body, C.accent)
+    what:SetPoint("LEFT", row.slot, "LEFT", 0, 0)
+    what:SetJustifyH("LEFT")
 
-    grid:Note(L["Click a place on the bar picture to pick a different one. "
-        .. "What a place carries of its own wins over the bar, which is why "
-        .. "a colour set here can leave one icon looking untouched."])
+    grid:Note(L["Click a place in the picture to change just that one, or the "
+        .. "card itself to change the whole bar. What a place carries of its "
+        .. "own wins over the bar, which is why a colour set on the bar can "
+        .. "leave one place looking untouched."])
 
     -- THE WAY BACK, and it is a button rather than a "reset" on every row: he
     -- has three places carrying styling from 4.82.0 and the honest offer is
@@ -409,15 +415,16 @@ local function PlaceRows(grid, bar)
 
     OnRefresh(grid, function()
         local index = Available()
-        local shown = index ~= nil
 
-        row.dkSkip = not shown
-        row:SetShown(shown)
-        if menu and menu.Refresh then menu:Refresh() end
+        -- THE LINE IS ALWAYS THERE, and only its answer changes. It used to
+        -- come and go with the selection, which meant the one state you most
+        -- need it in - "am I still editing that one place?" - was the only
+        -- state where the page said nothing at all.
+        what:SetText(index and PlaceName() or L["The whole bar"])
 
         -- The way back is only there while there is something to go back FROM,
         -- and only while this page is what the rows are pointed at.
-        local editing = page and page.Place and page.Place()
+        local editing = index
         local store, current = Store(), Bar(bar)
         local mine = editing and store and current
             and type(current.cellLook) == "table"

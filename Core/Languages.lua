@@ -424,7 +424,7 @@ Register("enUS", {
         true,
     ["Changing"] = true,
     ["Charges"] = true,
-    ["Click a place on the bar picture to pick a different one. What a place carries of its own wins over the bar, which is why a colour set here can leave one icon looking untouched."] =
+    ["Click a place in the picture to change just that one, or the card itself to change the whole bar. What a place carries of its own wins over the bar, which is why a colour set on the bar can leave one place looking untouched."] =
         true,
     ["Close up"] = true,
     ["Close up in the row"] = true,
@@ -929,8 +929,8 @@ Register("deDE", {
         "Ladungsmarken erscheinen nur bei einem Zauber, der mehr als eine Ladung HAT - der Schalter kann also für eine ganze Leiste an bleiben, ohne alles darauf zu markieren.",
     ["Changing"] = "Du änderst",
     ["Charges"] = "Ladungen",
-    ["Click a place on the bar picture to pick a different one. What a place carries of its own wins over the bar, which is why a colour set here can leave one icon looking untouched."] =
-        "Klick im Bild der Leiste auf einen Platz, um einen anderen zu wählen. Was ein Platz selbst mitbringt, gewinnt gegen die Leiste - deshalb kann eine hier gesetzte Farbe ein Symbol unberührt lassen.",
+    ["Click a place in the picture to change just that one, or the card itself to change the whole bar. What a place carries of its own wins over the bar, which is why a colour set on the bar can leave one place looking untouched."] =
+        "Klick im Bild auf einen Platz, um nur diesen zu ändern, oder auf die Karte selbst für die ganze Leiste. Was ein Platz selbst mitbringt, gewinnt gegen die Leiste - deshalb kann eine auf der Leiste gesetzte Farbe einen Platz unberührt lassen.",
     ["Close up"] = "Aufrücken",
     ["Close up in the row"] = "In der Reihe aufrücken",
     ["Crop"] = "Zuschnitt",

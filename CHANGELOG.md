@@ -129,10 +129,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   page has, per band.
 
 - **You can style ONE place on a bar now, and see which places carry their
-  own.** Click a place in the bar picture and the Look, Text, Effects and Fill
-  tabs get a **Changing** switch at the top: the whole bar, or just that place.
-  Everything underneath it works exactly as it did — every slider, colour and
-  menu simply writes where the switch says.
+  own.** Click the card to change the whole bar, click a place in the picture
+  to change just that one — the highlight tells you which, and it is never both
+  at once. The Look, Text, Effects and Fill tabs say it in words at the top too
+  (**Changing: …**). Everything underneath works exactly as it did: every
+  slider, colour and menu simply writes wherever you clicked.
   - **A dot in the corner of a place means it carries a look of its own.** This
     is the thing that had no answer before: you set a colour on the bar, and a
     place that had its own kept it and said nothing. Now the place says so.

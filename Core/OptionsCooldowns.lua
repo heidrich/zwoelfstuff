@@ -93,27 +93,31 @@ end
 -- travels when the spell is moved, so an empty place has nothing to key by. It
 -- answers nil there and the rows go back to the bar, which is also the honest
 -- reading: there is nothing on that place to look at.
-Page.editPlace = false
-
--- CAN the selected place be styled at all. Nil when nothing is selected, when
--- the selection is off the end of a bar that has since been narrowed, or when
--- the place is empty.
-function Page.PlaceAvailable()
+-- THE SELECTION IS THE SWITCH, and there is no second control for it.
+--
+-- The first version put a "Changing: whole bar / this place" dropdown at the
+-- top of the style tabs. He saw it beside a card whose stripe and whose first
+-- place were BOTH lit and said the real problem out loud: "jetzt wird immer
+-- beides angewählt und man weiss nicht was man editiert."
+--
+-- His answer, and it is better than the dropdown: *"wenn ich auf den parent
+-- frame klicke wird links der frame als ganzes markiert und dann stellst du
+-- alles ein. wenn ich auf eine leiste oder icon klicke dann da. dann ist das
+-- auch sauber visuell getrennt."* One gesture, one mark, nothing to keep in
+-- step - a switch that can disagree with the highlight is a switch that will.
+--
+-- Nil when nothing is picked, when the pick is off the end of a bar that has
+-- since been narrowed, or when the place is EMPTY: styling is filed under the
+-- spell so that it travels when the spell moves, so a place with nothing on it
+-- has nothing to key by. Clicking one selects it for the picker as it always
+-- did and leaves the settings on the bar, which is the only honest reading -
+-- there is nothing on that place to style.
+function Page.Place()
     local store, bar = Store(), Page.Current()
     if not (store and bar and Page.cell) then return nil end
     if Page.cell > store.Capacity(bar) then return nil end
     if type(store.Cells(bar)[Page.cell]) ~= "number" then return nil end
     return Page.cell
-end
-
--- AND WHETHER IT IS. Two questions, one answer underneath: the switch above
--- the rows is drawn from the first, so asking the second for it would make the
--- switch vanish the moment you pressed "whole bar" and take the way back with
--- it. Written as one line over the other rather than as two walks of the same
--- three conditions - the second copy of a rule is the one that goes stale.
-function Page.Place()
-    if not Page.editPlace then return nil end
-    return Page.PlaceAvailable()
 end
 
 local function Refresh()
@@ -491,9 +495,17 @@ local function BuildCards(host)
         card.remove:SetPoint("TOPRIGHT", card.well, "BOTTOMRIGHT", 0, -4)
         card.copy:SetPoint("RIGHT", card.remove, "LEFT", -10, 0)
 
+        -- CLICKING THE CARD IS "THE WHOLE BAR", and that is the way back out of
+        -- editing one place. Owner: "wenn ich auf den parent frame klicke wird
+        -- links der frame als ganzes markiert und dann stellst du alles ein."
+        --
+        -- Clearing the pick is the whole of it - Page.Place() reads that field
+        -- and nothing else, so the settings, the stripe and the ring all change
+        -- together on one press.
         card:SetScript("OnClick", function()
             if not card.dkBar then return end
             Page.barID = card.dkBar.id
+            Page.cell = nil
             Refresh()
         end)
 
@@ -542,7 +554,22 @@ local function BuildCards(host)
             end
             if card.switch and card.switch.Refresh then card.switch.Refresh() end
 
-            card.mark:SetShown(Page.barID == bar.id)
+            -- THE STRIPE MEANS "THIS IS WHAT THE SETTINGS ARE EDITING", and it
+            -- is the WHOLE bar or it is nothing.
+            --
+            -- Owner, with a picture of a card whose stripe and whose first
+            -- place were both lit: "jetzt wird immer beides angewählt und man
+            -- weiss nicht was man editiert." He is right, and his own answer
+            -- is the one built here: click the card and the card is marked,
+            -- click a place and the place is. Two marks that are never on
+            -- together, so there is nothing to read wrong.
+            --
+            -- The stripe is not "which bar is current" any more. That question
+            -- is still answered - the settings, the picker and the preview all
+            -- follow Page.barID - it just no longer has a mark of its own,
+            -- because a second highlight meaning something subtler is exactly
+            -- what he could not read.
+            card.mark:SetShown(Page.barID == bar.id and Page.Place() == nil)
 
             -- A CARD IS POOLED, so the one that was armed to delete bar three
             -- can come back holding bar four. Disarmed on every pass unless it

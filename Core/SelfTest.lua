@@ -7965,38 +7965,42 @@ local function TestCooldownStore()
     ---------------------------------------------------------------------
     -- WHICH PLACE THE ROWS ARE POINTED AT
     --
-    -- The switch above the rows writes Page.editPlace and nothing else; every
-    -- control resolves the target on each read and each write. So this is the
-    -- whole of "am I editing the bar or one place", and it is asked here
-    -- rather than by pressing a dropdown, which is a widget test.
+    -- THE SELECTION IS THE SWITCH. There was a "whole bar / this place"
+    -- dropdown here for one wave, and the owner named what was wrong with it
+    -- from a screenshot: the card had a highlight, the place had a ring and
+    -- the menu had an answer, so three things claimed to say what he was
+    -- editing and two of them could disagree. "Jetzt wird immer beides
+    -- angewählt und man weiss nicht was man editiert."
+    --
+    -- So there is one field, Page.cell - the same one the spell picker has
+    -- always used - and everything else reads it: the stripe on the card, the
+    -- ring on the place, and every control in the four style blocks.
     ---------------------------------------------------------------------
     local page = ns.OptionsCooldowns
     if page then
         local savedBars, savedID = ns.db.bars, page.barID
-        local savedCell, savedEdit = page.cell, page.editPlace
+        local savedCell = page.cell
 
         ns.db.bars = { { id = 9401, name = "desk", cells = { 1044, nil },
             rows = 1, columns = 2 } }
         page.barID = 9401
 
-        page.cell, page.editPlace = nil, true
+        page.cell = nil
         Check("With no place picked, the rows mean the whole bar",
             page.Place() == nil)
 
-        page.cell, page.editPlace = 1, false
-        Check("A place picked but the switch on the bar is still the bar",
-            page.Place() == nil)
-
-        page.editPlace = true
-        Check("and with the switch on the place, that is what they mean",
+        page.cell = 1
+        Check("Picking a place is what points them at it",
             page.Place() == 1, tostring(page.Place()))
 
-        -- AN EMPTY PLACE HAS NOTHING TO KEY BY, so it is not offered - the
-        -- switch is drawn from the same answer, so it cannot offer a choice
-        -- the writer would refuse.
+        -- AN EMPTY PLACE HAS NOTHING TO KEY BY. Styling is filed under the
+        -- SPELL so that it travels when the spell moves, so clicking an empty
+        -- place selects it for the picker - which is what that click has
+        -- always meant - and leaves the settings on the bar. Any other answer
+        -- would offer a target its own writer refuses.
         page.cell = 2
         Check("An empty place is never what the rows are pointed at",
-            page.Place() == nil and page.PlaceAvailable() == nil)
+            page.Place() == nil)
 
         -- AND A SELECTION THAT HAS GONE OUT OF RANGE. A bar narrowed since the
         -- click leaves a number pointing at a place that no longer exists.
@@ -8005,8 +8009,25 @@ local function TestCooldownStore()
         Check("Nor is a place past the end of a bar that has been narrowed",
             page.Place() == nil)
 
+        -- AND THE TWO MARKS ARE NEVER LIT TOGETHER, which is the whole of his
+        -- report. The card's stripe is drawn from this same answer - "the
+        -- settings are editing the WHOLE bar" - so one press moves both.
+        --
+        -- Asked as the condition the card is drawn from rather than by reading
+        -- a texture: the stripe is a region on a pooled frame in a column this
+        -- suite does not build, and a check that walked to it would be testing
+        -- the layout rather than the rule.
+        ns.db.bars[1].columns = 2
+        page.cell = nil
+        local wholeBar = page.Place() == nil
+        page.cell = 1
+        local onePlace = page.Place() == 1
+        Check("The bar and one of its places are never both what you edit",
+            wholeBar and onePlace, string.format("%s / %s", tostring(wholeBar),
+                tostring(onePlace)))
+
         ns.db.bars, page.barID = savedBars, savedID
-        page.cell, page.editPlace = savedCell, savedEdit
+        page.cell = savedCell
     else
         Skip("Which place the rows are pointed at",
             "the cooldowns page is not loaded")
