@@ -320,6 +320,33 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     original — which is correct text rather than a word with a hole in it —
     and they are listed for re-translation. Russian lost 44, Korean 6, Simplified Chinese 1.
 
+### Fixed
+
+- **The white line to the right of a bar was the spark.** Twelve pixels wide,
+  blended bright, hung by its **centre** on the fill's leading edge — so six of
+  them stood outside the bar, always on the same side, which is the shape of a
+  border. It hangs by its own edge now and sits entirely inside the fill at
+  every value.
+- **And the same spark stayed lit on an empty bar.** It rides the fill's
+  texture, and a texture with nothing in it does not go away — it collapses
+  onto the end the bar grows *from*. So an empty bar wore a bright line at one
+  end for as long as the buff was down, which is most of an evening. It goes
+  out when the bar empties and comes back when it refills.
+- **No, there is no range check** — and the icon that greyed itself sometimes
+  was real. `IsShown` can hand back a **protected** value on this patch, and
+  whether it does depends on where you are standing. Both readers of that
+  answer greyed on exactly "no" and stayed bright on "cannot say", so one
+  unchanged, inactive spell was drawn two different ways from frame to frame.
+  The last answer the client actually **gave** is kept now instead of being
+  thrown away — a frame nobody has ever had an answer for still draws bright.
+  `/zs cdm` prints both readings side by side, so a line where they differ is
+  the explanation rather than something to work out.
+- **The co-tank panel's trough is a surface, not a ghost of the bar.** It was
+  the health bar's own colour at 12%, so it changed shade every time somebody
+  took damage — one more moving thing on a panel that is read in two seconds.
+  It is #1a1a1a at full opacity now, and its rail reaches 100% (it stopped at
+  60% while the setting shipped at a value it could not express).
+
 ### Changed
 
 - **One look, out of the box.** Every background and every border in the addon

@@ -198,6 +198,11 @@ local NOT_A_SURFACE = { debuffs = true, buffs = true }
 local WAS_SURFACE = { { 0, 0, 0 }, { 0.05, 0.05, 0.06 } }
 local WAS_ALPHA = { 0.9, 0.85 }
 
+-- The co-tank panel's trough, which was the bar's own colour at 0.12 and is
+-- the house surface at 1 now. Its own list because it is its own setting -
+-- see the named step at the bottom of ns.ApplyHouseLook.
+local WAS_TRACK = { 0.12 }
+
 -- A TOLERANCE RATHER THAN `==`, because these numbers have been through
 -- SavedVariables. The file is written as decimal text and read back as a
 -- double, and 0.05 is not exactly representable either way - so an equality
@@ -216,11 +221,10 @@ local function WoreOldColor(colour)
     return false
 end
 
-local function WoreOldAlpha(value)
-    for _, was in ipairs(WAS_ALPHA) do
-        if type(value) == "number" and math.abs(value - was) < 0.005 then
-            return true
-        end
+local function WoreOldAlpha(value, list)
+    if type(value) ~= "number" then return false end
+    for _, was in ipairs(list or WAS_ALPHA) do
+        if math.abs(value - was) < 0.005 then return true end
     end
     return false
 end
@@ -286,6 +290,26 @@ function ns.ApplyHouseLook(profile, force)
     end
 
     Walk(profile, 0, false)
+
+    -- ONE SETTING BY NAME RATHER THAN A KEY IN THE WALK, and that is not an
+    -- exception being smuggled in - it is the walk refusing to guess.
+    --
+    -- `trackAlpha` exists in two places and names two different DESIGNS. On a
+    -- tracking group it is the bar's own colour faded to a ghost of itself,
+    -- deliberately, and 0.08 is right there. On the co-tank panel it is the
+    -- house surface behind the fill and it is opaque. A walk that only sees
+    -- key names cannot tell those apart, and teaching it to would be the
+    -- generic rule carrying a list of which module means what - which is the
+    -- fourteen-copies problem again, one layer up.
+    local panel = profile.coTanks
+    if type(panel) == "table" then
+        if (force or WoreOldAlpha(panel.trackAlpha, WAS_TRACK))
+            and panel.trackAlpha ~= 1 then
+            panel.trackAlpha = 1
+            moved = moved + 1
+        end
+    end
+
     return moved
 end
 
@@ -672,7 +696,21 @@ ns.DEFAULTS = {
         bgColor       = ns.SurfaceColor(),
         bgAlpha       = 1.00,
         bgGradient    = { on = false, color = { 0.10, 0.10, 0.12 }, direction = "down" },
-        trackAlpha    = 0.12,     -- the unfilled part, in the bar's own colour
+
+        -- THE EMPTY PART OF THE BAR IS A SURFACE NOW, not a ghost of the bar.
+        --
+        -- Owner, 2026-08-16: "bei co tanks den bar fill bg auch 1a1a1a 100%
+        -- machen." It used to be the bar's OWN colour at 0.12 - a green bar
+        -- ran into a faint green trough - and the idea was "how much of what
+        -- there was". In practice it is one more colour on a panel that is
+        -- read in two seconds, and it moved with the health colour, so the
+        -- trough changed shade as somebody took damage.
+        --
+        -- The alpha SURVIVES as a control and defaults to 1: this is how
+        -- solid the trough is, and at 1 it is exactly #1a1a1a. The rail used
+        -- to stop at 0.6 - it could not reach the value it now ships with,
+        -- which is a control that cannot express its own default.
+        trackAlpha    = 1.00,
 
         borderSize    = 1,
         borderColor   = ns.SurfaceColor(),

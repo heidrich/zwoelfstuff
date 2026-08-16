@@ -634,8 +634,53 @@ end
 -- The shape is old Screen.lua:724-730's correction, kept exactly. It lies ACROSS
 -- the bar, so the thickness is its width one way round and its height the other,
 -- and the bar's own measurement is the axis that is left.
+-- IS THERE ANYTHING FOR IT TO LEAD?
+--
+-- Owner, 2026-08-16: "wenn ich die follow spark da anhabe, wenn die bar leer
+-- ist, ist der spark immer noch zu sehen." The spark rides the fill's texture,
+-- and a texture with nothing in it does not go away - it collapses onto the
+-- end the bar grows FROM. So an empty bar wore a bright twelve-pixel line at
+-- one end for as long as the buff was down, which is most of an evening.
+--
+-- TRUE WHEN IT CANNOT BE ASKED, and that is the only honest default: a value
+-- mirrored from Blizzard is a SECRET on this patch, and a secret means the
+-- buff is up and running. Rounding "cannot say" down to "empty" would take
+-- the spark off every bar that works properly.
+local function Leading(fill)
+    local okValue, value = pcall(fill.GetValue, fill)
+    if not (okValue and ns.CanCompute(value)) then return true end
+
+    local okRange, low = pcall(fill.GetMinMaxValues, fill)
+    if not (okRange and ns.CanCompute(low) and type(low) == "number") then
+        low = 0
+    end
+    return type(value) == "number" and value > low
+end
+
+-- WHETHER THE SPARK IS LIT, RE-ASKED. Own.lua calls this on the two moments
+-- the answer can change - the buff falling off and coming back - rather than
+-- on a render pass, because a render pass runs when Blizzard notified us
+-- about something and the bar empties without anybody being notified.
+--
+-- ON THE TRANSITION AND NOT PER FRAME. This is two pcalls and a table lookup;
+-- at sixty frames on four bars it would be the closure-per-frame lesson over
+-- again, one floor down.
+function Fill.Lead(item)
+    local fill = type(item) == "table" and Fill.Bar(item) or nil
+    local note = fill and parts[fill] or nil
+    if not (note and note.spark) then return false end
+
+    note.spark:SetShown(note.sparkWanted and Leading(fill) or false)
+    return true
+end
+
 local function Spark(host, fill, note, show, direction, texture, vertical)
     local spark = note.spark
+
+    -- REMEMBERED, because Fill.Lead has to be able to tell "the user switched
+    -- the spark off" from "there is nothing to lead just now" - and turning
+    -- one back on must never turn the other on with it.
+    note.sparkWanted = show and true or false
 
     if not show then
         if spark then spark:Hide() end
@@ -665,10 +710,22 @@ local function Spark(host, fill, note, show, direction, texture, vertical)
         spark:SetRotation(0)
     end
 
+    -- ITS OWN EDGE ON THE FILL'S EDGE, NOT ITS CENTRE.
+    --
+    -- Owner, 2026-08-16: "rechts von den bars ist immer noch ein weisser
+    -- border." It was the spark. Twelve pixels wide, blended ADD, hung by its
+    -- CENTRE on the leading edge - so six pixels of white stood OUTSIDE the
+    -- bar, and on a full bar the bar's leading edge is the cell's own edge.
+    -- It reads as a border because it is the same shape as one and it is
+    -- always on the same side.
+    --
+    -- Anchored edge to edge it sits entirely inside the fill at every value,
+    -- which is also what it looked like it was doing on every screenshot: at
+    -- half full nobody can see which six pixels are which.
+    local edge = ns.Layout.SparkEdge(direction.orientation, direction.reverse)
     spark:ClearAllPoints()
-    spark:SetPoint("CENTER", texture or fill,
-        ns.Layout.SparkEdge(direction.orientation, direction.reverse), 0, 0)
-    spark:Show()
+    spark:SetPoint(edge, texture or fill, edge, 0, 0)
+    spark:SetShown(Leading(fill))
     return true
 end
 
@@ -1133,6 +1190,18 @@ function Fill.Trough(item)
     local fill = Fill.Bar(item)
     local note = fill and parts[fill] or nil
     return note and note.track or nil
+end
+
+-- THE SPARK ON ONE BAR, or nil. Fill.Trough's twin and for the same two
+-- readers: the self test has to prove where it is anchored and whether it
+-- goes out on an empty bar, and /zs cdm says whether one is lit. Both of
+-- those were reported as bugs on the same day - "rechts von den bars ist
+-- immer noch ein weisser border" and "wenn die bar leer ist, ist der spark
+-- immer noch zu sehen" - and neither could be seen from outside this file.
+function Fill.Spark(item)
+    local fill = Fill.Bar(item)
+    local note = fill and parts[fill] or nil
+    return note and note.spark or nil
 end
 
 -- How many StatusBars we are holding a note about.

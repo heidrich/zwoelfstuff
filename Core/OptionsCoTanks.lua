@@ -717,9 +717,13 @@ function OptionsCoTanks:BuildLook(grid)
     GradientRows(grid, "healthGradient", gradients)
     Slide(grid, "Opacity", "healthAlpha", 0, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100)
-    Slide(grid, "Empty part", "trackAlpha", 0, 0.6, 0.02,
+    -- THE RAIL GOES TO 1 NOW, AND IT HAD TO. It stopped at 0.6 while the
+    -- setting ships at 1 - a control that cannot express its own default,
+    -- which reads as "somebody has been in here and broken it".
+    Slide(grid, "Empty part", "trackAlpha", 0, 1, 0.05,
         function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end, 100,
-        "The bar's own colour, faint, behind the fill")
+        "How solid the trough behind the fill is. At 100% it is the same "
+            .. "#1a1a1a as everything else the addon draws behind something")
 
     UI.Dropdown(grid:FullRow("Runs", { controlWidth = 150 }),
         ns.FILL_DIRECTIONS,

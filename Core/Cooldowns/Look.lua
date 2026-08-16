@@ -401,7 +401,15 @@ function Look.Apply(item, style)
 
     -- nil is "the client will not say", and it counts as ACTIVE. See
     -- Look.Opacity: unknown is never rounded into the dimmer answer.
-    local active = ns.CDM:ItemIsActive(item) ~= false
+    --
+    -- ItemLooksActive rather than ItemIsActive, and the sentence above is
+    -- still exactly true - it just asks one question first. If the client HAS
+    -- answered for this frame before, that answer is used instead of the
+    -- default; only a frame nobody has ever had an answer for still lands on
+    -- "active". Rounding unknown into the flattering answer once is a wrong
+    -- picture; doing it on every second frame is a picture that flickers,
+    -- which is what the owner reported.
+    local active = ns.CDM:ItemLooksActive(item) ~= false
 
     local zoom = style.iconZoom
 

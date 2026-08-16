@@ -328,9 +328,14 @@ local function BuildRow(panel)
     row.health:SetMinMaxValues(0, 1)
     row.health:SetValue(1)
 
-    -- The empty part of the bar, in the bar's own colour at a low alpha. A
-    -- bar on a black plate reads as "how much is left"; a bar on a ghost of
-    -- itself reads as "how much of what there was", which is the question.
+    -- THE EMPTY PART OF THE BAR, in the house surface at its own opacity.
+    --
+    -- It used to be the bar's OWN colour faded to 0.12, on the theory that a
+    -- bar on a ghost of itself reads as "how much of what there was". What it
+    -- actually did was move: the trough is tinted from the health colour, so
+    -- it changed shade every time somebody took damage, and a panel read in
+    -- two seconds had one more thing changing on it. Owner: "bei co tanks den
+    -- bar fill bg auch 1a1a1a 100% machen."
     row.track = row.health:CreateTexture(nil, "BACKGROUND")
     row.track:SetAllPoints(row.health)
 
@@ -838,7 +843,10 @@ local function PaintRow(row, snap, db, testing)
     row.health:SetStatusBarColor(1, 1, 1, 1)
     ns.Tint(row.health:GetStatusBarTexture(), { r, g, b }, db.healthAlpha,
         db.healthGradient)
-    row.track:SetVertexColor(r, g, b, db.trackAlpha)
+    -- NOT `r, g, b` - that is the health colour, and it is the whole point of
+    -- the change. The trough is the house surface; only how solid it is is
+    -- still a setting.
+    row.track:SetVertexColor(ns.SurfaceRGB(db.trackAlpha))
 
     -- THE BAR TAKES THE NUMBER WITHOUT READING IT - but the RANGE has to be
     -- set, and that was the hole. SetMinMaxValues was guarded by CanCompute,

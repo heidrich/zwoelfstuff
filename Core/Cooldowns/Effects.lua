@@ -1439,6 +1439,13 @@ function Effects.Dump()
                         Say("isActive", info and info.isActive),
                         Say("isOnGCD", info and info.isOnGCD),
                         Say("item:IsActive", ns.CDM:ItemIsActive(item)),
+                        -- BOTH, and that is the point of printing them: a
+                        -- line where the first is nil and the second is not
+                        -- IS the answer to "why is this icon grey sometimes
+                        -- and bright other times". See CDM:ItemLooksActive.
+                        Say("looks active", ns.CDM:ItemLooksActive(item)),
+                        Say("remembered",
+                            ns.CDM:ItemActiveIsRemembered(item)),
                         Say("start", cdInfo and cdInfo.startTime),
                         Say("duration", cdInfo and cdInfo.duration),
                         Say("tracks", Tracks(item)),

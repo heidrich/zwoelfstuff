@@ -294,13 +294,24 @@ end
 -- evening, so this is the branch the tick actually spends its life in - and
 -- four setters a frame to keep saying nought is the same waste as the closure
 -- above, one layer down. `emptied` is on our own widget table.
-local function Empty(own)
+local function Empty(own, item)
     if own.emptied then return end
     own.emptied = true
 
     own.fill:SetMinMaxValues(0, 1)
     own.fill:SetValue(0)
     if own.timer then own.timer:SetText("") end
+
+    -- AND THE SPARK HAS NOTHING LEFT TO LEAD. It rides the fill's texture,
+    -- which does not disappear when the bar empties - it collapses onto the
+    -- end the bar grows FROM, and sat there as a bright line for as long as
+    -- the buff was down. Owner: "wenn die bar leer ist, ist der spark immer
+    -- noch zu sehen."
+    --
+    -- HERE RATHER THAN IN THE TICK, so it costs nothing per frame: this
+    -- function already runs once per fall and not once per frame, and the
+    -- latch above is what makes that true.
+    Fill.Lead(item)
 end
 
 ---------------------------------------------------------------------------
@@ -386,7 +397,12 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
     -- 4. THE CLOCK, MIRRORED. See the file header: the value is Blizzard's,
     --    worked out inside the game where a secret is readable, and it arrives
     --    here as something to pass on rather than to look at.
-    local active = ns.CDM:ItemIsActive(item)
+    -- ItemLooksActive, not ItemIsActive - see its note in CDM.lua. Both of
+    -- the two things this function does with the answer (the dimming below
+    -- and the greying at the bottom) fire on exactly `false`, so a client
+    -- that goes quiet for a frame used to swap the picture rather than leave
+    -- it alone. Owner: "manchmal ist das icon ausgegraut manchmal nicht."
+    local active = ns.CDM:ItemLooksActive(item)
     local mirror = parts.fill and Fill.Blizzard(item) or nil
     local text = mirror and TimerString(mirror) or nil
 
@@ -413,7 +429,7 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                 -- nil is "the client will not say", and it is never rounded
                 -- into the answer that empties the bar.
                 if up == false then
-                    Empty(own)
+                    Empty(own, item)
                     return
                 end
 
@@ -422,12 +438,30 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                 -- it would go quiet for ever, and a bar that emptied once
                 -- would never fill again. The cheap half of a rate limit is
                 -- setting it - the half that gets forgotten is clearing it.
+                --
+                -- CLEARED HERE AND ACTED ON AFTER THE SYNC, and the order is
+                -- the whole of it. The spark can only be re-lit once the new
+                -- value is IN the bar: asked a line earlier it puts the
+                -- question to a bar that is still empty, gets the same answer
+                -- that hid it in the first place, and the spark never comes
+                -- back for the rest of the session. The desk caught exactly
+                -- that, on the second half of the down-up-down fixture - the
+                -- half that exists because a latch's forgotten side is always
+                -- the one that clears it.
+                --
+                -- ON THE TRANSITION, not sixty times a second. Clearing an
+                -- already-clear latch is free; asking the fill for its value
+                -- is two pcalls.
+                local waking = own.emptied
                 own.emptied = nil
 
                 if not Sync(self, mirror, showTimer and own.timer or nil,
                         text) then
                     self:SetScript("OnUpdate", nil)
+                    return
                 end
+
+                if waking then Fill.Lead(item) end
             end
             Tick(own.fill)
             own.fill:SetScript("OnUpdate", Tick)

@@ -8930,6 +8930,9 @@ local function TestCooldownOwn()
         -- shape of a guard that reads one line and reports green.
         effects = { readyGlow = true },
         stackThresholds = { { value = 3, color = { 0, 1, 0 }, alpha = 1 } },
+        -- ON, so the two things he reported about it on 2026-08-16 can be
+        -- asked at a desk: where it sits, and whether it goes out.
+        showSpark = true,
     } }
 
     local ok, err = pcall(function()
@@ -9178,8 +9181,43 @@ local function TestCooldownOwn()
             tick(own.fill)
             Check("and it empties on the SECOND fall as well",
                 own.fill:GetValue() == 0, tostring(own.fill:GetValue()))
+
+            -----------------------------------------------------------
+            -- THE SPARK, AND BOTH OF THE THINGS HE SAW ON 2026-08-16
+            --
+            -- "rechts von den bars ist immer noch ein weisser border" and
+            -- "wenn die bar leer ist, ist der spark immer noch zu sehen"
+            -- are ONE object: a twelve-pixel ADD-blended line that hung by
+            -- its CENTRE on the fill's leading edge and was never taken
+            -- down. Six of those pixels stood outside the bar, always on
+            -- the same side, which is the shape of a border.
+            --
+            -- ASKED HERE, ON THE EMPTY STEP, because that is the state the
+            -- second report is about and the fixture is already in it.
+            -----------------------------------------------------------
+            local spark = Fill.Spark(bars)
+            Check("The bar asked for a spark and got one", spark ~= nil)
+            if spark then
+                -- ITS OWN EDGE ON THE FILL'S EDGE. A CENTRE anchor is the
+                -- bug: half the line lands outside whatever it is hung on.
+                local point, _, relPoint = spark:GetPoint(1)
+                Check("and it hangs by an edge rather than by its centre",
+                    point ~= "CENTER" and point == relPoint,
+                    string.format("%s -> %s", tostring(point),
+                        tostring(relPoint)))
+                Check("and there is nothing for it to lead on an empty bar",
+                    spark:IsShown() == false)
+            end
+
             bars:Show()
             tick(own.fill)
+            if spark then
+                -- THE HALF THAT GETS FORGOTTEN. A spark that goes out on the
+                -- first fall and never comes back reads exactly like the
+                -- line above passing.
+                Check("and it is lit again the moment the bar refills",
+                    spark:IsShown() == true)
+            end
         else
             Skip("The mirror allocates nothing per frame",
                 "the bar has no clock to run")
@@ -9191,6 +9229,58 @@ local function TestCooldownOwn()
         -- check, and this is the half that catches a trough painted always.
         Check("A bar that did not ask for a trough has none behind its fill",
             Fill.Trough(bars) == nil or Fill.Trough(bars):IsShown() == false)
+
+            -----------------------------------------------------------------
+        -- "KANN ES SEIN DAS DU EIN RANGE CHECK BEI DEN BARS MIT DRIN HAST?"
+        --
+        -- No. What he was looking at is CDM:ItemIsActive's THIRD answer.
+        -- `IsShown` can hand back a secret boolean on this patch, and whether
+        -- it does depends on where you are standing - so an unchanged,
+        -- inactive spell was greyed on the frames the client answered and
+        -- bright on the frames it did not. One state, two pictures.
+        --
+        -- ItemLooksActive keeps the last answer it was GIVEN rather than
+        -- rounding a refusal into the flattering one. This is asked against
+        -- a made-up frame rather than the fixture's: the point is the
+        -- transition from an answer to a refusal, and a real frame cannot be
+        -- made to refuse on cue.
+        -----------------------------------------------------------------
+        local coy = { hxAnswer = false }
+        coy.IsActive = function(this)
+            if this.hxAnswer == nil then return _G.__SECRET end
+            return this.hxAnswer
+        end
+
+        if _G.__SECRET and issecretvalue and issecretvalue(_G.__SECRET) then
+            Check("A frame that answers is taken at its word",
+                ns.CDM:ItemLooksActive(coy) == false)
+
+            coy.hxAnswer = nil
+            Check("and one that has gone quiet keeps the answer it gave",
+                ns.CDM:ItemLooksActive(coy) == false,
+                tostring(ns.CDM:ItemLooksActive(coy)))
+            Check("which the raw reader still reports as unanswerable",
+                ns.CDM:ItemIsActive(coy) == nil
+                    and ns.CDM:ItemActiveIsRemembered(coy) == true)
+
+            coy.hxAnswer = true
+            Check("and a new answer replaces the remembered one",
+                ns.CDM:ItemLooksActive(coy) == true)
+            coy.hxAnswer = nil
+            Check("and it is THAT one that is kept from then on",
+                ns.CDM:ItemLooksActive(coy) == true)
+
+            -- A FRAME NOBODY HAS EVER HAD AN ANSWER FOR STILL SAYS SO.
+            -- Remembering is not the same as inventing, and a first sight
+            -- has nothing to remember.
+            local stranger = { IsActive = function() return _G.__SECRET end }
+            Check("but a frame nobody has ever read still answers nil",
+                ns.CDM:ItemLooksActive(stranger) == nil,
+                tostring(ns.CDM:ItemLooksActive(stranger)))
+        else
+            Skip("A picture that will not sit still",
+                "the harness has no secret value to refuse with")
+        end
 
         -- AND FILL.LUA IS DRESSING OURS, not looking for one of theirs. The
         -- whole reason this file draws no texture and no spark of its own.
@@ -9854,6 +9944,9 @@ local function TestHouseLook()
     -- looking at, so a walk that turned those grey would be this rule eating
     -- the one place it does not belong.
     local strips = ns.DEFAULTS.coTanks
+    Check("The co-tank trough ships solid rather than as a faded bar",
+        ns.DEFAULTS.coTanks and ns.DEFAULTS.coTanks.trackAlpha == 1,
+        tostring(ns.DEFAULTS.coTanks and ns.DEFAULTS.coTanks.trackAlpha))
     Check("but a debuff strip keeps its red edge",
         strips and strips.debuffs and strips.debuffs.borderColor[1] > 0.5,
         strips and strips.debuffs
@@ -9976,9 +10069,13 @@ local function TestHouseLook()
             },
             coTanks = {
                 bgColor = { 0.05, 0.05, 0.06 }, bgAlpha = 0.85,
+                trackAlpha = 0.12,
                 debuffs = { borderColor = { 0.75, 0.15, 0.15 } },
                 buffs = { borderColor = { 0.25, 0.55, 0.30 } },
             },
+            -- The same key name, a different design: a tracking group's
+            -- trough IS the bar's own colour faded, and it stays.
+            groups = { { trackAlpha = 0.08 } },
         }
     end
 
@@ -9997,6 +10094,13 @@ local function TestHouseLook()
         math.abs(old.coTanks.bgColor[1] - v) < 0.005
             and old.coTanks.bgAlpha == 1,
         string.format("%.3f", old.coTanks.bgColor[1]))
+    -- THE TROUGH IS THE ONE SETTING MOVED BY NAME rather than by the walk,
+    -- because `trackAlpha` means two different designs in two places.
+    Check("and so does the trough behind the fill",
+        old.coTanks.trackAlpha == 1, tostring(old.coTanks.trackAlpha))
+    Check("but a tracking group's ghost-of-itself trough is left alone",
+        old.groups[1].trackAlpha == 0.08,
+        tostring(old.groups[1].trackAlpha))
     Check("The screen face moves off the window's",
         old.font == ns.SCREEN_FONT, tostring(old.font))
     Check("A name with no outline gets one",

@@ -995,6 +995,62 @@ function CDM:ItemIsActive(item)
     end
     return nil
 end
+
+---------------------------------------------------------------------------
+-- WHAT THE PICTURE SHOULD SAY, which is a different question from "what will
+-- the client admit this frame".
+--
+-- Owner, 2026-08-16: "kann es sein das du ein range check bei den bars mit
+-- drin hast? weil manchmal ist das icon ausgegraut manchmal nicht."
+--
+-- THERE IS NO RANGE CHECK ANYWHERE IN THIS ADDON. What he is looking at is
+-- the THIRD ANSWER above. ItemIsActive says true, false, or nil - and nil is
+-- "the client will not say", because on this patch `IsShown` can hand back a
+-- SECRET boolean and whether it does depends on where you are standing and
+-- who is beside you. Two readers then round that nil the flattering way:
+--
+--   Own.Draw   own.icon:SetDesaturated(... and active == false)
+--   Look       Look.Opacity(look, active ~= false)
+--
+-- Both grey the icon on exactly `false` and leave it bright on nil. So one
+-- unchanged, inactive spell was drawn grey on the frames the client answered
+-- and bright on the frames it did not - which is not a wrong answer once, it
+-- is a picture that will not sit still.
+--
+-- THE FIX IS TO STOP THROWING AN ANSWER AWAY, not to invent one. When the
+-- client goes quiet the last thing it actually SAID is remembered and used.
+-- That is a fact with a source, not a guess: it is what this frame's state
+-- was the last time anyone was allowed to look. nil still comes back for an
+-- item nobody has ever had an answer for, and a first sight draws bright.
+--
+-- Weak keys: these are Blizzard's pooled frames, and a strong table here is
+-- how a pooled frame never gets collected.
+---------------------------------------------------------------------------
+local lastKnownActive = setmetatable({}, { __mode = "k" })
+
+function CDM:ItemLooksActive(item)
+    if not item then return nil end
+
+    local now = self:ItemIsActive(item)
+    if now ~= nil then
+        lastKnownActive[item] = now
+        return now
+    end
+
+    -- STILL nil FOR A FRAME NOBODY HAS EVER READ. "We have never been told"
+    -- and "we were told and are not being told any more" are two different
+    -- states, and only the second one has something to remember.
+    local was = lastKnownActive[item]
+    if was ~= nil then return was end
+    return nil
+end
+
+-- For the diagnostics, so /zs cdm can say WHY a picture looks the way it does
+-- rather than making the reader work it out from two lines that disagree.
+function CDM:ItemActiveIsRemembered(item)
+    return item ~= nil and self:ItemIsActive(item) == nil
+        and lastKnownActive[item] ~= nil
+end
 ---------------------------------------------------------------------------
 -- The pandemic window - ASKED, NEVER CALCULATED
 --
