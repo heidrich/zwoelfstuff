@@ -152,9 +152,15 @@ Core\Cooldowns\Effects.lua
 Core\Cooldowns\Look.lua
 Core\Cooldowns\Text.lua
 Core\Cooldowns\Fill.lua
+# WAVE 6 - the places we draw OURSELVES. A bar-shaped place is ours again and
+# an icon-shaped one stays borrowed, which is 4.82.0's split: Blizzard's
+# TrackedBar template lays itself out, so every setting on the bar page was
+# either styling a frame that was not there or moving a plate behind one that
+# would not move. Below Look, Text and Fill, all three of which it captures.
+Core\Cooldowns\Own.lua
 # The pass that walks a bar: Store reads it, Model places it, Claim writes it.
-# LAST of the six, because it captures all three at file scope - this order is
-# load-bearing and a desk guard fails the build if it is disturbed.
+# LAST of the seven, because it captures all of them at file scope - this order
+# is load-bearing and a desk guard fails the build if it is disturbed.
 Core\Cooldowns\Render.lua
 Core\Visibility.lua
 # The aura engine and the co-tank frames.

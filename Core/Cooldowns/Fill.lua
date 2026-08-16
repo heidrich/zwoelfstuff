@@ -107,7 +107,12 @@ local TICK = 0.1
 -- Blizzard renames costs the fill and never an error. Ported from old
 -- CDM.lua:1186, where it was the only thing that made the texture picker reach
 -- the most bar-like thing this addon puts on screen.
-function Fill.Bar(item)
+--
+-- STILL REACHABLE UNDER ITS OWN NAME even though the finder below usually
+-- answers with ours: Own.lua MIRRORS this bar - its min, its max, its value
+-- and its timer string - and "the one Blizzard is running" is a different
+-- question from "the one we are dressing". Two questions, two names.
+function Fill.Blizzard(item)
     if type(item) ~= "table" then return nil end
 
     local named = item.Bar
@@ -124,6 +129,66 @@ function Fill.Bar(item)
         end
     end
     return nil
+end
+
+---------------------------------------------------------------------------
+-- THE FILLS WE DREW OURSELVES
+--
+-- Wave 6 stopped adopting bar-shaped places and draws them instead - see
+-- Own.lua's header for why, and for the five reports it answers. That leaves
+-- this file with a choice, and only one of the two is honest.
+--
+-- The tempting one is for Own.lua to draw its own texture, its own colour, its
+-- own spark, its own charge marks and its own threshold bands. It is also the
+-- one this project has already paid for twice: "the second copy of a list is
+-- already stale". Everything in this file is written, proved and load-bearing
+-- in an order the header spells out, and a second version of it would drift on
+-- the first afternoon somebody fixed a colour in one of them.
+--
+-- So the fill CHANGES OWNER and the file does not change job. Own.lua hands
+-- its StatusBar over here, the one finder answers with it, and the marks, the
+-- spark, the bands, the ticker and the release all follow it without knowing
+-- anything happened.
+--
+-- Weak keys, like every other table in this folder: a cell's widget outlives a
+-- render pass but not a reload, and a strong table would hold every frame the
+-- session ever saw.
+---------------------------------------------------------------------------
+local ours = setmetatable({}, { __mode = "k" })
+
+-- WHOSE FILLS ARE OURS, by the fill rather than by the item. Two tables rather
+-- than a search, because the question "may I write on this without recording
+-- an undo" is asked once per setter per pass and a linear walk there would be
+-- the one hot loop in the file.
+local mine = setmetatable({}, { __mode = "k" })
+
+-- HANDS ONE OVER, or takes it back when `fill` is nil.
+--
+-- `host` is the frame this fill is MEASURED against when it cannot measure
+-- itself - our cell, whose size is known a pass earlier than the fill's. On an
+-- adopted bar that job fell to the item frame; on ours the item frame is
+-- somewhere else entirely and its width would put every charge mark in the
+-- wrong place.
+function Fill.Own(item, fill, host)
+    if type(item) ~= "table" then return nil end
+
+    if fill == nil then
+        ours[item] = nil
+        return nil
+    end
+
+    ours[item] = { fill = fill, host = host or fill }
+    mine[fill] = true
+    return fill
+end
+
+-- THE ONE FINDER. Every other export in this file goes through it, or the
+-- styling pass and the release pass would eventually look in different places
+-- - which is precisely how a fill gets dressed and never given back.
+function Fill.Bar(item)
+    local held = type(item) == "table" and ours[item] or nil
+    if held then return held.fill end
+    return Fill.Blizzard(item)
 end
 
 ---------------------------------------------------------------------------
@@ -325,16 +390,18 @@ end
 -- number of the wrong axis - so a vertical bar would divide itself by the
 -- wrong length and look laid out rather than broken. Same shape as the
 -- `avoidable = false` that fell through an `or` twice in one evening.
-local function Span(item, fill, vertical)
-    local mine, theirs
+-- `host` is the frame that answers when the fill cannot: the adopted item on
+-- a borrowed bar, our own cell on a drawn one. See Fill.Own.
+local function Span(host, fill, vertical)
+    local here, there
     if vertical then
-        mine, theirs = fill:GetHeight(), item:GetHeight()
+        here, there = fill:GetHeight(), host and host:GetHeight()
     else
-        mine, theirs = fill:GetWidth(), item:GetWidth()
+        here, there = fill:GetWidth(), host and host:GetWidth()
     end
 
-    if type(mine) == "number" and mine > 0 then return mine end
-    if type(theirs) == "number" and theirs > 0 then return theirs end
+    if type(here) == "number" and here > 0 then return here end
+    if type(there) == "number" and there > 0 then return there end
     return 0
 end
 
@@ -378,16 +445,19 @@ local rampA, rampB = ColourObject(), ColourObject()
 -- the pair wants measuring in his client before anybody trusts either sentence.
 --
 -- Returns the fill's texture object, which the spark and the overlays anchor to.
-local function Paint(fill, colour, alpha, gradient)
+-- `Put` is the writer: Claim.Set on a frame Blizzard owns, a plain call on one
+-- of ours. Handed in rather than decided here, because Dress already knows the
+-- answer and asking twice is two answers to one question.
+local function Paint(Put, fill, colour, alpha, gradient)
     local r = colour[1] or 1
     local g = colour[2] or 1
     local b = colour[3] or 1
     local ramping = (gradient and gradient.on) and true or false
 
     if ramping then
-        Claim.Set(fill, "SetStatusBarColor", 1, 1, 1, 1)
+        Put(fill, "SetStatusBarColor", 1, 1, 1, 1)
     else
-        Claim.Set(fill, "SetStatusBarColor", r, g, b, alpha)
+        Put(fill, "SetStatusBarColor", r, g, b, alpha)
     end
 
     local texture = type(fill.GetStatusBarTexture) == "function"
@@ -407,7 +477,7 @@ local function Paint(fill, colour, alpha, gradient)
     rampA.r, rampA.g, rampA.b, rampA.a = one[1], one[2], one[3], opacity
     rampB.r, rampB.g, rampB.b, rampB.a = two[1], two[2], two[3], opacity
 
-    Claim.Set(texture, "SetGradient", orientation, rampA, rampB)
+    Put(texture, "SetGradient", orientation, rampA, rampB)
     return texture
 end
 
@@ -441,7 +511,7 @@ end
 -- Returns whether the span was real. A mark placed against a span of zero lands
 -- on pixel 0, which is a stack of hairlines on one edge - so it is HIDDEN until
 -- the bar can be measured rather than drawn in the wrong place.
-local function Marks(item, fill, note, wanted, colour, vertical)
+local function Marks(host, fill, note, wanted, colour, vertical)
     local pool = note.marks
 
     if wanted == 0 then
@@ -449,7 +519,7 @@ local function Marks(item, fill, note, wanted, colour, vertical)
         return true
     end
 
-    local span = Span(item, fill, vertical)
+    local span = Span(host, fill, vertical)
     if span <= 0 then
         for _, mark in ipairs(pool) do mark:Hide() end
         return false
@@ -496,7 +566,7 @@ end
 -- The shape is old Screen.lua:724-730's correction, kept exactly. It lies ACROSS
 -- the bar, so the thickness is its width one way round and its height the other,
 -- and the bar's own measurement is the axis that is left.
-local function Spark(item, fill, note, show, direction, texture, vertical)
+local function Spark(host, fill, note, show, direction, texture, vertical)
     local spark = note.spark
 
     if not show then
@@ -511,7 +581,7 @@ local function Spark(item, fill, note, show, direction, texture, vertical)
         note.spark = spark
     end
 
-    local across = Span(item, fill, not vertical)
+    local across = Span(host, fill, not vertical)
     if across <= 0 then
         spark:Hide()
         return false
@@ -650,11 +720,28 @@ end
 
 -- Returns whether every measurement it needed was real. False means the bar
 -- could not be measured yet, which is a reason to come back rather than a fault.
+-- WRITING ON A FRAME WE OWN, AND ON ONE WE DO NOT.
+--
+-- Claim.Set exists to record what was there first, so an adopted frame can be
+-- handed back exactly as it arrived. On a StatusBar we created there is nobody
+-- to hand it back TO: the record would be an undo nothing will ever call, and
+-- it would make Claim.Touched count our own frames - so /zs cdm's "how much
+-- are we holding" would climb with the number of bars on screen and mean
+-- something different from what it says.
+local function Direct(object, setter, ...)
+    local fn = type(object) == "table" and object[setter] or nil
+    if type(fn) == "function" then pcall(fn, object, ...) end
+end
+
 local function Dress(item, fill, bar, index, spellID)
     local note = Note(fill)
     -- Kept so the ticker can run this again without the render pass. Ours, in
     -- our table, keyed by their frame - never a key written onto theirs.
     note.bar, note.index, note.spellID = bar, index, spellID
+
+    local held = type(item) == "table" and ours[item] or nil
+    local Put = mine[fill] and Direct or Claim.Set
+    local host = (held and held.host) or item
 
     -- 1. THE TEXTURE. An unknown key leaves Blizzard's own on, which is a better
     --    default than white and one less thing to give back. Empty means "wear
@@ -666,19 +753,19 @@ local function Dress(item, fill, bar, index, spellID)
     local path
     if wear.texture then
         path = ns.Media.Statusbar(wear.texture)
-        Claim.Set(fill, "SetStatusBarTexture", path)
+        Put(fill, "SetStatusBarTexture", path)
     end
 
     -- 2 and 3. THE BAR COLOUR, THEN THE RAMP. Nothing may set the bar colour
     --    after this point.
-    local texture = Paint(fill, wear.color, wear.alpha, wear.gradient)
+    local texture = Paint(Put, fill, wear.color, wear.alpha, wear.gradient)
 
     -- 4. WHICH END AND WHICH AXIS. Two calls, because SetReverseFill alone only
     --    ever flips a horizontal bar - up and down were unreachable in 4.82.0 no
     --    matter which way the switch was thrown.
     local direction = wear.direction
-    Claim.Set(fill, "SetOrientation", direction.orientation)
-    Claim.Set(fill, "SetReverseFill", direction.reverse)
+    Put(fill, "SetOrientation", direction.orientation)
+    Put(fill, "SetReverseFill", direction.reverse)
 
     local vertical = direction.orientation == "VERTICAL"
 
@@ -690,10 +777,10 @@ local function Dress(item, fill, bar, index, spellID)
     if wear.marks then
         wanted = Fill.Divisions(Fill.MaxCharges(spellID))
     end
-    local marked = Marks(item, fill, note, wanted, wear.markColor, vertical)
+    local marked = Marks(host, fill, note, wanted, wear.markColor, vertical)
 
     -- 6. THE SPARK, on the edge the fill grows towards.
-    local sparked = Spark(item, fill, note, wear.spark, direction, texture,
+    local sparked = Spark(host, fill, note, wear.spark, direction, texture,
         vertical)
 
     -- 7. THE THRESHOLDS, last, because they copy the direction and anchor to the
@@ -825,10 +912,17 @@ local function Undress(fill)
 
     -- The texture object FIRST: the ramp was recorded on it, and it is reached
     -- through the fill, whose own undo may mount a different one.
-    local texture = type(fill.GetStatusBarTexture) == "function"
-        and fill:GetStatusBarTexture() or nil
-    if type(texture) == "table" then Claim.Unset(texture) end
-    Claim.Unset(fill)
+    --
+    -- NOT ON A FILL OF OURS. Nothing was recorded for it - see Direct - so
+    -- Claim.Unset would be a call that cannot do anything, which is a call the
+    -- next reader has to work out is harmless. Its overlays still come down
+    -- below, which is the whole of "released" for a frame we own.
+    if not mine[fill] then
+        local texture = type(fill.GetStatusBarTexture) == "function"
+            and fill:GetStatusBarTexture() or nil
+        if type(texture) == "table" then Claim.Unset(texture) end
+        Claim.Unset(fill)
+    end
 
     local note = parts[fill]
     if note then

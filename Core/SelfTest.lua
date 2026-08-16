@@ -8274,6 +8274,288 @@ local function TestCooldownRender()
 end
 
 ---------------------------------------------------------------------------
+-- THE PLACES WE DRAW OURSELVES
+--
+-- Wave 6's whole claim is that a bar-shaped place is OURS again, and the one
+-- thing that has to be true about it is the one that was got wrong twice with
+-- Blizzard's frame: THE FILL IS THE CELL MINUS THE ICON. Not a height taken
+-- once, not a rectangle straddling two frames - four edges, all four of them
+-- the cell's own, so "Bar height" reaches the coloured bar because the
+-- coloured bar IS the cell.
+--
+-- BOTH TIMES IT WAS WRONG THE OPTIONS PREVIEW AGREED WITH ITSELF, which is
+-- why this is a check and not a screenshot: the preview draws the icon and the
+-- fill out of ONE rectangle and the screen has two, so a fill hung between
+-- them looks right in exactly one of the two pictures.
+---------------------------------------------------------------------------
+local function TestCooldownOwn()
+    local Own = ns.Cooldowns and ns.Cooldowns.Own
+    local Render = ns.Cooldowns and ns.Cooldowns.Render
+    if not (Own and Render) then
+        Skip("Places we draw ourselves", "Cooldowns/Own.lua is not loaded")
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- THE GEOMETRY, WITHOUT A FRAME
+    ---------------------------------------------------------------------
+    local square = Own.Parts({ w = 40, h = 40 }, "left")
+    Check("A square place is all icon and has no band",
+        square.wide == false and square.fill == nil and square.band == nil
+            and square.icon.size == 40)
+
+    local left = Own.Parts({ w = 200, h = 24 }, "left")
+    Check("A bar keeps its icon SQUARE at the bar's height",
+        left.icon.side == "LEFT" and left.icon.size == 24,
+        tostring(left.icon and left.icon.size))
+    -- THE SEAM. The fill starting anywhere but the icon's far edge is either a
+    -- gap nobody asked for or a fill drawn under the picture.
+    Check("and the fill takes exactly what the icon leaves",
+        left.fill.left == left.icon.size and left.fill.right == 0,
+        string.format("%s/%s", tostring(left.fill.left),
+            tostring(left.fill.right)))
+    Check("and the name's band starts where the icon ends", left.band == 24)
+
+    local right = Own.Parts({ w = 200, h = 24 }, "right")
+    Check("An icon on the right pushes the fill the other way",
+        right.icon.side == "RIGHT" and right.fill.left == 0
+            and right.fill.right == 24)
+
+    -- A HIDDEN ICON IS STILL A BAR WITH A NAME ON IT. Reading "no icon" as "no
+    -- band" is what took the name off every bar whose owner had switched the
+    -- icon off - and it is a one-character difference in the guard.
+    local none = Own.Parts({ w = 200, h = 24 }, "hidden")
+    Check("A hidden icon leaves the whole cell to the fill",
+        none.icon == nil and none.fill.left == 0 and none.fill.right == 0)
+    Check("and the name still has a band to sit in", none.band == 0)
+
+    ---------------------------------------------------------------------
+    -- THE NUMBER RULE, AND THE BRANCH WAVE 6 WOULD HAVE BROKEN
+    --
+    -- On a place we draw, Blizzard's own counter frame is still SHOWN in the
+    -- sense the API means and is at alpha 0 in the sense the user means.
+    -- Deferring to it there empties the corner - which is exactly the number
+    -- the owner asked for three times.
+    ---------------------------------------------------------------------
+    local Text = ns.Cooldowns.Text
+    Check("On a borrowed place we leave Blizzard's number alone",
+        Text.StackToShow(true, 3) == nil)
+    Check("On one we draw, that same number is ours to write",
+        Text.StackToShow(true, 3, true) == 3,
+        tostring(Text.StackToShow(true, 3, true)))
+    -- AND THE HALF THAT MUST NOT MOVE. `false` is Blizzard saying it looked at
+    -- a count we may not look at and decided it was not worth a number. That
+    -- is the only legal comparison on this patch and it is final on both kinds.
+    Check("Blizzard deciding a count is not worth showing is still final",
+        Text.StackToShow(false, 3, true) == nil)
+    Check("and with no counter frame at all we judge it ourselves",
+        Text.StackToShow(nil, 3, true) == 3
+            and Text.StackToShow(nil, 1, true) == nil)
+
+    ---------------------------------------------------------------------
+    -- AND NOW ONE, DRAWN, THROUGH THE WHOLE RENDER PASS
+    ---------------------------------------------------------------------
+    for _, viewer in ipairs(ns.CDM.VIEWERS) do
+        if _G[viewer.global] then
+            Skip("A bar-shaped place, drawn", "the real Cooldown Manager is "
+                .. "up - a fake one would have to overwrite it")
+            return
+        end
+    end
+
+    -- BLIZZARD'S TRACKED BAR, AS FAR AS THIS ADDON READS ONE: a frame with a
+    -- StatusBar in it, and TWO nameless font strings in that - the first the
+    -- spell's name and the second the timer. That order is Blizzard's and the
+    -- mirror counts on it, so the fixture reproduces it rather than naming it.
+    local mirror
+    local function FakeBar(spellID)
+        local item = CreateFrame("Frame")
+        item.GetSpellID = function() return spellID end
+        item.Icon = item:CreateTexture()
+        item.Bar = CreateFrame("StatusBar", nil, item)
+        item.Bar:CreateFontString()
+        local timer = item.Bar:CreateFontString()
+        timer:SetText("12.3")
+        item.Bar:SetMinMaxValues(0, 30)
+        item.Bar:SetValue(18)
+        -- A stack count Blizzard would draw and cannot be seen drawing.
+        item.Applications = CreateFrame("Frame", nil, item)
+        item.Applications:Show()
+        item.auraDataCached = { applications = 3 }
+        -- SHOWN, and that is a fixture detail with teeth. CDM:ItemIsActive
+        -- falls back to IsShown for a frame with no IsActive, and Own reads
+        -- "not active" as "empty the bar" - so an unshown fixture proves the
+        -- EMPTY path while reading like a proof of the mirror.
+        item:Show()
+        mirror = item.Bar
+        return item
+    end
+
+    local bars = FakeBar(77535)
+
+    local pool = { items = { bars } }
+    function pool:EnumerateActive()
+        local index = 0
+        return function()
+            index = index + 1
+            return self.items[index]
+        end
+    end
+
+    -- THE FOURTH VIEWER, which is the one whose kind is "bar". Own.Wanted asks
+    -- the item's SHAPE and the shape comes from the viewer it was found in, so
+    -- putting the fixture anywhere else would test the icon path under a name
+    -- that says otherwise.
+    local viewerFrame = CreateFrame("Frame")
+    viewerFrame.itemFramePool = pool
+    viewerFrame:Show()
+
+    local saved = {
+        bars = ns.db.bars,
+        module = ns.db.modules and ns.db.modules.cooldowns,
+        takeover = ns.db.takeOverCDM,
+        available = ns.CDM.available,
+        built = ns.CDM.indexBuilt,
+        started = Render.started,
+    }
+
+    _G[ns.CDM.VIEWERS[4].global] = viewerFrame
+    ns.db.modules = ns.db.modules or {}
+    ns.db.modules.cooldowns = true
+    ns.db.takeOverCDM = true
+    ns.CDM.available = nil
+    ns.CDM.indexBuilt = nil
+
+    ns.db.bars = { {
+        id = 9101, name = "desk bar", enabled = true,
+        kind = "bar", rows = 1, columns = 1,
+        barWidth = 200, barHeight = 24, iconPlacement = "left",
+        spacing = 4, lineSpacing = 4,
+        layout = "grid", flow = "rows", growX = "right", growY = "down",
+        point = "CENTER", relPoint = "CENTER", x = 0, y = -300, scale = 1,
+        cells = { 77535 },
+    } }
+
+    local ok, err = pcall(function()
+        Check("Blizzard's own frame for it is bar-shaped",
+            ns.CDM:ItemShape(ns.CDM:ItemForSpell(77535)) == "bar")
+        Check("so it is one we draw ourselves",
+            Own.Wanted(ns.CDM:ItemForSpell(77535)) == true)
+
+        local drawn = Render.Refresh()
+        Check("The pass drew it", drawn == 1, tostring(drawn))
+
+        local container = Render.Containers()[9101]
+        local cell = container and container.cells[1]
+        Check("The place got a cell of the size the profile asks for",
+            cell ~= nil and cell:GetWidth() == 200 and cell:GetHeight() == 24)
+        if not cell then return end
+
+        local own = cell.own
+        Check("and a widget of ours on it", own ~= nil)
+        if not own then return end
+
+        -----------------------------------------------------------------
+        -- THE FILL IS THE CELL MINUS THE ICON, and this is the check the
+        -- whole file exists for.
+        -----------------------------------------------------------------
+        Check("The fill hangs from two corners rather than being given a size",
+            own.fill:GetNumPoints() == 2,
+            tostring(own.fill:GetNumPoints()))
+
+        local p1, to1, rel1, x1, y1 = own.fill:GetPoint(1)
+        local p2, to2, rel2, x2, y2 = own.fill:GetPoint(2)
+        Check("Both of them are the CELL's own corners, never the icon's",
+            to1 == cell and to2 == cell,
+            string.format("%s and %s", tostring(to1), tostring(to2)))
+        Check("Top left to top left, bottom right to bottom right",
+            p1 == "TOPLEFT" and rel1 == "TOPLEFT"
+                and p2 == "BOTTOMRIGHT" and rel2 == "BOTTOMRIGHT",
+            string.format("%s/%s and %s/%s", tostring(p1), tostring(rel1),
+                tostring(p2), tostring(rel2)))
+        -- WHICH IS WHAT MAKES BAR HEIGHT REACH THE BAR: no vertical inset on
+        -- either corner, so the fill is exactly as tall as the cell.
+        Check("with no vertical inset, so its height IS the cell's",
+            y1 == 0 and y2 == 0,
+            string.format("%s and %s", tostring(y1), tostring(y2)))
+        Check("and it starts exactly where the icon ends",
+            x1 == own.icon:GetWidth() and x2 == 0,
+            string.format("%s vs %s", tostring(x1),
+                tostring(own.icon:GetWidth())))
+
+        Check("The icon is square at the bar's height",
+            own.icon:GetWidth() == 24 and own.icon:IsShown() == true,
+            tostring(own.icon:GetWidth()))
+
+        -----------------------------------------------------------------
+        -- AND BLIZZARD'S FRAME IS NOT TOUCHED
+        --
+        -- Not claimed, not moved, not stripped - veiled by the takeover pass
+        -- like any other frame nobody placed. That is not tidiness: its clock
+        -- is what ours mirrors, and a frame we had hidden would stop feeding
+        -- it.
+        -----------------------------------------------------------------
+        Check("Blizzard's frame for it was never placed on our cell",
+            bars:GetNumPoints() == 0, tostring(bars:GetNumPoints()))
+        Check("It is veiled rather than hidden, so its clock keeps running",
+            bars:GetAlpha() == 0 and bars:IsShown() ~= false,
+            tostring(bars:GetAlpha()))
+
+        -----------------------------------------------------------------
+        -- THE THREE THINGS HE SAID USED TO WORK ON A BAR
+        -- "da konnte ich NAME, aufladung und restzeit anzeigen"
+        -----------------------------------------------------------------
+        Check("The spell name is on the bar",
+            cell.caption ~= nil and cell.caption:IsShown() == true)
+        Check("The stack count is drawn by us, and reads what Blizzard has",
+            cell.stackCount ~= nil and cell.stackCount:GetText() == "3",
+            cell.stackCount and cell.stackCount:GetText() or "no string")
+        Check("The remaining time is Blizzard's own, copied across",
+            own.timer:GetText() == "12.3", own.timer:GetText())
+
+        -- THE CLOCK ITSELF, mirrored rather than computed. Nothing on this
+        -- path may divide one number by another - both can be secret - so the
+        -- only honest check is that ours reads exactly what theirs does.
+        Check("and the fill is Blizzard's value, passed straight through",
+            own.fill:GetValue() == 18, tostring(own.fill:GetValue()))
+        local low, high = own.fill:GetMinMaxValues()
+        Check("against Blizzard's own scale",
+            low == 0 and high == 30,
+            string.format("%s..%s", tostring(low), tostring(high)))
+
+        -- AND FILL.LUA IS DRESSING OURS, not looking for one of theirs. The
+        -- whole reason this file draws no texture and no spark of its own.
+        Check("Fill's one finder answers with our StatusBar",
+            ns.Cooldowns.Fill.Bar(bars) == own.fill)
+        Check("while Blizzard's is still reachable for the mirror",
+            ns.Cooldowns.Fill.Blizzard(bars) == mirror)
+
+        -----------------------------------------------------------------
+        -- SWITCHING IT OFF
+        -----------------------------------------------------------------
+        ns.db.modules.cooldowns = false
+        Render.Refresh()
+        Check("Switching the module off takes our own widget down too",
+            own.fill:IsShown() == false and own.icon:IsShown() == false)
+        Check("and gives Blizzard's frame its brightness back",
+            bars:GetAlpha() == 1, tostring(bars:GetAlpha()))
+    end)
+
+    -- PUT THE WORLD BACK WHATEVER HAPPENED, and put it back in an order that
+    -- survives a throw halfway - the lesson TestCooldownRender carries above.
+    pcall(Render.Stop)
+    _G[ns.CDM.VIEWERS[4].global] = nil
+    ns.db.bars = saved.bars
+    if ns.db.modules then ns.db.modules.cooldowns = saved.module end
+    ns.db.takeOverCDM = saved.takeover
+    ns.CDM.available = saved.available
+    ns.CDM.indexBuilt = saved.built
+    Render.started = saved.started
+
+    if not ok then error(err, 0) end
+end
+
+---------------------------------------------------------------------------
 -- WHAT THE STYLING LAYER DOES WITHOUT A SCREEN
 --
 -- Waves 4 and 5 are four files and about three thousand lines, and almost all
@@ -8678,6 +8960,7 @@ function Test:Run()
         { "Reading a stored bar", TestCooldownStore },
         { "Claiming and letting go", TestCooldownClaim },
         { "Placing a bar", TestCooldownRender },
+        { "Places we draw ourselves", TestCooldownOwn },
         { "The styling layer", TestCooldownStyling },
     }
 

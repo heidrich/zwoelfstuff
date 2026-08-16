@@ -472,7 +472,13 @@ function Claim.Give(item)
     -- cannot be named on the way back either. Undim on a region we never
     -- touched is a no-op, which is what makes walking all of them safe.
     for _, region in ipairs({ item:GetRegions() }) do Undim(region) end
-    if item.Cooldown then
+    -- A TYPE TEST, NOT A TRUTHINESS ONE, and the reason is written out in
+    -- CDM:Counter, which cites THIS FILE for the guard: "a Blizzard FIELD
+    -- spelled like a widget METHOD would come back as a function, and every
+    -- caller here is about to index it". Claim carried it in Parts() and not
+    -- here, so the one place that reaches through `item.Cooldown` was the one
+    -- place that could take a function and index it.
+    if type(item.Cooldown) == "table" then
         for _, region in ipairs({ item.Cooldown:GetRegions() }) do Undim(region) end
     end
 
@@ -724,67 +730,6 @@ function Claim.Fill(object, frame, inset)
     return true
 end
 
-
--- THE REST OF A FRAME, BESIDE SOMETHING ELSE IN IT.
---
--- Claim.Fill's case is "the whole of this region covers its parent". This is
--- the other one wave 5 turned out to have: a tracked bar's StatusBar covers
--- everything the square icon at one end does not.
---
--- WHY IT EXISTS AT ALL. Blizzard's TrackedBar template lays its own parts
--- out, and this addon deliberately leaves them where the template put them -
--- forcing an ICON to fill a bar-shaped frame is what smeared one across a
--- quarter of the screen in 4.5.0. But leaving EVERYTHING alone means the
--- StatusBar keeps whatever height the template gave it while the frame around
--- it grows, so "Bar height" moved the plate behind the bar and not the bar.
--- Owner: "die bar hoehe wird komisch dargestellt, da wird nur der bg hoeher."
---
--- 4.82.0 did not have the fault and did not fix it either: the bar you SAW
--- there was our own StatusBar on a cell we sized. Deleting the second
--- renderer deleted the only thing that ever obeyed the setting - the same
--- shape as "a removal makes its neighbour load-bearing", one more time.
---
--- The whole point list is recorded first, exactly as Claim.Fill does, so the
--- undo is the template's own layout and not an approximation of it.
-function Claim.Beside(object, frame, after, gap, inset)
-    if type(object) ~= "table" or type(object.SetPoint) ~= "function" then
-        return false
-    end
-    gap = tonumber(gap) or 0
-    inset = tonumber(inset) or 0
-
-    RememberPoints(object)
-    pcall(object.ClearAllPoints, object)
-
-    -- THREE POINTS, AND THE THIRD IS THE CORRECTION.
-    --
-    -- The first version took TOPLEFT from the neighbour and BOTTOMRIGHT from
-    -- the frame - so the bar's top lined up with the icon and its bottom with
-    -- the frame, and Blizzard's template insets its icon. Owner: "die bar hat
-    -- nicht die gleiche hoehe wie das icon, nur in der vorschau." Two points
-    -- cannot take their vertical from one frame and their right edge from
-    -- another; three can.
-    --
-    -- Top AND bottom from the neighbour, so the two are the same height by
-    -- construction rather than by both happening to be full-height. The right
-    -- edge is the frame's, which is the only thing the bar should take from
-    -- it.
-    if type(after) == "table" and type(after.GetRight) == "function" then
-        pcall(object.SetPoint, object, "TOPLEFT", after, "TOPRIGHT", gap, 0)
-        pcall(object.SetPoint, object, "BOTTOMLEFT", after, "BOTTOMRIGHT",
-            gap, 0)
-    else
-        -- No neighbour to sit beside is not an error: a template without the
-        -- square icon is a bar all the way across, and then the vertical is
-        -- the frame's own, inset.
-        pcall(object.SetPoint, object, "TOPLEFT", frame, "TOPLEFT",
-            gap, -inset)
-        pcall(object.SetPoint, object, "BOTTOMLEFT", frame, "BOTTOMLEFT",
-            gap, inset)
-    end
-    pcall(object.SetPoint, object, "RIGHT", frame, "RIGHT", -inset, 0)
-    return true
-end
 
 -- Everything we changed on this object, put back.
 --

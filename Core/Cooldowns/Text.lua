@@ -452,7 +452,11 @@ function Text.Caption(cell, style, spellID, iconWidth, placement)
     local text = style and style.spellName
     if not (cell and text) then return end
 
-    if not (iconWidth and iconWidth > 0 and text.show) then
+    -- NIL STANDS DOWN, AND NOUGHT DOES NOT. A bar-shaped place with its icon
+    -- switched off is still a bar with a name on it - Layout.LabelBand answers
+    -- 5 and 5 for an icon width of nought - and reading the two as the same
+    -- answer took the name off every bar whose owner had hidden the icon.
+    if not (iconWidth and text.show) then
         if cell.caption then cell.caption:Hide() end
         return
     end
@@ -563,7 +567,28 @@ function Text.ChargesUp(spellID)
     return now
 end
 
-function Text.StackToShow(shown, count)
+-- `ours` says WE are drawing this place - Own.lua - which changes exactly one
+-- of the four branches and would have silently emptied the corner it fills.
+--
+-- On a place we draw, Blizzard's frame for the same spell is veiled at alpha
+-- 0. Its counter frame is still SHOWN in the sense the API means, so the old
+-- first branch read "Blizzard is already drawing one" and stood down - and the
+-- number the owner asked for three times would have gone missing again, on the
+-- very wave that was supposed to bring it back. The frame being shown is not
+-- the question. Whether the USER can see it is, and on our own place he cannot.
+--
+-- The other half of that branch survives untouched and has to: `shown ==
+-- false` is Blizzard saying it looked at a count we may not look at ourselves
+-- and decided it was not worth a number. That IS the comparison, it is the
+-- only legal one on this patch, and it stays final on both kinds of place.
+function Text.StackToShow(shown, count, ours)
+    if shown == true and ours then
+        -- Blizzard would draw it and cannot be seen doing so. Its comparison
+        -- has already said yes, so the count goes straight out - possibly a
+        -- secret, which is why it reaches SetFormattedText and nothing else.
+        return count
+    end
+
     -- BLIZZARD'S ANSWER IS FINAL EITHER WAY. `true` means it is already
     -- drawing one and a second number in the same corner is worse than none;
     -- `false` means it looked and decided there is nothing worth showing,
@@ -597,13 +622,13 @@ end
 -- stack half landed first and the same hole was left under it.
 local NUMBERS = {
     { key = "stacks",  member = "Applications", field = "stackCount",
-      Value = function(item)
+      Value = function(item, spellID, ours)
           return Text.StackToShow(
               ns.CDM:CounterShown(item, "Applications"),
-              ns.CDM.ItemStacks and ns.CDM:ItemStacks(item) or nil)
+              ns.CDM.ItemStacks and ns.CDM:ItemStacks(item) or nil, ours)
       end },
     { key = "charges", member = "ChargeCount", field = "chargeCount",
-      Value = function(item, spellID)
+      Value = function(item, spellID, ours)
           -- A DIFFERENT GATE FROM THE STACKS, AND THE ASYMMETRY IS THE POINT.
           --
           -- For a stack count we defer to Blizzard COMPLETELY, because the
@@ -620,12 +645,20 @@ local NUMBERS = {
           -- Which is why this asks `== true` and the stacks ask `~= nil`. The
           -- frame EXISTING is not the question - his own bar has one on all
           -- three places and shows no number on any of them.
-          if ns.CDM:CounterShown(item, "ChargeCount") == true then return nil end
+          -- AND NOT ON A PLACE WE DRAW. The only thing we owe Blizzard here
+          -- is not putting a second number beside one of its own; on our own
+          -- bar there is no visible first one to sit beside.
+          if not ours and ns.CDM:CounterShown(item, "ChargeCount") == true then
+              return nil
+          end
           return Text.ChargesUp(spellID)
       end },
 }
 
-function Text.Count(cell, item, style, spellID)
+-- `ours` is true when Own.lua drew this place rather than Claim adopting it.
+-- It changes nothing about how a number is drawn and one thing about whether
+-- one is - see Text.StackToShow.
+function Text.Count(cell, item, style, spellID, ours)
     if not (cell and item and style) then return end
 
     for _, number in ipairs(NUMBERS) do
@@ -639,7 +672,8 @@ function Text.Count(cell, item, style, spellID)
             end
         end
 
-        local value = text and text.show and number.Value(item, spellID) or nil
+        local value = text and text.show
+            and number.Value(item, spellID, ours) or nil
 
         if value == nil then
             Away()

@@ -985,11 +985,21 @@ function Effects.Track(item, cell, bar, spellID)
     end
 
     local fx = Effects.Attach(cell)
-    if item.GetFrameStrata then
-        fx:SetFrameStrata(item:GetFrameStrata() or "MEDIUM")
+
+    -- WHOSE STACKING ORDER THIS SITS ABOVE, and the answer is "whatever is
+    -- actually on screen here".
+    --
+    -- On an adopted place that is Blizzard's frame, and ordering against it is
+    -- the only thing that works - it is their child, not ours. On a place we
+    -- draw, their frame is veiled in a parent of theirs and its level says
+    -- nothing at all about ours, so a glow ordered against it lands wherever
+    -- that happens to fall - usually under our own fill.
+    local above = cell.own and cell or item
+    if above.GetFrameStrata then
+        fx:SetFrameStrata(above:GetFrameStrata() or "MEDIUM")
     end
-    if item.GetFrameLevel then
-        fx:SetFrameLevel((item:GetFrameLevel() or 0) + 6)
+    if above.GetFrameLevel then
+        fx:SetFrameLevel((above:GetFrameLevel() or 0) + 6)
     end
 
     -- The refresh window, hooked on the frame rather than computed. Idempotent
@@ -1083,7 +1093,23 @@ end
 -- and the look wave writes SetDesaturated and SetTexCoord on this same icon -
 -- undoing our greying that way would rip out its crop with it. Full brightness
 -- is written instead, and the real value is still the one Claim gives back.
-local function Dim(item, value)
+--
+-- AND IT IS NOT ALWAYS THEIR ICON ANY MORE. Wave 6 draws bar-shaped places
+-- itself, and on one of those Blizzard's frame is veiled at alpha 0 in
+-- somebody else's parent - so greying its icon greys a picture nobody can see
+-- while ours stays bright. The setting would have kept its reader and lost its
+-- writer, which is the fault this session has now found four times.
+--
+-- OURS IS WRITTEN DIRECTLY, theirs through Claim. Nothing recorded an undo for
+-- a texture we created, and Claim.Set on it would make Claim.Touched count our
+-- own regions - a number that then means something different from what it says.
+local function Dim(cell, item, value)
+    local own = type(cell) == "table" and cell.own or nil
+    if own and own.icon then
+        own.icon:SetVertexColor(value, value, value)
+        return true
+    end
+
     local icon = item and item.Icon
     if type(icon) ~= "table" then return false end
     return Claim.Set(icon, "SetVertexColor", value, value, value)
@@ -1295,11 +1321,11 @@ local function TickCell(entry, now, inCombat, span)
         -- for the whole length of a two-minute cooldown is work for nothing.
         if state.dim ~= target then
             state.dim = target
-            Dim(entry.item, target)
+            Dim(cell, entry.item, target)
         end
     elseif state.dim and state.dim ~= 1 then
         state.dim = 1
-        Dim(entry.item, 1)
+        Dim(cell, entry.item, 1)
     end
 end
 

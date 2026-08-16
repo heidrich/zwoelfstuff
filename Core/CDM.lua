@@ -744,43 +744,67 @@ function CDM:Dump()
 
     -- WHAT A TRACKING BAR IS ACTUALLY MADE OF, measured rather than assumed.
     --
-    -- Blizzard's TrackedBar template carries a square icon at one end and a
-    -- StatusBar beside it, and this addon leaves both where the template put
-    -- them - it sizes the ITEM and lets the template lay its own parts out.
-    -- Whether those parts follow the frame is a question only a client can
-    -- answer, and the answer decides whether raising the bar height moves the
-    -- fill or only the plate behind it.
+    -- IT IS OURS NOW, and that is what changed here. This block used to
+    -- measure Blizzard's TrackedBar frame and its StatusBar, because the addon
+    -- adopted both - and it existed to answer one question: does raising Bar
+    -- height move the fill or only the plate behind it? Wave 6 answered it by
+    -- taking the drawing back (see Cooldowns/Own.lua), so the frame this used
+    -- to measure is now the one we deliberately do NOT draw with.
+    --
+    -- So it measures three things and the relationship between them, which is
+    -- the whole rule: OUR CELL, OUR FILL and OUR ICON. The fill's height must
+    -- equal the cell's, and its left edge must land on the icon's right edge.
+    -- Anything else and the picture is either a bar in a box or a bar under an
+    -- icon, which are the two ways this has already been wrong.
     do
+        local Own = ns.Cooldowns and ns.Cooldowns.Own
+        local Render = ns.Cooldowns and ns.Cooldowns.Render
         local shown = 0
-        self:ForEachItemEverywhere(function(item)
-            if shown >= 2 or self:ItemShape(item) ~= "bar" then return end
 
-            local fill = ns.Cooldowns and ns.Cooldowns.Fill
-                and ns.Cooldowns.Fill.Bar(item) or nil
-            local iw, ih = item:GetSize()
-            local fw, fh = 0, 0
-            if fill then fw, fh = fill:GetSize() end
+        if Own and Render and Render.Containers then
+            for _, container in pairs(Render.Containers()) do
+                for _, cell in pairs(container.cells or {}) do
+                    local own = cell.own
+                    if own and own.fill:IsShown() and shown < 3 then
+                        if shown == 0 then
+                            ns.Print("|cffffd100Bars we draw ourselves|r "
+                                .. "|cff888888(cell / fill / icon)|r")
+                        end
 
-            local icon = type(item.Icon) == "table" and item.Icon or nil
-            local cw, ch = 0, 0
-            if icon and icon.GetSize then cw, ch = icon:GetSize() end
+                        local cw, ch = cell:GetSize()
+                        local fw, fh = own.fill:GetSize()
+                        local iw = own.icon:IsShown()
+                            and own.icon:GetWidth() or 0
 
-            if shown == 0 then
-                ns.Print("|cffffd100Tracking bar geometry|r "
-                    .. "|cff888888(frame / fill / icon)|r")
+                        -- THE TWO THINGS THAT HAVE TO AGREE, said out loud
+                        -- rather than left to be read off three pairs of
+                        -- numbers. A diagnostic that prints the evidence and
+                        -- not the verdict is one nobody reads twice.
+                        local tall = math.abs(fh - ch) < 1
+                        local seam = math.abs((cw - iw) - fw) < 1
+
+                        ns.Print(string.format(
+                            "   cell |cffffd100%.0fx%.0f|r  fill %.0fx%.0f  "
+                            .. "icon %.0f  %s  %s",
+                            cw, ch, fw, fh, iw,
+                            tall and "|cff40ff40height ok|r"
+                                or "|cffff4040FILL IS NOT AS TALL AS THE CELL|r",
+                            seam and "|cff40ff40seam ok|r"
+                                or "|cffff4040FILL DOES NOT MEET THE ICON|r"))
+                        shown = shown + 1
+                    end
+                end
             end
-            ns.Print(string.format(
-                "   %s  frame |cffffd100%.0fx%.0f|r  fill %s  icon %.0fx%.0f",
-                ns.SpellName(self:ItemSpellID(item) or 0) or "?",
-                iw, ih,
-                fill and string.format("|cffffd100%.0fx%.0f|r", fw, fh)
-                    or "|cffff4040none|r",
-                cw, ch))
-            shown = shown + 1
-        end)
+        end
+
         if shown == 0 then
-            ns.Print("|cff888888No tracking-bar frame is live, so its "
+            ns.Print("|cff888888No bar-shaped place is on screen, so its "
                 .. "geometry cannot be measured.|r")
+        end
+        if Own then
+            ns.Print(string.format("|cff888888We are drawing %d place(s) "
+                .. "ourselves; the rest are Blizzard's frames, moved.|r",
+                Own.Held()))
         end
     end
 

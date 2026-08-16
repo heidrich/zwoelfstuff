@@ -53,6 +53,7 @@ local Effects = Cooldowns.Effects
 local Look = Cooldowns.Look
 local Text = Cooldowns.Text
 local Fill = Cooldowns.Fill
+local Own = Cooldowns.Own
 
 ---------------------------------------------------------------------------
 -- Our frames
@@ -180,7 +181,42 @@ local function DrawBar(bar, claimed, factor)
             cell:Show()
 
             local item = items[index]
-            if item then
+            local style = item and Text.Style(bar, at.h) or nil
+            local spellID = cells[index]
+
+            if item and Own.Wanted(item) then
+                -- OURS TO DRAW, AND BLIZZARD'S FRAME IS DELIBERATELY NOT
+                -- CLAIMED.
+                --
+                -- It is left out of `claimed`, so the takeover pass below
+                -- veils it like any other frame nobody placed - alpha 0, still
+                -- shown, still updating. That is not a side effect being
+                -- tolerated, it is the mechanism: Own.lua MIRRORS that bar's
+                -- value and copies its timer string, because the remaining
+                -- time is a secret value and Blizzard is the only one allowed
+                -- to work it out. See Own.lua's header.
+                local band = Own.Draw(cell, item, bar, index, spellID, at,
+                    style, Look.Style(bar, index), factor)
+
+                -- THE SAME THREE CALLS THE ADOPTED BRANCH MAKES, and that is
+                -- the point of making them here rather than inside Own: the
+                -- name, the two numbers and the effects are the same feature
+                -- on both kinds of place, and one of them growing a second
+                -- implementation is how "Stack count" came to be a control
+                -- that worked on one half of a bar.
+                Text.Caption(cell, style, spellID, band, bar.iconPlacement)
+                Text.Count(cell, item, style, spellID, true)
+                Effects.Track(item, cell, bar, spellID)
+                drawn = drawn + 1
+
+            elseif item then
+                -- BORROWED. Anything this cell drew for itself last pass comes
+                -- down first: a place whose spell changed from a tracked buff
+                -- to an ordinary cooldown would otherwise wear our bar behind
+                -- Blizzard's icon, and the cell would keep the dimming we set
+                -- on it while the adopted frame ignored it.
+                Own.Hide(cell)
+
                 local point, inset, width, height =
                     Fit(item, at, bar.iconPlacement)
                 if point then
@@ -199,7 +235,6 @@ local function DrawBar(bar, claimed, factor)
                     --
                     -- Text before Look for the same reason and Fill before
                     -- Text because Fill owns the widget Text writes over.
-                    local style = Text.Style(bar, at.h)
                     Fill.Apply(item, bar, index, cells[index])
                     Text.Apply(item, style)
 
@@ -253,8 +288,11 @@ local function DrawBar(bar, claimed, factor)
                     claimed[item] = true
                     drawn = drawn + 1
                 end
+            else
+                Own.Hide(cell)
             end
         else
+            Own.Hide(cell)
             cell:Hide()
         end
     end
@@ -263,6 +301,7 @@ local function DrawBar(bar, claimed, factor)
     -- is allowed and is the only way a bar narrowed from twelve to five stops
     -- carrying seven empty rectangles.
     for index = count + 1, #container.cells do
+        Own.Hide(container.cells[index])
         container.cells[index]:Hide()
     end
 
@@ -382,6 +421,13 @@ function Render.Stop()
     -- would ever find.
     Effects.StopAll()
     Fill.ReleaseAll()
+
+    -- AND THE PLACES WE DREW OURSELVES. Own.Hide clears the OnUpdate that
+    -- mirrors Blizzard's bar, and a mirror still running after the module said
+    -- it let go is the same class of leak the two lines above exist for - one
+    -- that costs nothing on screen and is therefore invisible until somebody
+    -- profiles it.
+    Own.ReleaseAll()
 
     local given = Claim.GiveAll()
     for _, container in pairs(containers) do container:Hide() end

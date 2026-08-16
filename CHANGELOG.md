@@ -56,6 +56,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   - **Your bars from 4.82.0 are read as they are.** Nothing rewrites your saved
     variables, so rolling back finds them exactly where you left them.
 
+- **Tracking bars are drawn by the addon again, and everything on them works.**
+  A bar-shaped place used to be Blizzard's own tracking-bar frame, borrowed and
+  moved. That frame lays *itself* out, which is why so much of the bar page did
+  nothing: **Bar height** moved the plate behind the bar and not the bar,
+  **Stack count** and **Charges** styled a number nobody was writing, and the
+  **spell name** appeared or did not according to Blizzard's template. All four
+  are settings now rather than descriptions.
+  - **Icons are still Blizzard's frames**, because for an icon borrowing works:
+    their square, their swipe, their counters. Only the bar-shaped places
+    changed hands, which is the same split the addon had before the rebuild.
+  - **The clock is still Blizzard's.** The remaining time on a tracked buff is a
+    protected value on this patch — no addon may read it, and this one does not
+    try. Blizzard's bar for the same spell keeps running out of sight and its
+    length and its number are passed straight through, so the timing is the
+    game's and the picture is yours.
+  - **What that gives you back:** the name, the stack count, the charge count
+    and the remaining time all on one bar, at the size, colour, texture,
+    typeface and position you set, with the fill exactly as tall as the bar.
+  - **Still not there: "Fill up" on a tracking bar.** Making a borrowed value
+    grow instead of drain means arithmetic on a protected number. It is left
+    switched off rather than half-wired; the setting is not offered.
+
 - **The addon now notices when another one is managing your cooldowns.** Two
   addons cannot both hold Blizzard's cooldown frames — whichever loads second
   finds them taken, and what ends up on your screen depends on the order they

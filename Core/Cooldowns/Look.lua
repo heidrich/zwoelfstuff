@@ -385,68 +385,29 @@ function Look.Apply(item, style)
     local zoom = style.iconZoom
     local direction = style.fillDirection
 
-    if shape == "bar" then
-        -- Its parts stay where its template put them. The crop is about the
-        -- ART rather than the layout, so it is the one thing that carries
-        -- over from the icon branch.
-        Claim.Set(item.Icon, "SetTexCoord", zoom, 1 - zoom, zoom, 1 - zoom)
-
-        -- WHICH WAY THE FILL RUNS, and it is two calls rather than one:
-        -- SetReverseFill on its own only ever flips a HORIZONTAL bar, so up
-        -- and down are unreachable without the orientation. Neither of these
-        -- reads or writes a vertex colour, so they commute with the tint wave
-        -- 5 puts on the same widget - which is the one thing that must be
-        -- true about two files writing one StatusBar.
-        local fill = BarFill(item)
-
-        -- THE FILL FOLLOWS THE FRAME. Without this the StatusBar keeps
-        -- whatever height Blizzard's template gave it while everything around
-        -- it grows with Bar height - the plate, the border and the icon all
-        -- move and the coloured bar sits in the middle of them at its
-        -- original size. That is the whole of "da wird nur der bg hoeher".
-        --
-        -- Anchored BESIDE THE ICON rather than over it: the icon is the one
-        -- part of this template that must not be touched, and the two pixels
-        -- of gap are measured off his own screenshot rather than invented -
-        -- Blizzard's own layout leaves a visible sliver there and closing it
-        -- would be a change nobody asked for.
-        local beside = Door("Beside")
-        if fill and beside then
-            beside(fill, item, item.Icon, 2, 0)
-        end
-
-        Claim.Set(fill, "SetOrientation", direction.orientation)
-        Claim.Set(fill, "SetReverseFill", direction.reverse)
-
-        -- AND WHETHER IT GROWS OR DRAINS, which is a different axis and has
-        -- been shipped twice as a control that did nothing. It is the only
-        -- write in this wave whose undo is "its owner puts it back": the
-        -- clock belongs to Blizzard's template and it re-drives this Bar on
-        -- every cooldown update. Claim.Grow is where that lives, because a
-        -- setter with no getter and no honest default is exactly what Claim
-        -- exists to refuse from anywhere else.
-        -- ASKED FOR ONLY BY A BAR THAT WANTS IT. Owner, twice, with the
-        -- line in his chat: "ZwoelfStuff: Claim.Grow is missing."
-        --
-        -- Door() complains once per session when the door is not there, and
-        -- that is right - a silently skipped feature is what this project
-        -- keeps paying for. But it was being asked for on EVERY bar-shaped
-        -- place whether or not anything wanted it, so the one person it
-        -- reached was somebody who has never been offered the setting: the
-        -- row is gated on Claim.Grow existing, so nobody can currently even
-        -- ask for `fillGrow`. A warning about a control that is not on the
-        -- page is noise, and noise is how a real warning stops being read.
-        --
-        -- His "Bars 2" DOES carry fillGrow on one cell, written in 4.82.0 -
-        -- so this still speaks for him, once, and it is then telling him
-        -- about a setting he really did choose.
-        if style.fillGrow then
-            local grow = Door("Grow")
-            if grow then
-                dressing.grew = grow(item, style.fillGrow) and true or false
-            end
-        end
-    else
+    -- A BAR-SHAPED FRAME NEVER GETS HERE ANY MORE, and the branch that used
+    -- to dress one is gone rather than left standing.
+    --
+    -- Sixty lines lived here: the fill's texture anchoring, its orientation,
+    -- its reverse flag and a warning about "Fill up". All of it wrote onto
+    -- Blizzard's TrackedBar template, and wave 6 stopped adopting that
+    -- template - Render sends a bar-shaped place to Own.lua, which draws its
+    -- own StatusBar on a cell we size. So every one of those lines was
+    -- unreachable the moment that branch landed.
+    --
+    -- KEPT AS A CONDITION ANYWAY, because it still decides something: a bar
+    -- frames itself from just OUTSIDE and an icon from just inside, and
+    -- PaintBorder below reads exactly that. What is gone is the styling, not
+    -- the distinction.
+    --
+    -- The "Fill up" warning went with it and is not missed. Owner, in his own
+    -- chat, twice: "ZwoelfStuff: Claim.Grow is missing." It was a complaint
+    -- about a setting he cannot reach - the row is gated on the same door - so
+    -- it could only ever be noise, and noise is how a real warning stops being
+    -- read. `fillGrow` stays a named, deferred setting; see Own.lua's header
+    -- for why a mirrored value cannot be made to grow without arithmetic on a
+    -- secret.
+    if shape ~= "bar" then
         -- The art has to be told to fill the frame, and so does the sweep -
         -- or the cooldown would darken a rectangle that is not the icon it
         -- belongs to. Claim.Fill records the region's whole point list first,
