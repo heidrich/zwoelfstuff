@@ -350,6 +350,15 @@ function Page:BuildPage(page, width)
         apply = function() ns.Answers.Repaint() end,
     })
 
+    -- The other half of the pair. `alpha` was read by the bar and had no
+    -- control - the part without its own setting.
+    UI.Slider(grid:Row("Opacity when asked"), {
+        get = function() return Cfg().alpha end,
+        set = function(value) Cfg().alpha = value end,
+        min = 0.1, max = 1, step = 0.05, format = Percent, scale = 100,
+        apply = function() ns.Answers.Repaint() end,
+    })
+
     UI.Slider(grid:Row("How long it shouts"), {
         get = function() return Cfg().linger end,
         set = function(value) Cfg().linger = value end,
@@ -365,12 +374,59 @@ function Page:BuildPage(page, width)
         function() return Cfg().sound ~= false end,
         function(value) Cfg().sound = value and true or false end)
 
-    UI.Toggle(grid:Row("Only in dungeons and raids"),
-        function() return Cfg().onlyInInstance and true or false end,
+    ---------------------------------------------------------------------
+    -- WHEN IT IS ON THE SCREEN AT ALL - ns.Visibility's rule, the same
+    -- block the reminders and the bars carry, built by ns.OptionsWhen. The
+    -- "Only in dungeons and raids" switch that stood here until 4.84.0 is
+    -- one line of that rule now (Answers.Config folds it in). Discord,
+    -- 2026-08-16: "display conditions wie beim taunt button ... show as
+    -- tank, dps, heal".
+    ---------------------------------------------------------------------
+    ns.OptionsWhen.Build(grid, {
+        title = "When to show it",
+        anchor = "an-when",
+        holder = Cfg,
+        apply = function() ns.Answers.Repaint() end,
+    })
+
+    ---------------------------------------------------------------------
+    -- THE WORDS ON A CELL, AND THE SHOUT.
+    ---------------------------------------------------------------------
+    grid:Section("Text")
+
+    UI.Slider(grid:Row("Name size"), {
+        get = function() return Cfg().nameSize end,
+        set = function(value) Cfg().nameSize = value end,
+        min = 6, max = 20, step = 1,
+        apply = function() ns.Answers.Repaint() end,
+    })
+
+    UI.Toggle(grid:Row("Show the key"),
+        function() return Cfg().showKey ~= false end,
         function(value)
-            Cfg().onlyInInstance = value and true or false
-            Apply()
+            Cfg().showKey = value and true or false
+            ns.Answers.Repaint()
         end)
+
+    grid:Section("The shout")
+
+    UI.Swatch(grid:Row("Ring colour"),
+        function()
+            local colour = Cfg().callColor or ns.UI.C.accent
+            return colour[1], colour[2], colour[3]
+        end,
+        function(r, g, b) Cfg().callColor = { r, g, b } end,
+        function() ns.Answers.Repaint() end)
+
+    UI.Slider(grid:Row("Ring thickness"), {
+        get = function() return Cfg().callSize end,
+        set = function(value) Cfg().callSize = value end,
+        min = 1, max = 8, step = 1,
+        apply = function() ns.Answers.Repaint() end,
+    })
+
+    grid:Note("The ring and the name appear while somebody is asking, and go "
+        .. "again when you have answered or the request has run out.")
 
     ---------------------------------------------------------------------
     -- The look, in the bar's own words

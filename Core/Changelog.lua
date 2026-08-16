@@ -35,6 +35,16 @@ ns.CHANGELOG = {
         date = "2026-08-16",
         lines = {
             {
+                icon = "Interface\\Icons\\Spell_Holy_PowerWordShield",
+                text = "|cffffd100The answer bar gets its display conditions|r "
+                    .. "- always, only when..., never; combat, group, target, "
+                    .. "rested, the kind of place, and |cffffd100the role you "
+                    .. "are playing|r: as a tank, as a healer, as damage. "
+                    .. "And the look it was missing: opacity when asked, name "
+                    .. "size, the key, the shout's ring.",
+                link = { label = "Open the answer bar", page = "answers" },
+            },
+            {
                 icon = "Interface\\Icons\\INV_Misc_Map_01",
                 text = "|cffffd100Routes, back as an experiment.|r Off by "
                     .. "default; |cffffd100/zs route on|r reads the pull you "

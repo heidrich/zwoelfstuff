@@ -423,71 +423,26 @@ function OptionsReminders:BuildPage(page, width)
 
     ---------------------------------------------------------------------
     -- When it is allowed to appear at all - the bars' own rules, evaluated by
-    -- the bars' own evaluator. A second vocabulary for "only in combat" is a
-    -- second thing to learn and a second thing to get wrong.
+    -- the bars' own evaluator, EDITED BY THE ONE BUILDER every page with a
+    -- rule uses (ns.OptionsWhen, 4.84.0). This block was typed out here once;
+    -- the builder owns its rows' relevance - with nothing selected the
+    -- whole block goes, under any other mode than "Only when..." the rule
+    -- rows go - so Paint below does not touch them.
     ---------------------------------------------------------------------
-    grid:Section("When it may appear", "rm-rules")
-
-    local function RuleGet(key, fallback)
-        return function()
+    ns.OptionsWhen.Build(grid, {
+        title = "When it may appear",
+        anchor = "rm-rules",
+        open = false,
+        holder = function()
             local _, cfg = OptionsReminders:Current()
-            local value = cfg and cfg.show and cfg.show[key]
-            if value == nil then return fallback end
-            return value
-        end
-    end
-    local function RuleSet(key)
-        return function(value)
+            return cfg
+        end,
+        apply = Apply,
+        relevant = function()
             local _, cfg = OptionsReminders:Current()
-            if cfg and cfg.show then cfg.show[key] = value end
-        end
-    end
-
-    Body(UI.Dropdown(grid:FullRow("Show", { controlWidth = 150 }),
-        ns.SHOW_MODES, RuleGet("mode", "rules"), RuleSet("mode"),
-        { apply = Apply }))
-
-    local ruleRows = {}
-    local function Rule(row)
-        ruleRows[#ruleRows + 1] = row
-        -- A rule row is BOTH: it goes away with the reminder, and it goes
-        -- away when the mode is not "Only when...". Paint decides in that
-        -- order, so the second test only runs when there is one at all.
-        bodyRows[#bodyRows + 1] = row
-        return row
-    end
-
-    Rule(UI.Dropdown(grid:FullRow("Combat",
-        { controlWidth = 150, icon = "cond-combat" }),
-        ns.SHOW_COMBAT, RuleGet("combat", "in"), RuleSet("combat"),
-        { apply = Apply }))
-    Rule(UI.Dropdown(grid:FullRow("Group",
-        { controlWidth = 150, icon = "cond-group" }),
-        ns.SHOW_GROUP, RuleGet("group", "any"), RuleSet("group"),
-        { apply = Apply }))
-    Rule(UI.Dropdown(grid:FullRow("Target",
-        { controlWidth = 150, icon = "cond-target" }),
-        ns.SHOW_TARGET, RuleGet("target", "any"), RuleSet("target"),
-        { apply = Apply }))
-
-    for _, place in ipairs(ns.SHOW_WHERE) do
-        Rule(UI.Toggle(grid:FullRow(place.text,
-            { controlWidth = 124, icon = place.icon }),
-            function()
-                local _, cfg = OptionsReminders:Current()
-                local where = cfg and cfg.show and cfg.show.where
-                return where and where[place.key] and true or false
-            end,
-            function(value)
-                local _, cfg = OptionsReminders:Current()
-                if not (cfg and cfg.show) then return end
-                cfg.show.where = cfg.show.where or {}
-                -- FALSE, never nil: the defaults are re-applied on every load
-                -- and a missing key comes back as "allowed".
-                cfg.show.where[place.key] = value and true or false
-                Apply()
-            end))
-    end
+            return cfg and true or false
+        end,
+    })
 
     ---------------------------------------------------------------------
     -- What is shown and what is hidden, re-decided every refresh.
@@ -548,9 +503,6 @@ function OptionsReminders:BuildPage(page, width)
             OptionsReminders.spellHint:SetText(
                 "Drag a spell out of the list on the right.")
         end
-
-        local ruled = (cfg.show and cfg.show.mode) == "rules"
-        for _, row in ipairs(ruleRows) do row:SetRelevant(ruled) end
 
         iconSizeRow:SetRelevant(cfg.iconSide ~= "none")
         local flashing = cfg.flash and true or false

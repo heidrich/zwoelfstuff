@@ -73,7 +73,20 @@ Answers.DEFAULTS = {
     backdropAlpha   = 1.00,
     backdropTexture = "Blizzard",
     iconZoom        = 0.08,
-    onlyInInstance  = false,
+    -- THE WORDS ON A CELL: the asker's name at the foot, the key in the
+    -- corner. Both were a fixed ten and unnamed; a setting that has no
+    -- control is a setting nobody can change (Discord, 2026-08-16: "styling
+    -- optionen fuer die answer buttons").
+    nameSize        = 10,
+    showKey         = true,
+    -- THE SHOUT: the ring a cell wears while somebody is asking. Its colour
+    -- was the addon's accent and its thickness three, both unnamed too.
+    callSize        = 3,
+    -- WHEN IT IS ON THE SCREEN AT ALL is ns.Visibility's rule under `show`
+    -- - the same block the reminders and the bars carry - and NOT a switch
+    -- of its own here. `onlyInInstance` was that switch until 4.84.0 and is
+    -- folded into the rule by Config (see there); a second control for the
+    -- same question is two controls that can disagree.
 }
 
 function Answers.Config()
@@ -84,6 +97,15 @@ function Answers.Config()
     end
     cfg.borderColor = cfg.borderColor or ns.SurfaceColor()
     cfg.backdropColor = cfg.backdropColor or ns.SurfaceColor()
+    -- The old "only in dungeons and raids" switch becomes the rule it always
+    -- was: every kind of place but the open world. Once, and the key goes,
+    -- so a rule somebody edits afterwards is never overwritten by it.
+    if cfg.onlyInInstance ~= nil then
+        if cfg.onlyInInstance and type(cfg.show) ~= "table" then
+            cfg.show = Answers.RuleFromOnlyInInstance()
+        end
+        cfg.onlyInInstance = nil
+    end
     -- Which of your spells you are willing to be asked for. Absent means
     -- "not answered yet", and Offers reads that as yes - a spell you have
     -- never seen a switch for should be on the bar, not silently missing.
@@ -93,6 +115,27 @@ function Answers.Config()
     -- does not throw the list away.
     cfg.rowNames = cfg.rowNames or {}
     return cfg
+end
+
+-- The rule "only in dungeons and raids" meant, in ns.Visibility's words:
+-- shown, only when the place is any instance kind - not the open world.
+-- Pure, for the self test.
+function Answers.RuleFromOnlyInInstance()
+    local where = {}
+    for _, place in ipairs(ns.SHOW_WHERE) do where[place.key] = true end
+    where.none = false
+    return { mode = "rules", where = where }
+end
+
+-- The alpha the whole bar is drawn at right now: 1 while it is being placed
+-- (you have to see the thing to move it), otherwise what the rule says -
+-- and the rule is applied as ALPHA, never as Hide, because the cells are
+-- protected buttons and combat is exactly when a rule about combat flips.
+-- ns.Visibility's own header says the same about the bars.
+function Answers.Factor(cfg)
+    if Answers.placing then return 1 end
+    if not (ns.Visibility and cfg) then return 1 end
+    return ns.Visibility:Factor(cfg)
 end
 
 function Answers.Offering(spellID)
@@ -493,9 +536,9 @@ function Answers:ShouldShow()
     if Answers.placing then return true end
     local cfg = Answers.Config()
     if not cfg.enabled then return false end
-    if cfg.onlyInInstance and IsInInstance and not IsInInstance() then
-        return false
-    end
+    -- WHERE and WHEN are the rule's business, applied as alpha in Repaint,
+    -- not as Hide here: a bar hidden out of combat by a rule about combat
+    -- could never be shown again once combat began.
     return true
 end
 
@@ -664,6 +707,7 @@ function Answers.Rebuild()
             ns.PaintBorder(cell.chrome, style, false)
             local zoom = style.iconZoom
             cell.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+            Answers.DressCell(cell, cfg)
             cell.name:SetText(asker.name)
             cell.key:SetText(Answers.Key(index) or "")
 
@@ -688,6 +732,26 @@ function Answers.Rebuild()
     Answers.Repaint()
 end
 
+-- THE WORDS AND THE RING, in the settings' sizes and colours. Pure looks,
+-- so it may run in combat as well - and it does, from Repaint, so a slider
+-- moved mid-fight lands on the cell at once.
+function Answers.DressCell(cell, cfg)
+    cfg = cfg or Answers.Config()
+    local size = math.max(6, math.min(20, tonumber(cfg.nameSize) or 10))
+    if cell.nameSize ~= size then
+        cell.nameSize = size
+        ns.StyleUIFont(cell.name, size)
+        ns.StyleUIFont(cell.key, size)
+    end
+    local ring = cfg.callColor or ns.UI.C.accent
+    cell.call:SetColor(ring[1], ring[2], ring[3], 1)
+    local thick = math.max(1, math.min(8, tonumber(cfg.callSize) or 3))
+    if cell.callSize ~= thick then
+        cell.callSize = thick
+        cell.call:SetThickness(thick)
+    end
+end
+
 -- WHAT CHANGES WHILE SOMEBODY IS FIGHTING. Alpha, a ring, a word - and
 -- nothing else, because nothing else is allowed and nothing else is needed.
 function Answers.Repaint()
@@ -696,6 +760,9 @@ function Answers.Repaint()
     local cfg = Answers.Config()
     local now = GetTime and GetTime() or 0
     Answers.Prune(Answers.pending, now, cfg.linger)
+
+    -- THE RULE, as alpha on the whole bar. See Answers.Factor.
+    panel:SetAlpha(Answers.Factor(cfg))
 
     local idle = math.max(0, math.min(1, cfg.idleAlpha or 0.35))
     local lit = math.max(0, math.min(1, cfg.alpha or 1))
@@ -719,6 +786,8 @@ function Answers.Repaint()
             -- A stand-in cell is drawn at full strength with its name on it:
             -- while you are placing the bar, "which of these is it" is the
             -- only question, and a dimmed square answers it badly.
+            Answers.DressCell(cell, cfg)
+            cell.key:SetShown(cfg.showKey ~= false)
             if cell.preview then
                 cell:SetAlpha(lit)
                 cell.call:Hide()

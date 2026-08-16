@@ -10586,6 +10586,88 @@ local MEANING_NOT_SURFACE = { debuffs = true, buffs = true }
 -- is measured in a dungeon by /zs route probe; these are the rules that do
 -- not need one, and they were checked before the file was parked in 4.42.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- WHEN TO SHOW IT, the third customer: the answer bar's rule (4.84.0), the
+-- role rule that came with it, and the builder's two pure helpers.
+---------------------------------------------------------------------------
+local function TestWhenBlock()
+    local V, W, A = ns.Visibility, ns.OptionsWhen, ns.Answers
+    if not (V and W and A) then
+        Skip("When to show it", "a module is not loaded")
+        return
+    end
+    -- The vocabulary names three roles, keyed as the client returns them.
+    local keys = {}
+    for _, entry in ipairs(ns.SHOW_ROLES or {}) do keys[entry.key] = true end
+    Check("The role rule knows the three roles the client returns",
+        keys.TANK and keys.HEALER and keys.DAMAGER and #ns.SHOW_ROLES == 3)
+    Check("...and the defaults allow every one of them",
+        ns.SHOW_DEFAULTS.roles and ns.SHOW_DEFAULTS.roles.TANK
+        and ns.SHOW_DEFAULTS.roles.HEALER and ns.SHOW_DEFAULTS.roles.DAMAGER)
+
+    -- The evaluator against the sampled role: a rule that leaves the
+    -- current role out hides, one that lists it shows, none at all shows.
+    local role = V:State().role
+    if role then
+        local out = {}
+        for _, entry in ipairs(ns.SHOW_ROLES) do
+            out[entry.key] = (entry.key ~= role)
+        end
+        Check("A role rule that leaves your role out hides the thing",
+            V:Evaluate({ show = { mode = "rules", roles = out } }) == false
+            and V:Explain({ show = { mode = "rules", roles = out } }) ~= nil)
+        Check("...and one that names it shows it",
+            V:Evaluate({ show = { mode = "rules", roles = { [role] = true } } }) == true
+            and V:Evaluate({ show = { mode = "rules" } }) == true)
+    else
+        Skip("The role rule against your role", "the client named no role here")
+    end
+
+    -- The builder's helpers: a seed names every key; a missing list allows.
+    local seed = W.SeedAll(ns.SHOW_WHERE)
+    local all = true
+    for _, place in ipairs(ns.SHOW_WHERE) do
+        if seed[place.key] ~= true then all = false end
+    end
+    Check("The seed names every place, so the first untick hides one and not five", all)
+    Check("A missing list allows, a false forbids, an unknown key allows",
+        W.Allowed(nil, "raid") == true and W.Allowed({ raid = false }, "raid") == false
+        and W.Allowed({ party = true }, "raid") == true)
+
+    -- The old switch becomes the rule it meant: everywhere but the world.
+    local rule = A.RuleFromOnlyInInstance()
+    Check("'Only in dungeons and raids' becomes a rule for every place but the world",
+        rule.mode == "rules" and rule.where.none == false and rule.where.party == true
+        and rule.where.raid == true and rule.where.scenario == true)
+    -- And Config folds it in once: the key goes, the rule stays, and a rule
+    -- somebody already has is never overwritten.
+    do
+        local keep = ns.db.answers
+        ns.db.answers = { onlyInInstance = true }
+        local cfg = A.Config()
+        local folded = cfg.onlyInInstance == nil and type(cfg.show) == "table"
+            and cfg.show.where.none == false
+        ns.db.answers = { onlyInInstance = true, show = { mode = "always" } }
+        local cfg2 = A.Config()
+        local kept = cfg2.onlyInInstance == nil and cfg2.show.mode == "always"
+        ns.db.answers = keep
+        Check("Config folds the old switch into the rule once, and keeps a rule that is there",
+            folded and kept)
+    end
+    -- The bar's alpha follows the rule, and placing wins over it.
+    Check("The bar's factor is the rule's, and 1 while it is being placed",
+        A.Factor({ show = { mode = "never" } }) == 0
+        and A.Factor({ show = { mode = "always" } }) == 1
+        and A.Factor({ show = { mode = "never", hiddenAlpha = 0.3 } }) == 0.3)
+    do
+        local was = A.placing
+        A.placing = true
+        local placed = A.Factor({ show = { mode = "never" } }) == 1
+        A.placing = was
+        Check("...and 1 while it is being placed", placed)
+    end
+end
+
 local function TestRoutes()
     local R = ns.Routes
     if not R then
@@ -11001,6 +11083,7 @@ function Test:Run()
         { "Places we draw ourselves", TestCooldownOwn },
         { "The house look", TestHouseLook },
         { "Routes",         TestRoutes },
+        { "When to show it", TestWhenBlock },
         { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },
     }

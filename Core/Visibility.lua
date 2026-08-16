@@ -80,6 +80,17 @@ ns.SHOW_WHERE = {
     { key = "arena",    text = "Arenas",               icon = "place-arena" },
 }
 
+-- THE ROLE YOUR SPEC IS. Owner, 2026-08-16, for the answer bar: "show as
+-- tank, dps, heal" - three switches, like the places, and no "never" of its
+-- own ("never brauchen wir ja nicht, dann kann man es ausblenden" - the
+-- mode above already has one). Keyed by the role word the client itself
+-- returns for a specialisation, so a rule saved on one class reads the same
+-- on every other.
+ns.SHOW_ROLES = {
+    { key = "TANK",    text = "As a tank" },
+    { key = "HEALER",  text = "As a healer" },
+    { key = "DAMAGER", text = "As damage" },
+}
 ns.SHOW_DEFAULTS = {
     mode    = "always",
     combat  = "any",
@@ -97,6 +108,8 @@ ns.SHOW_DEFAULTS = {
 
     -- Only these specs. Empty means every one of them: same reasoning.
     specs = {},
+    -- Every role, until the user says otherwise. Same reasoning as `where`.
+    roles = { TANK = true, HEALER = true, DAMAGER = true },
 
     -- What "does not apply" looks like. 0 is out of the way entirely; a low
     -- number keeps the bar there as a ghost, which is what people want while
@@ -117,6 +130,7 @@ local state = {
     target = false,
     resting = false,
     spec = nil,
+    role = nil,
 }
 
 local function Sample()
@@ -142,15 +156,22 @@ local function Sample()
     if info and info.GetSpecialization and info.GetSpecializationInfo then
         local ok, index = pcall(info.GetSpecialization)
         if ok and index then
-            local okID, id = pcall(info.GetSpecializationInfo, index)
+            -- The role rides on the same call, fifth answer: "TANK",
+            -- "HEALER" or "DAMAGER". Read here and nowhere else, so a role
+            -- rule and a spec rule can never disagree about which spec you
+            -- are.
+            local okID, id, _, _, _, role = pcall(info.GetSpecializationInfo, index)
             state.spec = okID and id or nil
+            state.role = okID and type(role) == "string" and role or nil
         else
             state.spec = nil
+            state.role = nil
         end
     else
         -- No API, no answer. Leaving the last one in place would keep a spec
         -- rule running off a value nothing can refresh.
         state.spec = nil
+        state.role = nil
     end
 end
 
@@ -215,6 +236,7 @@ function Visibility:Evaluate(cfg)
     if not WhereAllows(rule) then return false end
 
     if state.spec and not Allows(rule.specs, state.spec) then return false end
+    if state.role and not Allows(rule.roles, state.role) then return false end
 
     return true
 end
@@ -246,6 +268,10 @@ function Visibility:Explain(cfg)
     end
     if not WhereAllows(rule) then return "Not in this kind of place." end
     if state.spec and not Allows(rule.specs, state.spec) then return "Not for this spec." end
+    if state.role and not Allows(rule.roles, state.role) then
+        return "Not as " .. (state.role == "TANK" and "a tank"
+            or state.role == "HEALER" and "a healer" or "damage") .. "."
+    end
 
     return nil
 end

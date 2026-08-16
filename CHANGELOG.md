@@ -14,6 +14,23 @@ oldest versions move over.
 
 ### Added
 
+- **The answer bar gets its display conditions** — the same *When to show
+  it* block the reminders and the bars carry: always / only when… / never,
+  combat, group, target, rested, the six kinds of place, and — new for every
+  rule in the addon — **the role you are playing**: as a tank, as a healer,
+  as damage, three switches. The old *Only in dungeons and raids* switch is
+  folded into that rule (every place but the open world) and is gone as a
+  switch of its own. The rule is applied as opacity, so a rule about combat
+  can flip mid-fight; *Otherwise* sets what a hidden bar looks like.
+- **The answer bar's look, the parts that had no control:** *Opacity when
+  asked* (the lit state, beside the resting one), *Name size*, *Show the
+  key*, and the shout's *Ring colour* and *Ring thickness*. Asked for on
+  Discord.
+- **One builder for "when to show it".** The block was typed out on the
+  cooldowns page and again on the reminders page; both read from the same
+  builder now, so every page with a rule shows the same rows in the same
+  order — the reminders page shows the role and rested rules for the first
+  time.
 - **Routes, back from the bench as an experiment.** Off by default. `/zs route
   on` reads the pull you planned in Mythic Dungeon Tools and badges the mobs
   in front of you in that pull's colour; `/zs route probe` asks this client

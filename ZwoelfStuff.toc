@@ -248,6 +248,9 @@ Core\News.lua
 # went: the death log and the reminders both build theirs from it, so it
 # loads above them and below the two catalogues it reads.
 Core\SpellPane.lua
+# The "when to show it" block, built once for every page that has a rule:
+# above the pages, below Widgets and Visibility, whose vocabulary it draws.
+Core\OptionsWhen.lua
 # The Cooldowns page. Above the rest only because it is first in the rail;
 # it reads Cooldowns\Rivals.lua and CDM.lua, both of which are far above.
 Core\OptionsCooldowns.lua
