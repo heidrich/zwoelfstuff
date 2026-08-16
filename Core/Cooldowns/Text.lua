@@ -535,6 +535,34 @@ end
 -- Returns the value to draw, or nil for "draw nothing". The value is passed
 -- straight to SetFormattedText and is never compared here unless CanCompute
 -- has already said it may be.
+-- HOW MANY CHARGES ARE UP, or nil.
+--
+-- Its own reader because the two numbers come from opposite places: a stack
+-- count lives on the aura and is read off the frame, a charge count is the
+-- SPELL's and is read off the API. Fill.MaxCharges already asks this question
+-- for the charge marks; this asks the same call for the other half of its
+-- answer, and the same guards apply - the count can be secret in restricted
+-- content and `most <= 1` is not a number worth a corner.
+function Text.ChargesUp(spellID)
+    local get = C_Spell and C_Spell.GetSpellCharges
+    if not (get and ns.CanCompute(spellID)) then return nil end
+
+    local ok, charges = pcall(get, spellID)
+    if not (ok and type(charges) == "table") then return nil end
+
+    -- A SPELL WITH ONE CHARGE HAS NO CHARGE COUNT. Blizzard draws none and
+    -- neither do we: "1" under every icon on the bar is noise on every icon
+    -- to say something about none of them.
+    local most = charges.maxCharges
+    if not (ns.CanCompute(most) and type(most) == "number" and most > 1) then
+        return nil
+    end
+
+    local now = charges.currentCharges
+    if now == nil then return nil end
+    return now
+end
+
 function Text.StackToShow(shown, count)
     -- BLIZZARD'S ANSWER IS FINAL EITHER WAY. `true` means it is already
     -- drawing one and a second number in the same corner is worse than none;
@@ -561,54 +589,94 @@ function Text.StackToShow(shown, count)
     return nil
 end
 
-function Text.Count(cell, item, style)
-    local text = style and style.stacks
-    if not (cell and item and text) then return end
+-- BOTH NUMBERS, and one function because they differ in exactly two places:
+-- which Blizzard counter would have drawn it, and where the value comes from.
+--
+-- Owner: "empowered rune weapon hat 2 aufladungen ... da muesste eine 2
+-- irgendwo sein." Charges were the half this addon still could not draw: the
+-- stack half landed first and the same hole was left under it.
+local NUMBERS = {
+    { key = "stacks",  member = "Applications", field = "stackCount",
+      Value = function(item)
+          return Text.StackToShow(
+              ns.CDM:CounterShown(item, "Applications"),
+              ns.CDM.ItemStacks and ns.CDM:ItemStacks(item) or nil)
+      end },
+    { key = "charges", member = "ChargeCount", field = "chargeCount",
+      Value = function(item, spellID)
+          -- A DIFFERENT GATE FROM THE STACKS, AND THE ASYMMETRY IS THE POINT.
+          --
+          -- For a stack count we defer to Blizzard COMPLETELY, because the
+          -- count is a secret value: "is it worth a number" cannot be asked
+          -- here at all, and Blizzard hiding its own counter IS that
+          -- comparison. Deferring is the only honest thing to do.
+          --
+          -- A charge count is not secret. C_Spell.GetSpellCharges answers
+          -- maxCharges and currentCharges in plain numbers, so the comparison
+          -- is ours to make and we do not need Blizzard to make it for us.
+          -- The only thing we still owe it is not to draw a SECOND number
+          -- beside one it is already drawing.
+          --
+          -- Which is why this asks `== true` and the stacks ask `~= nil`. The
+          -- frame EXISTING is not the question - his own bar has one on all
+          -- three places and shows no number on any of them.
+          if ns.CDM:CounterShown(item, "ChargeCount") == true then return nil end
+          return Text.ChargesUp(spellID)
+      end },
+}
 
-    local function Away()
-        if cell.stackCount then
-            cell.stackCount:SetText("")
-            cell.stackCount:Hide()
+function Text.Count(cell, item, style, spellID)
+    if not (cell and item and style) then return end
+
+    for _, number in ipairs(NUMBERS) do
+        local text = style[number.key]
+        local field = number.field
+
+        local function Away()
+            if cell[field] then
+                cell[field]:SetText("")
+                cell[field]:Hide()
+            end
         end
-    end
 
-    if not text.show then return Away() end
+        local value = text and text.show and number.Value(item, spellID) or nil
 
-    local value = Text.StackToShow(
-        ns.CDM:CounterShown(item, "Applications"),
-        ns.CDM.ItemStacks and ns.CDM:ItemStacks(item) or nil)
+        if value == nil then
+            Away()
+        else
+            if not cell[field] then
+                -- A LAYER OF ITS OWN, ten levels up, exactly as the caption.
+                -- The adopted frame is Blizzard's child rather than ours, so
+                -- this cannot decide the whole stacking order - what it
+                -- decides is that the number draws over our own cell rather
+                -- than under it.
+                local layer = CreateFrame("Frame", nil, cell)
+                layer:SetAllPoints(cell)
+                layer:SetFrameLevel(cell:GetFrameLevel() + 10)
 
-    if value == nil then return Away() end
+                cell[field] = layer:CreateFontString(nil, "OVERLAY")
+                cell[field]:SetWordWrap(false)
+            end
 
-    if not cell.stackCount then
-        -- A LAYER OF ITS OWN, ten levels up, exactly as the caption below.
-        -- The adopted frame is Blizzard's child rather than ours, so this
-        -- cannot decide the whole stacking order - what it decides is that
-        -- the number draws over our own cell rather than under it.
-        local layer = CreateFrame("Frame", nil, cell)
-        layer:SetAllPoints(cell)
-        layer:SetFrameLevel(cell:GetFrameLevel() + 10)
+            -- Our own font string, so the direct setter is right here.
+            ns.Media.ApplyFont(cell[field], text.font, text.size, text.outline,
+                text.color)
 
-        cell.stackCount = layer:CreateFontString(nil, "OVERLAY")
-        cell.stackCount:SetWordWrap(false)
-    end
+            local x, y = Text.Offset(text)
+            cell[field]:ClearAllPoints()
+            cell[field]:SetPoint(text.anchor, cell, text.anchor, x, y)
 
-    -- Our own font string, so the direct setter is the right one here.
-    ns.Media.ApplyFont(cell.stackCount, text.font, text.size, text.outline,
-        text.color)
-
-    local x, y = Text.Offset(text)
-    cell.stackCount:ClearAllPoints()
-    cell.stackCount:SetPoint(text.anchor, cell, text.anchor, x, y)
-
-    -- SetFormattedText, NEVER SetText(tostring(count)). The engine formats a
-    -- secret without ever handing it to us; tostring on one is the raise.
-    -- pcall because a font string with no face raises on being written to,
-    -- and a missing media file is a user's problem rather than an error.
-    if pcall(cell.stackCount.SetFormattedText, cell.stackCount, "%d", value) then
-        cell.stackCount:Show()
-    else
-        Away()
+            -- SetFormattedText, NEVER SetText(tostring(value)). The engine
+            -- formats a secret without ever handing it to us; tostring on one
+            -- is the raise. pcall because a font string with no face raises
+            -- on being written to, and a missing media file is a user's
+            -- problem rather than an error.
+            if pcall(cell[field].SetFormattedText, cell[field], "%d", value) then
+                cell[field]:Show()
+            else
+                Away()
+            end
+        end
     end
 end
 

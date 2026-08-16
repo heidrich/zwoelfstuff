@@ -600,11 +600,21 @@ end
 
 function Panel.BuildText(grid, bar)
     local L = ns.L
+    local groups = {}
 
     grid:Tab(L["Text"])
 
     for _, spec in ipairs(TEXT_ELEMENTS) do
-        grid:Section(spec.label(), "cd-text-" .. spec.key, true)
+        -- COLLECTED so a whole block can leave the page together. A section
+        -- heading is a region like any other, and one left standing over
+        -- hidden rows is a heading for nothing.
+        local block = {}
+        local function Keep(region)
+            if region then block[#block + 1] = region end
+            return region
+        end
+
+        Keep(grid:Section(spec.label(), "cd-text-" .. spec.key, true))
 
         -- ON THE PAGE, because it decides whether you touch this block at
         -- all: Blizzard puts a charge count on a cooldown and a stack count
@@ -617,7 +627,7 @@ function Panel.BuildText(grid, bar)
         -- page said which of the two his own places carry. Counted live now,
         -- off the frames themselves.
         if spec.key == "stacks" or spec.key == "charges" then
-            local reach = grid:Note("")
+            local reach = Keep(grid:Note(""))
             local wanted = (spec.key == "stacks") and "Applications"
                 or "ChargeCount"
             OnRefresh(grid, function()
@@ -638,41 +648,32 @@ function Panel.BuildText(grid, bar)
             end)
         end
 
-        if spec.key == "stacks" then
-            grid:Note(L["Blizzard puts a stack count on a buff and a charge "
-                .. "count on a cooldown, never both on one place. Each of "
-                .. "these reaches the places it belongs to and is quiet on "
-                .. "the rest."])
-        elseif spec.key == "charges" then
-            grid:Note(L["Anything left alone here follows the stack count, "
-                .. "field by field - so a bar arranged before the two were "
-                .. "split keeps the one number it was drawn with."])
-        elseif spec.key == "spellName" then
-            -- ON THE PAGE, because it decides whether any of this can be
-            -- seen: a square place has no room beside its icon for a word,
-            -- and a place Blizzard draws as a tracked buff bar writes its own
-            -- name along itself already.
-            grid:Note(L["Only shown where there is room beside the icon - a "
-                .. "bar-shaped place with its icon at one end. A square "
-                .. "place has no band to put a word in, and Blizzard's own "
-                .. "tracking bars already write their name along themselves."])
-        end
+        -- THE TWO PARAGRAPHS THAT USED TO STAND HERE ARE GONE. One explained
+        -- that Blizzard puts a stack count on a buff and a charge count on a
+        -- cooldown; the other explained the inheritance between them. Owner,
+        -- with a picture of both: "die beschreibung kannst du rausnehmen, das
+        -- juckt niemanden, entweder es geht oder nicht."
+        --
+        -- He is right, and the live line above them is why: it says the same
+        -- thing about HIS bar, in numbers, and it is the sentence that
+        -- actually sends him to the right block. A rule stated in general
+        -- next to the same rule stated about the thing in front of you is the
+        -- general one being read twice and acted on neither time.
 
-        UI.Toggle(grid:Row(L["Show"]),
+        Keep(UI.Toggle(grid:Row(L["Show"]),
             TextGet(bar, spec.key, "show", true),
             function(value)
                 TextPut(bar, spec, "show")(value)
                 Refresh()
-            end)
-        grid:Note(L["Blizzard counts these and runs the clock. We set the "
-            .. "face, the colour and where the number sits, and never the "
-            .. "number itself - which is why a protected count still reads "
-            .. "correctly."])
+            end))
+        -- ONE MORE PARAGRAPH GONE. "Blizzard counts these and runs the clock"
+        -- explained an implementation detail to somebody deciding whether to
+        -- tick a box. Owner: "text raus, juckt keinen."
 
-        UI.MediaPicker(
+        Keep(UI.MediaPicker(
             grid:FullRow(L["Font"], { controlWidth = 190, icon = "media-font" }),
             "font", TextRaw(bar, spec, "font"), TextPut(bar, spec, "font"),
-            Refresh, L["Same as everywhere"])
+            Refresh, L["Same as everywhere"]))
 
         -- NO LEGAL VALUE MAY BE INVISIBLE.
         --
@@ -693,7 +694,7 @@ function Panel.BuildText(grid, bar)
         -- smallest a number with an outline can be read at. Snapped in the
         -- SETTER so the jump is visible in the box as it happens - silently
         -- accepting 4 and drawing 6 would be a control that lies.
-        UI.Slider(grid:Row(L["Size"]), {
+        Keep(UI.Slider(grid:Row(L["Size"]), {
             min = 0, max = 32, step = 1, format = AutoSize,
             get = TextRaw(bar, spec, "size"),
             set = function(value)
@@ -702,18 +703,18 @@ function Panel.BuildText(grid, bar)
                 TextPut(bar, spec, "size")(value)
             end,
             apply = Refresh,
-        })
-        grid:Note(L("Nought works the size out from the place it sits in, "
+        }))
+        Keep(grid:Note(L("Nought works the size out from the place it sits in, "
             .. "which is what keeps a 24 pixel bar and a 64 pixel icon "
             .. "looking like one design. Below %d pixels a number is there "
             .. "and cannot be read, so the rail goes straight from nought to "
-            .. "%d.", TEXT_FLOOR, TEXT_FLOOR))
+            .. "%d.", TEXT_FLOOR, TEXT_FLOOR)))
 
         -- THE STORED ALPHA IS KEPT. A text colour is four numbers and a
         -- swatch only ever hands back three, so writing { r, g, b } would
         -- quietly set a number somebody had faded back to fully opaque - and
         -- there is no control on this page that could put it back.
-        UI.Swatch(grid:Row(L["Colour"]),
+        Keep(UI.Swatch(grid:Row(L["Colour"]),
             function()
                 local colour = TextGet(bar, spec.key, "color", nil)()
                 if type(colour) ~= "table" then colour = { 1, 1, 1, 1 } end
@@ -724,28 +725,51 @@ function Panel.BuildText(grid, bar)
                 local alpha = type(was) == "table" and was[4] or 1
                 TextPut(bar, spec, "color")({ r, g, b, alpha })
             end,
-            Refresh)
+            Refresh))
 
-        UI.Dropdown(grid:FullRow(L["Outline"],
+        Keep(UI.Dropdown(grid:FullRow(L["Outline"],
             { controlWidth = 150, icon = "media-outline" }),
             ns.Media.OUTLINES,
             TextGet(bar, spec.key, "outline", "OUTLINE"),
-            TextPut(bar, spec, "outline"), { apply = Refresh })
+            TextPut(bar, spec, "outline"), { apply = Refresh }))
 
-        UI.Dropdown(grid:Row(L["Position"]), TextAnchors(),
+        Keep(UI.Dropdown(grid:Row(L["Position"]), TextAnchors(),
             TextGet(bar, spec.key, "anchor", "BOTTOMRIGHT"),
-            TextPut(bar, spec, "anchor"), { apply = Refresh })
+            TextPut(bar, spec, "anchor"), { apply = Refresh }))
 
-        UI.Slider(grid:Row(L["Nudge across"]), {
+        Keep(UI.Slider(grid:Row(L["Nudge across"]), {
             min = -30, max = 30, step = 1,
             get = TextGet(bar, spec.key, "x", 0),
             set = TextPut(bar, spec, "x"), apply = Refresh,
-        })
-        UI.Slider(grid:Row(L["Nudge up"]), {
+        }))
+        Keep(UI.Slider(grid:Row(L["Nudge up"]), {
             min = -30, max = 30, step = 1,
             get = TextGet(bar, spec.key, "y", 0),
             set = TextPut(bar, spec, "y"), apply = Refresh,
-        })
+        }))
+
+        -- THE SPELL NAME BLOCK ONLY EXISTS WHERE A NAME CAN APPEAR.
+        --
+        -- Owner: "spell name kannste bei icons rausnehmen, nur bei bars
+        -- sichtbar. macht null sinn das bei icons anzuzeigen wenn man es
+        -- nicht einblenden kann." Eight controls that cannot reach anything
+        -- is the same defect as a setter with no undo, arrived at from the
+        -- page's side rather than from Claim's - and it is the one kind this
+        -- addon has shipped most often.
+        --
+        -- Re-decided on every pass rather than at build time: this page is
+        -- built ONCE and the kind of a bar's places is a dropdown two tabs
+        -- over. Render's own test is `at.w > at.h`, which on our own lattice
+        -- is exactly `kind == "bar"`.
+        if spec.key == "spellName" then
+            groups[#groups + 1] = {
+                when = function()
+                    local current = Bar(bar)
+                    return type(current) == "table" and current.kind == "bar"
+                end,
+                rows = block,
+            }
+        end
 
         -- NOTHING HERE HIDES A FIELD OF A SWITCHED-OFF ELEMENT, and that is
         -- the second half of the rule in the header: a face, a colour and a
@@ -753,6 +777,9 @@ function Panel.BuildText(grid, bar)
         -- on, so they are settings in their own right and not the detail of
         -- the switch above them.
     end
+
+    Reveal(groups)
+    OnRefresh(grid, function() Reveal(groups) end)
 end
 
 ---------------------------------------------------------------------------

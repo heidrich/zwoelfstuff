@@ -1551,6 +1551,37 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "cdm" then
         ns.CDM:Dump()
 
+    -- THREE DIAGNOSTICS THAT WERE WRITTEN AND COULD NOT BE RUN.
+    --
+    -- Text.Dump, Look.Dump and Effects.Dump were complete, commented and had
+    -- no caller. Text.Dump answers, per placed cell and per element: what the
+    -- setting asked for, where the widget's own first anchor actually is,
+    -- whether we have styled it, whether Blizzard is showing it, and what it
+    -- reads. That is precisely the question two rounds of "the number is not
+    -- there" were spent on, and it could not be asked.
+    --
+    -- Its own header says why it exists: "Three separate fixes for 'the
+    -- position does nothing' were made by reading the code and reasoning
+    -- about it, and each came back reported still broken." A diagnostic with
+    -- no way in is the same failure one level up.
+    elseif cmd == "numbers" or cmd == "text" then
+        local text = ns.Cooldowns and ns.Cooldowns.Text
+        if text and text.Dump then text.Dump() else
+            ns.Print("The cooldown text module is not loaded.")
+        end
+
+    elseif cmd == "look" then
+        local look = ns.Cooldowns and ns.Cooldowns.Look
+        if look and look.Dump then look.Dump() else
+            ns.Print("The cooldown look module is not loaded.")
+        end
+
+    elseif cmd == "fx" or cmd == "effects" then
+        local fx = ns.Cooldowns and ns.Cooldowns.Effects
+        if fx and fx.Dump then fx.Dump() else
+            ns.Print("The cooldown effects module is not loaded.")
+        end
+
 
     -- Co-tanks. The panel owns the settings; these three are the ones worth
     -- reaching without opening a window - move it, fake a raid, put it away.

@@ -248,7 +248,7 @@ local function DrawBar(bar, claimed, factor)
                     -- the caption is: there is nothing of theirs to write on.
                     -- Text.Count decides; it draws nothing whenever Blizzard
                     -- has an answer of its own.
-                    Text.Count(cell, item, style)
+                    Text.Count(cell, item, style, cells[index])
 
                     claimed[item] = true
                     drawn = drawn + 1
