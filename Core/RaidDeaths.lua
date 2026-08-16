@@ -401,6 +401,12 @@ function RaidDeaths.PlainEvents(events)
                     -- Strictly a boolean, so "the client did not say" comes
                     -- back off the disk as itself and not as "not avoidable".
                     avoidable = Plain(ev.avoidable, "boolean"),
+                    -- WHOSE FACE GOES IN FRONT OF THE ROW. It was dropped
+                    -- here and the killing blow alone kept its art - so the
+                    -- opened death drew ten rows with the face column empty
+                    -- while the death window's rows had theirs (owner,
+                    -- 2026-08-16). Same shape the death window keeps.
+                    art = ns.Death.PlainArt(ev.art),
                 }
             end
         end

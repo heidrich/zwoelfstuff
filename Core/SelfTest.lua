@@ -2436,10 +2436,16 @@ local function TestRaidDeaths()
             who = "Grim Skirmisher", spellID = 1234, avoidable = true },
         { t = 2.0, amount = 9000, hp = 27000, name = "Renew", heal = true },
         { t = 0.0, amount = 31829, overkill = 28483, name = "Spirit Rend",
-            who = "Tormented Shade", spellID = 1259255 },
+            who = "Tormented Shade", spellID = 1259255,
+            art = { creatureID = 220003 } },
     }
 
     local kept, dropped = R.PlainEvents(story)
+    -- The face rides every hit, not only the killing blow - the opened
+    -- death draws it in front of each row.
+    Check("...and each hit keeps the face of what did it",
+        kept[4].art ~= nil and kept[4].art.creatureID == 220003
+        and kept[1].art == nil)
     Check("A recap's hits are kept, field by field",
         kept ~= nil and #kept == 4 and dropped == 0
         and kept[4].overkill == 28483 and kept[2].spellID == 1234)
