@@ -332,14 +332,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   onto the end the bar grows *from*. So an empty bar wore a bright line at one
   end for as long as the buff was down, which is most of an evening. It goes
   out when the bar empties and comes back when it refills.
-- **It survived the first fix, and the reason is the secret rule.** "Is there
-  anything to lead" was asked of the bar's **value** — and a mirrored buff
-  timer is a *protected* value on this patch, unreadable on every single
-  frame, so the honest-looking "cannot say counts as yes" fired always and the
-  spark never went out. The drawn **width** of the bar is not protected: the
-  engine works it out inside the game and hands us a rectangle. The spark now
-  asks the geometry it is hanging on, every frame, and only touches the screen
-  when the answer changes.
+- **It survived two fixes, and both taught the same rule.** "Is there anything
+  to lead" was first asked of the bar's **value** — protected on every frame,
+  so "cannot say counts as yes" was the only branch that ever ran. Then it was
+  asked of the texture's drawn **width** — and the engine's output *inherits*
+  the protection: a width computed from a protected number is itself
+  protected, and reading it raised an error 22 times in one session. Nothing
+  hung off the mirror may be read at all. The spark is now **told** rather
+  than asking — from the same plain yes/no the icon's dimming and the bar's
+  emptying already run on, so the three can never disagree.
 - **There WAS a range check, and it was not ours.** An icon greyed itself when
   a target was selected and lit up again when it was deselected — with the buff
   plainly running. Nothing in this addon has ever looked at a target. Blizzard's

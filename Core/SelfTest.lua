@@ -8270,10 +8270,17 @@ local function TestCooldownClaim()
     ---------------------------------------------------------------------
     Check("Giving a frame back reports that it had one", Claim.Give(item))
 
+    -- Near FOR THE SIZE, exactly as the styled check above and for the
+    -- reason the long comment above it measures out. That comment documented
+    -- 13.999999046326 FROM HIS LOG and the line under it still said `== 14`
+    -- - the first check got the tolerance when he reported it, its twin five
+    -- lines down did not, and his client duly went red on the twin a week
+    -- later. The harness models the UI-scale rounding now, so the desk goes
+    -- red on an `==` here before he can.
     local _, counterSize = counter:GetFont()
     local counterRed = counter:GetTextColor()
     Check("An unnamed counter gets its font, colour and place back too",
-        counterSize == 14 and Same(counterRed, 1)
+        Near(counterSize, 14) and Same(counterRed, 1)
         and (counter:GetPoint(1)) == "CENTER",
         string.format("size %s, red %s, point %s", tostring(counterSize),
             tostring(counterRed), tostring((counter:GetPoint(1)))))
@@ -9265,22 +9272,23 @@ local function TestCooldownOwn()
                     spark:IsShown() == false)
 
                 -----------------------------------------------------
-                -- AND THE STATE HIS BARS ARE ACTUALLY IN: a value we
-                -- are not allowed to read at all.
+                -- AND THE STATE HIS BARS ARE ACTUALLY IN: everything
+                -- below the mirror unreadable, the WIDTH included.
                 --
-                -- A mirrored buff timer is a SECRET on this patch, so
-                -- asking the fill for its value answers "cannot say"
-                -- on every single frame. The first version of this
-                -- check took that as "yes, there is something to
-                -- lead" - an honest-looking default that therefore
-                -- fired always, and the spark never went out. Two
-                -- empty bars with a bright line on the right of each,
-                -- photographed.
+                -- Two designs died here, in his client and not at the
+                -- desk. The first asked the fill's VALUE - secret on
+                -- every frame, and "cannot say counts as lit" was the
+                -- only branch that ever ran. The second asked the
+                -- TEXTURE's drawn width - and the engine's output
+                -- inherits the protection: 22 raises of `attempt to
+                -- compare local 'size' (a secret number value)`.
                 --
-                -- The drawn WIDTH is not secret. The engine worked it
-                -- out inside the game from that very value, so it is
-                -- the same fact arriving through a door we may use -
-                -- and it is the thing the spark is hung on anyway.
+                -- The harness now stores a secret SetValue as itself
+                -- AND sizes the texture with the sentinel, so any
+                -- future reader of either raises right here instead
+                -- of in his combat log. These checks hold the fill in
+                -- exactly that state and drive the spark through the
+                -- only legal door - being TOLD.
                 -----------------------------------------------------
                 if _G.__SECRET and issecretvalue
                     and issecretvalue(_G.__SECRET) then
@@ -9288,16 +9296,21 @@ local function TestCooldownOwn()
                     own.fill:SetValue(_G.__SECRET)
                     Check("The fill can hold a value nobody may read",
                         ns.CanCompute(own.fill:GetValue()) == false)
+                    Check("and the width the engine drew from it is "
+                        .. "just as protected",
+                        ns.CanCompute(barTex:GetWidth()) == false)
 
-                    barTex:SetWidth(0)
-                    Fill.Lead(bars)
-                    Check("and an unreadable EMPTY bar still puts its "
-                        .. "spark out", spark:IsShown() == false)
+                    Fill.Lead(bars, false)
+                    Check("told the buff is down, the spark goes out "
+                        .. "with the width unreadable",
+                        spark:IsShown() == false)
 
-                    barTex:SetWidth(120)
-                    Fill.Lead(bars)
-                    Check("and lights it again the moment the engine "
-                        .. "draws a length", spark:IsShown() == true)
+                    Fill.Lead(bars, true)
+                    Check("told it is up, it lights the same way",
+                        spark:IsShown() == true)
+
+                    -- Readable again for everything that runs after.
+                    own.fill:SetValue(18)
                 end
             end
 

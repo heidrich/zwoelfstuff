@@ -330,10 +330,10 @@ local function Empty(own, item)
     -- the buff was down. Owner: "wenn die bar leer ist, ist der spark immer
     -- noch zu sehen."
     --
-    -- HERE RATHER THAN IN THE TICK, so it costs nothing per frame: this
-    -- function already runs once per fall and not once per frame, and the
-    -- latch above is what makes that true.
-    Fill.Lead(item)
+    -- TOLD, not asked: this function only ever runs on "the buff is down",
+    -- so the answer is in its own name. See Fill.Lead for the two ways
+    -- asking went in his client.
+    Fill.Lead(item, false)
 end
 
 ---------------------------------------------------------------------------
@@ -447,10 +447,13 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
             -- something Blizzard notified us about changed - a bar redrawn
             -- only on those would move in steps of several seconds.
             local function Tick(self)
-                local up = ns.CDM:ItemIsActive(item)
-                -- nil is "the client will not say", and it is never rounded
-                -- into the answer that empties the bar.
-                -- THE ICON KEEPS UP WITH THE BAR NOW. `up` is already in hand
+                -- ItemLooksActive rather than ItemIsActive: the remembered
+                -- tri-state, so a client that goes quiet for a frame does
+                -- not blink the picture. nil is "nobody has ever said", and
+                -- it is never rounded into the answer that empties the bar.
+                local up = ns.CDM:ItemLooksActive(item)
+
+                -- THE ICON KEEPS UP WITH THE BAR. `up` is already in hand
                 -- every frame; Wear is two setters and no allocation, and
                 -- without it the picture only changed when Blizzard happened
                 -- to notify us - which is how a full bar ended up beside a
@@ -459,6 +462,15 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                     own.worn = up
                     Wear(own, own.look, up)
                 end
+
+                -- AND SO DOES THE SPARK, from the SAME tri-state. It asked
+                -- the fill's value once and the texture's width once, and
+                -- his client refused both - everything downstream of the
+                -- mirror is secret, width included. This is the one answer
+                -- about "is the buff up" that arrives as a plain boolean,
+                -- and it is the same one the bar's emptying already runs on,
+                -- so the spark and the bar cannot disagree.
+                Fill.Lead(item, up ~= false)
 
                 if up == false then
                     Empty(own, item)
@@ -470,7 +482,6 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                 -- it would go quiet for ever, and a bar that emptied once
                 -- would never fill again. The cheap half of a rate limit is
                 -- setting it - the half that gets forgotten is clearing it.
-                --
                 own.emptied = nil
 
                 if not Sync(self, mirror, showTimer and own.timer or nil,
@@ -478,20 +489,6 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                     self:SetScript("OnUpdate", nil)
                     return
                 end
-
-                -- EVERY FRAME, NOT ON THE TRANSITION, and the transition
-                -- version of this was wrong twice over.
-                --
-                -- `waking` only fires when ItemIsActive said the buff FELL
-                -- OFF, and on a frame with no IsActive it never says so at
-                -- all - so a bar that simply drained to nothing kept its
-                -- spark for ever. Which is what he photographed: two empty
-                -- bars, a bright line on the right of each.
-                --
-                -- Fill.Lead is one GetWidth and a comparison, and it only
-                -- calls a setter when the answer changes. That is affordable
-                -- here; being right only when Blizzard notifies us is not.
-                Fill.Lead(item)
             end
             Tick(own.fill)
             own.fill:SetScript("OnUpdate", Tick)
@@ -501,6 +498,11 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
             -- says "about to run out", which is a statement we cannot support.
             own.fill:SetMinMaxValues(0, 1)
             own.fill:SetValue(1)
+
+            -- A full bar gets its spark on the same reasoning: something put
+            -- this place on screen, and Fill.Lead's own default keeps only an
+            -- explicit "the buff is down" dark.
+            Fill.Lead(item, active ~= false)
         end
     else
         own.timer:Hide()

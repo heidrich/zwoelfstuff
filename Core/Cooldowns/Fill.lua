@@ -634,57 +634,45 @@ end
 -- The shape is old Screen.lua:724-730's correction, kept exactly. It lies ACROSS
 -- the bar, so the thickness is its width one way round and its height the other,
 -- and the bar's own measurement is the axis that is left.
--- IS THERE ANYTHING FOR IT TO LEAD?
+-- IS THERE ANYTHING FOR IT TO LEAD? Owner: "wenn die bar leer ist, ist der
+-- spark immer noch zu sehen" - the texture collapses onto the end the bar
+-- grows FROM when it empties, and the spark sat on it as a bright line for
+-- as long as the buff was down.
 --
--- Owner, 2026-08-16: "wenn ich die follow spark da anhabe, wenn die bar leer
--- ist, ist der spark immer noch zu sehen." The spark rides the fill's texture,
--- and a texture with nothing in it does not go away - it collapses onto the
--- end the bar grows FROM. So an empty bar wore a bright twelve-pixel line at
--- one end for as long as the buff was down, which is most of an evening.
+-- THE SPARK IS TOLD, NEVER ASKS - and that sentence closed two doors his
+-- client shut in one day.
 --
--- ASKED OF THE GEOMETRY, NEVER OF THE VALUE, and the first version of this
--- got that exactly wrong.
+-- The first version asked the fill for its VALUE, with "cannot say" counting
+-- as lit. On a mirrored buff bar the value is a secret on every frame, so
+-- that default was the only branch that ever ran and the spark never went
+-- out.
 --
--- It asked the fill what its value was and answered "yes" whenever the value
--- could not be read. On a mirrored buff bar the value is ALWAYS a secret -
--- that is the whole reason Own.lua mirrors instead of running its own clock -
--- so the honest-looking default fired every single frame and the spark never
--- went out. Owner, with the bars plainly empty: "der rechte border ist immer
--- noch white."
+-- The second version asked the TEXTURE for its drawn width, on the theory
+-- that the engine computes it inside the game where the value is readable.
+-- His client, 22 raises in one session: `attempt to compare local 'size' (a
+-- secret number value)`. THE ENGINE'S OUTPUT INHERITS THE PROTECTION - a
+-- width derived from a secret is a secret, `type()` on it still says
+-- "number", and the comparison itself is the raise. There is no geometry
+-- door either, and nothing hung off the mirror may be read at all.
 --
--- THE DRAWN WIDTH IS NOT A SECRET. The engine works the value out INSIDE the
--- game, where it is readable, and sizes the status bar's texture from it. So
--- the texture's extent is the same fact arriving through a door that is open
--- to us - no comparison on a protected number anywhere, and it is the same
--- trick the stack bands use one screen down.
+-- So the answer comes from the caller, out of the one source that speaks
+-- plain booleans: CDM:ItemLooksActive, the same tri-state the icon's dimming
+-- runs on. A buff that is up has a leading edge; one that is down has
+-- nothing to lead. That is also simply TRUER than the geometry was - a full
+-- bar's edge sits against the border, and a spark there marks nothing.
 --
--- It also answers a question the value cannot: the spark rides that texture,
--- so "is there anything to lead" is literally "is that texture wide enough to
--- have an edge worth marking".
-local function Leading(note)
-    local texture = note and note.texture
-    if type(texture) ~= "table" then return false end
-
-    local size = note.vertical and texture:GetHeight() or texture:GetWidth()
-    return type(size) == "number" and size >= 1
-end
-
--- WHETHER THE SPARK IS LIT, RE-ASKED. Own.lua calls this from its mirror
--- tick, every frame, and a render pass is not enough: a render pass runs when
--- Blizzard notified us that something changed, and a bar drains to nothing
--- without anybody being notified about anything.
+--   lit   plain true/false from the caller. Only false puts it out -
+--         unknown is never rounded into the answer that hides a working
+--         bar's spark.
 --
--- CHEAP ENOUGH TO ASK THAT OFTEN, and measured rather than assumed: one
--- GetWidth on a texture and one comparison, no closure, no table, nothing to
--- collect. The setter only runs when the ANSWER changes - a spark that is
--- already lit is not re-lit sixty times a second - which is the same latch
--- the emptying uses and for the same reason.
-function Fill.Lead(item)
+-- Setter only on change: this runs from Own's mirror tick, sixty times a
+-- second, and a spark that is already lit is not re-lit per frame.
+function Fill.Lead(item, lit)
     local fill = type(item) == "table" and Fill.Bar(item) or nil
     local note = fill and parts[fill] or nil
     if not (note and note.spark) then return false end
 
-    local lit = note.sparkWanted and Leading(note) or false
+    lit = (note.sparkWanted and lit ~= false) and true or false
     if lit ~= note.sparkLit then
         note.sparkLit = lit
         note.spark:SetShown(lit)
@@ -764,14 +752,12 @@ local function Spark(host, fill, note, show, direction, texture, vertical)
     spark:ClearAllPoints()
     spark:SetPoint(edge, texture, edge, 0, 0)
 
-    -- REMEMBERED FOR THE TICK. Fill.Lead is called sixty times a second off
-    -- Own's mirror and must not go looking for the texture or work out which
-    -- way the bar runs each time; both are settled here, once per pass.
-    note.texture = texture
-    note.vertical = vertical and true or false
-
-    note.sparkLit = Leading(note)
-    spark:SetShown(note.sparkLit)
+    -- DARK UNTIL SOMEBODY WHO KNOWS SAYS OTHERWISE. This function styles; it
+    -- has no legal way to find out whether the buff is up - see Fill.Lead -
+    -- and Own.Draw runs its first mirror tick in the same pass, so the
+    -- answer arrives before the frame is ever seen.
+    note.sparkLit = false
+    spark:Hide()
     return true
 end
 
