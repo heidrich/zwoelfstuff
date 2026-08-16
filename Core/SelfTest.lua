@@ -9263,6 +9263,42 @@ local function TestCooldownOwn()
 
                 Check("and there is nothing for it to lead on an empty bar",
                     spark:IsShown() == false)
+
+                -----------------------------------------------------
+                -- AND THE STATE HIS BARS ARE ACTUALLY IN: a value we
+                -- are not allowed to read at all.
+                --
+                -- A mirrored buff timer is a SECRET on this patch, so
+                -- asking the fill for its value answers "cannot say"
+                -- on every single frame. The first version of this
+                -- check took that as "yes, there is something to
+                -- lead" - an honest-looking default that therefore
+                -- fired always, and the spark never went out. Two
+                -- empty bars with a bright line on the right of each,
+                -- photographed.
+                --
+                -- The drawn WIDTH is not secret. The engine worked it
+                -- out inside the game from that very value, so it is
+                -- the same fact arriving through a door we may use -
+                -- and it is the thing the spark is hung on anyway.
+                -----------------------------------------------------
+                if _G.__SECRET and issecretvalue
+                    and issecretvalue(_G.__SECRET) then
+                    local barTex = own.fill:GetStatusBarTexture()
+                    own.fill:SetValue(_G.__SECRET)
+                    Check("The fill can hold a value nobody may read",
+                        ns.CanCompute(own.fill:GetValue()) == false)
+
+                    barTex:SetWidth(0)
+                    Fill.Lead(bars)
+                    Check("and an unreadable EMPTY bar still puts its "
+                        .. "spark out", spark:IsShown() == false)
+
+                    barTex:SetWidth(120)
+                    Fill.Lead(bars)
+                    Check("and lights it again the moment the engine "
+                        .. "draws a length", spark:IsShown() == true)
+                end
             end
 
             bars.hxUp = true

@@ -642,35 +642,53 @@ end
 -- end the bar grows FROM. So an empty bar wore a bright twelve-pixel line at
 -- one end for as long as the buff was down, which is most of an evening.
 --
--- TRUE WHEN IT CANNOT BE ASKED, and that is the only honest default: a value
--- mirrored from Blizzard is a SECRET on this patch, and a secret means the
--- buff is up and running. Rounding "cannot say" down to "empty" would take
--- the spark off every bar that works properly.
-local function Leading(fill)
-    local okValue, value = pcall(fill.GetValue, fill)
-    if not (okValue and ns.CanCompute(value)) then return true end
+-- ASKED OF THE GEOMETRY, NEVER OF THE VALUE, and the first version of this
+-- got that exactly wrong.
+--
+-- It asked the fill what its value was and answered "yes" whenever the value
+-- could not be read. On a mirrored buff bar the value is ALWAYS a secret -
+-- that is the whole reason Own.lua mirrors instead of running its own clock -
+-- so the honest-looking default fired every single frame and the spark never
+-- went out. Owner, with the bars plainly empty: "der rechte border ist immer
+-- noch white."
+--
+-- THE DRAWN WIDTH IS NOT A SECRET. The engine works the value out INSIDE the
+-- game, where it is readable, and sizes the status bar's texture from it. So
+-- the texture's extent is the same fact arriving through a door that is open
+-- to us - no comparison on a protected number anywhere, and it is the same
+-- trick the stack bands use one screen down.
+--
+-- It also answers a question the value cannot: the spark rides that texture,
+-- so "is there anything to lead" is literally "is that texture wide enough to
+-- have an edge worth marking".
+local function Leading(note)
+    local texture = note and note.texture
+    if type(texture) ~= "table" then return false end
 
-    local okRange, low = pcall(fill.GetMinMaxValues, fill)
-    if not (okRange and ns.CanCompute(low) and type(low) == "number") then
-        low = 0
-    end
-    return type(value) == "number" and value > low
+    local size = note.vertical and texture:GetHeight() or texture:GetWidth()
+    return type(size) == "number" and size >= 1
 end
 
--- WHETHER THE SPARK IS LIT, RE-ASKED. Own.lua calls this on the two moments
--- the answer can change - the buff falling off and coming back - rather than
--- on a render pass, because a render pass runs when Blizzard notified us
--- about something and the bar empties without anybody being notified.
+-- WHETHER THE SPARK IS LIT, RE-ASKED. Own.lua calls this from its mirror
+-- tick, every frame, and a render pass is not enough: a render pass runs when
+-- Blizzard notified us that something changed, and a bar drains to nothing
+-- without anybody being notified about anything.
 --
--- ON THE TRANSITION AND NOT PER FRAME. This is two pcalls and a table lookup;
--- at sixty frames on four bars it would be the closure-per-frame lesson over
--- again, one floor down.
+-- CHEAP ENOUGH TO ASK THAT OFTEN, and measured rather than assumed: one
+-- GetWidth on a texture and one comparison, no closure, no table, nothing to
+-- collect. The setter only runs when the ANSWER changes - a spark that is
+-- already lit is not re-lit sixty times a second - which is the same latch
+-- the emptying uses and for the same reason.
 function Fill.Lead(item)
     local fill = type(item) == "table" and Fill.Bar(item) or nil
     local note = fill and parts[fill] or nil
     if not (note and note.spark) then return false end
 
-    note.spark:SetShown(note.sparkWanted and Leading(fill) or false)
+    local lit = note.sparkWanted and Leading(note) or false
+    if lit ~= note.sparkLit then
+        note.sparkLit = lit
+        note.spark:SetShown(lit)
+    end
     return true
 end
 
@@ -744,8 +762,16 @@ local function Spark(host, fill, note, show, direction, texture, vertical)
     -- half full nobody can see which six pixels are which.
     local edge = ns.Layout.SparkEdge(direction.orientation, direction.reverse)
     spark:ClearAllPoints()
-    spark:SetPoint(edge, texture or fill, edge, 0, 0)
-    spark:SetShown(Leading(fill))
+    spark:SetPoint(edge, texture, edge, 0, 0)
+
+    -- REMEMBERED FOR THE TICK. Fill.Lead is called sixty times a second off
+    -- Own's mirror and must not go looking for the texture or work out which
+    -- way the bar runs each time; both are settled here, once per pass.
+    note.texture = texture
+    note.vertical = vertical and true or false
+
+    note.sparkLit = Leading(note)
+    spark:SetShown(note.sparkLit)
     return true
 end
 

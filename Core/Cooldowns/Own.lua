@@ -471,20 +471,6 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                 -- would never fill again. The cheap half of a rate limit is
                 -- setting it - the half that gets forgotten is clearing it.
                 --
-                -- CLEARED HERE AND ACTED ON AFTER THE SYNC, and the order is
-                -- the whole of it. The spark can only be re-lit once the new
-                -- value is IN the bar: asked a line earlier it puts the
-                -- question to a bar that is still empty, gets the same answer
-                -- that hid it in the first place, and the spark never comes
-                -- back for the rest of the session. The desk caught exactly
-                -- that, on the second half of the down-up-down fixture - the
-                -- half that exists because a latch's forgotten side is always
-                -- the one that clears it.
-                --
-                -- ON THE TRANSITION, not sixty times a second. Clearing an
-                -- already-clear latch is free; asking the fill for its value
-                -- is two pcalls.
-                local waking = own.emptied
                 own.emptied = nil
 
                 if not Sync(self, mirror, showTimer and own.timer or nil,
@@ -493,7 +479,19 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                     return
                 end
 
-                if waking then Fill.Lead(item) end
+                -- EVERY FRAME, NOT ON THE TRANSITION, and the transition
+                -- version of this was wrong twice over.
+                --
+                -- `waking` only fires when ItemIsActive said the buff FELL
+                -- OFF, and on a frame with no IsActive it never says so at
+                -- all - so a bar that simply drained to nothing kept its
+                -- spark for ever. Which is what he photographed: two empty
+                -- bars, a bright line on the right of each.
+                --
+                -- Fill.Lead is one GetWidth and a comparison, and it only
+                -- calls a setter when the answer changes. That is affordable
+                -- here; being right only when Blizzard notifies us is not.
+                Fill.Lead(item)
             end
             Tick(own.fill)
             own.fill:SetScript("OnUpdate", Tick)
