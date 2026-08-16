@@ -1724,12 +1724,11 @@ function RaidDeaths:Create()
     -- Where the numbers came from, said out loud. A list that is quietly the
     -- last pull rather than this one is the kind of thing somebody reads
     -- wrongly once and never trusts again.
-    -- The guide's tile in front of the line, as the death window carries
-    -- it before its portrait; the words start after it when it is there.
-    frame.placeArt = ns.Death.CreatePlaceArt(frame, 40, 40)
-    frame.placeArt:SetPoint("TOPLEFT", frame, "TOPLEFT", UI.PAD,
-        -(UI.HEADER_H + 4))
-
+    -- No guide tile in front of this line. It stood there for an evening
+    -- and, because the verdict, the heads and the whole table hang off this
+    -- label, it pushed the table over with it (owner, 2026-08-16: "das
+    -- dungeon bild kann da auch oben raus, dann rutscht die table wieder
+    -- nach links"). The side column shows the tile on every pull.
     frame.where = UI.Label(frame, "", UI.FS.meta, C.textFaint)
     frame.where:SetPoint("TOPLEFT", frame, "TOPLEFT", UI.PAD,
         -(UI.HEADER_H + 8))
@@ -2155,7 +2154,7 @@ RaidDeaths.FOOT_HINT = "click on details for their last 10 seconds"
 
 -- The same sentence as pieces for the rich line: every mob's name with
 -- the enemy tip, every ability with its icon and tooltip.
-function RaidDeaths.FootPieces(culprits, count, openable, entries)
+function RaidDeaths.FootPieces(culprits, count, openable, entries, log)
     if count == 0 then return {} end
     local out = {}
     if not RaidDeaths.WorthCounting(culprits) then
@@ -2174,6 +2173,8 @@ function RaidDeaths.FootPieces(culprits, count, openable, entries)
                     summary = summary or entry.blow.summary
                 end
             end
+            -- This pull's own picture first, any kept pull's failing that.
+            art = art or RaidDeaths.ArtForWho(log, culprit.who)
             out[#out + 1] = { who = culprit.who, art = art, summary = summary }
             out[#out + 1] = { text = " - " }
             out[#out + 1] = { spell = culprit.spell, spellID = culprit.spellID }
@@ -2249,8 +2250,15 @@ end
 -- spell (for its icon and the client's tooltip); DetailLine below is the
 -- same two lines as one sentence, for chat. Owner, 2026-08-16: "hier fehlt
 -- auch der avatar und das spell icon mit hover."
-function RaidDeaths.DetailLines(entry)
+function RaidDeaths.DetailLines(entry, log)
     if type(entry) ~= "table" then return {} end
+    -- This death's own art first; failing that, the same mob's face off any
+    -- other kept pull (owner, 2026-08-16: "hier fehlt der gegner avatar ...
+    -- vor dem primal serpent" - a hit that mattered from a mob this entry
+    -- never kept a picture of, while the pull before it did).
+    local function Art(who)
+        return RaidDeaths.ArtFor(entry, who) or RaidDeaths.ArtForWho(log, who)
+    end
     local blow = entry.blow
     if not blow then
         return { { text = entry.blowWhy or "nothing readable",
@@ -2266,7 +2274,7 @@ function RaidDeaths.DetailLines(entry)
             .. " of it overkill"
     end
     tail = tail .. "."
-    local art = RaidDeaths.ArtFor(entry, blow.who)
+    local art = Art(blow.who)
     out[1] = {
         text = string.format("Killed by %s - %s%s",
             ns.UI.HotText(blow.who or "?"),
@@ -2284,7 +2292,7 @@ function RaidDeaths.DetailLines(entry)
         },
     }
     if type(entry.real) == "table" then
-        local realArt = RaidDeaths.ArtFor(entry, entry.real.who)
+        local realArt = Art(entry.real.who)
         local summary = entry.real.who
             and ns.Death.SourceSummary(entry.events, entry.real.who) or nil
         out[2] = {
@@ -2385,14 +2393,6 @@ function RaidDeaths:Refresh()
 
     -- The evening's page carries its own head. The pull's would be answering
     -- a question the page is not asking.
-    -- The tile in front of the line, and the line moves over for it.
-    local hasTile = (not RaidDeaths.overview) and info
-        and frame.placeArt.Paint(info.journal) or false
-    if not hasTile then frame.placeArt:Hide() end
-    frame.where:ClearAllPoints()
-    frame.where:SetPoint("TOPLEFT", frame, "TOPLEFT",
-        ns.UI.PAD + (hasTile and 48 or 0), -(ns.UI.HEADER_H + 8))
-
     if RaidDeaths.overview then
         frame.where:SetText("")
         frame.verdict:SetText("")
@@ -2521,7 +2521,8 @@ function RaidDeaths:Refresh()
         if RaidDeaths.Openable(entry) then anyOpenable = true break end
     end
     frame.foot.Paint(RaidDeaths.FootPieces(
-        (info and info.culprits) or {}, #entries, anyOpenable, entries))
+        (info and info.culprits) or {}, #entries, anyOpenable, entries,
+        RaidDeaths.log))
 
     -- WHICH DEATH IS BEING READ, checked against the list that is actually
     -- on screen. A kept index survives a repaint, and a repaint can come
@@ -2614,7 +2615,7 @@ function RaidDeaths.PaintDetail(entry, info)
     local hasSpec = ns.UI.PaintSpecIcon(detail.spec, entry.spec, entry.class)
     RaidDeaths.LayoutWho(detail, hasFace, hasSpec)
     detail.title:SetText(RaidDeaths.DetailTitle(entry, timed))
-    local lines = RaidDeaths.DetailLines(entry)
+    local lines = RaidDeaths.DetailLines(entry, RaidDeaths.log)
     detail.blow.Paint(lines[1] and lines[1].pieces or {})
     if lines[2] then
         detail.real.Paint(lines[2].pieces)
@@ -2641,8 +2642,12 @@ function RaidDeaths.PaintDetail(entry, info)
             detail.rows[index] = row
         end
         -- A death saved before every hit kept its art: the killing blow's
-        -- face stands in for every hit from the same mob.
-        if not ev.art then ev.art = RaidDeaths.ArtFor(entry, ev.who) end
+        -- face stands in for every hit from the same mob, and any kept
+        -- pull's picture of it after that.
+        if not ev.art then
+            ev.art = RaidDeaths.ArtFor(entry, ev.who)
+                or RaidDeaths.ArtForWho(RaidDeaths.log, ev.who)
+        end
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", detail.content, "TOPLEFT", 0,
             -((index - 1) * (EVENT_H + 2)))

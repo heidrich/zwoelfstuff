@@ -2553,6 +2553,26 @@ local function TestRaidDeaths()
         end
         Check("A detail line names the mob once, after the words, with no lone face piece",
             #lines == 2 and not lone and named == 2 and order)
+        -- And a mob this death kept no picture of wears the face another
+        -- kept pull has for it - the same fallback the footer uses.
+        local log = { { entries = { { blow = { who = "Primal Serpent",
+            art = { creatureID = 77 } } } } } }
+        local borrowed = R.DetailLines({
+            blow = { who = "Primal Serpent", spell = "Hiss", amount = 1 },
+            events = {} }, log)
+        local face
+        for _, piece in ipairs(borrowed[1].pieces) do
+            if piece.who then face = piece.art end
+        end
+        Check("A detail line borrows the mob's face from another kept pull",
+            face ~= nil and face.creatureID == 77)
+        local foot = R.FootPieces({ { who = "Primal Serpent", spell = "Hiss",
+            count = 2 } }, 2, false, {}, log)
+        local footFace
+        for _, piece in ipairs(foot) do
+            if piece.who then footFace = piece.art end
+        end
+        Check("...and so does the footer", footFace ~= nil and footFace.creatureID == 77)
     end
     -- The evening's tally finds a mob's face in whichever kept pull has it.
     Check("The mob's face is found across the kept pulls",
@@ -2561,6 +2581,20 @@ local function TestRaidDeaths()
             "Shade").creatureID == 7
         and R.ArtForWho({}, "Shade") == nil
         and R.ArtForWho(nil, nil) == nil)
+    -- The replay's title names the killer as a piece with its face and
+    -- its summary, after the words - and is just "Replay" without one.
+    do
+        local pieces = ns.Replay.TitlePieces({ killer = "Shade",
+            killerArt = { creatureID = 3 },
+            events = { { who = "Shade", amount = 10, t = 1 } } })
+        Check("The replay's title carries the killer with its face and tip",
+            #pieces == 2 and pieces[1].text == "Replay - killed by "
+            and pieces[2].who == "Shade" and pieces[2].art.creatureID == 3
+            and type(pieces[2].summary) == "table")
+        Check("...and is only the word without a killer",
+            ns.Replay.TitlePieces({})[1].text == "Replay"
+            and #ns.Replay.TitlePieces(nil) == 1)
+    end
     Check("The evening's fallen carry their spec, for the icon",
         R.Fallen({ fights = { { entries = { { name = "Zed", class = "DEATHKNIGHT",
             spec = 250 } } } } })[1].spec == 250)

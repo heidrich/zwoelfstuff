@@ -130,8 +130,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   the ability with its icon in front and its tooltip — the same as every row
   under them. The **Killing blow** line at the foot of the log (it was *What
   did the killing*) is built the same way: every mob wears its face, every
-  name and every ability answers the mouse. The guide's tile stands in front
-  of the pull's place line in the header, and the place is blue.
+  name and every ability answers the mouse. The place in the header is blue.
+  A mob this death kept no picture of borrows its face from any other kept
+  pull.
+- **The replay names its killer with a face.** *Replay - killed by* carries
+  the mob's face in front of its name and the enemy tip on both; the place
+  under it is blue. The **Graph** switch sits above *Play*, on the graph's
+  own edge, instead of at the far end of the control row.
 - **The evening's tally has pictures.** *What keeps killing us* shows each
   mob's face, *Who is falling* each player's spec or class icon, in a column
   between the count and the name.

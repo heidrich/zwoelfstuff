@@ -93,7 +93,7 @@ local PLOT_BOTTOM = LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP)
 -- Incoming damage over the same seconds as the axis, in as many columns
 -- as fit at a readable width, red for what landed and a lighter cap for
 -- the overkill; it scrolls and zooms with the plot because it is placed by
--- the same view. A switch beside Zoom shows or hides it, remembered in
+-- the same view. A switch above Play shows or hides it, remembered in
 -- the profile, and the window is only as tall as what is on it.
 local GRAPH_TOP = PLOT_BOTTOM + 10
 local GRAPH_H = 56
@@ -616,8 +616,13 @@ local function BuildWindow()
     local edge = ns.CreateBorder(frame, 1, "BORDER")
     edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
-    frame.title = UI.Label(frame, "Replay", 15, C.text)
+    -- A rich line, not a label: the killer's face in front of its name and
+    -- the enemy tip on both, as every other place the addon names a mob
+    -- (owner, 2026-08-16: "vor dem gegner namen fehlt noch avatar und
+    -- hover ... bei replay").
+    frame.title = ns.Death.BuildRichLine(frame, 15)
     frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -14)
+    frame.title:SetPoint("RIGHT", frame, "RIGHT", -44, 0)
 
     frame.sub = UI.Label(frame, "", 11, C.textFaint)
     frame.sub:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -3)
@@ -881,9 +886,13 @@ local function BuildWindow()
     UI.FitRow(zoomRow)
     frame.zoomRow = zoomRow
 
-    -- The switch for the graph, beside Zoom, remembered in the profile.
+    -- The switch for the graph, remembered in the profile. ABOVE PLAY, on
+    -- the graph's own left edge, not at the far end of the control row
+    -- (owner, 2026-08-16: "der graph button ist zu weit rechts aussen, den
+    -- kannste auch ueber den play button schieben"): it sits between the
+    -- thing it switches and the buttons, where the eye already is.
     local graphRow = UI.Row(frame, "Graph", { controlWidth = 40 })
-    graphRow:SetPoint("LEFT", zoomRow, "RIGHT", 10, 0)
+    graphRow:SetPoint("BOTTOMLEFT", play, "TOPLEFT", 0, 6)
     graphRow.rule:Hide()
     UI.Toggle(graphRow,
         function() return Replay.GraphWanted() end,
@@ -969,6 +978,21 @@ end
 -- Places every mark for one death. Positions do not change while it plays;
 -- only what is lit does, which is what makes the playhead read as time
 -- passing rather than as things appearing out of nowhere.
+-- The title as pieces for the rich line: the words in the window's text
+-- colour, then the killer with its face and the tip - what the mob did to
+-- you in these seconds. Pure.
+function Replay.TitlePieces(snapshot)
+    local C = ns.UI.C
+    if not (type(snapshot) == "table" and snapshot.killer) then
+        return { { text = "Replay", colour = C.text } }
+    end
+    return {
+        { text = "Replay - killed by ", colour = C.text },
+        { who = snapshot.killer, art = snapshot.killerArt,
+          summary = ns.Death.SourceSummary(snapshot.events, snapshot.killer) },
+    }
+end
+
 -- Whether the graph is wanted: on until switched off.
 function Replay.GraphWanted()
     return not (ns.db and ns.db.death and ns.db.death.replayGraph == false)
@@ -1415,13 +1439,13 @@ function Replay:Open(snapshot)
         pan = nil,
     }
 
-    -- The mob and the place in orange, the addon's mark for a word that
-    -- answers: every face on the plot below opens a tip for that same mob.
-    frame.title:SetText(snapshot.killer
-        and ("Replay - killed by " .. ns.UI.HotText(snapshot.killer))
-        or "Replay")
+    -- The mob in orange, the addon's mark for a word that answers: every
+    -- face on the plot below opens a tip for that same mob. The place in
+    -- the blue every place name in the addon wears (owner, 2026-08-16:
+    -- "bei replay ... da muss der dungeon name noch blau sein").
+    frame.title.Paint(Replay.TitlePieces(snapshot))
     frame.sub:SetText((snapshot.when or "")
-        .. (snapshot.where and ("  -  " .. ns.UI.HotText(snapshot.where)) or ""))
+        .. (snapshot.where and ("  -  " .. ns.UI.CoolText(snapshot.where)) or ""))
 
     -- The single portrait that used to sit in the corner of the damage lane
     -- is gone: every hit carries its own face now. One face for a death
