@@ -1318,17 +1318,22 @@ local function TestDeath()
     -- THE GUIDE'S TILE KEEPS ITS SHAPE: a frame narrower than the tile's
     -- own 296:101 shows the middle of it at full height, a wider one the
     -- middle band at full width.
+    -- The art is the top-left 190x92 of a 256x128 file (Raider.IO's
+    -- region); nothing outside it is ever shown.
     do
+        local AX0, AX1, AY0, AY1 = 4 / 256, 190 / 256, 4 / 128, 92 / 128
         local x0, x1, y0, y1 = Death.TileCoords(64, 46)
-        Check("A tall frame crops the sides and keeps the height",
-            y0 == 0 and y1 == 1 and x0 > 0.2 and x1 < 0.8
-                and math.abs((x1 - x0) - (64 / 46) / (296 / 101)) < 0.001)
+        Check("A tall frame crops the sides and keeps the art's height",
+            math.abs(y0 - AY0) < 0.001 and math.abs(y1 - AY1) < 0.001
+                and x0 > AX0 and x1 < AX1)
         local wx0, wx1, wy0, wy1 = Death.TileCoords(400, 40)
-        Check("A wide frame keeps the width and crops top and bottom",
-            wx0 == 0 and wx1 == 1 and wy0 > 0 and wy1 < 1)
-        local ex0, ex1, ey0, ey1 = Death.TileCoords(296, 101)
-        Check("The tile's own shape is the whole tile",
-            ex0 == 0 and ex1 == 1 and ey0 == 0 and ey1 == 1)
+        Check("A wide frame keeps the art's width and crops top and bottom",
+            math.abs(wx0 - AX0) < 0.001 and math.abs(wx1 - AX1) < 0.001
+                and wy0 > AY0 and wy1 < AY1)
+        local ex0, ex1, ey0, ey1 = Death.TileCoords(186, 88)
+        Check("The art's own shape is the whole art and nothing outside it",
+            math.abs(ex0 - AX0) < 0.001 and math.abs(ex1 - AX1) < 0.001
+                and math.abs(ey0 - AY0) < 0.001 and math.abs(ey1 - AY1) < 0.001)
     end
 
     Check("A snapshot with nothing readable says so in the panel",

@@ -1038,24 +1038,29 @@ end
 -- instance. One builder for the death window's rows and header and the
 -- group log's rows.
 --
--- THE TILE'S OWN SHAPE is the guide's button: the file is drawn stretched
--- into 296 by 101 there, so THAT is the picture's true proportion, not the
--- file's. A frame narrower than that shows the middle of it, full height;
--- a frame wider shows the middle band, full width. Owner, 2026-08-16, on
--- the first version: "nur verzerrt und etwas zu klein ... als eigene
--- spalte ... so hoch wie die spalte."
-local TILE_RATIO = 296 / 101
+-- THE PICTURE IS A REGION OF THE FILE, NOT THE FILE. The guide's button
+-- textures are 256 by 128 with the art in their top-left 190 by 92 and
+-- padding beyond - the first version drew the whole file and showed the
+-- padding as black bands (owner, 2026-08-16: "nur verzerrt und etwas zu
+-- klein"). The region is the one Raider.IO's inline tiles have used for
+-- years (|T...:256:128:4:190:4:92|t) - read off their code, not guessed.
+-- Within that region a frame narrower than the art shows its middle at
+-- full height; a frame wider shows its middle band at full width.
+local ART_X0, ART_X1 = 4 / 256, 190 / 256
+local ART_Y0, ART_Y1 = 4 / 128, 92 / 128
+local TILE_RATIO = ((ART_X1 - ART_X0) * 256) / ((ART_Y1 - ART_Y0) * 128)
 Death.PLACE_ART_W, Death.PLACE_ART_H = 64, 46
 function Death.TileCoords(width, height)
     local want = (width or 1) / math.max(1, height or 1)
+    local spanX, spanY = ART_X1 - ART_X0, ART_Y1 - ART_Y0
     if want < TILE_RATIO then
         local keep = want / TILE_RATIO
-        local x0 = (1 - keep) / 2
-        return x0, 1 - x0, 0, 1
+        local trim = spanX * (1 - keep) / 2
+        return ART_X0 + trim, ART_X1 - trim, ART_Y0, ART_Y1
     end
     local keep = TILE_RATIO / want
-    local y0 = (1 - keep) / 2
-    return 0, 1, y0, 1 - y0
+    local trim = spanY * (1 - keep) / 2
+    return ART_X0, ART_X1, ART_Y0 + trim, ART_Y1 - trim
 end
 
 function Death.CreatePlaceArt(parent, width, height)
@@ -3049,8 +3054,11 @@ function Death:Show(index)
 
     -- The place, in the same orange every instance name in the addon wears
     -- now - it is the line somebody reads to know which run this was.
+    -- Blue, like every place name in the addon now (owner, 2026-08-16:
+    -- "da den dungeon namen auch in blau").
     frame.place:SetText(snapshot.where or "")
-    frame.place:SetTextColor(UI.C.hot[1], UI.C.hot[2], UI.C.hot[3])
+    frame.place:SetTextColor(UI.C.accentCool[1], UI.C.accentCool[2],
+        UI.C.accentCool[3])
     frame.placeArt:ClearAllPoints()
     frame.placeArt:SetPoint("BOTTOMLEFT", frame.place, "BOTTOMLEFT",
         math.min(frame.place:GetStringWidth() or 0, MAIN_W - 70) + 8, -4)
