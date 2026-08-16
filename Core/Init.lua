@@ -1894,7 +1894,8 @@ ns.COMMANDS = {
     { cmd = "/zs route", text = "the MDT route experiment: what MDT holds and "
         .. "what the mobs in front of you resolved to (|cffffd100on|r / "
         .. "|cffffd100off|r switches it, |cffffd100probe|r asks the client "
-        .. "every question at once, |cffffd100test|r badges every plate, "
+        .. "every question at once, |cffffd100events|r which events the "
+        .. "client lets us register, |cffffd100test|r badges every plate, "
         .. "|cffffd100next|r / |cffffd100prev|r step the pull)" },
 
     { group = "Housekeeping" },
@@ -2176,6 +2177,8 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             R:Start()
             R:Sync()
             R:Probe()
+        elseif sub == "events" then
+            R:ProbeEvents()
         elseif sub == "test" then
             R:Start()
             R:SetTesting(not R.testing)

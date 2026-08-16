@@ -10694,6 +10694,17 @@ local function TestRoutes()
         and R.NpcFromGUID(nil) == nil)
     Check("The routes defaults are on the profile, and the experiment is off",
         type(ns.DEFAULTS.routes) == "table" and ns.DEFAULTS.routes.enabled == false)
+    -- The sweep starts without the combat log and the cast events; those
+    -- are doors the listener knocks on one at a time.
+    do
+        local sweep = {}
+        for _, e in ipairs(R.SWEEP_EVENTS) do sweep[e] = true end
+        Check("The sweep does not register the combat log or the cast events itself",
+            not sweep.COMBAT_LOG_EVENT_UNFILTERED and not sweep.UNIT_SPELLCAST_START
+            and sweep.NAME_PLATE_UNIT_ADDED and #R.DOOR_EVENTS == 4)
+        local ok, why = R.Register(nil, "X")
+        Check("Registering on nothing says no without raising", ok == false and why == nil)
+    end
     Check("/zs route is listed with a handler and asks nothing of a client without MDT",
         R:Available() == false or type(R:Available()) == "boolean")
 end
@@ -11033,6 +11044,22 @@ local function TestHouseLook()
         Profiles.Trough(chosen) == 0
             and chosen.coTanks.trackAlpha == 0.5
             and chosen.dbVersion == 10)
+
+    ---------------------------------------------------------------------
+    -- Version 11: the routes experiment starts off - a switch left on by
+    -- 4.4x is not a choice anybody made this year.
+    ---------------------------------------------------------------------
+    local stale = OldProfile()
+    stale.dbVersion = 10
+    stale.routes = { enabled = true, alpha = 0.9 }
+    Check("Version 11 switches a stale routes experiment off, once",
+        Profiles.Rest(stale) == true and stale.routes.enabled == false
+            and stale.routes.alpha == 0.9 and stale.dbVersion == 11
+            and Profiles.Rest(stale) == false)
+    local fresh = OldProfile()
+    fresh.dbVersion = 10
+    Check("...and a profile without routes is only stamped",
+        Profiles.Rest(fresh) == false and fresh.dbVersion == 11)
     local bare = OldProfile()
     bare.dbVersion = 9
     bare.coTanks = nil

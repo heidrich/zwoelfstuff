@@ -803,28 +803,59 @@ end
 ---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
+-- ONE DOOR FOR EVERY REGISTRATION. The client is asked first whether the
+-- event exists at all (C_EventUtils.IsEventValid); a name it does not know
+-- is skipped and said so, rather than raising. What the client FORBIDS is
+-- a different thing and cannot be caught here: it arrives later as
+-- ADDON_ACTION_FORBIDDEN, and Routes:ProbeEvents attributes it.
+function Routes.Register(frame, event)
+    if not (frame and event) then return false end
+    local ask = C_EventUtils and C_EventUtils.IsEventValid
+    if type(ask) == "function" then
+        local ok, valid = pcall(ask, event)
+        if ok and valid == false then return false, "not a valid event" end
+    end
+    local ok = pcall(frame.RegisterEvent, frame, event)
+    return ok and true or false
+end
+
+-- THE EVENTS THE SWEEP LIVES ON, and the two it does not start with.
+--
+-- The first login with Routes back (2026-08-16, his profile still holding
+-- `enabled` from 4.4x) met eleven ADDON_ACTION_FORBIDDEN errors out of this
+-- registration loop - the client refuses at least one of these on 12.1, and
+-- pcall does not catch a refusal, it only loses the name ("UNKNOWN()"). So:
+-- the combat log and the cast events, which are what a 12.x client is
+-- most likely to guard, are NOT registered here. Routes:Listen tries them,
+-- names them one at a time, and reports which one the client refused - and
+-- until it says yes, the sweep runs without them (kills are then counted
+-- off the forces counter alone, and the cast door stays shut).
+Routes.SWEEP_EVENTS = {
+    "NAME_PLATE_UNIT_ADDED",
+    "NAME_PLATE_UNIT_REMOVED",
+    "PLAYER_ENTERING_WORLD",
+    "CHALLENGE_MODE_START",
+    -- Walking through the door of the dungeon, and between its floors.
+    -- MDT has no zone event of its own, so this is where the route for
+    -- the place you are actually standing in gets picked up.
+    "ZONE_CHANGED_NEW_AREA",
+    -- The enemy forces counter moved. The better half of progress, and
+    -- the only half that needs nothing from a unit.
+    "SCENARIO_CRITERIA_UPDATE",
+}
+Routes.DOOR_EVENTS = {
+    "COMBAT_LOG_EVENT_UNFILTERED",
+    "UNIT_SPELLCAST_START",
+    "UNIT_SPELLCAST_CHANNEL_START",
+    "UNIT_SPELLCAST_SUCCEEDED",
+}
+
 function Routes:Start()
     if self.events then return end
     self.events = CreateFrame("Frame")
 
-    for _, event in ipairs({
-        "NAME_PLATE_UNIT_ADDED",
-        "NAME_PLATE_UNIT_REMOVED",
-        "COMBAT_LOG_EVENT_UNFILTERED",
-        "PLAYER_ENTERING_WORLD",
-        "CHALLENGE_MODE_START",
-        -- Walking through the door of the dungeon, and between its floors.
-        -- MDT has no zone event of its own, so this is where the route for
-        -- the place you are actually standing in gets picked up.
-        "ZONE_CHANGED_NEW_AREA",
-        -- The enemy forces counter moved. The better half of progress, and
-        -- the only half that needs nothing from a unit.
-        "SCENARIO_CRITERIA_UPDATE",
-        -- A mob naming itself. See Routes.CastSpell and the spell index.
-        "UNIT_SPELLCAST_START",
-        "UNIT_SPELLCAST_CHANNEL_START",
-    }) do
-        pcall(self.events.RegisterEvent, self.events, event)
+    for _, event in ipairs(Routes.SWEEP_EVENTS) do
+        Routes.Register(self.events, event)
     end
 
     self.events:SetScript("OnEvent", function(_, event, unit, _, spellID)
@@ -1153,12 +1184,38 @@ function Routes:Listen(seconds)
     ns.Print(string.format("|cffffd100listening for %d seconds|r - pull something, "
         .. "or wait for a cast", left))
 
-    pcall(f.RegisterEvent, f, "COMBAT_LOG_EVENT_UNFILTERED")
-    pcall(f.RegisterEvent, f, "UNIT_SPELLCAST_START")
-    pcall(f.RegisterEvent, f, "UNIT_SPELLCAST_CHANNEL_START")
-    pcall(f.RegisterEvent, f, "UNIT_SPELLCAST_SUCCEEDED")
+    -- The four doors, ONE AT A TIME with a beat between them, and the
+    -- client's refusal - ADDON_ACTION_FORBIDDEN, delivered as an event of
+    -- its own - is caught here and pinned to the name registered last. That
+    -- is the only way to learn WHICH event the client guards: pcall does
+    -- not catch a refusal, it only loses the function's name.
+    local registering
+    Routes.Register(f, "ADDON_ACTION_FORBIDDEN")
+    local doors = Routes.DOOR_EVENTS
+    local step = 0
+    local function NextDoor()
+        step = step + 1
+        local event = doors[step]
+        if not event then registering = nil return end
+        registering = event
+        local ok, why = Routes.Register(f, event)
+        ns.Print("   registering " .. event .. (ok and "" or (" - " .. tostring(why))))
+        if C_Timer and C_Timer.After then C_Timer.After(0.4, NextDoor) end
+    end
+    NextDoor()
 
     f:SetScript("OnEvent", function(_, event, unit, _, spellID)
+        if event == "ADDON_ACTION_FORBIDDEN" then
+            if unit == "ZwoelfStuff" then
+                ns.Print(string.format("   |cffff4040the client REFUSED|r %s "
+                    .. "(%s) - that door is shut on this patch",
+                    tostring(registering or "something before this"),
+                    tostring(spellID)))
+                self.refused = self.refused or {}
+                if registering then self.refused[registering] = true end
+            end
+            return
+        end
         if said >= LISTEN_LINES then return end
         if event == "COMBAT_LOG_EVENT_UNFILTERED" then
             if not CombatLogGetCurrentEventInfo then return end
@@ -1208,6 +1265,51 @@ function Routes:Listen(seconds)
         ns.Print(string.format("|cffffd100listening done|r - %d line(s) heard.%s",
             said, said == 0 and " Nothing hostile spoke; run it again in a pull." or ""))
     end)
+end
+
+-- EVERY EVENT THIS FILE WOULD REGISTER, ONE EVERY HALF SECOND, with the
+-- client's refusal pinned to the name that came before it. /zs route
+-- events. Written after the eleven errors of 2026-08-16: which of the nine
+-- the client guards is exactly the thing a traceback through pcall cannot
+-- say ("UNKNOWN()"), and this can.
+function Routes:ProbeEvents()
+    local list = {}
+    for _, event in ipairs(Routes.SWEEP_EVENTS) do list[#list + 1] = event end
+    for _, event in ipairs(Routes.DOOR_EVENTS) do list[#list + 1] = event end
+
+    local target = CreateFrame("Frame")
+    local watcher = CreateFrame("Frame")
+    local current
+    Routes.Register(watcher, "ADDON_ACTION_FORBIDDEN")
+    watcher:SetScript("OnEvent", function(_, _, addon, func)
+        if addon ~= "ZwoelfStuff" then return end
+        ns.Print(string.format("   |cffff4040REFUSED|r - %s (%s)",
+            tostring(current or "before the first"), tostring(func)))
+    end)
+
+    ns.Print("|cffffd100--------- which events this client lets us register ---------|r")
+    local index = 0
+    local function Step()
+        index = index + 1
+        local event = list[index]
+        if not event then
+            current = nil
+            target:UnregisterAllEvents()
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0.6, function()
+                    watcher:UnregisterAllEvents()
+                    ns.Print("|cffffd100events: done|r - a name with no red line "
+                        .. "after it is a door that is open.")
+                end)
+            end
+            return
+        end
+        current = event
+        local ok, why = Routes.Register(target, event)
+        ns.Print("   " .. event .. (ok and "" or (" |cffff8040- " .. tostring(why) .. "|r")))
+        if C_Timer and C_Timer.After then C_Timer.After(0.5, Step) end
+    end
+    Step()
 end
 
 ---------------------------------------------------------------------------

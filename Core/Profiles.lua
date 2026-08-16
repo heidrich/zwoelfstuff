@@ -195,6 +195,31 @@ function Profiles.Trough(profile)
 end
 
 ---------------------------------------------------------------------------
+-- Version 11: the routes experiment starts OFF for everybody
+--
+-- Routes came back in 4.84.0 as an experiment behind db.routes.enabled -
+-- and the owner's profile still carried `enabled = true` from the 4.4x
+-- days, so it started at login on its own and eleven ADDON_ACTION_FORBIDDEN
+-- errors met him before he had typed a thing (2026-08-16). A switch that
+-- was left on by a version that no longer exists is not a choice anybody
+-- made this year; it goes off, once, and /zs route on is the way back.
+---------------------------------------------------------------------------
+function Profiles.Rest(profile)
+    if type(profile) ~= "table" then return false end
+
+    local version = tonumber(profile.dbVersion) or 0
+    if version >= 11 then return false end
+
+    local moved = false
+    if type(profile.routes) == "table" and profile.routes.enabled then
+        profile.routes.enabled = false
+        moved = true
+    end
+    profile.dbVersion = 11
+    return moved
+end
+
+---------------------------------------------------------------------------
 -- Opening up
 --
 -- Called from ADDON_LOADED, and again by hand every time the active profile
@@ -230,6 +255,7 @@ function ns.OpenProfile()
     Profiles.HouseLook(store.profiles[name])
     Profiles.Bench(store.profiles[name])
     Profiles.Trough(store.profiles[name])
+    Profiles.Rest(store.profiles[name])
 
     ns.db = ns.ApplyDefaults(store.profiles[name], ns.DEFAULTS)
     ns.profileKey = key
