@@ -1092,15 +1092,38 @@ end
 -- the counter frame rather than by clearing the font string. So the frame's
 -- own visibility IS the answer, and reading it touches no secret.
 --
--- nil means "there is no such counter to ask", which is not the same as false
--- and must not be treated as one: a cell with no Blizzard frame at all has to
--- fall back to its own judgement rather than being silenced.
+-- nil means "there is nothing to ask, or nothing that will answer", which is
+-- not the same as false and must not be treated as one: a cell with no
+-- Blizzard frame at all, and one whose frame will not say, both have to fall
+-- back to their own judgement rather than being silenced.
+--
+-- THE pcall GUARDS THE CALL, NOT THE ANSWER, AND THAT WAS THE HOLE. His
+-- client, four times in one pass:
+--
+--     CDM.lua:1103: attempt to perform boolean test on local 'shown'
+--     (a secret boolean value, while execution tainted by 'ZwoelfStuff')
+--
+-- IsShown can hand back a SECRET boolean here - a counter whose visibility was
+-- decided from a stack count the addon may not read is itself unreadable - and
+-- `shown and true or false` on the next line is exactly the boolean test this
+-- patch raises on. It threw out of a function whose whole promise is that it
+-- never does, and it took the listener that called it with it
+-- (Visibility.lua:293 caught it four times over).
+--
+-- Word for word the bug the secret guard found in CDM:ItemIsActive on its
+-- first day, in the file it found it in, twenty lines from the paragraph that
+-- describes it. ns.CanCompute turns it back into the third answer this
+-- function already documents.
 function CDM:CounterShown(item, key)
     local widget = self:Counter(item, key)
     if not widget then return nil end
     local ok, shown = pcall(widget.IsShown, widget)
-    if not ok then return nil end
-    return shown and true or false
+    -- ONE LINE, exactly as CDM:ItemIsActive writes it above. The guard reads a
+    -- line at a time, so a CanCompute on the line BEFORE the test looks to it
+    -- like no guard at all - and it is right to: what it is checking is that
+    -- nothing tests this value without having just asked whether it may.
+    if ok and ns.CanCompute(shown) then return shown and true or false end
+    return nil
 end
 
 -- The font string inside one of Blizzard's counter frames. Published rather

@@ -8033,6 +8033,22 @@ local function TestCooldownClaim()
     -- Holding it where we put it
     ---------------------------------------------------------------------
     local slot = CreateFrame("Frame")
+
+    -- HOW MANY WERE PLACED BEFORE THIS SUITE PLACED ONE.
+    --
+    -- Claim.Placed() counts EVERY frame this addon is holding an anchor for,
+    -- across the whole session - not the ones this test made. On the desk
+    -- nothing else is running and it answered 1 and then 0, so `== 1` and
+    -- `== 0` looked like statements about this frame. In HIS client the bars
+    -- are up and drawing while /zs test runs, so it counts his cells too, and
+    -- both lines went red on a Claim that is working perfectly.
+    --
+    -- That is a test asserting THE WORLD rather than the code, and it is the
+    -- second time in this file: `mine.fo == 1` once meant "you happen to have
+    -- food up". The rule from it is the fix here - measure the DELTA the code
+    -- caused, never the absolute the client happens to be at.
+    local placedBefore = Claim.Placed()
+
     Claim.Place(item, { "CENTER", slot, "CENTER", 0, 0 }, 40, 40)
     Claim.Reveal(item)
 
@@ -8041,7 +8057,9 @@ local function TestCooldownClaim()
         point == "CENTER" and relativeTo == slot)
     Check("At the size we asked for", item:GetWidth() == 40)
     Check("And it is on screen", item:GetAlpha() == 1)
-    Check("One frame is placed", Claim.Placed() == 1)
+    Check("One frame more is placed than was", Claim.Placed() == placedBefore + 1,
+        string.format("%s, was %s", tostring(Claim.Placed()),
+            tostring(placedBefore)))
 
     -- BLIZZARD'S OWN LAYOUT PASS. There is no event for it and no polling
     -- either - the hook re-asserts from inside their own SetPoint, and this
@@ -8085,10 +8103,26 @@ local function TestCooldownClaim()
     Claim.Set(counter, "SetTextColor", 1, 0, 0, 1)
     Claim.Anchor(counter, "BOTTOMRIGHT", item, "BOTTOMRIGHT", -3, 3)
 
+    -- A FONT SIZE DOES NOT COME BACK AS THE NUMBER YOU GAVE IT.
+    --
+    -- The same lesson as ALPHA_STEP above, on a second value, and it cost the
+    -- same thing: two checks red in his client against a round trip that was
+    -- working. A FontString's size goes through the UI scale and is kept as a
+    -- 32-bit float, so it comes back a rounding error away. Measured, from his
+    -- own log rather than reasoned about:
+    --
+    --     SetFont(..., 22, ...)  ->  GetFont() = 22.000001907349
+    --     SetFont(..., 14, ...)  ->  GetFont() = 13.999999046326
+    --
+    -- The desk CANNOT reproduce this - its stub has no UI scale and hands back
+    -- exactly what it was given - so unlike the alpha case there is no braces
+    -- under this belt, and the tolerance is the whole of it. Near's default is
+    -- a hundredth, which is six thousand times the error above and still
+    -- nowhere near 14 against 22.
     local _, styledSize = counter:GetFont()
     local styledPoint = counter:GetPoint(1)
     Check("A counter takes our font and our place",
-        styledSize == 22 and styledPoint == "BOTTOMRIGHT",
+        Near(styledSize, 22) and styledPoint == "BOTTOMRIGHT",
         tostring(styledSize) .. " " .. tostring(styledPoint))
 
     ---------------------------------------------------------------------
@@ -8117,7 +8151,9 @@ local function TestCooldownClaim()
     Check("So does the out-of-range veil", Same(veil:GetAlpha(), veilAlpha))
     Check("The rounded corners go back on", item.Icon:GetNumMaskTextures() == 1)
     Check("The frame is visible again", item:GetAlpha() == 1)
-    Check("Nothing is placed any more", Claim.Placed() == 0)
+    Check("This one is not placed any more", Claim.Placed() == placedBefore,
+        string.format("%s, was %s", tostring(Claim.Placed()),
+            tostring(placedBefore)))
     Check("And we hold no record of it", ns.Cooldowns.Known(item) == nil)
 
     -- THE HOOKS CANNOT BE REMOVED, so the proof that letting go is real is
@@ -8518,6 +8554,46 @@ local function TestCooldownOwn()
     -- Deferring to it there empties the corner - which is exactly the number
     -- the owner asked for three times.
     ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    -- A COUNTER THAT WILL NOT SAY WHETHER IT IS SHOWN
+    --
+    -- His client, four times in one pass, on a bar that was drawing:
+    --
+    --     CDM.lua:1103: attempt to perform boolean test on local 'shown'
+    --     (a secret boolean value, while execution tainted by 'ZwoelfStuff')
+    --
+    -- IsShown can hand back a SECRET boolean - a counter whose visibility was
+    -- decided from a stack count we may not read is itself unreadable - and
+    -- the pcall around the CALL does nothing for what happens to the ANSWER.
+    -- It threw out of a reader whose whole promise is that it never does, and
+    -- took the listener that called it with it.
+    --
+    -- ASKED AT RUNTIME rather than only in the source. The desk guard reads
+    -- shapes and is what found this one; this hands a real secret to the real
+    -- function and asks what it answers. It can only run at all because the
+    -- harness now has issecretvalue - without it CanCompute says yes to
+    -- everything out here and this check cannot fail.
+    ---------------------------------------------------------------------
+    if _G.__SECRET and issecretvalue and issecretvalue(_G.__SECRET) then
+        local coy = CreateFrame("Frame")
+        coy.Applications = CreateFrame("Frame", nil, coy)
+        coy.Applications.IsShown = function() return _G.__SECRET end
+
+        local said = ns.CDM:CounterShown(coy, "Applications")
+        Check("A counter that will not say is answered with 'cannot tell'",
+            said == nil, tostring(said))
+
+        -- AND THE THIRD ANSWER REACHES THE DECISION IT WAS MADE FOR: nil is
+        -- not false. False is Blizzard saying it looked at a count and decided
+        -- it was not worth a number - final. Nil is nobody having said
+        -- anything, and on a place we draw that means we judge it ourselves,
+        -- which is the number he asked for three times.
+        Check("and a place we draw still writes its own number",
+            ns.Cooldowns.Text.StackToShow(said, 3, true) == 3)
+    else
+        Skip("A counter that will not say", "this client cannot make a secret")
+    end
+
     local Text = ns.Cooldowns.Text
     Check("On a borrowed place we leave Blizzard's number alone",
         Text.StackToShow(true, 3) == nil)

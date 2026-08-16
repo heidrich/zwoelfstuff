@@ -111,6 +111,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     allocates nothing at all. Nothing on screen changes, your machine just
     stops sweeping up after us.
 
+- **Fixed: an error four times a pass on a bar with stack counts.** Asking
+  whether Blizzard is showing its own stack counter could throw — the answer is
+  sometimes a value the game will not let an addon look at, and looking at it is
+  what raises. The whole listener it was called from died with it. It now
+  answers "cannot tell", which every caller already knew how to handle: on a
+  place the addon draws itself, that means it writes the number itself.
+
 - **Styling a single place on a bar now has one rule instead of two.** A place
   can carry its own look — its own fill colour, its own spark, its own charge
   marks — and it wins over the bar's. Two separate parts of the code decided
