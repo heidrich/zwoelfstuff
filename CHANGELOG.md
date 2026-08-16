@@ -111,6 +111,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     allocates nothing at all. Nothing on screen changes, your machine just
     stops sweeping up after us.
 
+- **Styling a single place on a bar now has one rule instead of two.** A place
+  can carry its own look — its own fill colour, its own spark, its own charge
+  marks — and it wins over the bar's. Two separate parts of the code decided
+  that, which is how a bar ends up wearing one answer at one end and another at
+  the other; there is one now, and it knows one level more than either did:
+  styling you set on a place is filed under its **spell**, so moving that spell
+  along the bar takes its look with it instead of leaving it behind for whatever
+  lands there next. Anything you set in 4.82.0 is read exactly as it was and is
+  never rewritten. The editor for it is the next piece of work — this is the
+  half underneath it, and the note on the fill and look blocks that says "some
+  places carry a look of their own" now counts both kinds rather than only the
+  old one.
+
 - **The addon now notices when another one is managing your cooldowns.** Two
   addons cannot both hold Blizzard's cooldown frames — whichever loads second
   finds them taken, and what ends up on your screen depends on the order they

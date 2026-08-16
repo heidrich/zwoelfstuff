@@ -148,6 +148,126 @@ function Store.Cells(bar)
 end
 
 ---------------------------------------------------------------------------
+-- ONE PLACE'S OWN STYLING, AND THERE IS EXACTLY ONE RESOLVER FOR IT
+--
+-- WHAT THIS IS FOR, in his own report: he set a fill colour on "Buff Bar" and
+-- two of its places ignored him without saying anything. Read out of his real
+-- saved variables rather than reasoned about:
+--
+--     Buff Bar              fillColor = RED      {1.00, 0.05, 0.12}
+--       cellOpts[1].look    fillColor = GREEN    {0.00, 1.00, 0.32}
+--       cellOpts[2].look    fillColor = MAGENTA  {0.99, 0.05, 1.00}
+--
+-- Both readers were RIGHT: the renderer takes the place's own colour first and
+-- the page's swatch shows the bar's. They disagree because they are different
+-- things, and there was no way to see the place's value, no way to change it
+-- and no mark saying a place carries one. "Die Farbvorschauen sind alle kacke"
+-- is that, and not a broken swatch.
+--
+-- KEYED BY SPELL, NOT BY SLOT, and that is the decision this function exists to
+-- carry. `cellOpts` is keyed by slot INDEX, so moving a spell one place along
+-- leaves its styling behind on whatever lands there next - which is the thing
+-- that actually breaks in play. `cellLook[spellID]` travels with the spell.
+--
+-- THREE LEVELS, IN THIS ORDER, and the middle one is READ AND NEVER WRITTEN:
+--
+--   1. bar.cellLook[spellID]      ours, what the per-place editor writes
+--   2. bar.cellOpts[index].look   4.82.0's, his real settings, read-only
+--   3. bar[key]                   the bar
+--
+-- ONE RESOLVER AND NOT TWO. There were two - Look's own `Chosen` and
+-- Fill.Option - and both of their headers say in as many words that they must
+-- MOVE here rather than be joined by a third. A second copy of a precedence
+-- rule is a copy that goes stale, and this one decides what colour something
+-- is: the day they disagree, half a bar wears one answer and half the other.
+---------------------------------------------------------------------------
+
+-- The two tables that can override a bar key for one place, newest first, or
+-- nil for each that is not there. ALLOCATES NOTHING - it hands back what is
+-- stored rather than a merge of it, which is what lets the resolver below be
+-- asked once per key without building a table per cell per pass.
+local function Overrides(bar, index)
+    if not index then return nil, nil end
+
+    -- WHICH SPELL SITS HERE NOW, asked of the bar rather than passed in. It is
+    -- the same answer - the caller would have read it out of this same list -
+    -- and asking here is what keeps every call site speaking (bar, index) as
+    -- it always has.
+    --
+    -- ASKED ONLY OF A BAR THAT CARRIES PER-SPELL STYLING, which is none of his
+    -- today. Store.Cells goes through ns.SpecStore, and SpecStore FILES a
+    -- per-spec copy on first read - a write, on a path that is nothing but a
+    -- read, and one that would now run for every key of every place on every
+    -- pass. The `cellLook` test in front of it costs one table lookup and
+    -- leaves a bar that has none exactly as it was.
+    local mine
+    if type(bar.cellLook) == "table" then
+        local spellID = Store.Cells(bar)[index]
+        if spellID ~= nil then mine = bar.cellLook[spellID] end
+    end
+
+    local opts = type(bar.cellOpts) == "table" and bar.cellOpts[index] or nil
+    local was = type(opts) == "table" and opts.look or nil
+
+    return type(mine) == "table" and mine or nil,
+        type(was) == "table" and was or nil
+end
+
+-- ONE VALUE FOR ONE PLACE. `index` is optional: without it this is the bar's
+-- own answer, which is what a place carrying no styling of its own wears.
+--
+-- NOT `mine[key] or was[key] or bar[key]`. Every level here can legally hold
+-- `false` - "no spark on this one", "no charge marks on that one" - and `x and
+-- y or z` cannot carry a false. That idiom has cost this project two settings
+-- that could not be switched off; the comparison is against nil, three times.
+function Store.Option(bar, index, key)
+    if type(bar) ~= "table" then return nil end
+
+    local own, carried = Store.Own(bar, index, key)
+    if carried then return own end
+    return bar[key]
+end
+
+-- WHAT THIS PLACE ANSWERS FOR ITSELF, and WHETHER it answers at all.
+--
+-- Two returns rather than one, for the same reason the comparisons above are
+-- against nil: `false` is a real answer at every level - "no spark on this
+-- one" - and a single return cannot tell it apart from "this place says
+-- nothing". A caller that folded them together would show a mark on a place
+-- carrying nothing, or none on a place that had switched something off.
+--
+-- It is the reader behind the mark the owner asked for ("wo sehe ich denn,
+-- wenn ich einzelne bars oder icons style? ich sehe da keinen indikator"), and
+-- behind a per-place "follow the bar again": what that button clears is
+-- exactly what this returns.
+function Store.Own(bar, index, key)
+    if type(bar) ~= "table" then return nil, false end
+
+    local mine, was = Overrides(bar, index)
+    if mine and mine[key] ~= nil then return mine[key], true end
+    if was and was[key] ~= nil then return was[key], true end
+    return nil, false
+end
+
+-- DOES THIS PLACE CARRY ANY STYLING OF ITS OWN?
+--
+-- Owner, with the page open: "wo sehe ich denn, wenn ich einzelne bars oder
+-- icons style? ich sehe da keinen indikator." There is no mark yet and this is
+-- what one is drawn from - the preview cell and the block being edited both
+-- need the same answer, and two ways of asking it is how they come to disagree.
+--
+-- It is also the fast path for a whole-look read: a place with nothing of its
+-- own is the bar, and copying eighteen keys to say so is work for nothing.
+function Store.Overridden(bar, index)
+    if type(bar) ~= "table" then return false end
+
+    local mine, was = Overrides(bar, index)
+    if mine and next(mine) ~= nil then return true end
+    if was and next(was) ~= nil then return true end
+    return false
+end
+
+---------------------------------------------------------------------------
 -- The lattice, in the words Model.lua speaks
 --
 -- Two vocabularies meet here and this is the only place they touch. The bar
@@ -238,8 +358,11 @@ Store.READERS = {
         "growX", "growY", "point", "relPoint", "x", "y", "scale", "pinned",
         "staggerOffset",
 
-        -- What is on it.
-        "cells", "cellsBySpec", "cellOpts",
+        -- What is on it. `cellOpts` is 4.82.0's per-SLOT styling, read and
+        -- never rewritten; `cellLook` is the same idea keyed by SPELL, so a
+        -- place's styling travels when the spell is moved. Store.Option is the
+        -- one reader of both.
+        "cells", "cellsBySpec", "cellOpts", "cellLook",
 
         -- HOW BIG ONE CELL IS AND HOW FAR THE NEXT ONE. Every one of these
         -- reads like styling and is GEOMETRY, and every one of them was

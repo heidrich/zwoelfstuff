@@ -7790,6 +7790,110 @@ local function TestCooldownStore()
     local _, strange = S.Survey(invented)
     Check("A key no wave claims is reported, not swallowed",
         #strange == 1 and strange[1] == "somethingNobodyDeclared")
+
+    ---------------------------------------------------------------------
+    -- ONE PLACE'S OWN STYLING, AND THE ONE RESOLVER THAT DECIDES IT
+    --
+    -- Out of his real saved variables: "Buff Bar" carries a RED fillColor,
+    -- its first place carries GREEN and its second MAGENTA. He set the red
+    -- and two places ignored him in silence. Both readers were right and
+    -- there were TWO of them - Look's own and Fill's - each with a header
+    -- saying it must move here rather than gain a third. This is that move,
+    -- so this is where the precedence is asked.
+    ---------------------------------------------------------------------
+    local styled = {
+        cells = { 1044, 102342 },
+        fillColor = "bar", showSpark = true, chargeMarks = true,
+        cellOpts = { [1] = { look = { fillColor = "slot" } } },
+        cellLook = { [1044] = { fillColor = "spell" } },
+    }
+
+    Check("A place with nothing of its own wears the bar's answer",
+        S.Option(styled, 2, "showSpark") == true)
+    Check("The place's own styling wins over the bar's",
+        S.Option({ cells = { 1044 }, fillColor = "bar",
+            cellOpts = { [1] = { look = { fillColor = "slot" } } } },
+            1, "fillColor") == "slot")
+    -- AND THE SPELL'S OWN WINS OVER THE SLOT'S. Both exist on place 1 here,
+    -- which is the only arrangement that can tell the two apart.
+    Check("and what is keyed to the SPELL wins over what is keyed to the slot",
+        S.Option(styled, 1, "fillColor") == "spell",
+        tostring(S.Option(styled, 1, "fillColor")))
+    Check("With no place named at all, the bar answers",
+        S.Option(styled, nil, "fillColor") == "bar")
+
+    -- THE WHOLE REASON IT IS KEYED BY SPELL. `cellOpts` is keyed by SLOT, so
+    -- moving a spell one along leaves its styling behind for whatever lands
+    -- there next - which is what actually happens when he rearranges a bar.
+    local moved = {
+        cells = { 102342, 1044 },
+        fillColor = "bar",
+        cellOpts = { [1] = { look = { fillColor = "slot" } } },
+        cellLook = { [1044] = { fillColor = "spell" } },
+    }
+    Check("A spell moved to another place takes its styling with it",
+        S.Option(moved, 2, "fillColor") == "spell",
+        tostring(S.Option(moved, 2, "fillColor")))
+    Check("and the slot it left keeps only what was keyed to the slot",
+        S.Option(moved, 1, "fillColor") == "slot",
+        tostring(S.Option(moved, 1, "fillColor")))
+
+    -- FALSE HAS TO SURVIVE ALL THREE LEVELS. "No spark on this one" is the
+    -- answer a per-place editor exists to give, and `x and y or z` cannot
+    -- carry it - the idiom that has already cost this addon two settings
+    -- nobody could switch off.
+    Check("A place that says false is not read as 'said nothing'",
+        S.Option({ cells = { 1044 }, showSpark = true,
+            cellLook = { [1044] = { showSpark = false } } },
+            1, "showSpark") == false)
+    Check("and the same at slot level",
+        S.Option({ cells = { 1044 }, chargeMarks = true,
+            cellOpts = { [1] = { look = { chargeMarks = false } } } },
+            1, "chargeMarks") == false)
+
+    -- HIS THREE STORED ENTRIES ARE READ AND NEVER REWRITTEN. They were
+    -- written by 4.82.0 and they are real settings of his; a resolver that
+    -- "upgraded" them into the new shape would be a migration, and Store
+    -- translates rather than migrates.
+    S.Option(styled, 1, "fillColor")
+    S.Overridden(styled, 1)
+    Check("Resolving a place never rewrites what 4.82.0 stored",
+        styled.cellOpts[1].look.fillColor == "slot"
+            and styled.cellLook[1044].fillColor == "spell")
+
+    ---------------------------------------------------------------------
+    -- AND WHETHER A PLACE CARRIES ANYTHING AT ALL
+    --
+    -- Owner: "wo sehe ich denn, wenn ich einzelne bars oder icons style? ich
+    -- sehe da keinen indikator." This is the answer a mark is drawn from, and
+    -- there is one of it so the preview cell and the block being edited
+    -- cannot disagree.
+    ---------------------------------------------------------------------
+    -- AND PER KEY, WHICH IS WHAT A MARK AND A "FOLLOW THE BAR AGAIN" NEED.
+    -- Two returns, because `false` is a real answer: a single one cannot tell
+    -- "this place switched the spark off" from "this place says nothing", and
+    -- those two want opposite marks.
+    local off, carried = S.Own({ cells = { 1044 }, showSpark = true,
+        cellLook = { [1044] = { showSpark = false } } }, 1, "showSpark")
+    Check("A place that switched something off is carrying an answer",
+        off == false and carried == true,
+        string.format("%s/%s", tostring(off), tostring(carried)))
+
+    local _, quiet = S.Own(styled, 2, "showSpark")
+    Check("and one that never said anything is not",
+        quiet == false, tostring(quiet))
+
+    Check("A place with styling of its own says so", S.Overridden(styled, 1))
+    Check("and one without says so too", S.Overridden(styled, 2) == false)
+    -- AN EMPTY TABLE IS NOT AN OVERRIDE. The editor writes one the moment it
+    -- touches a place, and a mark that appears for a place carrying nothing
+    -- is a mark that means nothing.
+    Check("An empty override table is not styling",
+        S.Overridden({ cells = { 1044 }, cellLook = { [1044] = {} } }, 1)
+            == false)
+    Check("Nor is a per-spell table with no entry for this spell",
+        S.Overridden({ cells = { 1044 }, cellLook = { [999] = { alpha = 1 } } },
+            1) == false)
 end
 
 ---------------------------------------------------------------------------
@@ -8486,6 +8590,23 @@ local function TestCooldownOwn()
     local perCell = Fill.Paint({ fillBack = false,
         cellOpts = { [2] = { look = { fillBack = true } } } }, 2).back
     Check("and a place with its own answer keeps it", perCell.on == true)
+
+    -- THE WIRING, NOT THE RULE. Store.Option's own suite proves the three
+    -- levels and their order; these two prove that the two things which
+    -- actually paint go THROUGH it. That has been a different answer twice in
+    -- this file's history - a rule green on its own while nothing asked it.
+    local bySpell = Fill.Paint({ cells = { 77535 }, fillColor = { 1, 0, 0 },
+        cellLook = { [77535] = { fillColor = { 0, 0, 1 } } } }, 1)
+    Check("The fill's paint reads the place's own colour, keyed by spell",
+        bySpell.color[3] == 1 and bySpell.color[1] == 0,
+        string.format("%s,%s,%s", tostring(bySpell.color[1]),
+            tostring(bySpell.color[2]), tostring(bySpell.color[3])))
+
+    local lookBySpell = ns.Cooldowns.Look.Style({ cells = { 77535 },
+        borderSize = 2,
+        cellLook = { [77535] = { borderSize = 6 } } }, 1)
+    Check("and the look resolver does the same for its eighteen keys",
+        lookBySpell.borderSize == 6, tostring(lookBySpell.borderSize))
 
     ---------------------------------------------------------------------
     -- AND NOW ONE, DRAWN, THROUGH THE WHOLE RENDER PASS

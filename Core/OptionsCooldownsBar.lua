@@ -243,31 +243,36 @@ end
 ---------------------------------------------------------------------------
 -- The places that carry their own answer
 --
--- Look.Chosen and Fill.Option both read `cellOpts[index].look` FIRST and the
--- bar only afterwards, so a place with an override of its own does not move
--- when these rows do. That is not hypothetical and it is not rare: his
--- "Bars 2" carries fillColor, chargeMarks, showSpark, fillGradient and
--- stackThresholds on place 1 and fillColor, fillGrow and showSpark on place
--- 2, and the bar underneath them carries none of it - so on that one bar most
--- of the fill block would look like it had stopped working.
+-- The renderer takes a place's own answer FIRST and the bar only afterwards,
+-- so a place with an override of its own does not move when these rows do.
+-- That is not hypothetical and it is not rare: his "Bars 2" carries fillColor,
+-- chargeMarks, showSpark, fillGradient and stackThresholds on place 1 and
+-- fillColor, fillGrow and showSpark on place 2, and the bar underneath them
+-- carries none of it - so on that one bar most of the fill block would look
+-- like it had stopped working.
+--
+-- ASKED OF Store.Own RATHER THAN OF cellOpts. This used to walk `cellOpts`
+-- itself, which was the whole story while there was one place styling could
+-- live in. There are two now - the per-SPELL table the per-place editor writes
+-- and 4.82.0's per-slot one - and a counter that knew about only the old one
+-- would go quiet exactly when somebody used the new one. Store.Own knows both
+-- because it is the same reader the renderer uses.
 --
 -- Editing a single place is a later wave (OptionsCooldowns.lua's header names
 -- it). Until it exists, the honest thing is to say the places are there, and
 -- to say it only when they are.
 ---------------------------------------------------------------------------
 local function Overrides(bar, keys)
-    local opts = type(bar) == "table" and bar.cellOpts or nil
-    if type(opts) ~= "table" then return 0 end
+    local store = Store()
+    if not (type(bar) == "table" and store) then return 0 end
 
     local count = 0
-    for _, entry in pairs(opts) do
-        local look = type(entry) == "table" and entry.look or nil
-        if type(look) == "table" then
-            for _, key in ipairs(keys) do
-                if look[key] ~= nil then
-                    count = count + 1
-                    break
-                end
+    for index = 1, store.Capacity(bar) do
+        for _, key in ipairs(keys) do
+            local _, carried = store.Own(bar, index, key)
+            if carried then
+                count = count + 1
+                break
             end
         end
     end

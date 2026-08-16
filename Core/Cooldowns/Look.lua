@@ -95,6 +95,10 @@ local Look = {}
 Cooldowns.Look = Look
 
 local Claim = Cooldowns.Claim
+-- Captured at file scope, so the TOC order is part of the program: Store is
+-- twenty lines above this file in the list and holds the one resolver that
+-- decides whether a key comes from the place or from the bar.
+local Store = Cooldowns.Store
 
 ---------------------------------------------------------------------------
 -- The doors this wave adds to Claim
@@ -231,22 +235,24 @@ end
 -- the bar level only would drop styling he set by hand and say nothing about
 -- it, which is the quietest kind of loss there is.
 --
--- A COPY OF AT MOST EIGHTEEN FIELDS, and only for a cell that actually
+-- THE PRECEDENCE ITSELF IS NOT DECIDED HERE ANY MORE. It moved to
+-- Store.Option, which is the one place that knows all three levels - the
+-- spell's own styling, the slot's from 4.82.0, and the bar - and this file's
+-- own header carried the warning that made it move: a second copy of that rule
+-- is a copy that goes stale, and it decides what colour things are.
+--
+-- A COPY OF AT MOST EIGHTEEN FIELDS, and only for a place that actually
 -- carries overrides. 4.82.0 used a metatable proxy here; a copy of a fixed
 -- list is the same answer without a table whose __index reaches into the
 -- profile from wherever it ends up being read.
 local function Chosen(bar, index)
     bar = type(bar) == "table" and bar or EMPTY
 
-    local opts = type(bar.cellOpts) == "table" and bar.cellOpts[index] or nil
-    local look = type(opts) == "table" and opts.look or nil
-    if not (type(look) == "table" and next(look)) then return bar end
+    if not Store.Overridden(bar, index) then return bar end
 
     local mixed = {}
     for _, key in ipairs(Look.KEYS) do
-        local value = look[key]
-        if value == nil then value = bar[key] end
-        mixed[key] = value
+        mixed[key] = Store.Option(bar, index, key)
     end
     return mixed
 end

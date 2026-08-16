@@ -75,6 +75,9 @@ Cooldowns.Fill = Fill
 -- then Claim, then this, then Render. A reorder is `attempt to index a nil
 -- value` on the next login and nothing out here would say a word.
 local Claim = Cooldowns.Claim
+-- Store is above Claim in the TOC and holds the ONE resolver for "does this
+-- place answer for itself, or does the bar answer for it".
+local Store = Cooldowns.Store
 
 -- OUR OWN SPARK FILE, not Blizzard's. UI-CastingBar-Spark carries its glow in
 -- the middle of a lot of transparent padding, so a frame stretched to a bar's
@@ -198,25 +201,21 @@ end
 -- stands - Store's promise. Nothing here writes a profile key.
 ---------------------------------------------------------------------------
 
--- ONE LOOK KEY, with the CELL's own answer winning over the bar's.
+-- ONE LOOK KEY, with the PLACE's own answer winning over the bar's.
 --
--- THE ONLY READER OF THE PER-CELL LOOK IN THE REBUILD. His "Bars 2" carries
--- chargeMarks, stackThresholds, fillGradient, showSpark and fillColor on cell 1
--- and fillColor, fillGrow and showSpark on cell 2, and the bar underneath them
--- carries none of it. A reader that looks only at bar level discards the whole
--- of his threshold and spark configuration and reports success.
+-- IT MOVED, AS ITS OWN HEADER SAID IT MUST. This was `Fill.Option`, and it
+-- carried the note "when the look wave lands its own resolver, this must MOVE
+-- rather than be joined". That resolver is Store.Option, it knows one level
+-- more than this did - a place's styling keyed by SPELL, so it travels when the
+-- spell is moved - and there is now exactly one of it. Look's own `Chosen` came
+-- across in the same commit.
 --
--- WHEN THE LOOK WAVE LANDS ITS OWN RESOLVER, THIS MUST MOVE RATHER THAN BE
--- JOINED. "The second copy of a list is already stale" is a lesson this project
--- has paid for once already.
-function Fill.Option(bar, index, key)
-    if type(bar) ~= "table" then return nil end
-
-    local opts = type(bar.cellOpts) == "table" and bar.cellOpts[index] or nil
-    local look = type(opts) == "table" and opts.look or nil
-    if type(look) == "table" and look[key] ~= nil then return look[key] end
-
-    return bar[key]
+-- The name stays local to this file because sixteen call sites read better as
+-- `Option(bar, index, key)` than as the full path, and because the file's own
+-- header names it as the reader of the per-place look. It is one line and it
+-- decides nothing.
+local function Option(bar, index, key)
+    return Store.Option(bar, index, key)
 end
 
 -- WHICH WAY THE FILL RUNS, as ns.Layout.FillDirection's entry: the four names,
@@ -234,9 +233,9 @@ end
 -- cannot take back is the one thing Claim.Set refuses, so it is named and
 -- deferred. Half-wiring it is exactly how "Fill up" came to do nothing at all.
 function Fill.Direction(bar, index)
-    local named = Fill.Option(bar, index, "fillDirection")
+    local named = Option(bar, index, "fillDirection")
     if named == nil then
-        named = Fill.Option(bar, index, "fillSide") and "left" or "right"
+        named = Option(bar, index, "fillSide") and "left" or "right"
     end
     return ns.Layout.FillDirection(named)
 end
@@ -287,7 +286,7 @@ end
 -- wrote rows the renderer discards. Reporting the count is what lets the wave
 -- that owns the panel fix the WRITER instead of somebody loosening this filter.
 function Fill.Thresholds(bar, index)
-    local stored = Fill.Option(bar, index, "stackThresholds")
+    local stored = Option(bar, index, "stackThresholds")
     local out, dropped = {}, 0
 
     for _, entry in ipairs(type(stored) == "table" and stored or {}) do
@@ -759,16 +758,16 @@ end
 -- which is Blizzard's own on screen and the backdrop's on a preview.
 ---------------------------------------------------------------------------
 function Fill.Paint(bar, index)
-    local key = Fill.Option(bar, index, "fillTexture")
+    local key = Option(bar, index, "fillTexture")
     if key == nil or key == "" then
-        key = Fill.Option(bar, index, "backdropTexture")
+        key = Option(bar, index, "backdropTexture")
     end
     if not (key ~= nil and key ~= "" and ns.Media.IsKnown("statusbar", key)) then
         key = nil
     end
 
-    local colour = Fill.Option(bar, index, "fillColor")
-    local markColour = Fill.Option(bar, index, "chargeMarkColor")
+    local colour = Option(bar, index, "fillColor")
+    local markColour = Option(bar, index, "chargeMarkColor")
 
     -- THE TRACK - what shows through where the bar is not filled yet.
     --
@@ -782,22 +781,22 @@ function Fill.Paint(bar, index)
     -- shipping a track switched on would repaint all nine of them for a
     -- setting nobody had chosen. Store's promise is about the saved file and
     -- this is the same promise about the picture.
-    local backColour = Fill.Option(bar, index, "fillBackColor")
+    local backColour = Option(bar, index, "fillBackColor")
 
     return {
         texture   = key,
         color     = type(colour) == "table" and colour or { 1.00, 0.478, 0.239 },
-        alpha     = tonumber(Fill.Option(bar, index, "fillAlpha")) or 0.85,
-        gradient  = Fill.Option(bar, index, "fillGradient"),
+        alpha     = tonumber(Option(bar, index, "fillAlpha")) or 0.85,
+        gradient  = Option(bar, index, "fillGradient"),
         direction = Fill.Direction(bar, index),
-        spark     = Fill.Option(bar, index, "showSpark") and true or false,
-        marks     = Fill.Option(bar, index, "chargeMarks") and true or false,
+        spark     = Option(bar, index, "showSpark") and true or false,
+        marks     = Option(bar, index, "chargeMarks") and true or false,
         markColor = type(markColour) == "table" and markColour or { 0, 0, 0 },
 
         back = {
-            on    = Fill.Option(bar, index, "fillBack") and true or false,
+            on    = Option(bar, index, "fillBack") and true or false,
             color = type(backColour) == "table" and backColour or { 0, 0, 0 },
-            alpha = tonumber(Fill.Option(bar, index, "fillBackAlpha")) or 0.5,
+            alpha = tonumber(Option(bar, index, "fillBackAlpha")) or 0.5,
         },
     }
 end
