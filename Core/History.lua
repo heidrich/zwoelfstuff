@@ -252,25 +252,51 @@ function History:ActiveWindow(spellID, castAt)
     return History.WindowFor(History.actives, openSince, spellID, castAt, family)
 end
 
-local function Sweep()
+-- EVERY PART OF THE SWEEP THAT IS NOT THE SWEEP, MADE ONCE.
+--
+-- This is the most unconditional loop in the addon: it is armed at file scope,
+-- so it runs ten times a second from login for the rest of the session, with no
+-- window open, no bar on screen and nothing switched on. It used to build a
+-- fresh `seen` table, a fresh two-word list to walk and a fresh closure per
+-- viewer on every single one of those - forty objects a second, for ever.
+--
+-- The two viewer keys are a constant. `seen` is emptied at the top of each
+-- sweep rather than replaced; it only ever holds spell ids, which are numbers,
+-- so nothing is pinned by keeping it. And the body is a named function at file
+-- scope, which is what takes the closure out - the one thing it needed from the
+-- outside was the timestamp, and that is a file-local written the line before.
+--
+-- Same shape as the mirror's `pcall(function() ... end)` and the fill ticker's
+-- two lists: invisible in one tick, endless over an evening.
+local BUFF_VIEWERS = { "buffIcon", "buffBar" }
+local seen = {}
+local sweepNow = 0
+
+local function NoteActive(item)
+    local spellID = ns.CDM:ItemSpellID(item)
+    -- A secret id never reaches a table key: that is the crash this addon has
+    -- already shipped once.
+    if not (spellID and ns.CanCompute(spellID)
+        and type(spellID) == "number") then
+        return
+    end
+    if ns.CDM:ItemIsActive(item) then
+        seen[spellID] = true
+        if not openSince[spellID] then openSince[spellID] = sweepNow end
+    end
+end
+
+-- EXPORTED for the same reason Effects.Step and Fill.Tick are: the desk does
+-- not dispatch OnUpdate, so a local one is a loop no check can walk even once -
+-- and this is the loop that runs the longest of any in the addon.
+function History.Sweep()
     if not (ns.CDM and ns.CDM.ForEachItem) then return end
     local now = GetTime()
-    local seen = {}
+    sweepNow = now
+    wipe(seen)
 
-    for _, key in ipairs({ "buffIcon", "buffBar" }) do
-        pcall(ns.CDM.ForEachItem, ns.CDM, key, function(item)
-            local spellID = ns.CDM:ItemSpellID(item)
-            -- A secret id never reaches a table key: that is the crash this
-            -- addon has already shipped once.
-            if not (spellID and ns.CanCompute(spellID)
-                and type(spellID) == "number") then
-                return
-            end
-            if ns.CDM:ItemIsActive(item) then
-                seen[spellID] = true
-                if not openSince[spellID] then openSince[spellID] = now end
-            end
-        end)
+    for _, key in ipairs(BUFF_VIEWERS) do
+        pcall(ns.CDM.ForEachItem, ns.CDM, key, NoteActive)
     end
 
     -- Anything that was up and is not any more closed its window.
@@ -288,7 +314,7 @@ listener:SetScript("OnUpdate", function(_, elapsed)
     since = since + (elapsed or 0)
     if since < POLL then return end
     since = 0
-    Sweep()
+    History.Sweep()
 end)
 
 ---------------------------------------------------------------------------

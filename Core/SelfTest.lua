@@ -8528,13 +8528,26 @@ local function TestCooldownOwn()
 
     local bars = FakeBar(77535)
 
-    local pool = { items = { bars } }
+    -- A POOL THAT HANDS OUT ITS ITEMS WITHOUT BUILDING ANYTHING TO DO IT.
+    --
+    -- The first version returned a fresh closure per call, and a check that
+    -- measures how much a loop allocates then measured the FIXTURE: the buff
+    -- sweep below reported 25.4 KB over 200 polls against code that allocates
+    -- nothing. Third time this exact shape has fooled a resource check here.
+    --
+    -- Blizzard's own is `return pairs(self.activeObjects)` - a shared iterator
+    -- and no allocation - so this is closer to the client as well as quieter.
+    -- The index lives on the pool, which is what lets the iterator be one
+    -- function rather than one per enumeration.
+    local function NextActive(this)
+        this.index = this.index + 1
+        return this.items[this.index]
+    end
+
+    local pool = { items = { bars }, index = 0 }
     function pool:EnumerateActive()
-        local index = 0
-        return function()
-            index = index + 1
-            return self.items[index]
-        end
+        self.index = 0
+        return NextActive, self
     end
 
     -- THE FOURTH VIEWER, which is the one whose kind is "bar". Own.Wanted asks
@@ -8899,6 +8912,44 @@ local function TestCooldownOwn()
         -- read exactly like the line above passing.
         Check("and it still has the bar after two hundred of them",
             Fill.Watching() == 1, tostring(Fill.Watching()))
+
+        -----------------------------------------------------------------
+        -- AND THE LONGEST-RUNNING LOOP IN THE ADDON
+        --
+        -- History's buff sweep is armed at file scope, so it polls ten times a
+        -- second from login to logout whatever is switched on - no window, no
+        -- bar, nothing. It is asked HERE rather than in the cast-history suite
+        -- because it needs a live buff viewer with an item in it to walk, and
+        -- this fixture is the only one in the file that has one. A second copy
+        -- of that fixture would be a second thing to keep true.
+        --
+        -- It used to build a `seen` table, the two-word list it walks and a
+        -- closure per viewer on every poll: forty objects a second, for ever.
+        -- Measured with those put back: 39.0 KB over 200 polls against 0.4.
+        -----------------------------------------------------------------
+        local sweeps = ns.History
+        if sweeps and type(sweeps.Sweep) == "function" then
+            sweeps.Sweep()
+            Check("The buff sweep sees the fixture's own bar",
+                sweeps.openActives[77535] ~= nil,
+                "nothing opened")
+
+            collectgarbage("collect")
+            collectgarbage("collect")
+            before = collectgarbage("count")
+            for _ = 1, 200 do sweeps.Sweep() end
+            grew = collectgarbage("count") - before
+            Check("and it allocates nothing per poll", grew < 2,
+                string.format("%.1f KB over 200 polls", grew))
+
+            -- ITS OWN STATE PUT BACK. The sweep opened a window for the
+            -- fixture's spell, and the suite's promise is that it leaves
+            -- nothing behind.
+            sweeps.openActives[77535] = nil
+        else
+            Skip("The buff sweep costs nothing per poll",
+                "History.Sweep is not exported")
+        end
 
         -----------------------------------------------------------------
         -- SWITCHING IT OFF
