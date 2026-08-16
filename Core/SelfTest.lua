@@ -8854,10 +8854,19 @@ local function TestCooldownOwn()
         item.Applications = CreateFrame("Frame", nil, item)
         item.Applications:Show()
         item.auraDataCached = { applications = 3 }
-        -- SHOWN, and that is a fixture detail with teeth. CDM:ItemIsActive
-        -- falls back to IsShown for a frame with no IsActive, and Own reads
-        -- "not active" as "empty the bar" - so an unshown fixture proves the
-        -- EMPTY path while reading like a proof of the mirror.
+        -- IT ANSWERS IsActive, AND THAT IS A FIXTURE DETAIL WITH TEETH.
+        --
+        -- It used to model "the buff is up" by being SHOWN, because
+        -- CDM:ItemIsActive fell back to IsShown for a frame with no IsActive.
+        -- That fallback is gone - IsShown is Blizzard's answer to "is this
+        -- usable on your target", not to "is the buff up", and reading one
+        -- for the other is what greyed his icons the moment he clicked a mob.
+        --
+        -- So the fixture answers the question a real buff-bar item answers.
+        -- Keeping the old shape would have been a fixture proving a path the
+        -- addon no longer takes, which is worse than no fixture: it passes.
+        item.hxUp = true
+        item.IsActive = function(this) return this.hxUp and true or false end
         item:Show()
         mirror = item.Bar
         return item
@@ -9167,20 +9176,57 @@ local function TestCooldownOwn()
             -- and simply never empties again. A check that cannot fail is
             -- worth exactly nothing, and this one could not until it went
             -- round twice.
-            bars:Hide()
+            -- THE BUFF FALLS OFF BY ANSWERING SO, not by being hidden. See
+            -- FakeBar: hiding a frame is Blizzard saying it is not usable on
+            -- your target, which is a different question and was the bug.
+            bars.hxUp = false
             tick(own.fill)
             Check("A buff that fell off empties the bar",
                 own.fill:GetValue() == 0, tostring(own.fill:GetValue()))
 
-            bars:Show()
+            -- AND THE ICON WENT WITH IT, on the tick rather than waiting for
+            -- a render pass. "wie du siehst ist Rime aktive, aber das icon
+            -- leuchtet nicht" - the fill runs on its own script and the icon
+            -- was only repainted when Blizzard notified us about something,
+            -- so the two could disagree for as long as nothing did.
+            Check("and the icon dimmed with it, without a render pass",
+                own.icon:GetAlpha() < 1, tostring(own.icon:GetAlpha()))
+
+            bars.hxUp = true
             tick(own.fill)
             Check("and one that came back fills it again",
                 own.fill:GetValue() == 18, tostring(own.fill:GetValue()))
+            Check("and the icon came back up with it",
+                own.icon:GetAlpha() == 1, tostring(own.icon:GetAlpha()))
 
-            bars:Hide()
+            bars.hxUp = false
             tick(own.fill)
             Check("and it empties on the SECOND fall as well",
                 own.fill:GetValue() == 0, tostring(own.fill:GetValue()))
+
+            -- THE TARGET HAS NOTHING TO DO WITH IT, and this is the check
+            -- that says so. Owner: "wenn ich kein target anwaehle, wird das
+            -- icon nicht mehr ausgegraut" - Blizzard hides an item it thinks
+            -- is not usable on what you have selected, and IsShown was being
+            -- read as "is the buff up". Hiding the frame must now change
+            -- nothing about the picture.
+            bars.hxUp = true
+            tick(own.fill)
+            local litAlpha = own.icon:GetAlpha()
+            bars:Hide()
+            tick(own.fill)
+            Check("A frame Blizzard stops showing does not dim a live buff",
+                own.icon:GetAlpha() == litAlpha
+                    and ns.CDM:ItemIsActive(bars) == true,
+                string.format("%s, active %s", tostring(own.icon:GetAlpha()),
+                    tostring(ns.CDM:ItemIsActive(bars))))
+            Check("and that IS a different question, still askable",
+                ns.CDM:ItemIsShown(bars) == false,
+                tostring(ns.CDM:ItemIsShown(bars)))
+            bars:Show()
+
+            bars.hxUp = false
+            tick(own.fill)
 
             -----------------------------------------------------------
             -- THE SPARK, AND BOTH OF THE THINGS HE SAW ON 2026-08-16
@@ -9205,11 +9251,21 @@ local function TestCooldownOwn()
                     point ~= "CENTER" and point == relPoint,
                     string.format("%s -> %s", tostring(point),
                         tostring(relPoint)))
+                -- AND IT RIDES THE TEXTURE, NOT THE FRAME. That `or fill`
+                -- fallback is what put a bright line on the cell's own edge
+                -- that never moved - "der spark ist nicht am ende der roten
+                -- bar" and "der rechte border ist immer noch white" are the
+                -- same six pixels photographed twice.
+                local _, anchoredTo = spark:GetPoint(1)
+                Check("and it is hung on the fill's texture, not on the frame",
+                    anchoredTo ~= own.fill
+                        and anchoredTo == own.fill:GetStatusBarTexture())
+
                 Check("and there is nothing for it to lead on an empty bar",
                     spark:IsShown() == false)
             end
 
-            bars:Show()
+            bars.hxUp = true
             tick(own.fill)
             if spark then
                 -- THE HALF THAT GETS FORGOTTEN. A spark that goes out on the
@@ -9277,6 +9333,34 @@ local function TestCooldownOwn()
             Check("but a frame nobody has ever read still answers nil",
                 ns.CDM:ItemLooksActive(stranger) == nil,
                 tostring(ns.CDM:ItemLooksActive(stranger)))
+
+            -----------------------------------------------------------
+            -- AND THE FRAME THE BUG ACTUALLY LIVED ON: one with NO
+            -- IsActive at all.
+            --
+            -- This is the shape every fixture in this file was missing, and
+            -- it is why the defect survived a suite this size. IsActive
+            -- answers on a buff-bar item, so the IsShown fallback under it
+            -- never ran in any test - it only ran on the frames that have
+            -- no IsActive, out in his client, where `IsShown` means "would
+            -- the Cooldown Manager put this on screen for your current
+            -- target". Reading that as "is the buff up" is what greyed an
+            -- icon the moment he clicked a mob and lit it again when he
+            -- deselected.
+            --
+            -- Restoring the fallback has to turn THIS red and nothing else,
+            -- which is the whole reason it is written as its own frame
+            -- rather than folded into the fixture above.
+            -----------------------------------------------------------
+            local noAnswer = { IsShown = function() return false end }
+            Check("A frame with no IsActive cannot say whether a buff is up",
+                ns.CDM:ItemIsActive(noAnswer) == nil,
+                tostring(ns.CDM:ItemIsActive(noAnswer)))
+            Check("and being hidden is a DIFFERENT question with its own name",
+                ns.CDM:ItemIsShown(noAnswer) == false)
+            -- The point of all of it: nothing downstream may dim on this.
+            Check("so nothing dims on it - unknown stays lit",
+                ns.CDM:ItemLooksActive(noAnswer) == nil)
         else
             Skip("A picture that will not sit still",
                 "the harness has no secret value to refuse with")

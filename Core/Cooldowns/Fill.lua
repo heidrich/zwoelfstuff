@@ -700,6 +700,26 @@ local function Spark(host, fill, note, show, direction, texture, vertical)
         return false
     end
 
+    -- NO TEXTURE, NO SPARK - and the `or fill` that used to stand at the
+    -- anchor below is the bug he photographed twice.
+    --
+    -- The spark's whole job is to ride the fill's TEXTURE: the engine moves
+    -- that as the clock runs and anything hung off it moves too, at no cost
+    -- per frame. Hanging it on the fill FRAME instead does not degrade the
+    -- effect, it produces a different object - a bright line pinned to the
+    -- cell's own edge that never moves at all, whatever the bar is doing.
+    -- Which is exactly "der spark bei der bar darunter ist nicht am ende der
+    -- roten bar" and "der rechte border ist immer noch white", one screenshot
+    -- each.
+    --
+    -- Paint answers nil whenever GetStatusBarTexture is not a real region,
+    -- and that nil arrived here as a silent fallback. A spark with nothing to
+    -- ride is not a spark; it goes out and says so through the return value.
+    if type(texture) ~= "table" then
+        spark:Hide()
+        return false
+    end
+
     if vertical then
         spark:SetSize(across, SPARK_THICKNESS)
         -- The picture is a bright line down a wide texture. Turned a quarter so

@@ -294,6 +294,28 @@ end
 -- evening, so this is the branch the tick actually spends its life in - and
 -- four setters a frame to keep saying nought is the same waste as the closure
 -- above, one layer down. `emptied` is on our own widget table.
+-- HOW THE PICTURE SAYS "UP" OR "DOWN", in one place because it is asked from
+-- TWO.
+--
+-- It used to be written only on a render pass, and a render pass runs when
+-- Blizzard notified us that something changed. The fill does not wait for
+-- that - it is mirrored on its own script, sixty times a second - so a bar
+-- could be visibly full while its icon still wore the look from whenever the
+-- last notification happened to arrive. Owner: "wie du siehst ist Rime
+-- aktive, aber das icon leuchtet nicht."
+--
+-- `active` is the tri-state: true, false, or nil for "cannot be answered".
+-- Both lines below fire on exactly `false`, which is deliberate and is the
+-- other half of the same report - unknown is never rounded into the dimmer
+-- answer. See CDM:ItemIsActive.
+local function Wear(own, look, active)
+    if not (own and type(look) == "table") then return false end
+
+    own.icon:SetAlpha(Look.Opacity(look, active ~= false))
+    own.icon:SetDesaturated(look.inactiveDesaturate and active == false)
+    return true
+end
+
 local function Empty(own, item)
     if own.emptied then return end
     own.emptied = true
@@ -428,6 +450,16 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                 local up = ns.CDM:ItemIsActive(item)
                 -- nil is "the client will not say", and it is never rounded
                 -- into the answer that empties the bar.
+                -- THE ICON KEEPS UP WITH THE BAR NOW. `up` is already in hand
+                -- every frame; Wear is two setters and no allocation, and
+                -- without it the picture only changed when Blizzard happened
+                -- to notify us - which is how a full bar ended up beside a
+                -- dimmed icon of the same spell.
+                if up ~= own.worn then
+                    own.worn = up
+                    Wear(own, own.look, up)
+                end
+
                 if up == false then
                     Empty(own, item)
                     return
@@ -496,16 +528,19 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
     --    Look.Apply spends the same number through Claim on Blizzard's frame -
     --    so "the icon's opacity" and "the cell's" were always one answer, and
     --    this only splits them where there are two things to tell apart.
-    local alpha = Look.Opacity(look, active ~= false)
-    own.icon:SetAlpha(alpha)
+    --    THE TWO LINES THEMSELVES LIVE IN `Wear`, at the top of this file,
+    --    because the tick above needs them too: the fill runs on its own
+    --    script and the icon was only ever repainted when Blizzard notified
+    --    us about something. `own.look` is what lets the tick reach them
+    --    without asking the store again on a frame that has not changed.
+    own.look = look
+    own.worn = active
+    Wear(own, look, active)
 
     -- THE PLACE ITSELF carries the show rules and nothing else. Written every
     -- pass rather than only when it is not 1: a cell comes back out of Render's
     -- pool still wearing whatever the last place on it faded to.
     cell:SetAlpha((factor and factor < 1) and factor or 1)
-
-    -- 6. AND GREYED OUT WHEN IT IS DOWN, if that is what was asked for.
-    own.icon:SetDesaturated(look.inactiveDesaturate and active == false)
 
     return parts.band
 end
@@ -523,6 +558,10 @@ function Own.Hide(cell)
 
     own.fill:SetScript("OnUpdate", nil)
     own.fill:Hide()
+    -- The tick's "what is it wearing" latch goes with it. A cell that comes
+    -- back out of the pool for a different spell would otherwise be told it
+    -- already wears the right look and skip the first repaint.
+    own.worn = nil
     own.icon:SetAlpha(1)
     own.icon:Hide()
     own.bg:Hide()

@@ -332,15 +332,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   onto the end the bar grows *from*. So an empty bar wore a bright line at one
   end for as long as the buff was down, which is most of an evening. It goes
   out when the bar empties and comes back when it refills.
-- **No, there is no range check** — and the icon that greyed itself sometimes
-  was real. `IsShown` can hand back a **protected** value on this patch, and
-  whether it does depends on where you are standing. Both readers of that
-  answer greyed on exactly "no" and stayed bright on "cannot say", so one
-  unchanged, inactive spell was drawn two different ways from frame to frame.
-  The last answer the client actually **gave** is kept now instead of being
-  thrown away — a frame nobody has ever had an answer for still draws bright.
-  `/zs cdm` prints both readings side by side, so a line where they differ is
-  the explanation rather than something to work out.
+- **There WAS a range check, and it was not ours.** An icon greyed itself when
+  a target was selected and lit up again when it was deselected — with the buff
+  plainly running. Nothing in this addon has ever looked at a target. Blizzard's
+  Cooldown Manager does: it decides which of its item frames to **show** from
+  whether the spell is usable on what you have selected. This addon asked
+  `IsActive` — the right question — and, for a frame that has no `IsActive`,
+  fell back to `IsShown`, which answers a completely different one. So
+  "inactive" quietly came to mean "not usable on your target", and the dimming
+  and the greying followed it. That fallback is gone; a frame that cannot say
+  whether a buff is up now says so, and nothing dims on it. "Is Blizzard
+  showing it" kept its own name and appears in `/zs cdm` beside the real
+  reading, so a line where the two disagree is the explanation rather than
+  something to work out.
+- **A full bar beside a dimmed icon of the same spell.** The fill is mirrored on
+  its own script sixty times a second; the icon's lit-or-dimmed look was only
+  written when Blizzard notified us that something had changed. The two could
+  disagree for as long as nothing did. The icon now keeps up with the bar, on
+  the transition rather than every frame.
 - **The co-tank panel's trough is a surface, not a ghost of the bar.** It was
   the health bar's own colour at 12%, so it changed shade every time somebody
   took damage — one more moving thing on a panel that is read in two seconds.

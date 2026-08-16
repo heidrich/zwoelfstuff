@@ -1439,10 +1439,13 @@ function Effects.Dump()
                         Say("isActive", info and info.isActive),
                         Say("isOnGCD", info and info.isOnGCD),
                         Say("item:IsActive", ns.CDM:ItemIsActive(item)),
-                        -- BOTH, and that is the point of printing them: a
-                        -- line where the first is nil and the second is not
-                        -- IS the answer to "why is this icon grey sometimes
-                        -- and bright other times". See CDM:ItemLooksActive.
+                        -- ALL THREE, and that is the point of printing them.
+                        -- `IsShown` is Blizzard's answer to "is this usable
+                        -- on what you have selected", which moves when you
+                        -- click a mob and has nothing to do with whether the
+                        -- buff is up. A line where it disagrees with IsActive
+                        -- IS the answer to "why is this icon grey sometimes".
+                        Say("blizzard shows it", ns.CDM:ItemIsShown(item)),
                         Say("looks active", ns.CDM:ItemLooksActive(item)),
                         Say("remembered",
                             ns.CDM:ItemActiveIsRemembered(item)),

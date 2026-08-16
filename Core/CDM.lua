@@ -973,26 +973,68 @@ end
 -- while inactive unless the user switched on Blizzard's own "Hide when
 -- inactive", which is off by default - so IsShown would say yes all evening.
 --
+---------------------------------------------------------------------------
+-- AND THE IsShown FALLBACK IS GONE, which is the answer to the thing he
+-- could not stop seeing.
+--
+-- Owner, 2026-08-16, three reports that turned out to be one:
+--
+--   "manchmal ist das icon ausgegraut manchmal nicht"
+--   "wie du siehst ist Rime aktive, aber das icon leuchtet nicht"
+--   "es ist interessant das wenn ich kein target anwaehle, das icon nicht
+--    mehr ausgegraut wird"
+--
+-- THE LAST SENTENCE IS THE WHOLE DIAGNOSIS. Nothing in this addon has ever
+-- looked at a target. Blizzard's Cooldown Manager does: it decides which of
+-- its item frames to SHOW from whether the spell is usable on what you have
+-- selected. So `IsShown` does not answer "is this buff up" at all - it
+-- answers "would the Cooldown Manager put this on screen right now", and
+-- that answer moves when you click a mob.
+--
+-- Reading it as activity meant every reader downstream inherited a range
+-- check nobody wrote: `inactiveDesaturate` and `inactiveAlpha` fire on
+-- exactly `false`, so selecting a target greyed an icon whose buff was
+-- plainly running, and deselecting lit it again. He suspected a range check
+-- and he was right about the effect and right to call it a bug - it was
+-- Blizzard's rule arriving through a door we left open.
+--
+-- IT WAS A FALLBACK, WHICH IS WHY IT SURVIVED. On a buff-bar item IsActive
+-- exists and answers, so the second branch never ran and every test of this
+-- function passed. It ran on the frames that have no IsActive - and on those
+-- "is the buff up" is a question with no answer, which is what nil is for.
+--
 -- Returns nil when it cannot be answered, which is not the same as false.
+-- A caller that genuinely wants "is it on screen" asks CDM:ItemIsShown.
+---------------------------------------------------------------------------
 function CDM:ItemIsActive(item)
     if not item then return nil end
 
-    -- THE pcall GUARDS THE CALL, NOT THE ANSWER, and that was the hole. Both
-    -- of these read a value off a frame Blizzard owns and then boolean-test it
-    -- one line later, outside the pcall - and on this patch a boolean test is
-    -- exactly what a secret value raises on. It would have thrown a real error
-    -- out of a function whose whole promise is that it never does.
+    -- THE pcall GUARDS THE CALL, NOT THE ANSWER, and that was the hole. This
+    -- reads a value off a frame Blizzard owns and then boolean-tests it one
+    -- line later, and on this patch a boolean test is exactly what a secret
+    -- value raises on. It would have thrown a real error out of a function
+    -- whose whole promise is that it never does.
     --
-    -- ns.CanCompute turns that into the third answer this function already
-    -- documents: nil, "cannot be answered", which every caller handles.
+    -- ns.CanCompute turns that into the third answer this function documents:
+    -- nil, "cannot be answered", which every caller handles.
     if item.IsActive then
         local ok, active = pcall(item.IsActive, item)
         if ok and ns.CanCompute(active) then return active and true or false end
     end
-    if item.IsShown then
-        local ok, shown = pcall(item.IsShown, item)
-        if ok and ns.CanCompute(shown) then return shown and true or false end
-    end
+    return nil
+end
+
+-- IS THE COOLDOWN MANAGER PUTTING THIS ON SCREEN? A different question from
+-- the one above, and it is kept apart from it by name so that reading one
+-- for the other has to be a decision somebody typed.
+--
+-- Target-dependent, by Blizzard's own rules rather than ours. Nothing in this
+-- addon should dress a cell from this - it is for the diagnostics, which have
+-- to be able to say WHY a picture looks the way it does.
+function CDM:ItemIsShown(item)
+    if not (item and item.IsShown) then return nil end
+    local ok, shown = pcall(item.IsShown, item)
+    if ok and ns.CanCompute(shown) then return shown and true or false end
     return nil
 end
 
