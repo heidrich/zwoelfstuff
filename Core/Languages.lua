@@ -422,10 +422,14 @@ Register("enUS", {
     ["Charge marks and the spark"] = true,
     ["Charge marks only appear on a spell that HAS more than one charge, so the switch can stay on for a whole bar without marking everything on it."] =
         true,
+    ["Changing"] = true,
     ["Charges"] = true,
+    ["Click a place on the bar picture to pick a different one. What a place carries of its own wins over the bar, which is why a colour set here can leave one icon looking untouched."] =
+        true,
     ["Close up"] = true,
     ["Close up in the row"] = true,
     ["Crop"] = true,
+    ["Follow the bar again"] = true,
     ["Edge colour"] = true,
     ["Edge style"] = true,
     ["Edge thickness"] = true,
@@ -487,6 +491,9 @@ Register("enUS", {
     ["Some places on this bar carry a look of their own and keep it. What you change here reaches every other place."] =
         true,
     ["Spark"] = true,
+    ["The whole bar"] = true,
+    ["This place also carries settings from an older version, filed under its position rather than its spell. Those are left exactly as they are."] =
+        true,
     ["Speed"] = true,
     ["Stack colours"] = true,
     ["Stack count"] = true,
@@ -920,10 +927,14 @@ Register("deDE", {
     ["Charge marks and the spark"] = "Ladungsmarken und der Funke",
     ["Charge marks only appear on a spell that HAS more than one charge, so the switch can stay on for a whole bar without marking everything on it."] =
         "Ladungsmarken erscheinen nur bei einem Zauber, der mehr als eine Ladung HAT - der Schalter kann also für eine ganze Leiste an bleiben, ohne alles darauf zu markieren.",
+    ["Changing"] = "Du änderst",
     ["Charges"] = "Ladungen",
+    ["Click a place on the bar picture to pick a different one. What a place carries of its own wins over the bar, which is why a colour set here can leave one icon looking untouched."] =
+        "Klick im Bild der Leiste auf einen Platz, um einen anderen zu wählen. Was ein Platz selbst mitbringt, gewinnt gegen die Leiste - deshalb kann eine hier gesetzte Farbe ein Symbol unberührt lassen.",
     ["Close up"] = "Aufrücken",
     ["Close up in the row"] = "In der Reihe aufrücken",
     ["Crop"] = "Zuschnitt",
+    ["Follow the bar again"] = "Wieder der Leiste folgen",
     ["Edge colour"] = "Kantenfarbe",
     ["Edge style"] = "Kantenstil",
     ["Edge thickness"] = "Kantenstärke",
@@ -989,6 +1000,9 @@ Register("deDE", {
     ["Some places on this bar carry a look of their own and keep it. What you change here reaches every other place."] =
         "Manche Plätze dieser Leiste haben ein eigenes Aussehen und behalten es. Was du hier änderst, erreicht jeden anderen Platz.",
     ["Spark"] = "Funke",
+    ["The whole bar"] = "Die ganze Leiste",
+    ["This place also carries settings from an older version, filed under its position rather than its spell. Those are left exactly as they are."] =
+        "Dieser Platz trägt außerdem Einstellungen einer älteren Version, abgelegt unter seiner Position statt unter seinem Zauber. Die bleiben unangetastet.",
     ["Speed"] = "Geschwindigkeit",
     ["Stack colours"] = "Stapelfarben",
     ["Stack count"] = "Stapelzahl",

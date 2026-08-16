@@ -268,3 +268,109 @@ function Bars.FirstFree(bar)
     end
     return nil
 end
+
+---------------------------------------------------------------------------
+-- STYLING ONE PLACE
+--
+-- Store.Option is the reader and it is the only one; this is its writer, and
+-- it is over here for the reason at the top of this file - Store translates
+-- and rewrites nothing, and a setter in there would make that sentence false.
+--
+-- WRITTEN UNDER THE SPELL, NEVER UNDER THE SLOT, and the reader's own header
+-- carries the argument: `cellOpts` is 4.82.0's and is keyed by slot INDEX, so
+-- moving a spell one place along leaves its styling behind for whatever lands
+-- there next. What he sets today travels with the spell.
+--
+-- HIS `cellOpts` IS NEVER TOUCHED BY EITHER OF THESE. It is read for as long
+-- as it exists and this writes beside it, not into it. That means a place he
+-- styled in 4.82.0 keeps its old answer until he changes it here, and then the
+-- new one wins - which is the precedence, doing exactly what it says.
+---------------------------------------------------------------------------
+
+-- The table this place's styling belongs in, made on demand, or nil and a
+-- reason. `create` false looks without making one: a READ that filed an empty
+-- table on every place it asked about would turn "carries nothing" into
+-- "carries an empty table", and the mark on the preview is drawn from exactly
+-- that difference.
+function Bars.PlaceLook(bar, index, create)
+    if type(bar) ~= "table" then return nil, "there is no such bar" end
+
+    index = tonumber(index)
+    if not index or index < 1 then return nil, "there is no such place" end
+
+    -- THE SPELL IS THE KEY, so a place with nothing on it cannot carry
+    -- styling. That is not a limitation to work around: styling filed under
+    -- "place 3" is the thing this replaces.
+    local spellID = Store.Cells(bar)[index]
+    if type(spellID) ~= "number" then
+        return nil, "there is no spell on that place yet"
+    end
+
+    -- THE SPELL COMES BACK EVEN WHEN THE TABLE DOES NOT, and that is what
+    -- lets a caller tell the two "no" answers apart: "this place cannot carry
+    -- styling" and "this place carries none yet" want opposite handling, and a
+    -- single nil cannot say which - the same shape as Store.Own's two returns.
+    local all = bar.cellLook
+    if type(all) ~= "table" then
+        if not create then
+            return nil, "this place carries no styling", spellID
+        end
+        all = {}
+        bar.cellLook = all
+    end
+
+    local mine = all[spellID]
+    if type(mine) ~= "table" then
+        if not create then
+            return nil, "this place carries no styling", spellID
+        end
+        mine = {}
+        all[spellID] = mine
+    end
+    return mine, nil, spellID
+end
+
+-- ONE KEY, ON ONE PLACE. `value` nil CLEARS it, which is the whole of "follow
+-- the bar again" for a single row - the reader falls straight through to the
+-- next level, and there is nothing left saying this place ever disagreed.
+function Bars.SetPlaceLook(bar, index, key, value)
+    if type(key) ~= "string" then return false, "there is no such setting" end
+
+    -- ASKED WITHOUT CREATING WHEN CLEARING. A read that filed an empty table
+    -- would turn "carries nothing" into "carries an empty table" - and the
+    -- mark on the preview is drawn from that difference.
+    local look, why, spellID = Bars.PlaceLook(bar, index, value ~= nil)
+    if not look then
+        -- Nothing there to clear IS the state that was asked for, as long as
+        -- this is a real place with a spell on it. `spellID` is what says so.
+        if value == nil and spellID then return true end
+        return false, why
+    end
+
+    look[key] = value
+
+    -- AND AN EMPTY TABLE GOES AWAY WITH THE LAST KEY IN IT. Store.Overridden
+    -- already answers false for one, so this is not what makes the mark
+    -- correct - it is what stops his profile growing a `cellLook` entry for
+    -- every place he ever clicked on and changed his mind about.
+    if next(look) == nil and spellID and type(bar.cellLook) == "table" then
+        bar.cellLook[spellID] = nil
+        if next(bar.cellLook) == nil then bar.cellLook = nil end
+    end
+    return true
+end
+
+-- EVERY KEY ON ONE PLACE, GONE. What the "follow the bar again" button does.
+--
+-- Only ours: `cellOpts` is his, written by a version that is not running any
+-- more, and a button that quietly deleted settings it did not write would be
+-- the one thing this whole wave exists to stop happening to him. It says so
+-- on the button rather than in here.
+function Bars.ClearPlaceLook(bar, index)
+    local look, _, spellID = Bars.PlaceLook(bar, index, false)
+    if not (look and spellID) then return false end
+
+    bar.cellLook[spellID] = nil
+    if next(bar.cellLook) == nil then bar.cellLook = nil end
+    return true
+end

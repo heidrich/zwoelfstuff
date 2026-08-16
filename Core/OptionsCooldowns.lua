@@ -70,6 +70,52 @@ function Page.Current()
     return nil
 end
 
+---------------------------------------------------------------------------
+-- WHICH PLACE THE STYLE ROWS ARE WRITING TO, or nil for the whole bar
+--
+-- Owner, with the page open: "wo sehe ich denn, wenn ich einzelne bars oder
+-- icons style? ich sehe da keinen indikator." He could not see it because
+-- there was nothing to see - the rows only ever wrote to the bar, while the
+-- RENDERER has always taken a place's own answer first. Out of his own file:
+--
+--     Buff Bar              fillColor = RED
+--       place 1             fillColor = GREEN
+--       place 2             fillColor = MAGENTA
+--
+-- He set the red and two places ignored him in silence.
+--
+-- THE SELECTION IS THE ONE HE ALREADY MAKES. Clicking a place on the card has
+-- selected it for the spell picker since the page was written; this is the
+-- same click meaning the same thing - "the place I am working on" - rather
+-- than a second selection somewhere else with its own rules.
+--
+-- ONLY A PLACE WITH A SPELL ON IT. Styling is filed under the SPELL so that it
+-- travels when the spell is moved, so an empty place has nothing to key by. It
+-- answers nil there and the rows go back to the bar, which is also the honest
+-- reading: there is nothing on that place to look at.
+Page.editPlace = false
+
+-- CAN the selected place be styled at all. Nil when nothing is selected, when
+-- the selection is off the end of a bar that has since been narrowed, or when
+-- the place is empty.
+function Page.PlaceAvailable()
+    local store, bar = Store(), Page.Current()
+    if not (store and bar and Page.cell) then return nil end
+    if Page.cell > store.Capacity(bar) then return nil end
+    if type(store.Cells(bar)[Page.cell]) ~= "number" then return nil end
+    return Page.cell
+end
+
+-- AND WHETHER IT IS. Two questions, one answer underneath: the switch above
+-- the rows is drawn from the first, so asking the second for it would make the
+-- switch vanish the moment you pressed "whole bar" and take the way back with
+-- it. Written as one line over the other rather than as two walks of the same
+-- three conditions - the second copy of a rule is the one that goes stale.
+function Page.Place()
+    if not Page.editPlace then return nil end
+    return Page.PlaceAvailable()
+end
+
 local function Refresh()
     if ns.Cooldowns and ns.Cooldowns.Render then
         ns.Cooldowns.Render.Refresh()
@@ -387,6 +433,18 @@ local function BuildCards(host)
                     return nil
                 end
                 return Page.cell
+            end,
+
+            -- THE MARK, and it is asked of the same reader the SCREEN asks.
+            -- Store.Overridden knows both places a look can live - the per-
+            -- spell table this page writes and 4.82.0's per-slot one - so a
+            -- place he styled two versions ago is marked exactly like one he
+            -- styled a minute ago. It has to be: those were the two places
+            -- whose colours he could not account for.
+            marked = function(index)
+                local store = Store()
+                return store and card.dkBar
+                    and store.Overridden(card.dkBar, index) or false
             end,
             onPick = function(index)
                 if not card.dkBar then return end

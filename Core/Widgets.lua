@@ -3433,6 +3433,29 @@ function UI.CellGrid(parent, cfg)
         cell.hover:SetColor(C.controlHi[1], C.controlHi[2], C.controlHi[3], 1)
         cell.hover:Hide()
 
+        -- THIS PLACE CARRIES A LOOK OF ITS OWN.
+        --
+        -- Owner, with the page open: "wo sehe ich denn, wenn ich einzelne bars
+        -- oder icons style? ich sehe da keinen indikator." He was right that
+        -- there was none, and it had already cost him: he set a fill colour on
+        -- a bar and two of its places kept their own and said nothing.
+        --
+        -- A DOT AND NOT A RING. The ring is the SELECTION and the two would be
+        -- unreadable together on the cell that is both - which is the cell you
+        -- look at most, because it is the one you are editing. Opposite corner
+        -- to the number for the same reason.
+        --
+        -- Its own frame above the chrome, like the two rings: a texture on the
+        -- cell is drawn under the cell's child frames whatever layer it claims.
+        cell.markHost = CreateFrame("Frame", nil, cell)
+        cell.markHost:SetFrameLevel(cell:GetFrameLevel() + 7)
+        cell.markHost:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -2, -2)
+        cell.markHost:SetSize(6, 6)
+        cell.mark = cell.markHost:CreateTexture(nil, "OVERLAY")
+        cell.mark:SetAllPoints(cell.markHost)
+        cell.mark:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
+        cell.markHost:Hide()
+
         cell.number = cell:CreateFontString(nil, "OVERLAY")
         ns.StyleFont(cell.number, 10, "OUTLINE")
         cell.number:SetPoint("TOPLEFT", cell, "TOPLEFT", 2, -2)
@@ -3747,6 +3770,12 @@ function UI.CellGrid(parent, cfg)
             local isSelected = cfg.selected and cfg.selected() == index
             cell.ring:SetShown(isSelected)
             if isSelected then cell.hover:Hide() end
+
+            -- Asked rather than remembered, on the same pass as everything
+            -- else the cell shows: a mark cached at build time would be a mark
+            -- that stops being true the moment somebody presses a colour.
+            cell.markHost:SetShown(cfg.marked and cfg.marked(index) and true
+                or false)
 
             cell:Show()
         end

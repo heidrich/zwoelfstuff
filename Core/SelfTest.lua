@@ -7894,6 +7894,125 @@ local function TestCooldownStore()
     Check("Nor is a per-spell table with no entry for this spell",
         S.Overridden({ cells = { 1044 }, cellLook = { [999] = { alpha = 1 } } },
             1) == false)
+
+    ---------------------------------------------------------------------
+    -- AND THE WRITER, which lives in Bars because Store rewrites nothing
+    --
+    -- The rules above are the READ. These are what the per-place editor
+    -- actually does when a control is moved, driven through the same two
+    -- calls the page makes - so "the resolver is right" and "the page can
+    -- reach it" are two answers rather than one assumed from the other.
+    ---------------------------------------------------------------------
+    local B = ns.Cooldowns and ns.Cooldowns.Bars
+    if not B then
+        Skip("Styling one place", "Cooldowns/Bars.lua is not loaded")
+        return
+    end
+
+    -- ON A PROFILE OF ITS OWN. Store.Cells reads through ns.SpecStore, so
+    -- these writes need a spec that is ANSWERED - and they must not go
+    -- anywhere near his bars.
+    local realKey = PretendSpec("DEATHKNIGHT:250")
+
+    local mine = { cells = { 1044, 102342 }, fillColor = "bar",
+        cellOpts = { [1] = { look = { showSpark = "his" } } } }
+
+    Check("Styling a place writes under its SPELL, not under its slot",
+        B.SetPlaceLook(mine, 1, "fillColor", "ours") == true
+            and mine.cellLook ~= nil and mine.cellLook[1044] ~= nil
+            and mine.cellLook[1044].fillColor == "ours")
+    Check("and the bar itself is not touched by it",
+        mine.fillColor == "bar")
+    Check("and the resolver answers with it",
+        S.Option(mine, 1, "fillColor") == "ours")
+
+    -- THE ONE THING THAT MUST NEVER HAPPEN TO HIS FILE: his 4.82.0 settings
+    -- were written by a version that is not running any more, and nothing
+    -- here may rewrite or delete them.
+    Check("His older per-slot settings are left exactly where they were",
+        mine.cellOpts[1].look.showSpark == "his"
+            and S.Option(mine, 1, "showSpark") == "his")
+
+    -- A PLACE WITH NOTHING ON IT CANNOT CARRY STYLING, and it is refused with
+    -- a reason rather than filed under nil - the crash this addon has already
+    -- shipped once is a key that should never have been one.
+    local ok, why = B.SetPlaceLook(mine, 5, "fillColor", "nowhere")
+    Check("An empty place cannot be styled, and says why", ok == false
+        and type(why) == "string" and why ~= "", tostring(why))
+
+    -- CLEARING ONE KEY IS "FOLLOW THE BAR" FOR ONE ROW, and it must leave
+    -- nothing behind: an empty table is not styling, but it IS a table his
+    -- profile would carry for every place he ever clicked on.
+    B.SetPlaceLook(mine, 1, "fillColor", nil)
+    Check("Clearing the last key takes the place's whole entry with it",
+        mine.cellLook == nil, type(mine.cellLook))
+    Check("and the resolver falls back through to the bar",
+        S.Option(mine, 1, "fillColor") == "bar")
+
+    -- Clearing what was never there is the state that was asked for, not a
+    -- failure: the place already follows the bar.
+    Check("Clearing a place that carries nothing is not an error",
+        B.SetPlaceLook(mine, 1, "fillColor", nil) == true)
+
+    -- AND THE BUTTON: everything OURS on this place, gone, and nothing else.
+    B.SetPlaceLook(mine, 1, "fillColor", "ours")
+    B.SetPlaceLook(mine, 1, "borderSize", 4)
+    Check("Following the bar again clears what this page wrote",
+        B.ClearPlaceLook(mine, 1) == true and mine.cellLook == nil)
+    Check("and leaves the older version's settings alone",
+        mine.cellOpts[1].look.showSpark == "his")
+
+    ---------------------------------------------------------------------
+    -- WHICH PLACE THE ROWS ARE POINTED AT
+    --
+    -- The switch above the rows writes Page.editPlace and nothing else; every
+    -- control resolves the target on each read and each write. So this is the
+    -- whole of "am I editing the bar or one place", and it is asked here
+    -- rather than by pressing a dropdown, which is a widget test.
+    ---------------------------------------------------------------------
+    local page = ns.OptionsCooldowns
+    if page then
+        local savedBars, savedID = ns.db.bars, page.barID
+        local savedCell, savedEdit = page.cell, page.editPlace
+
+        ns.db.bars = { { id = 9401, name = "desk", cells = { 1044, nil },
+            rows = 1, columns = 2 } }
+        page.barID = 9401
+
+        page.cell, page.editPlace = nil, true
+        Check("With no place picked, the rows mean the whole bar",
+            page.Place() == nil)
+
+        page.cell, page.editPlace = 1, false
+        Check("A place picked but the switch on the bar is still the bar",
+            page.Place() == nil)
+
+        page.editPlace = true
+        Check("and with the switch on the place, that is what they mean",
+            page.Place() == 1, tostring(page.Place()))
+
+        -- AN EMPTY PLACE HAS NOTHING TO KEY BY, so it is not offered - the
+        -- switch is drawn from the same answer, so it cannot offer a choice
+        -- the writer would refuse.
+        page.cell = 2
+        Check("An empty place is never what the rows are pointed at",
+            page.Place() == nil and page.PlaceAvailable() == nil)
+
+        -- AND A SELECTION THAT HAS GONE OUT OF RANGE. A bar narrowed since the
+        -- click leaves a number pointing at a place that no longer exists.
+        ns.db.bars[1].columns = 1
+        page.cell = 2
+        Check("Nor is a place past the end of a bar that has been narrowed",
+            page.Place() == nil)
+
+        ns.db.bars, page.barID = savedBars, savedID
+        page.cell, page.editPlace = savedCell, savedEdit
+    else
+        Skip("Which place the rows are pointed at",
+            "the cooldowns page is not loaded")
+    end
+
+    ns.SpecKey = realKey
 end
 
 ---------------------------------------------------------------------------

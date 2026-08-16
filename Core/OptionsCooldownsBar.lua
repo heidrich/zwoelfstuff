@@ -125,14 +125,53 @@ end
 -- Commit calls set and THEN apply, so a refreshing setter would repaint
 -- twice per drag step.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- WHAT THESE ROWS ARE EDITING: THE BAR, OR ONE PLACE ON IT
+--
+-- Every control in this file already went through Get and Put, and that is
+-- the whole reason the per-place editor is these forty lines rather than a
+-- rewrite of four blocks: the rows do not know what they are pointed at, so
+-- pointing them somewhere else is done once, here.
+--
+-- READING IS ASKED OF Store.Option, WHICH IS WHAT THE SCREEN ASKS. So a row
+-- showing "this place" shows what the place actually WEARS - its own answer
+-- where it has one and the bar's where it does not - rather than a blank for
+-- everything it has not overridden. A page that showed blanks would be a page
+-- you cannot use to change one thing about one place.
+--
+-- WRITING GOES THROUGH Bars, NEVER STRAIGHT INTO THE TABLE. The bar half below
+-- writes `current[key]` because a bar IS the table; a place is filed under its
+-- spell so that it travels when the spell moves, and that is a rule with a
+-- writer of its own.
+---------------------------------------------------------------------------
+local function Place()
+    local page = ns.OptionsCooldowns
+    return page and page.Place and page.Place() or nil
+end
+
 local function Get(bar, key, fallback)
-    return function() return Stored(Bar(bar), key, fallback) end
+    return function()
+        local current, store, index = Bar(bar), Store(), Place()
+        if index and store then
+            local value = store.Option(current, index, key)
+            if value ~= nil then return value end
+            return fallback
+        end
+        return Stored(current, key, fallback)
+    end
 end
 
 local function Put(bar, key)
     return function(value)
-        local current = Bar(bar)
-        if type(current) == "table" then current[key] = value end
+        local current, index = Bar(bar), Place()
+        if type(current) ~= "table" then return end
+
+        if index then
+            local bars = ns.Cooldowns and ns.Cooldowns.Bars
+            if bars then bars.SetPlaceLook(current, index, key, value) end
+            return
+        end
+        current[key] = value
     end
 end
 
@@ -164,17 +203,23 @@ end
 -- screen as "the swatch is broken" rather than as "that key is not a colour".
 -- Effects.Colour makes the same two steps for the same reason.
 local function Colour(grid, bar, label, key, fallback, opts)
+    -- THROUGH Get AND Put LIKE EVERY OTHER CONTROL. It used to read and write
+    -- the bar table directly, which was the same thing while there was only
+    -- the bar - and would have been the one control still editing the whole
+    -- bar while the switch above it said "this place". The colour swatch is
+    -- the control this entire wave was reported through ("die Farbvorschauen
+    -- sind alle kacke"), so it is the last one that could be left behind.
+    local read = Get(bar, key, fallback)
+    local write = Put(bar, key)
+
     return UI.Swatch(grid:Row(label, opts),
         function()
-            local colour = Stored(Bar(bar), key, fallback)
+            local colour = read()
             if type(colour) ~= "table" then colour = fallback end
             if type(colour) ~= "table" then return 1, 1, 1 end
             return colour[1] or 1, colour[2] or 1, colour[3] or 1
         end,
-        function(r, g, b)
-            local current = Bar(bar)
-            if type(current) == "table" then current[key] = { r, g, b } end
-        end,
+        function(r, g, b) write({ r, g, b }) end,
         Refresh)
 end
 
@@ -279,6 +324,122 @@ local function Overrides(bar, keys)
     return count
 end
 
+---------------------------------------------------------------------------
+-- THE SWITCH ABOVE THE ROWS: the whole bar, or this one place
+--
+-- The rows underneath it do not change. Get and Put resolve what they are
+-- pointed at on every read and every write, so this control's whole job is to
+-- answer one question - and the four blocks get the feature at once rather
+-- than four times.
+--
+-- IT IS AT THE TOP OF EVERY STYLE TAB, on purpose. The setting you are looking
+-- for is somewhere in eighteen look keys, twenty effects or eleven fill rows,
+-- and "which of these am I changing" is not a question a page may answer
+-- differently depending on how far down you have scrolled.
+--
+-- IT DISAPPEARS WHEN THERE IS NOTHING TO POINT AT. A bar with no place
+-- selected, or one selected that is empty, has exactly one thing these rows
+-- could mean - and a switch offering a choice that does not exist is worse
+-- than none, because it reads as a feature that has stopped working.
+---------------------------------------------------------------------------
+local function PlaceRows(grid, bar)
+    local L = ns.L
+    local page = ns.OptionsCooldowns
+
+    local function Available()
+        return page and page.PlaceAvailable and page.PlaceAvailable() or nil
+    end
+
+    -- WHAT THE PLACE IS CALLED, because "place 3" is a number on a page and
+    -- the thing on screen is a spell. Falls back to the number for a spell the
+    -- client will not name - which is a real state on this patch, not a
+    -- defensive nil check.
+    local function PlaceName()
+        local index = Available()
+        if not index then return nil end
+
+        local store, current = Store(), Bar(bar)
+        local spellID = store and current and store.Cells(current)[index] or nil
+        local name = spellID and ns.SpellName(spellID) or nil
+        -- "Place %d" IS ALREADY IN THE MASTER LIST, and its German is already
+        -- written. A lowercase twin of a string this addon already has is the
+        -- shape that puts one sentence in two languages and the other in one.
+        return name or L("Place %d", index)
+    end
+
+    local row = grid:Row(L["Changing"])
+    local menu = UI.Dropdown(row,
+        function()
+            local out = { { value = false, text = L["The whole bar"] } }
+            local name = PlaceName()
+            if name then out[#out + 1] = { value = true, text = name } end
+            return out
+        end,
+        function() return page and page.editPlace and true or false end,
+        function(value)
+            if page then page.editPlace = value and true or false end
+        end,
+        { apply = Refresh })
+
+    grid:Note(L["Click a place on the bar picture to pick a different one. "
+        .. "What a place carries of its own wins over the bar, which is why "
+        .. "a colour set here can leave one icon looking untouched."])
+
+    -- THE WAY BACK, and it is a button rather than a "reset" on every row: he
+    -- has three places carrying styling from 4.82.0 and the honest offer is
+    -- "this place follows the bar again", once.
+    --
+    -- ONLY WHAT THIS PAGE WROTE. 4.82.0's per-slot settings are his, written by
+    -- a version that is not running any more, and a button that quietly deleted
+    -- settings it did not write is the one thing this wave exists to stop
+    -- happening to him. The sentence under it says so out loud rather than in a
+    -- comment nobody reads.
+    local followRow = grid:Buttons({
+        { text = L["Follow the bar again"], onClick = function()
+            local bars = ns.Cooldowns and ns.Cooldowns.Bars
+            local index = Available()
+            if bars and index then bars.ClearPlaceLook(Bar(bar), index) end
+            Refresh()
+        end },
+    })
+
+    local kept = grid:Note(L["This place also carries settings from an older "
+        .. "version, filed under its position rather than its spell. Those are "
+        .. "left exactly as they are."])
+
+    OnRefresh(grid, function()
+        local index = Available()
+        local shown = index ~= nil
+
+        row.dkSkip = not shown
+        row:SetShown(shown)
+        if menu and menu.Refresh then menu:Refresh() end
+
+        -- The way back is only there while there is something to go back FROM,
+        -- and only while this page is what the rows are pointed at.
+        local editing = page and page.Place and page.Place()
+        local store, current = Store(), Bar(bar)
+        local mine = editing and store and current
+            and type(current.cellLook) == "table"
+            and current.cellLook[store.Cells(current)[editing]] or nil
+        local hasOwn = mine ~= nil and next(mine) ~= nil
+
+        followRow.dkSkip = not hasOwn
+        followRow:SetShown(hasOwn)
+
+        -- And the sentence about his 4.82.0 settings appears only on a place
+        -- that actually has some, because on every other place it would be a
+        -- warning about nothing.
+        local opts = editing and current
+            and type(current.cellOpts) == "table"
+            and current.cellOpts[editing] or nil
+        local old = type(opts) == "table" and type(opts.look) == "table"
+            and next(opts.look) ~= nil
+        kept.dkSkip = not old
+        kept:SetShown(old and true or false)
+    end)
+end
+
 local function OverrideNote(grid, bar, keys)
     local L = ns.L
     local note = grid:Note(L["Some places on this bar carry a look of their "
@@ -379,6 +540,7 @@ function Panel.BuildLook(grid, bar)
     local groups = {}
 
     grid:Tab(L["Look"])
+    PlaceRows(grid, bar)
     grid:Section(L["The icon"], "cd-look-icon", true)
     OverrideNote(grid, bar, LOOK_KEYS)
 
@@ -616,6 +778,7 @@ function Panel.BuildText(grid, bar)
     local groups = {}
 
     grid:Tab(L["Text"])
+    PlaceRows(grid, bar)
 
     for _, spec in ipairs(TEXT_ELEMENTS) do
         -- COLLECTED so a whole block can leave the page together. A section
@@ -849,6 +1012,7 @@ function Panel.BuildEffects(grid, bar)
     local groups = {}
 
     grid:Tab(L["Effects"])
+    PlaceRows(grid, bar)
 
     -----------------------------------------------------------------------
     -- The flash
@@ -1211,6 +1375,7 @@ function Panel.BuildFill(grid, bar)
     local groups = {}
 
     grid:Tab(L["Fill"])
+    PlaceRows(grid, bar)
     grid:Section(L["The bar's fill"], "cd-fill-bar", true)
     -- THE PARAGRAPH THAT USED TO STAND HERE IS GONE, and so is the reason it
     -- was needed. It explained that these settings reach a place Blizzard

@@ -118,6 +118,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   answers "cannot tell", which every caller already knew how to handle: on a
   place the addon draws itself, that means it writes the number itself.
 
+- **You can style ONE place on a bar now, and see which places carry their
+  own.** Click a place in the bar picture and the Look, Text, Effects and Fill
+  tabs get a **Changing** switch at the top: the whole bar, or just that place.
+  Everything underneath it works exactly as it did — every slider, colour and
+  menu simply writes where the switch says.
+  - **A dot in the corner of a place means it carries a look of its own.** This
+    is the thing that had no answer before: you set a colour on the bar, and a
+    place that had its own kept it and said nothing. Now the place says so.
+  - **"Follow the bar again"** hands one place back to the bar's settings. It
+    only clears what this page wrote — anything you set in 4.82.0 is filed
+    under the place's position rather than its spell, and the page says so and
+    leaves it alone.
+  - **Your styling is filed under the SPELL**, so dragging a spell to another
+    place on the bar takes its look with it instead of leaving it behind for
+    whatever lands there next.
+
 - **Styling a single place on a bar now has one rule instead of two.** A place
   can carry its own look — its own fill colour, its own spark, its own charge
   marks — and it wins over the bar's. Two separate parts of the code decided
