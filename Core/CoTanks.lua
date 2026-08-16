@@ -1063,7 +1063,7 @@ function CoTanks:Create()
     hint:SetPoint("BOTTOM", panel, "TOP", 0, 4)
     -- Fonted BEFORE the text, or SetText raises on a string with no font.
     ns.StyleUIFont(hint, 11)
-    hint:SetText("ZwoelfStuff co-tanks - drag me")
+    hint:SetText("ZwoelfStuff tank unitframes - drag me")
     hint:Hide()
     self.moveHint = hint
 

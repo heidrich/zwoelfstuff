@@ -178,9 +178,9 @@ function Page:BuildPage(page, width)
     end
     band.Fit()
 
-    grid:Note(L["Pick from the list on the right. Right-click a place to "
-        .. "empty it. To put the bar somewhere on your screen, open "
-        .. "|cffffd100Edit mode|r at the top of the list on the left."])
+    -- NO SENTENCE UNDER THE LATTICE - "pick from the list on the right ...
+    -- open Edit mode" described the page's own furniture, and the owner
+    -- struck it (2026-08-16) along with the same line on the externals page.
 
     -- THE ONE SENTENCE NOBODY WOULD GUESS, and it is on the page rather than
     -- in a tooltip because it explains a delay somebody will otherwise report
@@ -260,18 +260,11 @@ function Page:BuildPage(page, width)
         .. "one in combat."])
 
     ---------------------------------------------------------------------
-    -- Keys
+    -- NO KEYS SECTION. The first ns.RaidBar.KEYS places carry a key, set in
+    -- the game's own key list under ZwoelfStuff, and the key belongs to the
+    -- PLACE - the paragraph that said so stood here until the owner struck
+    -- it (2026-08-16): "den komplett raus". Bindings.xml is where it lives.
     ---------------------------------------------------------------------
-    grid:Section(L["Keys"])
-
-    -- L(...) rather than L[...], because the number is ours and a translator
-    -- must be able to put it where their sentence wants it. A translation
-    -- that loses the placeholder falls back to the English line rather than
-    -- throwing inside format - see the __call door in Core/Locale.lua.
-    grid:Note(L("The first |cffffd100%d|r places on the bar can carry a key, "
-        .. "set in the game's own key list under |cffffd100ZwoelfStuff|r. The "
-        .. "key belongs to the PLACE, not to what is in it - so rearranging "
-        .. "the bar moves what each key does.", ns.RaidBar.KEYS))
 
     ---------------------------------------------------------------------
     -- Look

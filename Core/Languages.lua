@@ -50,7 +50,7 @@ Register("enUS", {
     -- Page names. Also the module names, which is not a coincidence - a
     -- feature and its page are one thing with one name.
     ["Cooldowns"] = true,
-    ["Co-Tanks"] = true,
+    ["Tank Unitframes"] = true,
     ["Reminders"] = true,
     ["External CD request"] = true,
     ["External CD answer"] = true,
@@ -84,7 +84,6 @@ Register("enUS", {
     ["Look"] = true,
     ["Border"] = true,
     ["Backdrop"] = true,
-    ["Keys"] = true,
     ["Set keys"] = true,
     ["Test mode"] = true,
     ["Test mode: on"] = true,
@@ -257,15 +256,11 @@ Register("enUS", {
     -- last English left on three pages whose labels had been translated
     -- for months - which reads as an addon that gave up half way rather
     -- than one that is honestly unfinished.
-    ["Pick from the list on the right. Right-click a place to empty it. To put the bar somewhere on your screen, open |cffffd100Edit mode|r at the top of the list on the left."] = 
-        true,
     ["|cffffd100Marker, world marker and ping buttons are the game's own protected kind|r - the addon cannot press them for you, and the bar cannot be rearranged while you are in combat. Changes made in a fight appear the moment it ends."] = 
         true,
     ["Out in the world there is nothing to mark. Off, the bar is there whenever you are in a group."] = 
         true,
     ["The countdown is the game's own - the one Blizzard added for exactly this - so a boss mod picks it up by itself and everybody without one still sees the numbers. Right-click the Pull button on the bar to cancel it. The game refuses to start one in combat."] = 
-        true,
-    ["The first |cffffd100%d|r places on the bar can carry a key, set in the game's own key list under |cffffd100ZwoelfStuff|r. The key belongs to the PLACE, not to what is in it - so rearranging the bar moves what each key does."] = 
         true,
     ["Every icon on your bars, and how they look."] = true,
     ["Every piece of text on every bar, unless a bar has its own font."] = 
@@ -283,25 +278,18 @@ Register("enUS", {
     ["An entry in the game's own addon list."] = true,
     ["Everything on this page is |cffffd100off until you switch it on|r. Nothing here invites, promotes or accepts anything until the switch above it says so."] = 
         true,
-    ["Somebody whispers one of the words above and the invitation goes out. A Battle.net whisper names an account rather than a character, which cannot be invited - so that one is answered with a line telling them to whisper the character instead."] = 
-        true,
-    ["For standing at a summoning stone and shouting. It listens to everybody in earshot, so it belongs to the ten minutes you are filling a group and not to the evening."] = 
-        true,
-    ["Off, the whole message has to BE the word - \"inv\" invites, \"inv please\" does not. On, the word is found anywhere in the sentence, which also finds it in \"I cannot inv you sorry\"."] = 
-        true,
-    ["Anybody else who whispers the word is told nothing happened - in your chat frame, not theirs."] = 
-        true,
-    ["Your friends list, and guild members count as friends here."] = true,
-    ["The other direction: an invitation FROM a friend or a guild member is accepted for you and the box goes away. From anybody else the box stays, which is the point."] = 
-        true,
-    ["A party holds five. Without this the sixth invitation goes nowhere at all - which is the step everybody forgets. Not done in combat: the game refuses."] = 
-        true,
-    ["One name a line. They are made assistants when they join, and only while you are the leader of a raid. A raid where everybody is an assistant is a raid where anybody can pull."] = 
-        true,
-    ["A line in your own chat frame for every invitation sent. Worth keeping on: an invite tool that works silently is one you cannot tell from one that has stopped."] = 
-        true,
-    ["Everybody at that rank and above it. Rank numbers count downwards from the guild master, which is why this reads as \"and above\" rather than \"and below\"."] =
-        true,
+    ["Somebody whispers one of the words above"] = true,
+    ["For shouting at a summoning stone"] = true,
+    ["Off, the whole message has to be the word"] = true,
+    ["A Battle.net whisper names an account rather than a character, which cannot be invited - that one is answered with a line telling them to whisper the character instead."] = true,
+    ["Anybody else is ignored, and you are told"] = true,
+    ["Guild members count as friends here"] = true,
+    ["Their invitation is accepted for you"] = true,
+    ["The sixth invitation needs a raid"] = true,
+    ["A line in your chat for every invitation"] = true,
+    ["The names below become assistants"] = true,
+    ["One name a line. They are made assistants when they join, and only while you are the leader of a raid."] = true,
+    ["Everybody at that rank and above it"] = true,
 
     -- The Cooldowns page, and the conflict check on the welcome window
     ["Who is managing your cooldowns"] = true,
@@ -555,7 +543,7 @@ Register("deDE", {
     ["Info"] = "Info",
 
     ["Cooldowns"] = "Abklingzeiten",
-    ["Co-Tanks"] = "Mit-Tanks",
+    ["Tank Unitframes"] = "Tank-Unitframes",
     ["Reminders"] = "Erinnerungen",
     ["External CD request"] = "Externen CD anfragen",
     ["External CD answer"] = "Externen CD geben",
@@ -588,7 +576,6 @@ Register("deDE", {
     ["Look"] = "Aussehen",
     ["Border"] = "Rahmen",
     ["Backdrop"] = "Hintergrund",
-    ["Keys"] = "Tasten",
     ["Set keys"] = "Tasten belegen",
     ["Test mode"] = "Testmodus",
     ["Test mode: on"] = "Testmodus: an",
@@ -774,16 +761,12 @@ Register("deDE", {
     -- last English left on three pages whose labels had been translated
     -- for months - which reads as an addon that gave up half way rather
     -- than one that is honestly unfinished.
-    ["Pick from the list on the right. Right-click a place to empty it. To put the bar somewhere on your screen, open |cffffd100Edit mode|r at the top of the list on the left."] = 
-        "Wähle rechts aus der Liste. Rechtsklick auf einen Platz leert ihn. Um die Leiste auf dem Bildschirm zu platzieren, öffne links oben |cffffd100Bearbeiten|r.",
     ["|cffffd100Marker, world marker and ping buttons are the game's own protected kind|r - the addon cannot press them for you, and the bar cannot be rearranged while you are in combat. Changes made in a fight appear the moment it ends."] = 
         "|cffffd100Markierungen, Weltmarkierungen und Pings sind geschützte Knöpfe des Spiels|r - das Addon kann sie nicht für dich drücken, und die Leiste lässt sich im Kampf nicht umbauen. Änderungen im Kampf erscheinen, sobald er vorbei ist.",
     ["Out in the world there is nothing to mark. Off, the bar is there whenever you are in a group."] = 
         "Draußen in der Welt gibt es nichts zu markieren. Aus, ist die Leiste da, sobald du in einer Gruppe bist.",
     ["The countdown is the game's own - the one Blizzard added for exactly this - so a boss mod picks it up by itself and everybody without one still sees the numbers. Right-click the Pull button on the bar to cancel it. The game refuses to start one in combat."] = 
         "Der Countdown ist der des Spiels - der, den Blizzard genau dafür eingebaut hat - also greift ihn ein Boss-Mod von selbst auf, und wer keinen hat, sieht die Zahlen trotzdem. Rechtsklick auf den Pull-Knopf bricht ihn ab. Im Kampf startet das Spiel keinen.",
-    ["The first |cffffd100%d|r places on the bar can carry a key, set in the game's own key list under |cffffd100ZwoelfStuff|r. The key belongs to the PLACE, not to what is in it - so rearranging the bar moves what each key does."] = 
-        "Die ersten |cffffd100%d|r Plätze der Leiste können eine Taste tragen, gesetzt in der Tastenbelegung des Spiels unter |cffffd100ZwoelfStuff|r. Die Taste gehört zum PLATZ, nicht zu dem, was darauf liegt - wer die Leiste umbaut, verschiebt also auch, was jede Taste tut.",
     ["Every icon on your bars, and how they look."] = 
         "Jedes Symbol auf deinen Leisten und wie sie aussehen.",
     ["Every piece of text on every bar, unless a bar has its own font."] = 
@@ -802,26 +785,30 @@ Register("deDE", {
         "Ein Eintrag in der Addon-Liste des Spiels.",
     ["Everything on this page is |cffffd100off until you switch it on|r. Nothing here invites, promotes or accepts anything until the switch above it says so."] = 
         "Alles auf dieser Seite ist |cffffd100aus, bis du es einschaltest|r. Nichts hier lädt ein, befördert oder nimmt an, bevor der Schalter darüber es sagt.",
-    ["Somebody whispers one of the words above and the invitation goes out. A Battle.net whisper names an account rather than a character, which cannot be invited - so that one is answered with a line telling them to whisper the character instead."] = 
-        "Jemand flüstert eines der Wörter oben, und die Einladung geht raus. Ein Battle.net-Flüstern nennt ein Konto statt eines Charakters, und ein Konto kann man nicht einladen - darauf kommt deshalb eine Zeile zurück, die um ein Flüstern an den Charakter bittet.",
-    ["For standing at a summoning stone and shouting. It listens to everybody in earshot, so it belongs to the ten minutes you are filling a group and not to the evening."] = 
-        "Fürs Rufen am Beschwörungsstein. Es hört jedem in Hörweite zu, gehört also zu den zehn Minuten, in denen du eine Gruppe füllst, und nicht zum ganzen Abend.",
-    ["Off, the whole message has to BE the word - \"inv\" invites, \"inv please\" does not. On, the word is found anywhere in the sentence, which also finds it in \"I cannot inv you sorry\"."] = 
-        "Aus, muss die ganze Nachricht das Wort SEIN - \"inv\" lädt ein, \"inv bitte\" nicht. An, wird das Wort überall im Satz gefunden, also auch in \"kann dich leider nicht inv\".",
-    ["Anybody else who whispers the word is told nothing happened - in your chat frame, not theirs."] = 
-        "Wenn sonst jemand das Wort flüstert, passiert nichts - und das steht in deinem Chatfenster, nicht in seinem.",
-    ["Your friends list, and guild members count as friends here."] = 
-        "Deine Freundesliste, und Gildenmitglieder zählen hier als Freunde.",
-    ["The other direction: an invitation FROM a friend or a guild member is accepted for you and the box goes away. From anybody else the box stays, which is the point."] = 
-        "Die andere Richtung: eine Einladung VON einem Freund oder Gildenmitglied wird für dich angenommen und das Fenster verschwindet. Von allen anderen bleibt es stehen, und genau darum geht es.",
-    ["A party holds five. Without this the sixth invitation goes nowhere at all - which is the step everybody forgets. Not done in combat: the game refuses."] = 
-        "Eine Gruppe fasst fünf. Ohne das geht die sechste Einladung schlicht ins Leere - der Schritt, den alle vergessen. Im Kampf passiert es nicht: das Spiel lehnt ab.",
-    ["One name a line. They are made assistants when they join, and only while you are the leader of a raid. A raid where everybody is an assistant is a raid where anybody can pull."] = 
-        "Ein Name pro Zeile. Sie werden beim Beitreten zu Assistenten ernannt, und nur solange du Anführer eines Schlachtzugs bist. Ein Schlachtzug, in dem jeder Assistent ist, ist einer, in dem jeder pullen kann.",
-    ["A line in your own chat frame for every invitation sent. Worth keeping on: an invite tool that works silently is one you cannot tell from one that has stopped."] = 
-        "Eine Zeile in deinem eigenen Chatfenster für jede verschickte Einladung. Lohnt sich anzulassen: ein Einladungswerkzeug, das stumm arbeitet, ist von einem, das stehengeblieben ist, nicht zu unterscheiden.",
-    ["Everybody at that rank and above it. Rank numbers count downwards from the guild master, which is why this reads as \"and above\" rather than \"and below\"."] = 
-        "Jeder in diesem Rang und darüber. Rangnummern zählen vom Gildenmeister abwärts, deshalb heißt es hier \"und darüber\" und nicht \"und darunter\".",
+    ["Somebody whispers one of the words above"] =
+        "Jemand flüstert eines der Wörter oben",
+    ["For shouting at a summoning stone"] =
+        "Fürs Rufen am Beschwörungsstein",
+    ["Off, the whole message has to be the word"] =
+        "Aus, muss die ganze Nachricht das Wort sein",
+    ["A Battle.net whisper names an account rather than a character, which cannot be invited - that one is answered with a line telling them to whisper the character instead."] =
+        "Ein Battle.net-Flüstern nennt ein Konto statt eines Charakters, und ein Konto kann man nicht einladen - darauf kommt eine Zeile zurück, die um ein Flüstern an den Charakter bittet.",
+    ["Anybody else is ignored, and you are told"] =
+        "Alle anderen werden ignoriert, und du erfährst es",
+    ["Guild members count as friends here"] =
+        "Gildenmitglieder zählen hier als Freunde",
+    ["Their invitation is accepted for you"] =
+        "Ihre Einladung wird für dich angenommen",
+    ["The sixth invitation needs a raid"] =
+        "Die sechste Einladung braucht einen Schlachtzug",
+    ["A line in your chat for every invitation"] =
+        "Eine Chatzeile für jede Einladung",
+    ["The names below become assistants"] =
+        "Die Namen unten werden Assistenten",
+    ["One name a line. They are made assistants when they join, and only while you are the leader of a raid."] =
+        "Ein Name pro Zeile. Sie werden beim Beitreten zu Assistenten ernannt, und nur solange du Anführer eines Schlachtzugs bist.",
+    ["Everybody at that rank and above it"] =
+        "Jeder in diesem Rang und darüber",
 
     -- Die Cooldowns-Seite und die Konfliktprüfung im Willkommensfenster
     ["Who is managing your cooldowns"] = "Wer deine Cooldowns verwaltet",
@@ -1092,7 +1079,7 @@ Register("frFR", {
     ["Info"] = "Infos",
 
     ["Cooldowns"] = "Temps de recharge",
-    ["Co-Tanks"] = "Autres tanks",
+    ["Tank Unitframes"] = "Unitframes des tanks",
     ["Reminders"] = "Rappels",
     ["External CD request"] = "Demander un externe",
     ["External CD answer"] = "Donner un externe",
@@ -1125,7 +1112,6 @@ Register("frFR", {
     ["Look"] = "Apparence",
     ["Border"] = "Bordure",
     ["Backdrop"] = "Fond",
-    ["Keys"] = "Touches",
     ["Set keys"] = "Assigner les touches",
     ["Test mode"] = "Mode test",
     ["Test mode: on"] = "Mode test : actif",
@@ -1257,7 +1243,7 @@ Register("esES", {
     ["Info"] = "Info",
 
     ["Cooldowns"] = "Reutilizaciones",
-    ["Co-Tanks"] = "Otros tanques",
+    ["Tank Unitframes"] = "Unitframes de tanques",
     ["Reminders"] = "Recordatorios",
     ["External CD request"] = "Pedir un externo",
     ["External CD answer"] = "Dar un externo",
@@ -1290,7 +1276,6 @@ Register("esES", {
     ["Look"] = "Aspecto",
     ["Border"] = "Borde",
     ["Backdrop"] = "Fondo",
-    ["Keys"] = "Teclas",
     ["Set keys"] = "Asignar teclas",
     ["Test mode"] = "Modo prueba",
     ["Test mode: on"] = "Modo prueba: activo",
@@ -1425,7 +1410,7 @@ Register("esMX", {
     ["Info"] = "Info",
 
     ["Cooldowns"] = "Reutilizaciones",
-    ["Co-Tanks"] = "Otros tanques",
+    ["Tank Unitframes"] = "Unitframes de tanques",
     ["Reminders"] = "Recordatorios",
     ["External CD request"] = "Pedir un externo",
     ["External CD answer"] = "Dar un externo",
@@ -1458,7 +1443,6 @@ Register("esMX", {
     ["Look"] = "Aspecto",
     ["Border"] = "Borde",
     ["Backdrop"] = "Fondo",
-    ["Keys"] = "Teclas",
     ["Set keys"] = "Asignar teclas",
     ["Test mode"] = "Modo prueba",
     ["Test mode: on"] = "Modo prueba: activo",
@@ -1572,7 +1556,7 @@ Register("itIT", {
     ["Info"] = "Info",
 
     ["Cooldowns"] = "Recuperi",
-    ["Co-Tanks"] = "Altri tank",
+    ["Tank Unitframes"] = "Unitframes dei tank",
     ["Reminders"] = "Promemoria",
     ["External CD request"] = "Chiedi un esterno",
     ["External CD answer"] = "Dai un esterno",
@@ -1605,7 +1589,6 @@ Register("itIT", {
     ["Look"] = "Aspetto",
     ["Border"] = "Bordo",
     ["Backdrop"] = "Sfondo",
-    ["Keys"] = "Tasti",
     ["Set keys"] = "Assegna i tasti",
     ["Test mode"] = "Modalità prova",
     ["Test mode: on"] = "Modalità prova: attiva",
@@ -1719,7 +1702,7 @@ Register("ptBR", {
     ["Info"] = "Info",
 
     ["Cooldowns"] = "Recargas",
-    ["Co-Tanks"] = "Outros tanques",
+    ["Tank Unitframes"] = "Unitframes dos tanques",
     ["Reminders"] = "Lembretes",
     ["External CD request"] = "Pedir um externo",
     ["External CD answer"] = "Dar um externo",
@@ -1752,7 +1735,6 @@ Register("ptBR", {
     ["Look"] = "Aparência",
     ["Border"] = "Borda",
     ["Backdrop"] = "Fundo",
-    ["Keys"] = "Teclas",
     ["Set keys"] = "Definir teclas",
     ["Test mode"] = "Modo de teste",
     ["Test mode: on"] = "Modo de teste: ativo",
@@ -1864,7 +1846,7 @@ Register("ruRU", {
     ["M+ and raid stuff"] = "М+ и рейд",
     ["Info"] = "Инфо",
 
-    ["Co-Tanks"] = "Другие танки",
+    ["Tank Unitframes"] = "Фреймы танков",
     ["Reminders"] = "Напоминания",
     ["External CD answer"] = "Дать внешний КД",
     ["Raid Bar"] = "Рейдовая панель",
@@ -1889,7 +1871,6 @@ Register("ruRU", {
     ["Look"] = "Вид",
     ["Border"] = "Рамка",
     ["Backdrop"] = "Подложка",
-    ["Keys"] = "Клавиши",
     ["Set keys"] = "Назначить клавиши",
     ["Only in a group"] = "Только в группе",
     ["Only in combat"] = "Только в бою",
@@ -1993,7 +1974,6 @@ Register("koKR", {
     ["Look"] = "모양",
     ["Border"] = "테두리",
     ["Backdrop"] = "배경",
-    ["Keys"] = "단축키",
     ["Language"] = "언어",
     ["Switch it on"] = "켜기",
     ["Modules"] = "모듈",
@@ -2069,7 +2049,6 @@ Register("zhCN", {
     ["Look"] = "外观",
     ["Border"] = "边框",
     ["Backdrop"] = "背景",
-    ["Keys"] = "按键",
     ["Language"] = "语言",
     ["Switch it on"] = "开启",
     ["Modules"] = "模块",
@@ -2149,7 +2128,6 @@ Register("zhTW", {
     ["Look"] = "外觀",
     ["Border"] = "邊框",
     ["Backdrop"] = "背景",
-    ["Keys"] = "按鍵",
     ["Language"] = "語言",
     ["Switch it on"] = "開啟",
     ["Modules"] = "模組",

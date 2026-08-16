@@ -53,6 +53,16 @@ ns.CHANGELOG = {
                     .. "|cffffd100Standard look|r button for when you want it "
                     .. "all back on purpose.",
             },
+            {
+                icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
+                text = "|cffffd100Co-Tanks are Tank Unitframes now|r, and they "
+                    .. "ship set up the way the author runs them - your own "
+                    .. "row, only in an instance, growing up from below the "
+                    .. "middle, flat texture, white name. A profile you have "
+                    .. "tuned is not touched. The taunt button can be limited "
+                    .. "to raids, and its macro button sits with its icon.",
+                link = { label = "Open the tank unitframes", page = "cotanks" },
+            },
             -- The one thing from that page a player can go looking for. Its
             -- number is untouched in your account file; only the row moved.
             {

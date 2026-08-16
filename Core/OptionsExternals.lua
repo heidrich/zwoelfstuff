@@ -215,14 +215,12 @@ function Page:BuildPage(page, width)
     end
     band.Fit()
 
-    -- The second sentence is where "Move the panel" went. A button that opens
-    -- edit mode, on a page whose rail already has Edit mode at the top of it,
-    -- is the same door drawn twice - and this one has to say where the door
-    -- is anyway, because nothing else on the page does.
-    grid:Note("Pick from the list on the right. Clicking a slot whispers "
-        .. "whoever can cast it; right-click drops it. To put the panel "
-        .. "somewhere, open |cffffd100Edit mode|r at the top of the list on "
-        .. "the left.")
+    -- NO SENTENCE UNDER THE LATTICE. It said "pick from the list on the
+    -- right ... open Edit mode at the top of the list on the left", and the
+    -- owner struck it (2026-08-16) with the rest of its kind: the list IS on
+    -- the right, and Edit mode IS at the top of the rail - a page that
+    -- describes its own furniture is telling the reader what they are
+    -- looking at.
 
     ---------------------------------------------------------------------
     -- Assignment
@@ -307,31 +305,22 @@ function Page:BuildPage(page, width)
     }, 10)
 
     ---------------------------------------------------------------------
-    -- Keys
-    --
-    -- ON THE PANEL, not in a list. Owner, 2026-08-10, after being handed
-    -- eight rows: "du machst da einen keybind button, dann grauen die buttons
-    -- aus und du kannst auf den button klicken und einen key belegen."
-    --
-    -- A key belongs to a place on the screen, and the screen is right there.
-    -- The button is at the bottom with the other things this page does.
+    -- NO KEYS SECTION. Keys are set ON THE PANEL - owner, 2026-08-10, after
+    -- being handed eight rows: "du machst da einen keybind button, dann
+    -- grauen die buttons aus und du kannst auf den button klicken und einen
+    -- key belegen" - and the button that starts it is |cffffd100Set keys|r
+    -- in this page's header. The paragraph that used to sit here only said
+    -- so, and the owner struck it (2026-08-16): "den komplett raus".
     ---------------------------------------------------------------------
-    grid:Section("Keys")
-
-    grid:Note("|cffffd100Set keys|r puts the panel on screen with a square "
-        .. "over every place: click one, press the key. Bound to the "
-        .. "place, not to the spell - what sits in it changes as people "
-        .. "come and go.")
 
     ---------------------------------------------------------------------
     -- Sounds
     --
-    -- DIRECTLY UNDER THE KEYS, because it is their mirror and the pair is
-    -- only obvious side by side. The note above says a key is bound to the
-    -- PLACE - "what sits in it changes as people come and go". A sound is
-    -- bound to the SPELL, and for the same reason read the other way:
-    -- asking for Pain Suppression and asking for a battle res have to sound
-    -- different, and where they happen to sit says nothing about that.
+    -- A key is bound to the PLACE - what sits in it changes as people come
+    -- and go. A sound is bound to the SPELL, and for the same reason read
+    -- the other way: asking for Pain Suppression and asking for a battle
+    -- res have to sound different, and where they happen to sit says
+    -- nothing about that.
     --
     -- His words: "bei den requests auch je nach spell nicht slot."
     --

@@ -5822,6 +5822,28 @@ local function TestTaunts()
     -- writing in party chat after an update is the worst surprise it could
     -- hand somebody, and this is the check that keeps that promise.
     ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    -- Whether the BUTTON is on the screen - the same pure shape.
+    --
+    -- "Only in a raid" is the newest gate and the one that would silently
+    -- undo the one above it if it defaulted on: a fresh profile in a
+    -- dungeon would switch the button on and see nothing.
+    ---------------------------------------------------------------------
+    local B = T.ButtonWanted
+    Check("No button asked for, no button", B({}, true, true) == false)
+    Check("Asked for, in a group: shown",
+        B({ button = true }, true, false) == true)
+    Check("Asked for, alone: hidden by the group gate that defaults on",
+        B({ button = true }, false, false) == false)
+    Check("The group gate can be switched off",
+        B({ button = true, buttonOnlyInGroup = false }, false, false) == true)
+    Check("The raid gate defaults OFF - a dungeon group still gets it",
+        B({ button = true }, true, false) == true)
+    Check("Raid gate on, in a dungeon: hidden",
+        B({ button = true, buttonOnlyInRaid = true }, true, false) == false)
+    Check("Raid gate on, in a raid: shown",
+        B({ button = true, buttonOnlyInRaid = true }, true, true) == true)
+
     local S = T.ShouldAnnounce
     Check("Switched off, it says nothing", S({}, true, true) == false)
     Check("Switched on in a group, it speaks",
@@ -10533,6 +10555,40 @@ local function TestHouseLook()
     Check("A profile with no version at all is benched too",
         Profiles.Bench(unversioned) == true
             and unversioned.modules.cooldowns == false)
+
+    ---------------------------------------------------------------------
+    -- Version 10: the trough step version 8 missed
+    --
+    -- THE OWNER'S OWN PROFILE is the fixture: stamped 9, trough still 0.12,
+    -- because the trough joined the house look one commit after his profile
+    -- had been stamped 8. A step under a consumed number runs for nobody
+    -- who was there first - it needs a number of its own.
+    ---------------------------------------------------------------------
+    local trough = OldProfile()
+    trough.dbVersion = 9
+    trough.coTanks = { trackAlpha = 0.12, width = 235 }
+    Check("Version 10 moves a 0.12 trough that version 8 left behind",
+        Profiles.Trough(trough) == 1
+            and trough.coTanks.trackAlpha == 1
+            and trough.dbVersion == 10,
+        string.format("%s at version %s",
+            tostring(trough.coTanks.trackAlpha), tostring(trough.dbVersion)))
+    Check("and touches nothing else on the way",
+        trough.coTanks.width == 235 and trough.bars[1].name == "one")
+    Check("A second login does not repeat it",
+        Profiles.Trough(trough) == 0)
+    local chosen = OldProfile()
+    chosen.dbVersion = 9
+    chosen.coTanks = { trackAlpha = 0.5 }
+    Check("A trough somebody chose is left alone, and still stamped",
+        Profiles.Trough(chosen) == 0
+            and chosen.coTanks.trackAlpha == 0.5
+            and chosen.dbVersion == 10)
+    local bare = OldProfile()
+    bare.dbVersion = 9
+    bare.coTanks = nil
+    Check("A profile without a panel table is stamped and nothing breaks",
+        Profiles.Trough(bare) == 0 and bare.dbVersion == 10)
 end
 
 function Test:Run()

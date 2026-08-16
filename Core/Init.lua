@@ -301,16 +301,28 @@ function ns.ApplyHouseLook(profile, force)
     -- key names cannot tell those apart, and teaching it to would be the
     -- generic rule carrying a list of which module means what - which is the
     -- fourteen-copies problem again, one layer up.
-    local panel = profile.coTanks
-    if type(panel) == "table" then
-        if (force or WoreOldAlpha(panel.trackAlpha, WAS_TRACK))
-            and panel.trackAlpha ~= 1 then
-            panel.trackAlpha = 1
-            moved = moved + 1
-        end
-    end
+    moved = moved + ns.ApplyHouseTrough(profile, force)
 
     return moved
+end
+
+-- THE TROUGH STEP ON ITS OWN, because it has its own migration. It was added
+-- to the walk above one commit AFTER the walk had already run and stamped
+-- the owner's profile dbVersion 8 - so his panel kept its 0.12 trough while
+-- the desk swore the migration was complete. A step added under a version
+-- number that has already been consumed runs for nobody who was there
+-- first; Profiles.Trough gives it a number of its own (10). Returns how many
+-- it moved, like the walk.
+function ns.ApplyHouseTrough(profile, force)
+    if type(profile) ~= "table" then return 0 end
+    local panel = profile.coTanks
+    if type(panel) ~= "table" then return 0 end
+    if (force or WoreOldAlpha(panel.trackAlpha, WAS_TRACK))
+        and panel.trackAlpha ~= 1 then
+        panel.trackAlpha = 1
+        return 1
+    end
+    return 0
 end
 
 ---------------------------------------------------------------------------
@@ -654,29 +666,36 @@ ns.DEFAULTS = {
         -- OFF until asked for. A panel that appears on screen unbidden after
         -- an update is worse than one nobody has found yet - and this one
         -- draws over the middle of the screen by default.
-        enabled     = false,
+        -- THE OWNER'S OWN PANEL IS THE DEFAULT. Owner, 2026-08-16: "bitte
+        -- mein aktuelles co tank frame setup so als default einbauen" - read
+        -- off his saved profile that evening, not typed from memory: your
+        -- own row in the stack, only inside an instance, rows of 30 with air
+        -- between them growing UP from below the middle of the screen, the
+        -- flat texture, a white name, big debuffs, a centred combat mark.
+        -- Every value below that is not commented is his.
+        enabled     = false,      -- still off until asked for - see above
         testMode    = false,
-        includeSelf = false,      -- your own frame is already on your screen
+        includeSelf = true,
         onlyInGroup = true,
-        onlyInInstance = false,
+        onlyInInstance = true,
         locked      = true,
 
         -- The frame
-        width       = 240,
-        rowHeight   = 26,
-        spacing     = 6,
+        width       = 235,
+        rowHeight   = 30,
+        spacing     = 16,
         scale       = 1.0,
         maxRows     = 5,          -- more tanks than any raid actually fields
-        growth      = "down",     -- which way the stack grows: down | up
+        growth      = "up",       -- which way the stack grows: down | up
         sortBy      = "group",    -- group | name | health
 
         point       = "CENTER",
         relPoint    = "CENTER",
-        x           = -340,
-        y           = 140,
+        x           = -384,
+        y           = -289,
 
         -- Health
-        healthTexture = "",
+        healthTexture = "ZS Flat",
         healthColor   = "class",  -- class | custom | health
         healthCustom  = { 0.36, 0.62, 0.86 },
         healthAlpha   = 1.00,
@@ -751,7 +770,7 @@ ns.DEFAULTS = {
         name = {
             show = true, font = ns.SCREEN_FONT, size = 0, color = { 1, 1, 1 },
             outline = ns.SCREEN_OUTLINE, anchor = "LEFT", x = 0, y = 0,
-            classColor = true,
+            classColor = false,  -- white; the bar already wears the class
             maxLength = 0,       -- 0 keeps the whole name
         },
         health = {
@@ -777,10 +796,10 @@ ns.DEFAULTS = {
         --
         -- The list lives in Core/CoTanks.lua next to the code that draws
         -- them, because the artwork and the anchor belong together.
-        marker = { show = true,  size = 16, anchor = "LEFT",     x = 2,  y = 0 },
-        leader = { show = true,  size = 12, anchor = "TOPLEFT",  x = -2, y = 4 },
-        role   = { show = false, size = 14, anchor = "RIGHT",    x = -2, y = 0 },
-        combat = { show = false, size = 14, anchor = "TOPRIGHT", x = 2,  y = 4 },
+        marker = { show = true,  size = 16, anchor = "LEFT",   x = 2, y = 0 },
+        leader = { show = true,  size = 12, anchor = "LEFT",   x = 4, y = 0 },
+        role   = { show = false, size = 14, anchor = "RIGHT",  x = -2, y = 0 },
+        combat = { show = true,  size = 14, anchor = "CENTER", x = 0, y = 0 },
 
         -- A SECOND BORDER when that tank is your target, not a "ring": it is
         -- drawn exactly like the border above, and the owner said so - "das
@@ -830,7 +849,7 @@ ns.DEFAULTS = {
         -- buff at the same size in the same corner, both in #1a1a1a, is one
         -- setting saying nothing twice.
         debuffs = {
-            show = true, max = 8, size = 22, spacing = 1, perRow = 8,
+            show = true, max = 8, size = 35, spacing = 1, perRow = 8,
             anchor = "TOPLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.75, 0.15, 0.15 },
@@ -1811,7 +1830,7 @@ ns.COMMANDS = {
         .. "(|cffffd100guild|r invites, |cffffd100back|r re-invites, "
         .. "|cffffd100disband|r empties the group)" },
     { cmd = "/zs tanks",
-      text = "the co-tank panel (|cffffd100test|r fakes a raid)" },
+      text = "the tank unitframes (|cffffd100test|r fakes a raid)" },
     { cmd = "/zs reminders",
       text = "every reminder, and why each one is or is not up" },
     { cmd = "/zs externals", text = "who each external slot would whisper "
@@ -1933,7 +1952,7 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         local sub = (rest or ""):match("^(%S*)"):lower()
         if sub == "test" then
             ns.CoTanks:SetTestMode(not db.coTanks.testMode)
-            ns.Print("Co-tank test mode",
+            ns.Print("Tank unitframes test mode",
                 db.coTanks.testMode and "|cff40ff40on|r" or "|cff888888off|r")
         -- Both of these now go through EDIT MODE, because that is where
         -- everything this addon draws is placed. Two ways to move one thing,
@@ -1945,7 +1964,7 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         else
             db.coTanks.enabled = not db.coTanks.enabled
             ns.CoTanks:Refresh()
-            ns.Print("Co-tanks",
+            ns.Print("Tank unitframes",
                 db.coTanks.enabled and "|cff40ff40on|r" or "|cff888888off|r")
         end
 

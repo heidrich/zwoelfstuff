@@ -73,7 +73,7 @@ Share.PARTS = {
         note = "The lines of text and what makes each one appear.",
     },
     {
-        key = "coTanks", label = "Co-tank panel",
+        key = "coTanks", label = "Tank unitframes",
         note = "The row layout, what each row shows, and where it sits.",
     },
     {

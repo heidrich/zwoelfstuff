@@ -146,6 +146,15 @@ local function BuildList(parent, width)
                 chip = UI.GhostButton(host, "", function()
                     OptionsReminders:Select(index)
                 end)
+                -- A BED UNDER EVERY CHIP, and the chosen one's is lit. They
+                -- were bare words - the chosen one orange, the rest grey -
+                -- and one orange word in a row of grey ones does not read as
+                -- "one of these is picked" (owner, 2026-08-16: "das sollte
+                -- besser zu sehen sein, dass es eine auswahl ist"). The
+                -- same two colours the filter chips over the spell list use,
+                -- so a picked thing looks picked the same way everywhere.
+                chip.bed = chip:CreateTexture(nil, "BACKGROUND")
+                chip.bed:SetAllPoints(chip)
                 host.chips[index] = chip
             end
             local cfg = Reminders:Get(index)
@@ -155,7 +164,10 @@ local function BuildList(parent, width)
             -- an answer you have to click to find.
             if cfg and not cfg.enabled then label = label .. " (off)" end
             chip:SetText(label)
-            chip:SetBaseColor(index == current and C.accent or C.textDim)
+            local picked = index == current
+            chip:SetBaseColor(picked and C.accent or C.textDim)
+            local bed = picked and C.accentSoft or C.control
+            chip.bed:SetColorTexture(bed[1], bed[2], bed[3], 1)
             chip:ClearAllPoints()
             chip:SetPoint("LEFT", host, "LEFT", x, 0)
             chip:Show()

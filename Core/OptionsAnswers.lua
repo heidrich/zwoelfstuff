@@ -317,13 +317,10 @@ function Page:BuildPage(page, width)
         .. "|cffffd100taunt|r cell casts on what that tank is fighting.")
 
     ---------------------------------------------------------------------
-    -- Keys - on the bar itself, not in a list of eight rows.
+    -- NO KEYS SECTION. Keys are set on the bar itself - |cffffd100Set keys|r
+    -- in this page's header - and the paragraph that stood here only said
+    -- so. Owner, 2026-08-16: "den komplett raus".
     ---------------------------------------------------------------------
-    grid:Section("Keys")
-
-    grid:Note("|cffffd100Set keys|r puts the bar on screen with a square over "
-        .. "every cell: click one, press the key. The key then shows in the "
-        .. "corner of the cell.")
 
     ---------------------------------------------------------------------
     -- The bar

@@ -112,7 +112,11 @@ local LIST = {
         Apply = function() ns.Cooldowns.Render.Refresh() end,
     },
     {
-        key = "cotanks", title = "Co-Tanks", glyph = "tanks", since = 1,
+        -- "TANK UNITFRAMES", not "Co-Tanks", on the owner's word (2026-08-16):
+        -- it is what the thing IS in the vocabulary every player already has,
+        -- and "co-tank" was ours. The key stays `cotanks` - it is in every
+        -- saved profile.
+        key = "cotanks", title = "Tank Unitframes", glyph = "tanks", since = 1,
         blurb = "Every other tank in the group, with their health and their cooldowns.",
         detail = "Off, the panel never appears and no taunt is announced.",
         -- The taunt announce belongs to this module: it is about the OTHER

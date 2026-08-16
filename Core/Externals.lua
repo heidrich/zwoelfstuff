@@ -612,7 +612,10 @@ Externals.Roster = ns.Roster
 -- The message, with the spell's name written into it. One sentence for every
 -- slot, editable, because "Ironbark bitte!" in German and a raid leader's own
 -- wording are the same setting.
-Externals.DEFAULT_MESSAGE = "%s bitte!"
+-- ENGLISH. It is typed into somebody else's whisper, and the addon ships in
+-- English (owner, 2026-08-16: "die platzhalter texte muessen ueberall auf en
+-- sein").
+Externals.DEFAULT_MESSAGE = "%s please!"
 
 -- WHERE IT GOES. Owner: "wir brauchen noch mehr funktionen, neben wisper,
 -- /p /ra /y etc".

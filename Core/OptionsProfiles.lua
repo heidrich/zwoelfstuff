@@ -306,7 +306,7 @@ function Page:BuildPage(page, width)
                 if applied.bars then said[#said + 1] = applied.bars .. " bars" end
                 if applied.reminders then said[#said + 1] = applied.reminders .. " reminders" end
                 if applied.presets then said[#said + 1] = applied.presets .. " looks" end
-                if applied.coTanks then said[#said + 1] = "the co-tank panel" end
+                if applied.coTanks then said[#said + 1] = "the tank unitframes" end
                 if applied.settings then said[#said + 1] = "the settings" end
 
                 ns.Print("Added " .. (next(said) and table.concat(said, ", ")

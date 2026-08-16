@@ -684,7 +684,7 @@ end
 PANEL_MOVERS = {
     { key = "tanks", module = "cotanks",
       panel = TankPanel, apply = ApplyTankMove,
-      label = "Co-tanks", page = "cotanks",
+      label = "Tank Unitframes", page = "cotanks",
       -- RAW, not through an accessor, and it is the one thing this surface
       -- does differently: ns.db.coTanks is filled in by ns.DEFAULTS rather
       -- than seeded by a Config() call of its own.

@@ -48,6 +48,39 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   - **We do not ship Expressway.** If your client has it — most UI addons
     install it — you get it. If not, the closest narrow grotesk you do have is
     used instead of Blizzard's serif.
+- **Co-Tanks are called Tank Unitframes** — in the sidebar, in Edit Mode, in
+  the module list — because that is what they are in the vocabulary every
+  player already has. Nothing in your saved profile changes name.
+- **The tank unitframes ship set up the way the author runs them:** your own
+  row in the stack, only inside a dungeon or raid, rows of 30 with air between
+  them growing *up* from below the middle of the screen, the flat bar
+  texture, a white name, larger debuffs and a centred combat mark. A profile
+  you have already tuned is not touched — these are the defaults a fresh one
+  starts from.
+- **The taunt button can be limited to raids.** A dungeon has one tank, and a
+  button asking the other one to take it is asking nobody. *Only in a raid*
+  sits beside *Only in a group*, off by default. **Create macro for action
+  bar** — the button that writes *ZS Taunt* — moved from the page header down
+  to the icon it writes.
+- **The default chat lines are English.** *"%n, please taunt!"* and *"%s
+  please!"* were German in an addon that ships in English; anything you typed
+  yourself is kept.
+- **The pages say less about themselves.** *"To move it, open Edit mode"*,
+  *"The button is placed in Edit mode like everything else"*, *"Pick from
+  the list on the right"*, the *Keys* paragraphs on three pages, and *"Your
+  client has Blizzard's aura engine"* are gone — the list *is* on the right,
+  Edit mode *is* at the top of the rail, and a sentence about the absence of
+  a problem is not a setting. Reports meant for the desk (*What a taunt would
+  say*, *What every cell would cast*, *What is listening*) left the page
+  headers; the slash commands still print them.
+- **The Invites page is two columns again.** Every switch used to be followed
+  by a paragraph, so no two could share a line and ten yes-or-nos ran down one
+  side of an empty page. Each switch carries its one line underneath it now;
+  the three things the page *does* — invite the guild, invite everyone back,
+  disband — moved into its header.
+- **The reminder list shows which one is picked.** Each name sits on a chip
+  and the chosen one is lit, the same way the filter chips over the spell
+  list are; one orange word in a row of grey ones did not read as a choice.
 - **The welcome window lost its strapline.** "8 features in one addon. Pick
   the ones you want running." sat over eight rows that are the features, each
   with a switch on it — it narrated the thing underneath it, and the number in
@@ -79,6 +112,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The co-tank trough had missed the standard look.** The step that moves
+  the empty part of the bar to #1a1a1a opaque joined the migration one commit
+  after the migration had already run on the author's profile, so his panel
+  kept the old 12% trough while the desk reported the move complete. It runs
+  now, once, and only for a trough still wearing the old value.
 - **The Edit Mode tools are back.** The grid and its step, snap-to-grid, how
   far a snap catches, the screen dim and the coordinates had gone out with
   the old bars page - though they are about placing panels, which Edit Mode

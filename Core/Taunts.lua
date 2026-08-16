@@ -67,8 +67,13 @@ end
 ---------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------
+-- ENGLISH, both of them. The addon ships in English and these are the words
+-- it puts in OTHER people's chat; a German default in an English addon was
+-- the one German sentence a French tank could not switch off without
+-- retyping it (owner, 2026-08-16: "die platzhalter texte muessen ueberall
+-- auf en sein").
 Taunts.DEFAULT_MESSAGE = "Taunt: %t"
-Taunts.DEFAULT_ASK = "%n, bitte taunten!"
+Taunts.DEFAULT_ASK = "%n, please taunt!"
 
 -- THE BUTTON'S LOOK, under the SAME key names a bar uses - so ns.PaintSurface
 -- and ns.PaintBorder paint it without knowing what it is, exactly as the
@@ -360,13 +365,29 @@ function Taunts.Style()
     }
 end
 
+-- WHETHER THE BUTTON IS WANTED, as a pure function of the settings and where
+-- you are - the same shape as ShouldAnnounce above, and for the same reason:
+-- the desk can ask it every way without a group.
+--
+--   button           off -> never
+--   buttonOnlyInGroup (default on) -> only with somebody else in the group
+--   buttonOnlyInRaid  (default off) -> only in a RAID. A dungeon has one
+--                    tank; a button asking the other one is asking nobody.
+--                    Owner, 2026-08-16: "only when in raid, weil es
+--                    eigentlich keinen sinn macht das in einer 5er gruppe
+--                    anzuzeigen."
+function Taunts.ButtonWanted(cfg, inGroup, inRaid)
+    if not cfg.button then return false end
+    if cfg.buttonOnlyInGroup ~= false and not inGroup then return false end
+    if cfg.buttonOnlyInRaid and not inRaid then return false end
+    return true
+end
+
 function Taunts:ShouldShow()
     local cfg = Taunts.Config()
     if not ns.Modules:IsOn("cotanks") then return false end
     if Taunts.placing then return true end
-    if not cfg.button then return false end
-    if cfg.buttonOnlyInGroup ~= false and not IsInGroup() then return false end
-    return true
+    return Taunts.ButtonWanted(cfg, IsInGroup(), IsInRaid())
 end
 
 function Taunts:Create()

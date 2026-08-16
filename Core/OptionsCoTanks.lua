@@ -213,7 +213,7 @@ function OptionsCoTanks:BuildPage(page, width)
 
     grid:Section("Switch it on")
 
-    UI.Toggle(grid:Row("Show co-tanks", {
+    UI.Toggle(grid:Row("Show tank unitframes", {
         sublabel = "A row for every tank in your group",
     }), function() return DB().enabled end,
         function(value) DB().enabled = value; Apply() end)
@@ -232,12 +232,12 @@ function OptionsCoTanks:BuildPage(page, width)
     -- switch already says what these tanks are. `/zs tanks test` still works
     -- and is listed with the other commands.
 
-    -- NO "MOVE IT" BUTTON. It moved into Edit Mode, where every other thing
-    -- this addon draws is placed - the owner's call, and the right one: a
-    -- display moved from a button on a settings page is moved blind, because
-    -- the window is sitting over the place you are trying to put it.
-    grid:Note("To move it, open |cffffd100Edit mode|r in the list on the "
-        .. "left.")
+    -- NO "MOVE IT" BUTTON, AND NO SENTENCE SAYING WHERE IT WENT. It moved
+    -- into Edit Mode, where every other thing this addon draws is placed -
+    -- the owner's call, and the right one: a display moved from a button on
+    -- a settings page is moved blind, because the window is sitting over the
+    -- place you are trying to put it. The note that pointed at Edit mode
+    -- went too (owner, 2026-08-16: "das sollte alle auch so checken").
 
     grid:Section("The basics")
 
@@ -354,13 +354,6 @@ function OptionsCoTanks:BuildPage(page, width)
             ns.Taunts.Refresh()
         end)
 
-    UI.Toggle(grid:Row("Only in a group"),
-        function() return TCfg().buttonOnlyInGroup ~= false end,
-        function(value)
-            TCfg().buttonOnlyInGroup = value and true or false
-            ns.Taunts.Refresh()
-        end)
-
     -- THE ICON, with the class taunts as the likely answers. Yours is the
     -- default and it is the right one: it is the picture you already press.
     local iconRow = grid:Row("Icon")
@@ -404,6 +397,29 @@ function OptionsCoTanks:BuildPage(page, width)
         iconButton:SetText(TCfg().icon and "Chosen" or "Your taunt")
     end
 
+    -- THE TWO CONDITIONS SIDE BY SIDE, under the button and its icon: one
+    -- line that reads "only in a group / only in a raid" is one question,
+    -- and split across the icon picker it was two.
+    UI.Toggle(grid:Row("Only in a group"),
+        function() return TCfg().buttonOnlyInGroup ~= false end,
+        function(value)
+            TCfg().buttonOnlyInGroup = value and true or false
+            ns.Taunts.Refresh()
+        end)
+
+    -- NARROWER THAN "IN A GROUP". Owner, 2026-08-16: "only when in raid,
+    -- weil es eigentlich keinen sinn macht das in einer 5er gruppe
+    -- anzuzeigen" - a dungeon has one tank, and a button asking the other
+    -- one to take it is asking nobody. Off by default: the panel it belongs
+    -- to shows in any group, and a fresh setting that hides something the
+    -- setting above it just showed is the surprise this page must not pull.
+    UI.Toggle(grid:Row("Only in a raid"),
+        function() return TCfg().buttonOnlyInRaid and true or false end,
+        function(value)
+            TCfg().buttonOnlyInRaid = value and true or false
+            ns.Taunts.Refresh()
+        end)
+
     UI.Slider(grid:Row("Button size"), {
         get = function() return TCfg().size or 44 end,
         set = function(value) TCfg().size = value end,
@@ -411,15 +427,26 @@ function OptionsCoTanks:BuildPage(page, width)
         apply = function() ns.Taunts.Refresh() end,
     })
 
-    grid:Note("The button is placed in |cffffd100Edit mode|r like everything "
-        .. "else this addon draws, and it has the same cog and padlock the "
-        .. "panels do.")
+    -- THE MACRO BUTTON LIVES WITH THE ICON IT WRITES. It used to be a
+    -- header action on this page and a note down here pointed "above" at it;
+    -- the owner moved it (2026-08-16): "schiebe es unter asking for taunt
+    -- und nenne es um in create macro for action bar". The one sentence a
+    -- player needs - what the macro is called - stays under the button, so
+    -- it can be found on the bar afterwards.
+    --
+    -- The sentence about Edit mode and the cog and padlock is gone with the
+    -- others of its kind: every panel this addon draws is placed the same
+    -- way, and saying so on each page is saying it five times.
+    grid:Buttons({
+        { text = "Create macro for action bar", onClick = function()
+            local ok, why = ns.Taunts.MakeMacro()
+            ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
+                or ("|cffff8040Not made:|r " .. tostring(why)))
+        end },
+    }, 10)
 
-    -- Beside the icon it names, now that the button itself sits at the top of
-    -- the page. A note about a control belongs where the control's SUBJECT is,
-    -- not where the control happens to be drawn.
-    grid:Note("|cffffd100Make the macro|r, above, writes a macro called "
-        .. "|cffffd100ZS Taunt|r with this icon. Drag it onto a bar once.")
+    grid:Note("Writes a macro called |cffffd100ZS Taunt|r with this icon. "
+        .. "Drag it onto a bar once - it is kept up to date.")
 
     ---------------------------------------------------------------------
     -- THE BUTTON'S OWN LOOK
@@ -502,7 +529,7 @@ function OptionsCoTanks:BuildSide(parent, pad)
 
     local width = parent:GetWidth() - pad * 2
 
-    local title = UI.Label(side, "Co-tank rows", UI.FS.card, C.text)
+    local title = UI.Label(side, "Tank rows", UI.FS.card, C.text)
     title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -16)
     title:SetWidth(width - 96)
     title:SetWordWrap(false)
@@ -1030,9 +1057,15 @@ function OptionsCoTanks:BuildAuras(grid)
     -- nothing, with no explanation, is the exact defect this addon spent a
     -- whole session removing. The reason is asked of the engine rather than
     -- written here, so it names the actual client build.
+    -- WHEN THE ENGINE IS THERE, THE NOTE IS NOT. It used to say "your client
+    -- has Blizzard's aura engine, so these strips show real auras" - a
+    -- sentence about the absence of a problem, which the owner struck
+    -- (2026-08-16). The block skips the layout entirely rather than sitting
+    -- there empty; only the client that CANNOT show live auras is told why.
     local reason = grid:Note("")
     reason.Refresh = function()
         local why = ns.CoTanks:AuraReason()
+        reason.dkSkip = not why
         if why then
             reason:SetText("|cffffd100Live auras need patch 12.1.|r An aura on "
                 .. "another player is a protected value on this client - no "
@@ -1044,8 +1077,8 @@ function OptionsCoTanks:BuildAuras(grid)
                 .. "now and will be right the moment the patch lands.\n\n"
                 .. "|cff888888" .. why .. "|r")
         else
-            reason:SetText("Your client has Blizzard's aura engine, so these "
-                .. "strips show real auras on the real tanks.")
+            reason:SetText("")
+            reason:Hide()
         end
     end
     grid.widgets[#grid.widgets + 1] = reason

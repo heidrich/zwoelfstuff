@@ -689,18 +689,14 @@ local PAGES = {
     -- column - not the bar inspector and not the explain panel - because what
     -- belongs beside a co-tank preview is the co-tank settings and nothing in
     -- the other two is about this page at all.
-    { key = "cotanks", title = "Co-Tanks", glyph = "tanks", tanks = true,
+    -- NO HEADER ACTIONS. Owner, 2026-08-16: the macro button belongs with
+    -- the taunt settings it writes for - it sits under "Asking for a taunt"
+    -- on the page now - and "What a taunt would say" was a report for the
+    -- desk, not a thing a player goes looking for. `/zs tanks` still prints
+    -- it.
+    { key = "cotanks", title = "Tank Unitframes", glyph = "tanks", tanks = true,
       module = "cotanks",
       subtitle = "Every tank in the group, with their health and their auras.",
-      actions = {
-          { text = "Make the macro", onClick = function()
-              local ok, why = ns.Taunts.MakeMacro()
-              ns.Print(ok and ("|cff40ff40Macro " .. tostring(why) .. ".|r")
-                  or ("|cffff8040Not made:|r " .. tostring(why)))
-          end },
-          { text = "What a taunt would say",
-            onClick = function() ns.Taunts:Dump() end },
-      },
       -- Through the namespace, not a local: the builder lives in
       -- Core/OptionsCoTanks.lua, which loads BEFORE this file but after this
       -- table would have captured a local upvalue that was still nil.
@@ -742,14 +738,13 @@ local PAGES = {
     { key = "answers", title = "External CD answer", glyph = "tanks",
       module = "answers",
       subtitle = "When somebody asks for one of yours, a button lights up.",
+      -- ONE ACTION. "What every cell would cast" was the report that says
+      -- whether this works at all - and it is a report for the desk, so it
+      -- left the header on the owner's word (2026-08-16). ns.Answers:Dump()
+      -- is still there behind `/zs answers`.
       actions = {
           { text = "Set keys",
             onClick = function() ns.Keys:SetActive(true) end },
-          -- The report, and it is worth finding: it prints the macro each
-          -- cell would run, which is the one thing that says whether this
-          -- works at all.
-          { text = "What every cell would cast",
-            onClick = function() ns.Answers:Dump() end },
       },
       build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },
 
@@ -782,9 +777,18 @@ local PAGES = {
     -- are typed into.
     { key = "invites", title = "Invites", glyph = "tanks", module = "invites",
       subtitle = "Somebody whispers a word and they are in the group.",
+      -- THE THREE THINGS THIS PAGE DOES RIGHT NOW are its header, on the
+      -- owner's word (2026-08-16): they used to sit at the bottom of the
+      -- page under the rank filter, and "What is listening" - a report for
+      -- the desk - sat up here instead. The rank filter stays on the page,
+      -- beside the note that says what it filters.
       actions = {
-          { text = "What is listening",
-            onClick = function() ns.Invites:Dump() end },
+          { text = "Invite the guild",
+            onClick = function() ns.Invites.InviteGuild() end },
+          { text = "Invite everyone back",
+            onClick = function() ns.Invites.InviteBack() end },
+          { text = "Disband",
+            onClick = function() ns.Invites.Disband() end },
       },
       build = function(page, width) return ns.OptionsInvites:BuildPage(page, width) end },
 
@@ -1440,8 +1444,16 @@ function Options:Create()
     -- has to live in what is left of the line under them, without wrapping.
     -- Four buttons at the width their own words ask for come to about 470 and
     -- leave the sentence 260, cut off mid-word. Two leave it 400.
+    --
+    -- A page WITHOUT a third column has the inspector's 400 as well, and
+    -- that is where a third button fits: the Invites page carries its three
+    -- "right now" actions up here (owner, 2026-08-16), some 400 of buttons
+    -- against a middle 400 wider than the one the ceiling was measured on.
+    -- The ceiling is asked per page, from the same predicate that decides
+    -- the width, so the two cannot disagree.
     local ACTION_GAP = 6
     local MAX_ACTIONS = 2
+    local MAX_ACTIONS_WIDE = 3
 
     -- A button with a mark in front of it needs room for the mark as well as
     -- for its words, and UI.ButtonWidth measures the WORDS: twelve for the
@@ -1452,8 +1464,10 @@ function Options:Create()
     for index, entry in ipairs(PAGES) do
         if entry.actions then
             local built, span = {}, 0
+            local ceiling = Options.HasThirdColumn(entry) and MAX_ACTIONS
+                or MAX_ACTIONS_WIDE
             for slot, spec in ipairs(entry.actions) do
-                if slot > MAX_ACTIONS then break end
+                if slot > ceiling then break end
 
                 -- CUT FOR THE WIDEST IT WILL EVER SAY, not for what it says
                 -- while the window is being built. "Test mode" grows to
