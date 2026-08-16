@@ -242,15 +242,36 @@ end
 -- ONE MIRROR STEP. Everything it touches is passed straight through; nothing
 -- here reads a number.
 --
--- Wrapped whole in a pcall rather than per call: the two reads and the two
--- writes are one picture, and half of them landing is a bar showing the right
--- length against the wrong scale.
+-- NOT ONE ALLOCATION PER FRAME, AND THAT IS THE WHOLE REASON THIS IS SHAPED
+-- LIKE THIS.
+--
+-- The first version wrapped both reads and both writes in `pcall(function()
+-- ... end)`, which is tidy and builds A CLOSURE EVERY TIME IT RUNS. This runs
+-- once per frame per bar-shaped place: four bars at sixty frames is two
+-- hundred and forty closures a second, every second the addon is on screen,
+-- for the collector to sweep up. Owner, on the game's own memory list: "wenn
+-- das addon offen ist sollte das weniger ein problem sein, schlimm waere es
+-- nur, wenn im zu zustand so viele ressourcen verbraucht werden" - and he is
+-- exactly right about which half matters. A window you opened once is held
+-- and then stops growing; garbage made per frame never stops.
+--
+-- pcall on a METHOD REFERENCE allocates nothing: `pcall(mirror.GetValue,
+-- mirror)` passes a function that already exists and arguments on the stack.
+--
+-- READ BOTH, THEN WRITE BOTH, which keeps the promise the closure version was
+-- written for: the two reads and the two writes are one picture, and half of
+-- them landing is a bar showing the right length against the wrong scale.
+-- Split into four calls it is actually stronger - a failed READ now stops the
+-- write instead of leaving one of the two applied.
 local function Sync(fill, mirror, timer, text)
-    local ok = pcall(function()
-        fill:SetMinMaxValues(mirror:GetMinMaxValues())
-        fill:SetValue(mirror:GetValue())
-    end)
-    if not ok then return false end
+    local okRange, low, high = pcall(mirror.GetMinMaxValues, mirror)
+    if not okRange then return false end
+
+    local okValue, value = pcall(mirror.GetValue, mirror)
+    if not okValue then return false end
+
+    if not pcall(fill.SetMinMaxValues, fill, low, high) then return false end
+    if not pcall(fill.SetValue, fill, value) then return false end
 
     if timer and text then
         -- GetText can hand back a secret string - it was formatted from one
@@ -268,7 +289,15 @@ end
 -- updating shows the last length it had, for ever - a bar that says a buff is
 -- half up when it fell off two minutes ago, which is worse than an empty one
 -- because it is confidently wrong.
+--
+-- WRITTEN ONCE PER FALL, NOT ONCE PER FRAME. A buff bar is DOWN for most of an
+-- evening, so this is the branch the tick actually spends its life in - and
+-- four setters a frame to keep saying nought is the same waste as the closure
+-- above, one layer down. `emptied` is on our own widget table.
 local function Empty(own)
+    if own.emptied then return end
+    own.emptied = true
+
     own.fill:SetMinMaxValues(0, 1)
     own.fill:SetValue(0)
     if own.timer then own.timer:SetText("") end
@@ -387,6 +416,14 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
                     Empty(own)
                     return
                 end
+
+                -- AND THE LATCH COMES OFF THE MOMENT IT IS UP AGAIN. Empty
+                -- writes once per fall and then goes quiet; without this line
+                -- it would go quiet for ever, and a bar that emptied once
+                -- would never fill again. The cheap half of a rate limit is
+                -- setting it - the half that gets forgotten is clearing it.
+                own.emptied = nil
+
                 if not Sync(self, mirror, showTimer and own.timer or nil,
                         text) then
                     self:SetScript("OnUpdate", nil)

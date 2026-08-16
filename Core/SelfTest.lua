@@ -8714,6 +8714,88 @@ local function TestCooldownOwn()
                 "this client cannot read a gradient back")
         end
 
+        -----------------------------------------------------------------
+        -- NOTHING IS ALLOCATED PER FRAME
+        --
+        -- Owner, on the game's own memory list: "wenn das addon offen ist
+        -- sollte das weniger ein problem sein, schlimm waere es nur, wenn im
+        -- zu zustand so viele ressourcen verbraucht werden." He is right
+        -- about which half matters, and it is the half no other check here
+        -- can see: a window opened once is HELD and then stops growing, while
+        -- a table or a closure built per frame never stops.
+        --
+        -- This mirror is the addon's only sixty-times-a-second job, and its
+        -- first version wrapped its four calls in `pcall(function() ... end)`
+        -- - one closure per frame per bar, which on four bars is two hundred
+        -- and forty a second for as long as the addon is on screen. It cost
+        -- nothing measurable in a single frame and everything over an evening,
+        -- which is exactly the shape that gets shipped.
+        --
+        -- CALIBRATED ON THE DEFECT rather than on a round number: 200 ticks
+        -- of the closure version allocate about 14 KB, and the version
+        -- without it allocates none at all. Two KB is comfortably below the
+        -- one and comfortably above the other.
+        -----------------------------------------------------------------
+        local tick = own.fill:GetScript("OnUpdate")
+        if type(tick) == "function" then
+            -- Warmed first: the FIRST call through a path can legitimately
+            -- build something it then keeps, and a guard that counts that
+            -- would be measuring startup rather than steady state.
+            tick(own.fill)
+            collectgarbage("collect")
+            collectgarbage("collect")
+
+            local before = collectgarbage("count")
+            for _ = 1, 200 do tick(own.fill) end
+            local grew = collectgarbage("count") - before
+
+            Check("The mirror allocates nothing per frame", grew < 2,
+                string.format("%.1f KB over 200 ticks", grew))
+
+            -------------------------------------------------------------
+            -- AND THE RATE LIMIT LETS GO AGAIN
+            --
+            -- Emptying the bar writes four setters, and writing them sixty
+            -- times a second to keep saying nought is the same waste the
+            -- closure above was - a buff bar is DOWN for most of an evening,
+            -- so that is the branch the clock actually lives in. So it writes
+            -- once per fall and then goes quiet.
+            --
+            -- The cheap half of a rate limit is setting the latch. The half
+            -- that gets forgotten is CLEARING it, and forgetting it here does
+            -- not look like a memory fix gone wrong - it looks like a bar
+            -- that stops working after the first time the buff drops, for the
+            -- rest of the session. The red proof found this exact hole with
+            -- one line deleted and nothing out here noticed.
+            -------------------------------------------------------------
+            -- DOWN, UP, DOWN AGAIN - and the third step is the one that
+            -- matters. The first draft of this stopped after two and passed
+            -- against the broken version, because the latch only gates the
+            -- EMPTYING: with it stuck on, the bar still fills perfectly well
+            -- and simply never empties again. A check that cannot fail is
+            -- worth exactly nothing, and this one could not until it went
+            -- round twice.
+            bars:Hide()
+            tick(own.fill)
+            Check("A buff that fell off empties the bar",
+                own.fill:GetValue() == 0, tostring(own.fill:GetValue()))
+
+            bars:Show()
+            tick(own.fill)
+            Check("and one that came back fills it again",
+                own.fill:GetValue() == 18, tostring(own.fill:GetValue()))
+
+            bars:Hide()
+            tick(own.fill)
+            Check("and it empties on the SECOND fall as well",
+                own.fill:GetValue() == 0, tostring(own.fill:GetValue()))
+            bars:Show()
+            tick(own.fill)
+        else
+            Skip("The mirror allocates nothing per frame",
+                "the bar has no clock to run")
+        end
+
         -- THE TROUGH IS A TEXTURE, NOT A SETTING. The fixture bar does not
         -- ask for one, so there must not be one behind its fill: a switch
         -- that draws whatever it is set to is the other half of the same
