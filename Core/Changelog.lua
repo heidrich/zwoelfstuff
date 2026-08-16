@@ -32,7 +32,7 @@ end
 ns.CHANGELOG = {
     {
         version = "4.83.0",
-        date = "2026-08-15",
+        date = "2026-08-16",
         lines = {
             {
                 icon = "Interface\\Icons\\INV_Misc_Wrench_01",
