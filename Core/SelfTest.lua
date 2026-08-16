@@ -8480,6 +8480,34 @@ local function TestCooldownStyling()
     ---------------------------------------------------------------------
     -- THE TEXT OFFSETS, which are the corner-clipping fix
     ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    -- THE STACK NUMBER, AND WHO IS ALLOWED TO MAKE THE COMPARISON
+    --
+    -- Owner, twice: "stack count wird immer noch nicht bei den buffs
+    -- angezeigt." Every control on the block was correct and wrote onto a
+    -- frame Blizzard had never made, so the Show switch could only ever hide.
+    -- This is the rule that decides whether we draw one ourselves.
+    ---------------------------------------------------------------------
+    Check("Blizzard drawing its own number means we draw none",
+        Text.StackToShow(true, 5) == nil)
+    Check("And Blizzard deciding NOT to is its comparison, not ours",
+        Text.StackToShow(false, 5) == nil)
+    Check("With no counter frame at all, a readable count above one shows",
+        Text.StackToShow(nil, 5) == 5)
+    Check("A single application is not worth a corner",
+        Text.StackToShow(nil, 1) == nil)
+    Check("Nor is nought", Text.StackToShow(nil, 0) == nil)
+    Check("And nothing to read is nothing to draw",
+        Text.StackToShow(nil, nil) == nil)
+
+    -- THE ARM THAT COST A RELEASE IN 4.82.0. A secret may not be compared, so
+    -- with no counter frame to ask instead it is SHOWN - guessing that a
+    -- protected count is 1 hides a real stack count for a whole fight. The
+    -- desk has no secrets, so this pins the shape rather than the value: a
+    -- count that is neither computable nor displayable draws nothing.
+    Check("Something that is neither readable nor showable draws nothing",
+        Text.StackToShow(nil, {}) == nil)
+
     local x, y = Text.Offset({ anchor = "BOTTOMRIGHT" })
     Check("A corner-anchored number is pushed off both edges",
         x < 0 and y > 0, string.format("%s,%s", tostring(x), tostring(y)))

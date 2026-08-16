@@ -243,6 +243,13 @@ local function DrawBar(bar, claimed, factor)
                     Text.Caption(cell, style, cells[index], band,
                         bar.iconPlacement)
 
+                    -- AND THE STACK NUMBER, when Blizzard has no counter
+                    -- frame to put one in. On our cell for the same reason
+                    -- the caption is: there is nothing of theirs to write on.
+                    -- Text.Count decides; it draws nothing whenever Blizzard
+                    -- has an answer of its own.
+                    Text.Count(cell, item, style)
+
                     claimed[item] = true
                     drawn = drawn + 1
                 end

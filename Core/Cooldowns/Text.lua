@@ -488,6 +488,131 @@ function Text.Caption(cell, style, spellID, iconWidth, placement)
 end
 
 ---------------------------------------------------------------------------
+-- THE STACK COUNT, WHEN BLIZZARD HAS NO COUNTER TO SHOW ONE WITH
+--
+-- Owner, twice: "stack count wird immer noch nicht bei den buffs angezeigt."
+--
+-- WHY EVERY CONTROL ON THE STACK BLOCK WAS CORRECT AND NOTHING APPEARED.
+-- On an adopted frame the number is Blizzard's own `Applications` frame and
+-- NOTHING ELSE - this addon authors no number anywhere. The Show switch, the
+-- face, the size, the colour and the position all write onto that frame
+-- correctly, and every one of them is a way of styling something that is not
+-- there. Alpha 1 on a frame Blizzard never made is still nothing, so the
+-- switch could only ever hide.
+--
+-- 4.82.0 DID NOT HAVE THIS FAULT, and the reason is the shape this project
+-- has paid for before: it drew its OWN font string on cells it drew itself
+-- (Screen.lua:617-655, ApplyStackCount), and only leaned on Blizzard's frame
+-- for the ones it had adopted. Every cell is adopted now. Deleting the second
+-- renderer deleted the only thing that ever wrote a stack number - the
+-- setting kept its reader and lost its writer.
+--
+-- THE "NOT WORTH A NUMBER" RULE IS BLIZZARD'S TO MAKE, and that is not
+-- deference: the count is a SECRET VALUE on this patch, so "is it more than
+-- one" may not be asked here at all. Blizzard asks it inside the engine and
+-- answers by HIDING its counter frame, and a frame's visibility is a plain
+-- boolean that touching is legal.
+--
+--   shown == true    Blizzard is drawing it. We draw nothing - two numbers in
+--                    one corner is worse than none.
+--   shown == false   Blizzard looked and decided it is not worth showing.
+--                    That IS the comparison; we do not second-guess it.
+--   shown == nil     there is no counter frame to ask. Ours, under the same
+--                    rule 4.82.0 used: compare when the count is readable,
+--                    and when it is secret SHOW it, because guessing that a
+--                    protected count is 1 hides a real one for a whole fight.
+---------------------------------------------------------------------------
+-- PURE, AND THE WHOLE DECISION. Split out from the drawing below because
+-- this is the half that can be PROVED at a desk with no screen - the same
+-- division Effects.lua draws through its own file, and for the same reason:
+-- three of the four branches here are about a value that may not be looked
+-- at, and "it seemed right when I read it" is how the extra 0 shipped in
+-- 4.82.0.
+--
+--   shown   what Blizzard says about ITS counter frame: true, false or nil
+--   count   ns.CDM:ItemStacks, which may be a secret or nil
+--
+-- Returns the value to draw, or nil for "draw nothing". The value is passed
+-- straight to SetFormattedText and is never compared here unless CanCompute
+-- has already said it may be.
+function Text.StackToShow(shown, count)
+    -- BLIZZARD'S ANSWER IS FINAL EITHER WAY. `true` means it is already
+    -- drawing one and a second number in the same corner is worse than none;
+    -- `false` means it looked and decided there is nothing worth showing,
+    -- which IS the comparison this code may not make. Only nil - no counter
+    -- frame at all - leaves the question to us.
+    if shown ~= nil then return nil end
+    if count == nil then return nil end
+
+    if ns.CanCompute(count) and type(count) == "number" then
+        -- Readable, so the comparison is ours and it is the same one
+        -- Blizzard makes: a single application is not worth a corner.
+        if count > 1 then return count end
+        return nil
+    end
+
+    if ns.CanDisplay(count) then
+        -- SECRET. It may not be compared and there is no counter frame to
+        -- ask instead, so it is shown. 4.82.0's own note: guessing that a
+        -- protected count is 1 hides a real stack count for a whole fight.
+        return count
+    end
+
+    return nil
+end
+
+function Text.Count(cell, item, style)
+    local text = style and style.stacks
+    if not (cell and item and text) then return end
+
+    local function Away()
+        if cell.stackCount then
+            cell.stackCount:SetText("")
+            cell.stackCount:Hide()
+        end
+    end
+
+    if not text.show then return Away() end
+
+    local value = Text.StackToShow(
+        ns.CDM:CounterShown(item, "Applications"),
+        ns.CDM.ItemStacks and ns.CDM:ItemStacks(item) or nil)
+
+    if value == nil then return Away() end
+
+    if not cell.stackCount then
+        -- A LAYER OF ITS OWN, ten levels up, exactly as the caption below.
+        -- The adopted frame is Blizzard's child rather than ours, so this
+        -- cannot decide the whole stacking order - what it decides is that
+        -- the number draws over our own cell rather than under it.
+        local layer = CreateFrame("Frame", nil, cell)
+        layer:SetAllPoints(cell)
+        layer:SetFrameLevel(cell:GetFrameLevel() + 10)
+
+        cell.stackCount = layer:CreateFontString(nil, "OVERLAY")
+        cell.stackCount:SetWordWrap(false)
+    end
+
+    -- Our own font string, so the direct setter is the right one here.
+    ns.Media.ApplyFont(cell.stackCount, text.font, text.size, text.outline,
+        text.color)
+
+    local x, y = Text.Offset(text)
+    cell.stackCount:ClearAllPoints()
+    cell.stackCount:SetPoint(text.anchor, cell, text.anchor, x, y)
+
+    -- SetFormattedText, NEVER SetText(tostring(count)). The engine formats a
+    -- secret without ever handing it to us; tostring on one is the raise.
+    -- pcall because a font string with no face raises on being written to,
+    -- and a missing media file is a user's problem rather than an error.
+    if pcall(cell.stackCount.SetFormattedText, cell.stackCount, "%d", value) then
+        cell.stackCount:Show()
+    else
+        Away()
+    end
+end
+
+---------------------------------------------------------------------------
 -- /zs text and /zs numbers, answered together
 --
 -- Three separate fixes for "the position does nothing" were made by reading
