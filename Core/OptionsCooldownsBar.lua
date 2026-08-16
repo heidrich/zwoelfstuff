@@ -184,6 +184,11 @@ local function Picture(grid, bar, label, kind, key, fallback, icon, inherit)
         Get(bar, key, fallback), Put(bar, key), Refresh, inherit)
 end
 
+-- THE SMALLEST A NUMBER WITH AN OUTLINE CAN BE READ AT. Measured on his own
+-- screenshot rather than chosen: the outline eats a pixel on each side, so
+-- below this the glyph is two pixels of colour between two of black.
+local TEXT_FLOOR = 6
+
 local function Percent(value)
     return string.format("%d%%", math.floor((value or 0) * 100 + 0.5))
 end
@@ -250,6 +255,32 @@ end
 -- it). Until it exists, the honest thing is to say the places are there, and
 -- to say it only when they are.
 ---------------------------------------------------------------------------
+-- HOW MANY PLACES ON THIS BAR CARRY A PARTICULAR BLIZZARD COUNTER.
+--
+-- Asked of the frames rather than of the spell, because WHICH counter a
+-- template carries is Blizzard's decision and the only honest source for it
+-- is the frame that is on screen. Two numbers out: how many carry it, and how
+-- many places are filled at all - "0 of 0" and "0 of 5" are different
+-- problems and the page says which one you have.
+local function Counters(bar, member)
+    local store, cdm = ns.Cooldowns and ns.Cooldowns.Store, ns.CDM
+    if not (type(bar) == "table" and store and cdm and cdm.Counter) then
+        return 0, 0
+    end
+
+    local cells = store.Cells(bar)
+    local found, total = 0, 0
+    for index = 1, store.Capacity(bar) do
+        local spellID = cells[index]
+        local item = spellID and cdm:ItemForSpell(spellID) or nil
+        if item then
+            total = total + 1
+            if cdm:Counter(item, member) then found = found + 1 end
+        end
+    end
+    return found, total
+end
+
 local function Overrides(bar, keys)
     local opts = type(bar) == "table" and bar.cellOpts or nil
     if type(opts) ~= "table" then return 0 end
@@ -579,6 +610,34 @@ function Panel.BuildText(grid, bar)
         -- all: Blizzard puts a charge count on a cooldown and a stack count
         -- on a buff and never both on one frame, so a bar of ordinary
         -- cooldowns has nothing for the stack rows to reach.
+        --
+        -- AND SAID ABOUT THIS BAR RATHER THAN IN GENERAL. The sentence below
+        -- was correct and did not help: he spent a session in the Stack count
+        -- block setting up a spell that has CHARGES, because nothing on the
+        -- page said which of the two his own places carry. Counted live now,
+        -- off the frames themselves.
+        if spec.key == "stacks" or spec.key == "charges" then
+            local reach = grid:Note("")
+            local wanted = (spec.key == "stacks") and "Applications"
+                or "ChargeCount"
+            OnRefresh(grid, function()
+                local found, total = Counters(Bar(bar), wanted)
+                if total == 0 then
+                    reach:SetText(L["Nothing is on this bar yet."])
+                elseif found == 0 then
+                    reach:SetText("|cffff7a3d"
+                        .. L("No place on this bar carries this number - "
+                            .. "Blizzard puts it on the other kind. Look "
+                            .. "under %s instead.",
+                            (spec.key == "stacks") and L["Charges"]
+                                or L["Stack count"]) .. "|r")
+                else
+                    reach:SetText(L("%d of the %d places on this bar carry "
+                        .. "this number.", found, total))
+                end
+            end)
+        end
+
         if spec.key == "stacks" then
             grid:Note(L["Blizzard puts a stack count on a buff and a charge "
                 .. "count on a cooldown, never both on one place. Each of "
@@ -615,15 +674,40 @@ function Panel.BuildText(grid, bar)
             "font", TextRaw(bar, spec, "font"), TextPut(bar, spec, "font"),
             Refresh, L["Same as everywhere"])
 
+        -- NO LEGAL VALUE MAY BE INVISIBLE.
+        --
+        -- Owner, with a photograph of this row reading 4 and a bar showing no
+        -- numbers: "stack count wird immer noch nicht angezeigt ... empowered
+        -- rune weapon hat 2 aufladungen, stack count ist aktiviert aber nicht
+        -- sichtbar." The number was there. It was four pixels tall.
+        --
+        -- Worse than it looks, and this is why it is fixed rather than
+        -- explained: the charge count INHERITS from the stack count field by
+        -- field, so one drag to 4 while hunting for a missing number made the
+        -- other number invisible too - and the second one is the one his
+        -- spell actually has. A setting that hides the thing you are looking
+        -- for, while you are looking for it, is a trap.
+        --
+        -- The bottom of the rail is therefore two positions and not six:
+        -- nought, which is the automatic size, and then six, which is the
+        -- smallest a number with an outline can be read at. Snapped in the
+        -- SETTER so the jump is visible in the box as it happens - silently
+        -- accepting 4 and drawing 6 would be a control that lies.
         UI.Slider(grid:Row(L["Size"]), {
             min = 0, max = 32, step = 1, format = AutoSize,
             get = TextRaw(bar, spec, "size"),
-            set = TextPut(bar, spec, "size"),
+            set = function(value)
+                value = tonumber(value) or 0
+                if value > 0 and value < TEXT_FLOOR then value = TEXT_FLOOR end
+                TextPut(bar, spec, "size")(value)
+            end,
             apply = Refresh,
         })
-        grid:Note(L["Nought works the size out from the place it sits in, "
+        grid:Note(L("Nought works the size out from the place it sits in, "
             .. "which is what keeps a 24 pixel bar and a 64 pixel icon "
-            .. "looking like one design."])
+            .. "looking like one design. Below %d pixels a number is there "
+            .. "and cannot be read, so the rail goes straight from nought to "
+            .. "%d.", TEXT_FLOOR, TEXT_FLOOR))
 
         -- THE STORED ALPHA IS KEPT. A text colour is four numbers and a
         -- swatch only ever hands back three, so writing { r, g, b } would

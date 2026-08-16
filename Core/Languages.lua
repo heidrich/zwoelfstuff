@@ -366,6 +366,12 @@ Register("enUS", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         true,
     ["Places"] = true,
+    ["Nothing is on this bar yet."] = true,
+    ["No place on this bar carries this number - Blizzard puts it on the other kind. Look under %s instead."] =
+        true,
+    ["%d of the %d places on this bar carry this number."] = true,
+    ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design. Below %d pixels a number is there and cannot be read, so the rail goes straight from nought to %d."] =
+        true,
     ["Show this place"] = true,
     ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither. A place the client will not answer for stays on screen: one that vanished because something could not be read is indistinguishable from a bug."] =
         true,
@@ -464,8 +470,6 @@ Register("enUS", {
     ["None is a crisp one-pixel line drawn from colour textures, and it stays sharper than any edge file at small sizes. The rest come from whatever your other addons registered."] =
         true,
     ["Nothing"] = true,
-    ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design."] =
-        true,
     ["Nudge across"] = true,
     ["Nudge up"] = true,
     ["One line per charge boundary"] = true,
@@ -864,6 +868,13 @@ Register("deDE", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         "Der Ablauf und die Zahlen brauchen Blizzards eigenen Rahmen, deshalb stehen sie nicht hier - alles andere ist die Leiste, wie sie gerade eingestellt ist.",
     ["Places"] = "Plätze",
+    ["Nothing is on this bar yet."] = "Auf dieser Leiste ist noch nichts.",
+    ["No place on this bar carries this number - Blizzard puts it on the other kind. Look under %s instead."] =
+        "Kein Platz auf dieser Leiste trägt diese Zahl - Blizzard setzt sie auf die andere Sorte. Schau stattdessen unter %s.",
+    ["%d of the %d places on this bar carry this number."] =
+        "%d der %d belegten Plätze auf dieser Leiste tragen diese Zahl.",
+    ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design. Below %d pixels a number is there and cannot be read, so the rail goes straight from nought to %d."] =
+        "Null rechnet die Größe aus dem Platz aus, in dem sie sitzt - das hält eine 24-Pixel-Leiste und ein 64-Pixel-Symbol wie ein Design aussehend. Unter %d Pixeln ist eine Zahl da und nicht lesbar, deshalb springt der Regler von null direkt auf %d.",
     ["Show this place"] = "Diesen Platz zeigen",
     ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither. A place the client will not answer for stays on screen: one that vanished because something could not be read is indistinguishable from a bug."] =
         "Bereit heißt, du kannst ihn drücken. Wirkt heißt, der Buff, den er dir gegeben hat, läuft noch - Antimagische Hülle, Blutschild. Lädt nach ist keins von beidem. Ein Platz, für den der Client nicht antwortet, bleibt sichtbar: einer, der verschwindet, weil etwas nicht gelesen werden konnte, ist von einem Fehler nicht zu unterscheiden.",
@@ -965,8 +976,6 @@ Register("deDE", {
     ["None is a crisp one-pixel line drawn from colour textures, and it stays sharper than any edge file at small sizes. The rest come from whatever your other addons registered."] =
         "Keine ist eine scharfe Ein-Pixel-Linie aus Farbtexturen und bleibt bei kleinen Größen schärfer als jede Kantendatei. Der Rest kommt aus dem, was deine anderen Addons registriert haben.",
     ["Nothing"] = "Nichts",
-    ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design."] =
-        "Null rechnet die Größe aus dem Platz aus, auf dem die Zahl sitzt - das lässt eine 24-Pixel-Leiste und ein 64-Pixel-Symbol wie eine Gestaltung aussehen.",
     ["Nudge across"] = "Waagerecht verschieben",
     ["Nudge up"] = "Senkrecht verschieben",
     ["One line per charge boundary"] = "Eine Linie pro Ladungsgrenze",

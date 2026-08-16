@@ -1028,6 +1028,37 @@ function Options.HasThirdColumn(entry)
         or entry.cooldowns) and true or false
 end
 
+-- WHICH PAGE THE WINDOW OPENS ON, as a pure function of the page list and
+-- what was last remembered.
+--
+--   the remembered key, if that page still exists and its module is on
+--   else Cooldowns, which is where the owner wants a fresh install to land
+--   else the first page there is, which is Settings and always exists
+--
+-- Pure so the desk can ask it every one of those three ways without a window.
+-- The middle line is the one that would otherwise be untestable: it only
+-- happens on a profile that has never opened the window, which is nobody's
+-- machine after the first minute.
+function Options.Landing(pages, remembered)
+    local firstLive
+    for index, entry in ipairs(pages or {}) do
+        local live = not entry.module or ns.Modules:IsOn(entry.module)
+        if live then
+            if entry.key == remembered then return index end
+            firstLive = firstLive or index
+        end
+    end
+
+    for index, entry in ipairs(pages or {}) do
+        if entry.key == "cooldowns"
+            and (not entry.module or ns.Modules:IsOn(entry.module)) then
+            return index
+        end
+    end
+
+    return firstLive or 1
+end
+
 function Options.PageWidth(entry, narrow, wide)
     if Options.HasThirdColumn(entry) then return narrow end
     return wide
@@ -1575,6 +1606,17 @@ function Options:Create()
         self.pageIndex = index
 
         local entry = PAGES[index]
+
+        -- REMEMBERED BY KEY, NEVER BY INDEX. Owner, 2026-08-15: "das
+        -- speichern des letzten offenen modules fehlt immer noch, ich lande
+        -- beim oeffnen immer in den settings."
+        --
+        -- The key and not the number: PAGES is reordered whenever a page is
+        -- added or a group is rearranged, so a stored 4 is "whichever page is
+        -- fourth in the version you are running" - it would silently point
+        -- somewhere else after every release, which is worse than not
+        -- remembering at all because it looks like it worked.
+        if ns.db and entry and entry.key then ns.db.lastPage = entry.key end
         if entry.build and not entry.built then
             entry.built = true
             entry.build(pageFrames[index], Options.PageWidth(entry, listWidth, pageWidth))
@@ -1808,6 +1850,16 @@ function Options:Create()
     --
     -- The desk could not see it: the harness walks ShowPage over every page
     -- deliberately, so out here page one was always built a moment later.
+    -- WHERE THE WINDOW OPENS.
+    --
+    -- Cooldowns on the very first open - owner, 2026-08-15: "bitte cooldowns
+    -- als standard open fenster einstellen wenn das erste mal geoeffnet wird
+    -- ansonsten bitte last modul merken" - and after that wherever he was.
+    --
+    -- FALLS BACK TWICE, and both fallbacks matter: a remembered page whose
+    -- MODULE has since been switched off is a page the rail no longer shows,
+    -- and opening onto it would be a blank window with nothing selected.
+    self.pageIndex = Options.Landing(PAGES, ns.db and ns.db.lastPage)
     ShowPage(self.pageIndex)
 
     table.insert(UISpecialFrames, "ZwoelfStuffOptionsFrame")   -- close with ESC

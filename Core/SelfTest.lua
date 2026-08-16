@@ -8508,6 +8508,38 @@ local function TestCooldownStyling()
     Check("Something that is neither readable nor showable draws nothing",
         Text.StackToShow(nil, {}) == nil)
 
+    ---------------------------------------------------------------------
+    -- WHERE THE WINDOW OPENS
+    --
+    -- Owner: "ich lande beim oeffnen immer in den settings." Remembered by
+    -- KEY and never by index - PAGES is reordered whenever a page is added,
+    -- so a stored number points somewhere else after a release and looks
+    -- exactly like it worked.
+    ---------------------------------------------------------------------
+    do
+        local PAGES = {
+            { key = "settings" },
+            { key = "cooldowns", module = "cooldowns" },
+            { key = "deaths",    module = "deaths" },
+        }
+        Check("A remembered page is where it opens",
+            ns.Options.Landing(PAGES, "deaths") == 3)
+        Check("With nothing remembered it opens on Cooldowns",
+            ns.Options.Landing(PAGES, nil) == 2)
+        Check("A page that no longer exists falls back to Cooldowns",
+            ns.Options.Landing(PAGES, "gone") == 2)
+
+        -- THE FALLBACK THAT MATTERS. A remembered page whose module has been
+        -- switched off is one the rail no longer shows, and landing on it is
+        -- a blank window with nothing selected in the list.
+        local was = ns.db.modules and ns.db.modules.deaths
+        ns.db.modules = ns.db.modules or {}
+        ns.db.modules.deaths = false
+        Check("A remembered page whose module is off is not landed on",
+            ns.Options.Landing(PAGES, "deaths") == 2)
+        ns.db.modules.deaths = was
+    end
+
     local x, y = Text.Offset({ anchor = "BOTTOMRIGHT" })
     Check("A corner-anchored number is pushed off both edges",
         x < 0 and y > 0, string.format("%s,%s", tostring(x), tostring(y)))
