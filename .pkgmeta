@@ -16,6 +16,12 @@ enable-nolib-creation: no
 # CHANGELOG.md is written by hand and is what a player reads on the project
 # page. Left as-is rather than generated from commit messages, which are
 # written for whoever picks the code up next and read like it.
+#
+# THE WHOLE FILE IS THE RELEASE BODY, and GitHub refuses one over 125,000
+# characters - 4.83.0's release was not created for that reason (the
+# CurseForge upload had already succeeded, so the tag went out half done).
+# The desk harness keeps CHANGELOG.md under 100,000; older versions move to
+# CHANGELOG-ARCHIVE.md, which does not ship.
 manual-changelog: CHANGELOG.md
 
 ignore:
@@ -23,6 +29,10 @@ ignore:
     - .github
     - .pkgmeta
     - .gitignore
+
+    # The old half of the changelog. CHANGELOG.md ships and is what the
+    # packager posts; the archive is for the repository.
+    - CHANGELOG-ARCHIVE.md
 
     # Editor and linter configuration. Useful in a checkout, meaningless in an
     # AddOns folder.
