@@ -89,6 +89,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     grow instead of drain means arithmetic on a protected number. It is left
     switched off rather than half-wired; the setting is not offered.
 
+- **The settings window uses about half the memory it did.** A page with tabs
+  used to build all of them the moment you opened it, and five of six are
+  behind a tab you may never press. They are built when you press them now.
+  Measured: the Cooldowns page cost 652 frames and 13.4 MB to open and now
+  costs 116 and 2.4 MB; Co-Tanks went from 724 and 14.9 MB to 272 and 5.7 MB.
+  Nothing was removed — everything is still there the moment you ask for it.
+  - **Where the memory actually was**, since the number in the game's list
+    looks alarming: all sixty-five files of code together are 455 KB, and the
+    addon sits at about 3 MB until you open the settings window. Everything
+    above that is the window, and a frame in this game cannot be freed once
+    made — so a page you opened once is held until you reload.
+
 - **The addon now notices when another one is managing your cooldowns.** Two
   addons cannot both hold Blizzard's cooldown frames — whichever loads second
   finds them taken, and what ends up on your screen depends on the order they

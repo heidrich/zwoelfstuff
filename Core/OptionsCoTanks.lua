@@ -536,10 +536,16 @@ function OptionsCoTanks:BuildSide(parent, pad)
 
     grid = UI.Page(body, width)
 
+    -- LOOK NOW, THE OTHER THREE WHEN SOMEBODY PRESSES THEM.
+    --
+    -- This page was the most expensive in the window - 724 frames and 14.9 MB
+    -- the first time it opens - and three of its four tabs are off screen the
+    -- whole time. See Grid:LazyTab for the measurement and for why the tab
+    -- that IS on screen is not deferred with them.
     self:BuildLook(grid)
-    self:BuildText(grid)
-    self:BuildAuras(grid)
-    self:BuildRules(grid)
+    grid:LazyTab("Text", function() self:BuildText(grid) end)
+    grid:LazyTab("Auras", function() self:BuildAuras(grid) end)
+    grid:LazyTab("Rules", function() self:BuildRules(grid) end)
 
     grid.tab = "Look"
     grid:Layout()

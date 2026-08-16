@@ -1074,13 +1074,29 @@ function Page:BuildPage(page, width)
     -- elements, twenty effects and eleven fill settings on this one would be
     -- the 2 710-line page again - which the owner named as the defect. Each
     -- one opens its own tab.
+    -- DEFERRED, ALL FIVE. Together they are 476 of this page's 652 frames and
+    -- four fifths of them are off screen whatever you are doing. See
+    -- Grid:LazyTab for the measurement and for why the first tab is not one of
+    -- them.
+    --
+    -- `bar` is a FALLBACK, not the bar. OptionsCooldownsBar's own Bar() asks
+    -- Page.Current() first and only falls back to this - which is what makes
+    -- building a tab ten minutes later, on a different bar, correct rather
+    -- than merely harmless.
     local bar = Page.Current()
-    ns.OptionsCooldownsBar.BuildLook(grid, bar)
-    ns.OptionsCooldownsBar.BuildText(grid, bar)
-    ns.OptionsCooldownsBar.BuildEffects(grid, bar)
-    ns.OptionsCooldownsBar.BuildFill(grid, bar)
-
-    BuildWhen(grid)
+    grid:LazyTab(L["Look"], function()
+        ns.OptionsCooldownsBar.BuildLook(grid, bar)
+    end)
+    grid:LazyTab(L["Text"], function()
+        ns.OptionsCooldownsBar.BuildText(grid, bar)
+    end)
+    grid:LazyTab(L["Effects"], function()
+        ns.OptionsCooldownsBar.BuildEffects(grid, bar)
+    end)
+    grid:LazyTab(L["Fill"], function()
+        ns.OptionsCooldownsBar.BuildFill(grid, bar)
+    end)
+    grid:LazyTab(L["When"], function() BuildWhen(grid) end)
 
     -- WITH NO BARS THERE IS NOTHING TO SET.
     --

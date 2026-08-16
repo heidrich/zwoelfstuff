@@ -661,6 +661,9 @@ end
 
 UI.rows = {}
 
+-- Every UI.Page ever made. See the note where they are added.
+UI.pages = {}
+
 function UI.Row(parent, text, opts)
     opts = opts or {}
     local row = CreateFrame("Frame", nil, parent)
@@ -4321,6 +4324,19 @@ function UI.Page(parent, width, opts)
         widgets  = {},
     }, Grid)
 
+    -- EVERY PAGE EVER MADE, for the same reason UI.rows exists: something
+    -- outside has to be able to walk them.
+    --
+    -- The desk is what walks them. Grid:LazyTab means four fifths of a tabbed
+    -- page does not exist until somebody presses a tab, so every guard out
+    -- there that audits rows, menus and media pickers would have quietly
+    -- stopped covering it - and it did, on the first run: 44 pickers became
+    -- 38 and 393 rows became 288. The harness calls Grid:RealiseTabs on each
+    -- of these before it audits anything.
+    --
+    -- A dozen references and no frames. Named as a cost anyway, in a change
+    -- that is about memory: this list is the smallest thing in the window.
+    UI.pages[#UI.pages + 1] = grid
     return grid
 end
 
@@ -4418,11 +4434,93 @@ function Grid:Tab(name)
     end
 end
 
+---------------------------------------------------------------------------
+-- A TAB YOU HAVE NOT PRESSED IS NOT BUILT.
+--
+-- MEASURED, and the measurement is why this exists. The cooldowns page costs
+-- 652 frames the first time it is opened, and 476 of them - 73% - are the four
+-- tabs behind the one you are looking at:
+--
+--     Look      92 frames      Text      126 frames
+--     Effects   99 frames      Fill      159 frames
+--
+-- Owner, with the game's own memory list open: "unser addon braucht was 40 mb,
+-- was isn da los", and the constraint under it - "wir duerfen auf keinen fall
+-- groesser als eui werden, wir haben nur 1% von dem seinem umfang". He is
+-- right, and nothing about this is a feature being cut: five of those six tabs
+-- are off screen at any moment, and a frame in this API cannot be destroyed
+-- once made, so every one built is held for the session.
+--
+-- THE THIRD LAYER OF ONE IDEA. The PAGES have been lazy for versions, the
+-- inspector PANES were made lazy after the first reading of this report, and
+-- the tabs are the same question one level down: a thing is built when
+-- somebody asks to see it. Options.lua's own note about the panes says it
+-- plainly - "the panes were just never brought over".
+--
+-- THE TAB ON SCREEN IS BUILT AT ONCE. A page that opens on an empty tab is a
+-- page that looks broken, which is worth more than the frames it saves.
+---------------------------------------------------------------------------
+function Grid:LazyTab(name, build)
+    self:Tab(name)
+
+    -- Already the one showing - which is the first tab declared - so it is
+    -- built here and now, exactly as if it had never been deferred.
+    if self.tab == name then
+        build(self)
+        return
+    end
+
+    self.pending = self.pending or {}
+    self.pending[name] = build
+end
+
+-- BUILDS ONE DEFERRED TAB. Returns whether it actually built anything.
+--
+-- The builder calls Grid:Tab itself on its first line - every one of them does
+-- - so `recordTab` is set by the builder rather than here. Restored
+-- afterwards all the same: a page still being built has a tab it is filing
+-- into, and leaving that pointing at the tab somebody just clicked would file
+-- the REST of the page into it.
+function Grid:Realise(name)
+    local build = self.pending and self.pending[name]
+    if not build then return false end
+
+    self.pending[name] = nil
+    local was = self.recordTab
+    build(self)
+    self.recordTab = was
+    return true
+end
+
+-- EVERY DEFERRED TAB, BUILT. Nothing in the game calls this and that is the
+-- point: it is what the desk uses before it audits a page.
+--
+-- Without it the guards out there would quietly stop covering four fifths of
+-- this window - the row widths, the menus that can be drawn, the media
+-- pickers still painted by their row - and a guard that checks less prints
+-- exactly the same green as one that passes. That is the single most repeated
+-- lesson in this project, and laziness is the perfect way to trigger it.
+function Grid:RealiseTabs()
+    local count = 0
+    for _, name in ipairs(self.tabs or {}) do
+        if self:Realise(name) then count = count + 1 end
+    end
+    return count
+end
+
 -- Which one is on screen. Layout is the only thing that reads it, so a switch
--- costs one re-layout of frames that already exist.
+-- costs one re-layout of frames that already exist - unless this is the first
+-- time it has been asked for, in which case they are made now.
 function Grid:ShowTab(name)
-    if self.tab == name then return end
+    local built = self:Realise(name)
+    if self.tab == name and not built then return end
     self.tab = name
+
+    -- A TAB BUILT THIS SECOND HAS NEVER BEEN REFRESHED, so every control on it
+    -- still shows whatever its widget was created with rather than what is
+    -- stored. Grid:Refresh walks every row on the page and not only this
+    -- tab's, which is what makes one call enough.
+    if built then self:Refresh() end
     self:Layout()
 
     -- A NEW TAB IS A NEW PAGE, so it opens at ITS top.

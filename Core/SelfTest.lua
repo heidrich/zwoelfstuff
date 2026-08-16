@@ -8274,6 +8274,83 @@ local function TestCooldownRender()
 end
 
 ---------------------------------------------------------------------------
+-- A TAB YOU HAVE NOT PRESSED IS NOT BUILT
+--
+-- Written because the red proof found two holes that every guard in the
+-- window was blind to, and both are the kind a user meets on the first click:
+--
+--   * a tab that BUILDS and is never REFRESHED shows every control at its
+--     build-time value instead of yours. Nothing about that looks like a
+--     refresh problem - it looks like the addon forgetting your settings.
+--   * a page whose FIRST tab is deferred opens empty. No current page does
+--     that, because the tab on screen is built at once - and "no caller
+--     exercises it" is exactly the state a rule is in the day before somebody
+--     writes the caller.
+--
+-- Driven through the real calls rather than through a page, so the rule is
+-- proved once here and every page that uses it inherits the proof.
+---------------------------------------------------------------------------
+local function TestLazyTabs()
+    if not (ns.UI and ns.UI.Page) then
+        Skip("Deferred tabs", "the widget layer is not loaded")
+        return
+    end
+
+    local host = CreateFrame("Frame", nil, UIParent)
+    host:SetWidth(400)
+    host:Hide()
+
+    local grid = ns.UI.Page(host, 400, { single = true })
+    if type(grid.LazyTab) ~= "function" then
+        Skip("Deferred tabs", "Grid:LazyTab is not there")
+        return
+    end
+
+    local first, second, refreshed = 0, 0, 0
+
+    -- THE FIRST TAB IS THE ONE ON SCREEN, so it is built at once. A page that
+    -- opens on an empty tab is worth more than the frames it would save.
+    grid:LazyTab("One", function(g)
+        first = first + 1
+        g:Tab("One")
+        g.widgets[#g.widgets + 1] = {
+            Refresh = function() refreshed = refreshed + 1 end,
+        }
+    end)
+    Check("The tab a page opens on is built at once, never left empty",
+        first == 1, tostring(first))
+
+    grid:LazyTab("Two", function(g)
+        second = second + 1
+        g:Tab("Two")
+    end)
+    Check("A tab nobody has pressed is not built at all", second == 0,
+        tostring(second))
+
+    refreshed = 0
+    grid:ShowTab("Two")
+    Check("Pressing it builds it", second == 1, tostring(second))
+
+    -- AND EVERYTHING ON THE PAGE IS REFRESHED. A control created this second
+    -- carries whatever its constructor gave it; the value it should show is
+    -- in the profile, and only a refresh goes and reads that.
+    Check("and the page is refreshed, so no control shows a build-time value",
+        refreshed > 0, tostring(refreshed))
+
+    grid:ShowTab("One")
+    grid:ShowTab("Two")
+    Check("Pressing it again does not build a second copy of it",
+        second == 1, tostring(second))
+
+    -- AND THE BOOKKEEPING SURVIVES IT. RealiseTabs is what the desk uses to
+    -- get the whole window back before it audits anything, and a tab already
+    -- built must not count - a number that never falls to nought is a number
+    -- nobody can read.
+    Check("Nothing is left to realise once every tab has been pressed",
+        grid:RealiseTabs() == 0)
+end
+
+---------------------------------------------------------------------------
 -- THE PLACES WE DRAW OURSELVES
 --
 -- Wave 6's whole claim is that a bar-shaped place is OURS again, and the one
@@ -9082,6 +9159,7 @@ function Test:Run()
         { "Claiming and letting go", TestCooldownClaim },
         { "Placing a bar", TestCooldownRender },
         { "Places we draw ourselves", TestCooldownOwn },
+        { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },
     }
 
