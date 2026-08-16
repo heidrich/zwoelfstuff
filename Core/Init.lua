@@ -44,14 +44,34 @@ ns.ICON_TEXTURE = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo"
 -- in a box you can copy from, which is the honest version of a link in a game.
 ns.CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/zwoelfstuff"
 ns.WAGO_URL = "https://addons.wago.io/addons/zwoelfstuff"
+ns.GITHUB_URL = "https://github.com/heidrich/zwoelfstuff"
 ns.DISCORD_URL = "https://discord.gg/d2EnXGNbGu"
 
 -- Both stores get the same build from the same tag - the packager uploads to
 -- whichever it has a token and a project id for. They are listed in the order
 -- they were published in, and neither is "the real one".
+--
+-- EACH CARRIES ITS MARK. The real logos, as files under Media/icons -
+-- brand-curseforge, brand-wago, brand-github, brand-discord - rasterised
+-- from the official vector marks (Simple Icons for three, Wago's own touch
+-- icon for the fourth) at every size the glyph cut needs, white, tinted at
+-- the call site like every other mark. Owner, 2026-08-16, pointing at MDT:
+-- "die haben die drin und die sind scharf." Until then the rail drew one
+-- "this leaves the game" arrow on all of them, on purpose - a traced logo
+-- is worse than none - and now the official ones are on the disk.
 ns.STORES = {
-    { name = "CurseForge", url = ns.CURSEFORGE_URL },
-    { name = "Wago", url = ns.WAGO_URL },
+    { name = "CurseForge", url = ns.CURSEFORGE_URL, icon = "brand-curseforge" },
+    { name = "Wago", url = ns.WAGO_URL, icon = "brand-wago" },
+}
+
+-- EVERY PLACE THIS ADDON POINTS OUT OF THE GAME, in one list: the two
+-- stores, the source, the Discord. The rail's foot, the About page and the
+-- welcome window all read THIS, so a fifth appears in all three by existing.
+ns.LINKS = {
+    ns.STORES[1],
+    ns.STORES[2],
+    { name = "GitHub", url = ns.GITHUB_URL, icon = "brand-github" },
+    { name = "Discord", url = ns.DISCORD_URL, icon = "brand-discord" },
 }
 
 -- The aura this addon was built for: the Boiling Point buff, 15s, Blood

@@ -1286,6 +1286,35 @@ local function TestDeath()
             and items["Unused defensives"][2].suffix:find("none", 1, true) ~= nil)
     Check("The rest of the casts are their own list",
         #items["Your casts"] == 1 and items["Your casts"][1].name == "Death Strike")
+    -- Nothing picked is a door: one button per empty half, to the page
+    -- where they are picked. Somebody with spells and no potions gets one.
+    local function Buttons(snap)
+        local found = {}
+        for _, row in ipairs(Death.PanelEntries(snap)) do
+            if row.kind == "button" then found[#found + 1] = row.text end
+        end
+        return found
+    end
+    local none = Buttons({ casts = {}, avail = {} })
+    Check("Nothing picked offers both doors",
+        #none == 2 and none[1] == "Set up your defensives"
+            and none[2] == "Set up your consumables")
+    local spellsOnly = Buttons({ casts = {},
+        avail = { { spellID = 1, name = "IBF", remaining = 0 } } })
+    Check("Spells picked and no potions offers the potion door alone",
+        #spellsOnly == 1 and spellsOnly[1] == "Set up your consumables")
+    local both = Buttons({ casts = {}, avail = {
+        { spellID = 1, name = "IBF", remaining = 0 },
+        { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 } } })
+    Check("Both picked, no door", #both == 0)
+    Check("A button row names the page it opens",
+        (function()
+            for _, row in ipairs(Death.PanelEntries({ casts = {}, avail = {} })) do
+                if row.kind == "button" and row.page ~= "deaths" then return false end
+            end
+            return true
+        end)())
+
     Check("A snapshot with nothing readable says so in the panel",
         (function()
             local out = Death.PanelEntries({ reason = "The recap was empty." })

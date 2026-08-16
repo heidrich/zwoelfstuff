@@ -107,6 +107,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   point at it for the same enemy tip the other windows show. Deaths recorded
   before this update are brought up to date when they are shown: a potion
   gets its bottle, a Healthstone its bar.
+- **The real logos.** CurseForge, Wago, GitHub and Discord each wear their
+  own mark now — the official vector marks, rasterised at every size the
+  addon draws — in the sidebar's foot, on the About page and along the foot
+  of the welcome window, where the four links are new. GitHub is linked for
+  the first time.
+- **The side lists name the place and show it.** Every death in the death
+  window's list, and every pull in the group log's, carries a third line:
+  the dungeon or raid by name with the Adventure Guide's own tile beside it
+  — **click the tile and the guide opens on that instance.** The tile sits
+  in the death window's header too. The columns grew wider for it, the rows
+  taller, and every line in them is one size. Recorded from now on: an older
+  entry knows only "Dungeon".
+- **A group death opened from the log** shows the mob's face and the
+  ability's icon in front of *Killed by* and *The hit that mattered*, both
+  with their hover — the same as every row under them. *What did the
+  killing* is **Killing blow**.
+- **Nothing picked is a door.** Open the death log with no defensives or no
+  consumables chosen and the panel offers *Set up your defensives* / *Set up
+  your consumables* — one for each half that is empty — straight to the page.
 - **The reminder list shows which one is picked.** Each name sits on a chip
   and the chosen one is lit, the same way the filter chips over the spell
   list are; one orange word in a row of grey ones did not read as a choice.

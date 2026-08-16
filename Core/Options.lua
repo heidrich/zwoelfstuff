@@ -67,7 +67,7 @@ local RAIL_LINK_H = 22
 -- single row while three were being drawn - which is a check quietly agreeing
 -- with a window that had already changed.
 function Options.RailTail()
-    return (#ns.STORES + 1) * RAIL_LINK_H + 12
+    return #ns.LINKS * RAIL_LINK_H + 12
 end
 
 -- THE CLOSE CROSS, AND WHY ITS SIZE IS A SHARED NUMBER.
@@ -484,7 +484,7 @@ local function BuildAboutPage(page, width)
     grid:Section("Where to get it")
 
     for _, store in ipairs(ns.STORES) do
-        local row = grid:Row(store.name)
+        local row = grid:Row(store.name, { icon = store.icon })
         local button = UI.Button(row.slot, "Copy the address",
             UI.ButtonWidth("Copy the address"), function()
                 UI.CopyBox(store.name, store.url,
@@ -836,7 +836,7 @@ local PAGES = {
     { key = "about", title = "About", glyph = "info",
       subtitle = "Why this addon exists, and every command.",
       actions = {
-          { text = "Discord", onClick = function()
+          { text = "Discord", icon = "brand-discord", onClick = function()
               UI.CopyBox("Discord", ns.DISCORD_URL,
                   "Ctrl+C copies it, then paste it into your browser. Esc "
                   .. "closes. An addon cannot open a browser itself - the "
@@ -1223,10 +1223,10 @@ function Options:Create()
     -- column and the About page cannot end up pointing at different places.
     local LINK_H = RAIL_LINK_H
     local LINKS = {}
-    for _, store in ipairs(ns.STORES) do
-        LINKS[#LINKS + 1] = { text = store.name, url = store.url }
+    for _, entry in ipairs(ns.LINKS) do
+        LINKS[#LINKS + 1] = { text = entry.name, url = entry.url,
+            icon = entry.icon }
     end
-    LINKS[#LINKS + 1] = { text = "Discord", url = ns.DISCORD_URL }
 
     -- Laid out from the foot upwards, so the LAST one written sits nearest the
     -- version line and adding a fourth pushes the block up rather than into
@@ -1274,7 +1274,11 @@ function Options:Create()
         -- ship the official ones or to trace them from memory; the second is
         -- worse than none, because a traced mark claims to be the real thing.
         -- Drop the official files into Media/icons and this line takes them.
-        local outward = UI.Glyph(link, "menu-export", 12, C.textGhost)
+        -- THEY ARE ON THE DISK NOW (2026-08-16) - the real marks, see
+        -- ns.LINKS - so each row wears its own, and the arrow that stood in
+        -- for all of them stays the fallback for a link without one.
+        local outward = UI.Glyph(link, entry.icon or "menu-export", 12,
+            C.textGhost)
         outward:SetPoint("LEFT", link, "LEFT", UI.PAD, 0)
 
         local label = UI.Label(link, entry.text, UI.FS.meta, C.textDim)

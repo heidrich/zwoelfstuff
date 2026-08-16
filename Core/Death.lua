@@ -285,6 +285,8 @@ function Death.Persist(snapshot)
         day = Plain(snapshot.day, "string"),
         where = Plain(snapshot.where, "string"),
         whereShort = Plain(snapshot.whereShort, "string"),
+        instance = Plain(snapshot.instance, "string"),
+        journal = Plain(snapshot.journal, "number"),
         killer = Plain(snapshot.killer, "string"),
         killerArt = PlainArt(art),
         maxHP = Plain(snapshot.maxHP, "number"),
@@ -972,6 +974,111 @@ local function Readable(value)
     return nil
 end
 
+---------------------------------------------------------------------------
+-- THE PLACE'S OWN PICTURE, out of the Adventure Guide.
+--
+-- Owner, 2026-08-16: "ich moechte gern dass der dungeon / raid name
+-- geschrieben wird und das dungeon / raid bild dahinter klein zu sehen ist,
+-- das hilft gemein! ... bei klick auf das bild oeffnet sich das dungeon
+-- journal zu dem dungeon. die bilder bekommst du aus dem dungeon journal."
+--
+-- The journal knows an instance by its own id, reached from the map you are
+-- standing in (EJ_GetInstanceForMap), and answers with the tile the guide
+-- draws on its own buttons (EJ_GetInstanceInfo's buttonImage). Both are
+-- core API, no Blizzard addon needs loading to ASK; opening the guide does
+-- load Blizzard_EncounterJournal, once, on the click. All three doors are
+-- guarded: a desk without them, or a client that answers nothing, gets nil
+-- and draws no picture rather than an empty square.
+---------------------------------------------------------------------------
+function Death.Journal()
+    if not (C_Map and C_Map.GetBestMapForUnit and EJ_GetInstanceForMap) then
+        return nil
+    end
+    local ok, mapID = pcall(C_Map.GetBestMapForUnit, "player")
+    if not (ok and type(mapID) == "number") then return nil end
+    local ok2, id = pcall(EJ_GetInstanceForMap, mapID)
+    if ok2 and type(id) == "number" and id > 0 then return id end
+    return nil
+end
+
+local journalArt = {}
+-- The tile and the name for a journal id, cached: it is asked for every
+-- row of the side list on every repaint.
+function Death.JournalArt(journalID)
+    if not (type(journalID) == "number" and journalID > 0) then return nil end
+    local hit = journalArt[journalID]
+    if hit ~= nil then return hit or nil end
+    if not EJ_GetInstanceInfo then return nil end
+    local ok, name, _, _, button1, _, button2 = pcall(EJ_GetInstanceInfo,
+        journalID)
+    local art = ok and (button1 or button2) or nil
+    if art and art ~= 0 and art ~= "" then
+        journalArt[journalID] = { texture = art, name = name }
+        return journalArt[journalID]
+    end
+    journalArt[journalID] = false
+    return nil
+end
+
+-- Open the Adventure Guide on that instance. Loads the Blizzard addon on
+-- first use - it is load-on-demand - then goes through Blizzard's own door.
+function Death.OpenJournal(journalID)
+    if not (type(journalID) == "number" and journalID > 0) then return false end
+    if not EncounterJournal_OpenJournal then
+        local load = (C_AddOns and C_AddOns.LoadAddOn) or LoadAddOn
+        if load then pcall(load, "Blizzard_EncounterJournal") end
+    end
+    if not EncounterJournal_OpenJournal then return false end
+    local ok = pcall(EncounterJournal_OpenJournal, nil, journalID)
+    return ok and true or false
+end
+
+-- THE PICTURE AS A BUTTON: the guide's tile at a thumbnail size, and a
+-- click opens the guide on that instance. One builder for the death
+-- window's rows and header and the group log's rows.
+Death.PLACE_ART_W, Death.PLACE_ART_H = 52, 18
+function Death.CreatePlaceArt(parent)
+    local art = CreateFrame("Button", nil, parent)
+    art:SetSize(Death.PLACE_ART_W, Death.PLACE_ART_H)
+    art.tex = art:CreateTexture(nil, "ARTWORK")
+    art.tex:SetAllPoints(art)
+    -- The tile is drawn stretched into the guide's own 296x101 button, so
+    -- the whole file is picture; only its outermost pixels are trimmed.
+    art.tex:SetTexCoord(0.02, 0.98, 0.04, 0.96)
+    art.edge = ns.CreateBorder(art, 1, "OVERLAY")
+    art:SetScript("OnClick", function(self)
+        Death.OpenJournal(self.journal)
+    end)
+    art:SetScript("OnEnter", function(self)
+        if not (GameTooltip and self.journal) then return end
+        local info = Death.JournalArt(self.journal)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine(info and info.name or "", 1, 1, 1)
+        GameTooltip:AddLine("Click to open it in the Adventure Guide",
+            0.61, 0.64, 0.69)
+        GameTooltip:Show()
+    end)
+    art:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    art.Paint = function(journalID)
+        art.journal = journalID
+        local info = Death.JournalArt(journalID)
+        if not info then
+            art:Hide()
+            return false
+        end
+        art.tex:SetTexture(info.texture)
+        local C = ns.UI.C
+        art.edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+        art:Show()
+        return true
+    end
+    art:Hide()
+    return art
+end
+
 function Death.Where()
     local instanceName, instanceType, difficultyName
     if GetInstanceInfo then
@@ -993,8 +1100,15 @@ function Death.Where()
         if ok then zone = Readable(text) end
     end
 
-    return Death.WhereLabel(instanceType, instanceName, difficultyName,
-        KeyLevel(), Death.encounter, zone)
+    local place, short = Death.WhereLabel(instanceType, instanceName,
+        difficultyName, KeyLevel(), Death.encounter, zone)
+    -- The instance's own name and its journal id ride along, for the side
+    -- lists: "Altar of Fangs" and its tile, not only "Dungeon". Only inside
+    -- one - the open world has no page in the guide.
+    local inside = instanceType == "party" or instanceType == "raid"
+        or instanceType == "scenario"
+    return place, short, inside and instanceName or nil,
+        inside and Death.Journal() or nil
 end
 
 -- WHAT YOU PRESSED in the seconds before it, off ns.History - the player's
@@ -1334,7 +1448,7 @@ function Death:Capture(overrideID, replace)
     end
 
     local avail = Availability(now)
-    local where, whereShort = Death.Where()
+    local where, whereShort, instance, journal = Death.Where()
     local casts = CastsBefore(Death.diedAt or now, WINDOW)
 
     self.snapshot = Death.Remember(self.log, {
@@ -1343,6 +1457,8 @@ function Death:Capture(overrideID, replace)
         day = date("%Y-%m-%d"),
         where = where,
         whereShort = whereShort,
+        instance = instance,
+        journal = journal,
         events = events,
         maxHP = maxHP,
         killer = killer,
@@ -1500,7 +1616,10 @@ local LIST_GUTTER = 8
 -- against the line while the list had air to spare.
 local MAIN_W = 510
 local LIST_W = MAIN_W - LIST_GUTTER
-local SIDE_W = 186
+-- 232, up from 186 (owner, 2026-08-16: "du kannst dafuer ruhig das rechte
+-- panel verbreitern"): the third line of every row is the instance's name
+-- with the guide's tile beside it.
+local SIDE_W = 232
 local GUTTER = 16
 
 -- THE THIRD COLUMN, DOWN THE LEFT. Owner, 2026-08-16, looking at the header
@@ -1516,11 +1635,16 @@ local PANEL_W = SIDE_W
 local MAIN_X = 16 + PANEL_W + GUTTER + GUTTER
 local DIVIDER_X = MAIN_X + MAIN_W + GUTTER
 local SIDE_X = DIVIDER_X + GUTTER
-local SIDE_ROW_H = 34
+-- THREE LINES A ROW: when and the kind, the killer, the place with its
+-- picture. All at 11 - the two lines under the clock were 10 and read as
+-- a different list (owner, 2026-08-16: "die text fonts sollten gleich
+-- gross sein").
+local SIDE_ROW_H = 50
 -- How many rows FIT beside the analysis. The list may hold fifty now, so
 -- the pool is sized to the window and the rest is scrolled to - a pool
--- sized to the setting would build fifty frames to show twelve.
-local SIDE_ROWS = 12
+-- sized to the setting would build fifty frames to show twelve. Nine of
+-- fifty at the taller row, in a window that grew to 580 for them.
+local SIDE_ROWS = 9
 local HEADER_BOTTOM = 82
 -- How small and how large this window may be dragged. Below 60% the event
 -- rows stop being readable at arm's length; above 140% it outgrows a 1080p
@@ -1824,6 +1948,7 @@ end
 ---------------------------------------------------------------------------
 local PANEL_HEAD_H = 24
 local PANEL_ROW_H = 20
+local PANEL_BUTTON_H = 30
 local PANEL_GAP = 10          -- air above the second and third heading
 
 -- WHAT THE PANEL SHOWS, as a flat list of rows. Pure - the desk walks it.
@@ -1911,8 +2036,28 @@ function Death.PanelEntries(snapshot)
         if shown == 0 then
             out[#out + 1] = { kind = "none",
                 text = #(snapshot.avail or {}) == 0
-                    and "Nothing picked yet - the Deaths page has the list."
+                    and "Nothing picked yet."
                     or "None - you used them all." }
+        end
+        -- NOTHING PICKED IS A DOOR, NOT A SENTENCE. Owner, 2026-08-16:
+        -- "wenn ich das death log aufmache und ich hab im addon KEINE DEF
+        -- und consumables eingestellt, sollte dort ein button sein, setup
+        -- your consumables und setup your defensives mit link zu dem
+        -- modul." One for each half that is empty - the spells and the
+        -- items are picked on the same page, but somebody with defensives
+        -- and no potions is told about the potions, not both.
+        local spells, items = 0, 0
+        for _, entry in ipairs(snapshot.avail or {}) do
+            if entry.itemID then items = items + 1
+            elseif entry.spellID then spells = spells + 1 end
+        end
+        if spells == 0 then
+            out[#out + 1] = { kind = "button", text = "Set up your defensives",
+                page = "deaths" }
+        end
+        if items == 0 then
+            out[#out + 1] = { kind = "button", text = "Set up your consumables",
+                page = "deaths" }
         end
     end
 
@@ -2009,6 +2154,14 @@ function Death.BuildDefensivePanel(parent, width)
         row.none:SetJustifyH("LEFT")
         row.none:SetWordWrap(false)
 
+        -- The door to the Deaths page, for a list with nothing picked.
+        row.button = UI.Button(row, "", rowWidth - 8, function()
+            local entry = row.pageEntry
+            if entry and ns.Options then ns.Options:Open(entry.page) end
+        end)
+        row.button:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.button:Hide()
+
         row:EnableMouse(true)
         row:SetScript("OnEnter", Tip)
         row:SetScript("OnLeave", function()
@@ -2032,10 +2185,15 @@ function Death.BuildDefensivePanel(parent, width)
             row.name:SetShown(entry.kind == "item")
             row.suffix:SetShown(entry.kind == "item")
             row.none:SetShown(entry.kind == "none")
+            row.button:SetShown(entry.kind == "button")
+            row.pageEntry = (entry.kind == "button") and entry or nil
             row:EnableMouse(entry.kind == "item")
 
             local height = PANEL_ROW_H
-            if entry.kind == "head" then
+            if entry.kind == "button" then
+                height = PANEL_BUTTON_H
+                row.button.label:SetText(entry.text or "")
+            elseif entry.kind == "head" then
                 heads = heads + 1
                 if heads > 1 then y = y + PANEL_GAP end
                 height = PANEL_HEAD_H
@@ -2073,7 +2231,7 @@ local function BuildWindow()
     local C = UI.C
 
     frame = CreateFrame("Frame", "ZwoelfStuffDeathFrame", UIParent)
-    frame:SetSize(SIDE_X + SIDE_W + 16, 520)
+    frame:SetSize(SIDE_X + SIDE_W + 16, 580)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
     frame:SetFrameStrata("DIALOG")
     -- See Replay.lua: the two windows share a strata and lie on each other,
@@ -2130,6 +2288,10 @@ local function BuildWindow()
     frame.place:SetPoint("TOPLEFT", frame.sub, "BOTTOMLEFT", 0, -2)
     frame.place:SetWidth(MAIN_W - 70)
     frame.place:SetWordWrap(false)
+
+    -- The guide's tile after the place, in the header too ("ggf auch oben
+    -- im header"). Placed by Show, after the words, at their measured width.
+    frame.placeArt = Death.CreatePlaceArt(frame)
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(24, 24)
@@ -2268,16 +2430,28 @@ local function BuildWindow()
         -- The place and the killer both in the orange this addon now uses
         -- for a word that answers: the whole row is a button, and these two
         -- are what it is a button ABOUT.
-        row.where = UI.Label(row, "", 10, C.hot)
+        row.where = UI.Label(row, "", 11, C.hot)
         row.where:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -4)
         row.where:SetJustifyH("RIGHT")
         row.where:SetWidth(96)
         row.where:SetWordWrap(false)
 
-        row.who = UI.Label(row, "", 10, C.hot)
+        row.who = UI.Label(row, "", 11, C.hot)
         row.who:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
         row.who:SetWidth(SIDE_W - 16)
         row.who:SetWordWrap(false)
+
+        -- THE PLACE, NAMED, with the guide's own tile beside it. The tile is
+        -- a button that opens the Adventure Guide on that instance; the row
+        -- underneath still opens the death.
+        row.art = Death.CreatePlaceArt(row)
+        row.art:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -6, 4)
+
+        row.place = UI.Label(row, "", 11, C.textDim)
+        row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
+        row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
+        row.place:SetJustifyH("LEFT")
+        row.place:SetWordWrap(false)
 
         row:SetScript("OnEnter", function(self)
             if self.index ~= Death.showing then
@@ -2777,6 +2951,14 @@ function PaintSideList()
             row.when:SetText(Death.WhenLabel(snapshot, today))
             row.where:SetText(snapshot.whereShort or "")
             row.who:SetText(snapshot.killer or "|cff626a76no killer named|r")
+            row.place:SetText(snapshot.instance or "")
+            row.place:ClearAllPoints()
+            row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
+            if row.art.Paint(snapshot.journal) then
+                row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
+            else
+                row.place:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+            end
             local selected = index == Death.showing
             row.mark:SetShown(selected)
             if selected then
@@ -2837,6 +3019,10 @@ function Death:Show(index)
     -- now - it is the line somebody reads to know which run this was.
     frame.place:SetText(snapshot.where or "")
     frame.place:SetTextColor(UI.C.hot[1], UI.C.hot[2], UI.C.hot[3])
+    frame.placeArt:ClearAllPoints()
+    frame.placeArt:SetPoint("LEFT", frame.place, "LEFT",
+        math.min(frame.place:GetStringWidth() or 0, MAIN_W - 70) + 8, 0)
+    frame.placeArt.Paint(snapshot.journal)
 
     -- The portrait decides where the header starts: with a face, the text
     -- moves out of its way; without one, it keeps the left margin every

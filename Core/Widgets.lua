@@ -5631,6 +5631,8 @@ for _, name in ipairs({
     -- were deleted with them: eight TGAs nothing draws are eight TGAs in
     -- every player's download.
     "ui-lock", "ui-reset", "ui-search",
+    -- The brand marks: the official logos, white, at every cut. See ns.LINKS.
+    "brand-curseforge", "brand-wago", "brand-github", "brand-discord",
 }) do
     ICON_FILES[name] = name
 end

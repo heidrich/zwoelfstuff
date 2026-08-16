@@ -276,12 +276,38 @@ local function BuildFrame()
     -- would be wrong the day the word changes.
     footer:SetWidth(WIDTH - PAD * 2 - (130 + 8 + notNow:GetWidth() + 16))
 
+    -- WHERE THIS ADDON LIVES, along the very foot: the two stores, the
+    -- source and the Discord, each with its mark, from the one list the rail
+    -- and the About page read (owner, 2026-08-16: "im welcome screen unten
+    -- auch einbauen und entsprechend verlinken"). Ghosts, not buttons: this
+    -- window is asking one question and these are not the answer to it. A
+    -- click opens the copy box, which is the honest link inside a game.
+    local LINK_ROW = 24
+    local previousLink
+    for _, entry in ipairs(ns.LINKS) do
+        local link = UI.GhostButton(frame, entry.name, function()
+            UI.CopyBox(entry.name, entry.url,
+                "Ctrl+C copies it, then paste it into your browser. Esc "
+                .. "closes. An addon cannot open a browser itself - the "
+                .. "client has no call for it, by design.")
+        end)
+        if entry.icon then link:SetIcon(entry.icon) end
+        if previousLink then
+            link:SetPoint("LEFT", previousLink, "RIGHT", 10, 0)
+        else
+            link:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD - 6, PAD - 2)
+        end
+        previousLink = link
+    end
+
     -- The height is what the rows added up to, not a number typed once and
     -- wrong after the fifth module. The warning strip is NOT in it: it is only
     -- there for somebody who has a conflict, so its height is added in Show
-    -- where the answer is known.
+    -- where the answer is known. The link row at the foot is its own line
+    -- under the sentence and the buttons.
     frame.baseHeight = HEAD_TOP + PAD + 62 + 4 + #frame.rows * ROW_H + PAD
         + math.max(footer:GetStringHeight(), UI.BUTTON_H) + PAD
+        + LINK_ROW
     frame:SetHeight(frame.baseHeight)
 
     frame.version = version
