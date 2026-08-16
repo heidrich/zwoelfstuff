@@ -255,32 +255,6 @@ end
 -- it). Until it exists, the honest thing is to say the places are there, and
 -- to say it only when they are.
 ---------------------------------------------------------------------------
--- HOW MANY PLACES ON THIS BAR CARRY A PARTICULAR BLIZZARD COUNTER.
---
--- Asked of the frames rather than of the spell, because WHICH counter a
--- template carries is Blizzard's decision and the only honest source for it
--- is the frame that is on screen. Two numbers out: how many carry it, and how
--- many places are filled at all - "0 of 0" and "0 of 5" are different
--- problems and the page says which one you have.
-local function Counters(bar, member)
-    local store, cdm = ns.Cooldowns and ns.Cooldowns.Store, ns.CDM
-    if not (type(bar) == "table" and store and cdm and cdm.Counter) then
-        return 0, 0
-    end
-
-    local cells = store.Cells(bar)
-    local found, total = 0, 0
-    for index = 1, store.Capacity(bar) do
-        local spellID = cells[index]
-        local item = spellID and cdm:ItemForSpell(spellID) or nil
-        if item then
-            total = total + 1
-            if cdm:Counter(item, member) then found = found + 1 end
-        end
-    end
-    return found, total
-end
-
 local function Overrides(bar, keys)
     local opts = type(bar) == "table" and bar.cellOpts or nil
     if type(opts) ~= "table" then return 0 end
@@ -507,9 +481,37 @@ end
 -- for. A closure keeps one list and puts the literal back in the file.
 local TEXT_ELEMENTS = {
     { key = "countdown", label = function() return ns.L["Countdown"] end },
-    { key = "stacks",    label = function() return ns.L["Stack count"] end },
-    { key = "charges",   inherit = "stacks",
-      label = function() return ns.L["Charges"] end },
+
+    -- ONE BLOCK FOR ONE NUMBER, AND THE SPLIT WAS OUR PLUMBING SHOWING.
+    --
+    -- Owner, after a session of this: "WIR BRAUCHEN DEN STACK COUNT: ich muss
+    -- doch sehen wie viel aufladungen der spell hat", and before that
+    -- "kann es sein dass du hier paar sachen durcheinander bringst und wild
+    -- benennst?"
+    --
+    -- He is right, and it is worth being exact about whose fault it is.
+    -- BLIZZARD has two frames: `Applications` counts the stacks of an aura,
+    -- `ChargeCount` counts the charges of a spell, and no frame ever carries
+    -- both. That is a real distinction inside the engine. It is not a
+    -- distinction anybody has while looking at a bar: there, it is the small
+    -- number in the corner that says how many. Two blocks of eight identical
+    -- controls, named after which of Blizzard's frames happens to feed them,
+    -- made the user's job "work out which of our two pages your spell is on
+    -- before you can change its font".
+    --
+    -- So the page offers one block and writes BOTH keys. `also` is what makes
+    -- that true rather than nearly true: Text.Element already lets `charges`
+    -- inherit from `stacks` field by field, so writing only `stacks` would
+    -- work on a fresh profile and quietly stop working on any bar that
+    -- already carries a `charges` value from the split-era page - which is
+    -- exactly the shape of bug that takes a week to find.
+    --
+    -- Nothing changes in the renderer. Text.Style still resolves two
+    -- elements, Render still styles two of Blizzard's frames, and Text.Count
+    -- still draws either number when Blizzard draws none. Only the page
+    -- stopped asking somebody to care.
+    { key = "stacks", also = "charges",
+      label = function() return ns.L["Stacks and charges"] end },
     -- THE FOURTH ONE, ADDED THE DAY IT BECAME REACHABLE. It was left out
     -- because Text.Caption had no caller - eight controls that could not
     -- reach anything is worse than a missing block - and Render calls it now.
@@ -589,12 +591,18 @@ local function TextRaw(bar, spec, key)
     end
 end
 
+-- WRITES EVERY ELEMENT THE ROW SPEAKS FOR, which is one of them except for
+-- the merged stacks-and-charges block. See TEXT_ELEMENTS: writing only the
+-- first would work until a bar carried a value under the second, and then the
+-- control would edit a number nobody could see changing.
 local function TextPut(bar, spec, key)
     return function(value)
         local current = Bar(bar)
         if type(current) ~= "table" then return end
-        if type(current[spec.key]) ~= "table" then current[spec.key] = {} end
-        current[spec.key][key] = value
+        for _, name in ipairs({ spec.key, spec.also }) do
+            if type(current[name]) ~= "table" then current[name] = {} end
+            current[name][key] = value
+        end
     end
 end
 
@@ -626,28 +634,6 @@ function Panel.BuildText(grid, bar)
         -- block setting up a spell that has CHARGES, because nothing on the
         -- page said which of the two his own places carry. Counted live now,
         -- off the frames themselves.
-        if spec.key == "stacks" or spec.key == "charges" then
-            local reach = Keep(grid:Note(""))
-            local wanted = (spec.key == "stacks") and "Applications"
-                or "ChargeCount"
-            OnRefresh(grid, function()
-                local found, total = Counters(Bar(bar), wanted)
-                if total == 0 then
-                    reach:SetText(L["Nothing is on this bar yet."])
-                elseif found == 0 then
-                    reach:SetText("|cffff7a3d"
-                        .. L("No place on this bar carries this number - "
-                            .. "Blizzard puts it on the other kind. Look "
-                            .. "under %s instead.",
-                            (spec.key == "stacks") and L["Charges"]
-                                or L["Stack count"]) .. "|r")
-                else
-                    reach:SetText(L("%d of the %d places on this bar carry "
-                        .. "this number.", found, total))
-                end
-            end)
-        end
-
         -- THE TWO PARAGRAPHS THAT USED TO STAND HERE ARE GONE. One explained
         -- that Blizzard puts a stack count on a buff and a charge count on a
         -- cooldown; the other explained the inheritance between them. Owner,

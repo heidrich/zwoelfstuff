@@ -366,10 +366,7 @@ Register("enUS", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         true,
     ["Places"] = true,
-    ["Nothing is on this bar yet."] = true,
-    ["No place on this bar carries this number - Blizzard puts it on the other kind. Look under %s instead."] =
-        true,
-    ["%d of the %d places on this bar carry this number."] = true,
+    ["Stacks and charges"] = true,
     ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design. Below %d pixels a number is there and cannot be read, so the rail goes straight from nought to %d."] =
         true,
     ["Show this place"] = true,
@@ -395,8 +392,6 @@ Register("enUS", {
     ["Fill"] = true,
     ["Blizzard"] = true,
     ["Spell name"] = true,
-    ["Only shown where there is room beside the icon - a bar-shaped place with its icon at one end. A square place has no band to put a word in, and Blizzard's own tracking bars already write their name along themselves."] =
-        true,
     ["A band starts at one stack. To switch one off, take it away - a band of nought would be crossed by an aura that is merely there."] =
         true,
     ["A band takes the fill's colour over once the stack count reaches its number. The highest one reached is the one you see."] =
@@ -412,14 +407,8 @@ Register("enUS", {
     ["Add a band"] = true,
     ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
         true,
-    ["Anything left alone here follows the stack count, field by field - so a bar arranged before the two were split keeps the one number it was drawn with."] =
-        true,
     ["Behind the icon"] = true,
     ["Belongs to the staggered pattern and is ignored by the others. As a share of one cell, so it stays right when you change the icon size."] =
-        true,
-    ["Blizzard counts these and runs the clock. We set the face, the colour and where the number sits, and never the number itself - which is why a protected count still reads correctly."] =
-        true,
-    ["Blizzard puts a stack count on a buff and a charge count on a cooldown, never both on one place. Each of these reaches the places it belongs to and is quiet on the rest."] =
         true,
     ["Blizzard's Cooldown Manager is asked whether the spell is on a real cooldown, so the global cooldown never sets any of this off. A cooldown the client will not talk about is left alone."] =
         true,
@@ -868,11 +857,7 @@ Register("deDE", {
     ["The sweep and the numbers need Blizzard's own frame, so they are not here - everything else is the bar as it is set right now."] =
         "Der Ablauf und die Zahlen brauchen Blizzards eigenen Rahmen, deshalb stehen sie nicht hier - alles andere ist die Leiste, wie sie gerade eingestellt ist.",
     ["Places"] = "Plätze",
-    ["Nothing is on this bar yet."] = "Auf dieser Leiste ist noch nichts.",
-    ["No place on this bar carries this number - Blizzard puts it on the other kind. Look under %s instead."] =
-        "Kein Platz auf dieser Leiste trägt diese Zahl - Blizzard setzt sie auf die andere Sorte. Schau stattdessen unter %s.",
-    ["%d of the %d places on this bar carry this number."] =
-        "%d der %d belegten Plätze auf dieser Leiste tragen diese Zahl.",
+    ["Stacks and charges"] = "Stapel und Aufladungen",
     ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design. Below %d pixels a number is there and cannot be read, so the rail goes straight from nought to %d."] =
         "Null rechnet die Größe aus dem Platz aus, in dem sie sitzt - das hält eine 24-Pixel-Leiste und ein 64-Pixel-Symbol wie ein Design aussehend. Unter %d Pixeln ist eine Zahl da und nicht lesbar, deshalb springt der Regler von null direkt auf %d.",
     ["Show this place"] = "Diesen Platz zeigen",
@@ -899,8 +884,6 @@ Register("deDE", {
     ["Fill"] = "Füllung",
     ["Blizzard"] = "Blizzard",
     ["Spell name"] = "Zaubername",
-    ["Only shown where there is room beside the icon - a bar-shaped place with its icon at one end. A square place has no band to put a word in, and Blizzard's own tracking bars already write their name along themselves."] =
-        "Wird nur gezeigt, wo neben dem Symbol Platz ist - ein leistenförmiger Platz mit dem Symbol an einem Ende. Ein quadratischer Platz hat kein Band für ein Wort, und Blizzards eigene Verfolgungsleisten schreiben ihren Namen schon selbst darauf.",
     ["A band starts at one stack. To switch one off, take it away - a band of nought would be crossed by an aura that is merely there."] =
         "Ein Band beginnt bei einem Stapel. Zum Abschalten nimm es weg - ein Band bei null würde von jeder bloß vorhandenen Aura überschritten.",
     ["A band takes the fill's colour over once the stack count reaches its number. The highest one reached is the one you see."] =
@@ -918,15 +901,9 @@ Register("deDE", {
     ["Add a band"] = "Band hinzufügen",
     ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
         "Ein Symbolplatz ist quadratisch und nutzt den ersten Wert; ein Leistenplatz die anderen beiden. Welche Art die Plätze einer Leiste sind, steht oben unter Anordnung.",
-    ["Anything left alone here follows the stack count, field by field - so a bar arranged before the two were split keeps the one number it was drawn with."] =
-        "Was du hier unberührt lässt, folgt der Stapelzahl, Feld für Feld - eine Leiste, die vor der Trennung der beiden eingerichtet wurde, behält also die eine Zahl, mit der sie gezeichnet war.",
     ["Behind the icon"] = "Hinter dem Symbol",
     ["Belongs to the staggered pattern and is ignored by the others. As a share of one cell, so it stays right when you change the icon size."] =
         "Gehört zum versetzten Muster und wird von den anderen ignoriert. Als Anteil einer Zelle, damit es stimmt, wenn du die Symbolgröße änderst.",
-    ["Blizzard counts these and runs the clock. We set the face, the colour and where the number sits, and never the number itself - which is why a protected count still reads correctly."] =
-        "Blizzard zählt das und führt die Uhr. Wir setzen Schrift, Farbe und Ort der Zahl, nie die Zahl selbst - deshalb stimmt auch eine geschützte Zählung.",
-    ["Blizzard puts a stack count on a buff and a charge count on a cooldown, never both on one place. Each of these reaches the places it belongs to and is quiet on the rest."] =
-        "Blizzard setzt eine Stapelzahl auf einen Buff und eine Ladungszahl auf einen Cooldown, nie beides auf denselben Platz. Jede erreicht die Plätze, zu denen sie gehört, und schweigt auf den übrigen.",
     ["Blizzard's Cooldown Manager is asked whether the spell is on a real cooldown, so the global cooldown never sets any of this off. A cooldown the client will not talk about is left alone."] =
         "Blizzards Cooldown-Manager wird gefragt, ob der Zauber wirklich auf Cooldown ist - der globale Cooldown löst hier also nichts aus. Ein Cooldown, über den der Client nichts sagt, bleibt unangetastet.",
     ["Blizzard's icon art has a border baked into the file. Cropping cuts it off; at 0 you see the whole thing, frame and all. Above a fifth it starts eating the picture instead."] =
