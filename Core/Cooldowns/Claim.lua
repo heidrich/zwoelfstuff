@@ -756,16 +756,33 @@ function Claim.Beside(object, frame, after, gap, inset)
     RememberPoints(object)
     pcall(object.ClearAllPoints, object)
 
-    -- No neighbour to sit beside is not an error: a template without the
-    -- square icon is a bar all the way across, which is the same call with
-    -- the frame as its own left edge.
+    -- THREE POINTS, AND THE THIRD IS THE CORRECTION.
+    --
+    -- The first version took TOPLEFT from the neighbour and BOTTOMRIGHT from
+    -- the frame - so the bar's top lined up with the icon and its bottom with
+    -- the frame, and Blizzard's template insets its icon. Owner: "die bar hat
+    -- nicht die gleiche hoehe wie das icon, nur in der vorschau." Two points
+    -- cannot take their vertical from one frame and their right edge from
+    -- another; three can.
+    --
+    -- Top AND bottom from the neighbour, so the two are the same height by
+    -- construction rather than by both happening to be full-height. The right
+    -- edge is the frame's, which is the only thing the bar should take from
+    -- it.
     if type(after) == "table" and type(after.GetRight) == "function" then
-        pcall(object.SetPoint, object, "TOPLEFT", after, "TOPRIGHT", gap, -inset)
+        pcall(object.SetPoint, object, "TOPLEFT", after, "TOPRIGHT", gap, 0)
+        pcall(object.SetPoint, object, "BOTTOMLEFT", after, "BOTTOMRIGHT",
+            gap, 0)
     else
-        pcall(object.SetPoint, object, "TOPLEFT", frame, "TOPLEFT", gap, -inset)
+        -- No neighbour to sit beside is not an error: a template without the
+        -- square icon is a bar all the way across, and then the vertical is
+        -- the frame's own, inset.
+        pcall(object.SetPoint, object, "TOPLEFT", frame, "TOPLEFT",
+            gap, -inset)
+        pcall(object.SetPoint, object, "BOTTOMLEFT", frame, "BOTTOMLEFT",
+            gap, inset)
     end
-    pcall(object.SetPoint, object, "BOTTOMRIGHT", frame, "BOTTOMRIGHT",
-        -inset, inset)
+    pcall(object.SetPoint, object, "RIGHT", frame, "RIGHT", -inset, 0)
     return true
 end
 
