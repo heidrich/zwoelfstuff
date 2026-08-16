@@ -89,15 +89,15 @@ local function BuildFrame()
     version:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", -PAD, -PAD - 8)
     version:SetJustifyH("RIGHT")
 
-    -- NO STRAPLINE UNDER THE NAME. Owner, 2026-08-15, with a photograph of it:
-    -- "den text raus".
-    --
-    -- It counted the features and then told you to pick some. The rows below
-    -- are the features and each carries a switch, so the sentence was
-    -- narrating the thing it sat on top of - and the count in it was the
-    -- second copy of a list, which is the mistake this addon has made and
-    -- written down more than once. The rule is at a fixed offset from the
-    -- frame's top, so nothing below moves.
+    -- ONE LINE UNDER THE NAME, AND IT SAYS WHAT THE ADDON IS. The strapline
+    -- that stood here until 2026-08-15 counted the features and told you to
+    -- pick some - narrating the rows under it - and went on his word ("den
+    -- text raus"). This one is his too (2026-08-16): "A Tank and Group Play
+    -- addon" - not a count, not an instruction, the one sentence a stranger
+    -- needs. The rule stays at its fixed offset, so nothing below moves.
+    local subline = UI.Label(frame, "A Tank and Group Play addon", UI.FS.meta,
+        C.textDim)
+    subline:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
     local rule = frame:CreateTexture(nil, "ARTWORK")
     rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
     rule:SetHeight(1)

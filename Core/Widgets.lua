@@ -451,6 +451,14 @@ function UI.HotText(text)
     return UI.HOT .. text .. "|r"
 end
 
+-- The same for a PLACE - the blue every instance name in the addon wears
+-- (C.accentCool, #7EC6D4).
+UI.COOL = "|cff7ec6d4"
+function UI.CoolText(text)
+    if type(text) ~= "string" or text == "" then return text or "" end
+    return UI.COOL .. text .. "|r"
+end
+
 local CLASS_SHEET = "Interface\\TargetingFrame\\UI-Classes-Circles"
 
 function UI.SpecIcon(specID, classFile)

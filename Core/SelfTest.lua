@@ -2494,8 +2494,20 @@ local function TestRaidDeaths()
     Check("A fight nobody died in has no footer at all",
         R.FootLine({}, 0) == "")
     Check("The footer offers the click only when something can be opened",
-        R.FootLine({}, 4, true):find("last ten seconds", 1, true) ~= nil
-        and R.FootLine({}, 4, false):find("last ten seconds", 1, true) == nil)
+        R.FootLine({}, 4, true):find("last 10 seconds", 1, true) ~= nil
+        and R.FootLine({}, 4, false):find("last 10 seconds", 1, true) == nil)
+    -- The same sentence as pieces: names carry the tip, abilities the icon.
+    local pieces = R.FootPieces({ { who = "Shade", spell = "Rend", count = 3,
+        spellID = 5 } }, 3, true, {})
+    local sawWho, sawSpell, sawHint = false, false, false
+    for _, piece in ipairs(pieces) do
+        if piece.who == "Shade" then sawWho = true end
+        if piece.spell == "Rend" and piece.spellID == 5 then sawSpell = true end
+        if piece.text and piece.text:find(R.FOOT_HINT, 1, true) then sawHint = true end
+    end
+    Check("The footer's pieces carry the mob and the ability apart",
+        sawWho and sawSpell and sawHint)
+    Check("...and none for a fight nobody died in", #R.FootPieces({}, 0) == 0)
 
     ---------------------------------------------------------------------
     -- ONE DEATH, KEPT WHOLE AND OPENED

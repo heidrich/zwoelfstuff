@@ -1067,6 +1067,8 @@ function RaidDeaths.Best()
             label = fight.whereShort and (fight.whereShort .. ", " .. fight.when)
                 or fight.when,
             where = fight.where,
+            instance = fight.instance,
+            journal = fight.journal,
             when = fight.when,
             culprits = fight.culprits or RaidDeaths.Culprits(fight.entries),
         }, "kept"
@@ -1677,6 +1679,12 @@ function RaidDeaths:Create()
     -- Where the numbers came from, said out loud. A list that is quietly the
     -- last pull rather than this one is the kind of thing somebody reads
     -- wrongly once and never trusts again.
+    -- The guide's tile in front of the line, as the death window carries
+    -- it before its portrait; the words start after it when it is there.
+    frame.placeArt = ns.Death.CreatePlaceArt(frame, 40, 40)
+    frame.placeArt:SetPoint("TOPLEFT", frame, "TOPLEFT", UI.PAD,
+        -(UI.HEADER_H + 4))
+
     frame.where = UI.Label(frame, "", UI.FS.meta, C.textFaint)
     frame.where:SetPoint("TOPLEFT", frame, "TOPLEFT", UI.PAD,
         -(UI.HEADER_H + 8))
@@ -1859,101 +1867,17 @@ function RaidDeaths:Create()
 
     detail.title = UI.Label(who, "", UI.FS.card, C.text)
 
-    -- THE TWO LINES ABOUT WHAT KILLED THEM, each with the mob's face and
-    -- the ability's icon in front of the words - the face opens the enemy
-    -- tip, the icon the client's spell tooltip, exactly as the rows below
-    -- do. They were one plain sentence; owner, 2026-08-16: "hier fehlt auch
-    -- der avatar und das spell icon mit hover."
-    local BLOW_H, BLOW_FACE, BLOW_ICON = 20, 18, 16
-    local function BuildBlowLine(anchor, gap)
-        local line = CreateFrame("Frame", nil, detail)
-        line:SetHeight(BLOW_H)
-        line:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -gap)
-        line:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
-
-        line.face = ns.Death.CreateFace(line, BLOW_FACE)
-        line.face:SetPoint("LEFT", line, "LEFT", 0, 0)
-        line.face:EnableMouse(true)
-        line.face:SetScript("OnEnter", function(self)
-            local spec = line.spec
-            if not (spec and spec.who) then return end
-            ns.Death.ShowEnemyTip(self, { who = spec.who, art = spec.art,
-                summary = spec.summary })
-        end)
-        line.face:SetScript("OnLeave", ns.Death.HideEnemyTip)
-
-        line.icon = line:CreateTexture(nil, "ARTWORK")
-        line.icon:SetSize(BLOW_ICON, BLOW_ICON)
-        line.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-        line.iconHit = CreateFrame("Frame", nil, line)
-        line.iconHit:SetAllPoints(line.icon)
-        line.iconHit:EnableMouse(true)
-        line.iconHit:SetScript("OnEnter", function(self)
-            local spec = line.spec
-            if not (spec and GameTooltip) then return end
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            local shown = spec.spellID
-                and pcall(GameTooltip.SetSpellByID, GameTooltip, spec.spellID)
-            if not shown then
-                GameTooltip:ClearLines()
-                GameTooltip:AddLine(ns.Death.PlainText(spec.spell or "?"),
-                    1, 1, 1)
-            end
-            GameTooltip:Show()
-        end)
-        line.iconHit:SetScript("OnLeave", function()
-            if GameTooltip then GameTooltip:Hide() end
-        end)
-
-        line.label = UI.Label(line, "", UI.FS.meta, C.textDim)
-        line.label:SetPoint("RIGHT", line, "RIGHT", 0, 0)
-        line.label:SetJustifyH("LEFT")
-        line.label:SetWordWrap(false)
-
-        -- Face, icon, words - and when there is no face the icon takes the
-        -- left edge, and when there is neither the words do.
-        line.Paint = function(spec)
-            line.spec = spec
-            if not spec then
-                line:SetHeight(1)
-                line:Hide()
-                return
-            end
-            line:SetHeight(BLOW_H)
-            line:Show()
-            local hasFace = spec.who and ns.Death.PaintFace(line.face, spec.art)
-            -- The same fallback the rows use for a swing with no spell:
-            -- the ability is always pictured, so the words always start
-            -- in the same place.
-            local hasIcon = (spec.spellID or spec.spell)
-                and ((spec.spellID and ns.SpellTexture
-                    and ns.SpellTexture(spec.spellID)) or 135274) or nil
-            line.icon:ClearAllPoints()
-            if hasIcon then
-                line.icon:SetTexture(hasIcon)
-                line.icon:SetPoint("LEFT", hasFace and line.face or line,
-                    hasFace and "RIGHT" or "LEFT", hasFace and 6 or 0, 0)
-                line.icon:Show()
-            else
-                line.icon:Hide()
-            end
-            line.iconHit:SetShown(hasIcon ~= nil)
-            line.label:ClearAllPoints()
-            line.label:SetPoint("RIGHT", line, "RIGHT", 0, 0)
-            local left = hasIcon and line.icon or (hasFace and line.face) or nil
-            if left then
-                line.label:SetPoint("LEFT", left, "RIGHT", 6, 0)
-            else
-                line.label:SetPoint("LEFT", line, "LEFT", 0, 0)
-            end
-            line.label:SetText(spec.text or "")
-        end
-        return line
-    end
-
-    detail.blow = BuildBlowLine(who, 12)
-    detail.real = BuildBlowLine(detail.blow, 2)
+    -- THE TWO LINES ABOUT WHAT KILLED THEM, each a rich line: the mob's
+    -- face, the words, the mob's name with the enemy tip on it, the ability
+    -- with its icon in front and the client's tooltip on it. Owner,
+    -- 2026-08-16: "das spell icon vor den spell namen ... und der name
+    -- braucht noch einen tooltip." See Death.BuildRichLine.
+    detail.blow = ns.Death.BuildRichLine(detail)
+    detail.blow:SetPoint("TOPLEFT", who, "BOTTOMLEFT", 0, -12)
+    detail.blow:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
+    detail.real = ns.Death.BuildRichLine(detail)
+    detail.real:SetPoint("TOPLEFT", detail.blow, "BOTTOMLEFT", 0, -2)
+    detail.real:SetPoint("RIGHT", detail, "RIGHT", 0, 0)
 
     detail.verdict = UI.Label(detail, "", UI.FS.meta, C.accentCool)
     detail.verdict:SetPoint("TOPLEFT", detail.real, "BOTTOMLEFT", 0, -4)
@@ -2018,10 +1942,12 @@ function RaidDeaths:Create()
     over.headWho = UI.Eyebrow(overContent, "Who is falling")
     over.empty = UI.Label(overContent, "", UI.FS.row, C.textFaint)
 
-    frame.foot = UI.Label(frame, "", UI.FS.meta, C.textFaint)
+    -- A rich line, not a label: names with the enemy tip, abilities with
+    -- their icons and tooltips (owner, 2026-08-16). Grows upward from its
+    -- foot as it wraps, so two lines sit clear of the buttons.
+    frame.foot = ns.Death.BuildRichLine(frame)
     frame.foot:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 46)
     frame.foot:SetPoint("RIGHT", side, "LEFT", -18, 0)
-    frame.foot:SetJustifyH("LEFT")
 
     -----------------------------------------------------------------------
     -- The same two buttons the death window carries, in the same corner.
@@ -2174,9 +2100,48 @@ function RaidDeaths.FootLine(culprits, count, openable)
         end
     end
     if openable then
-        line = line .. "   -   click a death for their last ten seconds"
+        line = line .. "   -   " .. RaidDeaths.FOOT_HINT
     end
     return line
+end
+
+-- His words (2026-08-16): "click on details for their last 10 seconds".
+RaidDeaths.FOOT_HINT = "click on details for their last 10 seconds"
+
+-- The same sentence as pieces for the rich line: every mob's name with
+-- the enemy tip, every ability with its icon and tooltip.
+function RaidDeaths.FootPieces(culprits, count, openable, entries)
+    if count == 0 then return {} end
+    local out = {}
+    if not RaidDeaths.WorthCounting(culprits) then
+        out[#out + 1] = { text = string.format(
+            "%d deaths, each to something different.", count) }
+    else
+        out[#out + 1] = { text = "Killing blow: " }
+        for index = 1, min(#culprits, CULPRITS_SHOWN) do
+            local culprit = culprits[index]
+            if index > 1 then out[#out + 1] = { text = ", " } end
+            out[#out + 1] = { text = string.format("%dx ", culprit.count) }
+            local art, summary
+            for _, entry in ipairs(entries or {}) do
+                if entry.blow and entry.blow.who == culprit.who then
+                    art = art or entry.blow.art
+                    summary = summary or entry.blow.summary
+                end
+            end
+            out[#out + 1] = { who = culprit.who, art = art, summary = summary }
+            out[#out + 1] = { text = " - " }
+            out[#out + 1] = { spell = culprit.spell, spellID = culprit.spellID }
+        end
+        if #culprits > CULPRITS_SHOWN then
+            out[#out + 1] = { text = string.format(", and %d more",
+                #culprits - CULPRITS_SHOWN) }
+        end
+    end
+    if openable then
+        out[#out + 1] = { text = "   -   " .. RaidDeaths.FOOT_HINT }
+    end
+    return out
 end
 
 ---------------------------------------------------------------------------
@@ -2229,34 +2194,57 @@ function RaidDeaths.DetailLines(entry)
     if type(entry) ~= "table" then return {} end
     local blow = entry.blow
     if not blow then
-        return { { text = entry.blowWhy or "nothing readable" } }
+        return { { text = entry.blowWhy or "nothing readable",
+            pieces = { { text = entry.blowWhy or "nothing readable" } } } }
     end
     local out = {}
-    local first = string.format("Killed by %s - %s",
-        ns.UI.HotText(blow.who or "?"),
-        ns.UI.HotText(ns.Death.PlainText(blow.spell or "?")))
+    local tail = ""
     if type(blow.amount) == "number" and blow.amount > 0 then
-        first = first .. " for " .. ns.ShortNumber(blow.amount)
+        tail = tail .. " for " .. ns.ShortNumber(blow.amount)
     end
     if type(blow.overkill) == "number" and blow.overkill > 0 then
-        first = first .. ", " .. ns.ShortNumber(blow.overkill)
+        tail = tail .. ", " .. ns.ShortNumber(blow.overkill)
             .. " of it overkill"
     end
-    out[1] = { text = first .. ".", who = blow.who,
-        art = RaidDeaths.ArtFor(entry, blow.who),
-        spellID = blow.spellID, spell = blow.spell,
-        summary = blow.summary }
+    tail = tail .. "."
+    local art = RaidDeaths.ArtFor(entry, blow.who)
+    out[1] = {
+        text = string.format("Killed by %s - %s%s",
+            ns.UI.HotText(blow.who or "?"),
+            ns.UI.HotText(ns.Death.PlainText(blow.spell or "?")), tail),
+        who = blow.who, art = art, spellID = blow.spellID, spell = blow.spell,
+        summary = blow.summary,
+        -- The face, the words, the mob (tip on the name), the ability
+        -- with its icon in front of it, the numbers.
+        pieces = {
+            { face = art, who = blow.who, summary = blow.summary },
+            { text = "Killed by " },
+            { who = blow.who or "?", art = art, summary = blow.summary },
+            { text = " - " },
+            { spell = blow.spell or "?", spellID = blow.spellID },
+            { text = tail },
+        },
+    }
     if type(entry.real) == "table" then
+        local realArt = RaidDeaths.ArtFor(entry, entry.real.who)
+        local summary = entry.real.who
+            and ns.Death.SourceSummary(entry.events, entry.real.who) or nil
         out[2] = {
             text = string.format("The hit that mattered: %s - %s for %s.",
                 ns.UI.HotText(entry.real.who or "?"),
                 ns.UI.HotText(ns.Death.PlainText(entry.real.spell or "?")),
                 ns.ShortNumber(entry.real.landed or 0)),
-            who = entry.real.who,
-            art = RaidDeaths.ArtFor(entry, entry.real.who),
+            who = entry.real.who, art = realArt,
             spellID = entry.real.spellID, spell = entry.real.spell,
-            summary = entry.real.who and
-                ns.Death.SourceSummary(entry.events, entry.real.who) or nil,
+            summary = summary,
+            pieces = {
+                { face = realArt, who = entry.real.who, summary = summary },
+                { text = "The hit that mattered: " },
+                { who = entry.real.who or "?", art = realArt, summary = summary },
+                { text = " - " },
+                { spell = entry.real.spell or "?", spellID = entry.real.spellID },
+                { text = " for " .. ns.ShortNumber(entry.real.landed or 0) .. "." },
+            },
         }
     end
     return out
@@ -2340,6 +2328,14 @@ function RaidDeaths:Refresh()
 
     -- The evening's page carries its own head. The pull's would be answering
     -- a question the page is not asking.
+    -- The tile in front of the line, and the line moves over for it.
+    local hasTile = (not RaidDeaths.overview) and info
+        and frame.placeArt.Paint(info.journal) or false
+    if not hasTile then frame.placeArt:Hide() end
+    frame.where:ClearAllPoints()
+    frame.where:SetPoint("TOPLEFT", frame, "TOPLEFT",
+        ns.UI.PAD + (hasTile and 48 or 0), -(ns.UI.HEADER_H + 8))
+
     if RaidDeaths.overview then
         frame.where:SetText("")
         frame.verdict:SetText("")
@@ -2349,10 +2345,10 @@ function RaidDeaths:Refresh()
     else
         -- The death window's header shape: the time and the killer on one
         -- line, the place under it. Here the place carries the clock - and
-        -- the PLACE is the orange half, because that is the part somebody
-        -- reads to know which run this was.
+        -- the PLACE is the blue half, the colour every place name in the
+        -- addon wears now (owner, 2026-08-16).
         local where = info.when and (info.when .. "  -  ") or ""
-        where = where .. ns.UI.HotText(info.where or info.label or "")
+        where = where .. ns.UI.CoolText(info.where or info.label or "")
         if info.duration then
             where = where .. "  -  " .. RaidDeaths.Clock(info.duration)
         end
@@ -2467,8 +2463,8 @@ function RaidDeaths:Refresh()
     for _, entry in ipairs(entries) do
         if RaidDeaths.Openable(entry) then anyOpenable = true break end
     end
-    frame.foot:SetText(RaidDeaths.FootLine(
-        (info and info.culprits) or {}, #entries, anyOpenable))
+    frame.foot.Paint(RaidDeaths.FootPieces(
+        (info and info.culprits) or {}, #entries, anyOpenable, entries))
 
     -- WHICH DEATH IS BEING READ, checked against the list that is actually
     -- on screen. A kept index survives a repaint, and a repaint can come
@@ -2562,8 +2558,15 @@ function RaidDeaths.PaintDetail(entry, info)
     RaidDeaths.LayoutWho(detail, hasFace, hasSpec)
     detail.title:SetText(RaidDeaths.DetailTitle(entry, timed))
     local lines = RaidDeaths.DetailLines(entry)
-    detail.blow.Paint(lines[1])
-    detail.real.Paint(lines[2])
+    detail.blow.Paint(lines[1] and lines[1].pieces or {})
+    if lines[2] then
+        detail.real.Paint(lines[2].pieces)
+        detail.real:Show()
+    else
+        detail.real.Paint({})
+        detail.real:SetHeight(1)
+        detail.real:Hide()
+    end
 
     -- The same ten seconds the death window promises, out of the same
     -- function - including its answer for a recap that reaches back further

@@ -1063,6 +1063,149 @@ function Death.TileCoords(width, height)
     return ART_X0, ART_X1, ART_Y0 + trim, ART_Y1 - trim
 end
 
+---------------------------------------------------------------------------
+-- A RICH LINE: words, a mob's name with the enemy tip on it, an ability
+-- with its icon and the client's tooltip, a face - laid left to right and
+-- wrapped like a sentence. One builder for the group log's "Killed by"
+-- lines and its "Killing blow:" foot (owner, 2026-08-16: "das spell icon
+-- vor den spell namen ... und der name braucht noch einen tooltip"; "hier
+-- fehlen spell icons und tooltips bei den namen").
+--
+--   { text = "...", colour = C.x }        plain words
+--   { who = name, art = art, summary = s } the mob, orange, enemy tip
+--   { spell = name, spellID = id }        icon + ability, orange, tooltip
+--   { face = art, who = name, summary = s } the mob's face alone
+--
+-- Paint(pieces) lays them out inside the line's current width and sets
+-- the line's height to what it took; returns that height.
+---------------------------------------------------------------------------
+local RICH_H, RICH_FACE, RICH_ICON = 20, 18, 16
+function Death.BuildRichLine(parent, size)
+    local UI, C = ns.UI, ns.UI.C
+    size = size or UI.FS.meta
+    local line = CreateFrame("Frame", nil, parent)
+    line:SetHeight(RICH_H)
+    line.pool = {}
+
+    local function EnemyTip(self)
+        local spec = self.spec
+        if not (spec and spec.who) then return end
+        Death.ShowEnemyTip(self, { who = spec.who, art = spec.art,
+            summary = spec.summary })
+    end
+    local function SpellTip(self)
+        local spec = self.spec
+        if not (spec and GameTooltip) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local shown = spec.spellID
+            and pcall(GameTooltip.SetSpellByID, GameTooltip, spec.spellID)
+        if not shown then
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine(Death.PlainText(spec.spell or "?"), 1, 1, 1)
+        end
+        GameTooltip:Show()
+    end
+    local function HideTips()
+        Death.HideEnemyTip()
+        if GameTooltip then GameTooltip:Hide() end
+    end
+
+    local function Piece(index)
+        local piece = line.pool[index]
+        if piece then return piece end
+        piece = CreateFrame("Frame", nil, line)
+        piece:SetHeight(RICH_H)
+        piece.label = UI.Label(piece, "", size, C.textDim)
+        piece.label:SetPoint("LEFT", piece, "LEFT", 0, 0)
+        piece.label:SetWordWrap(false)
+        piece.icon = piece:CreateTexture(nil, "ARTWORK")
+        piece.icon:SetSize(RICH_ICON, RICH_ICON)
+        piece.icon:SetPoint("LEFT", piece, "LEFT", 0, 0)
+        piece.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        piece.icon:Hide()
+        piece:EnableMouse(false)
+        piece:SetScript("OnLeave", HideTips)
+        line.pool[index] = piece
+        return piece
+    end
+
+    line.Paint = function(pieces)
+        local width = line:GetWidth() or 0
+        if width < 40 then width = 400 end
+        local x, y, rows = 0, 0, 1
+        local used = 0
+        for _, spec in ipairs(pieces or {}) do
+            used = used + 1
+            local piece = Piece(used)
+            piece.spec = spec
+            piece.label:ClearAllPoints()
+            piece.icon:Hide()
+            if piece.face then piece.face:Hide() end
+            piece:EnableMouse(false)
+            piece:SetScript("OnEnter", nil)
+
+            local w
+            if spec.face then
+                if not piece.face then
+                    piece.face = Death.CreateFace(piece, RICH_FACE)
+                    piece.face:SetPoint("LEFT", piece, "LEFT", 0, 0)
+                end
+                piece.label:SetText("")
+                local drawn = Death.PaintFace(piece.face, spec.face)
+                w = drawn and (RICH_FACE + 6) or 0
+                if drawn then
+                    piece:EnableMouse(true)
+                    piece:SetScript("OnEnter", EnemyTip)
+                end
+            elseif spec.who then
+                piece.label:SetText(UI.HotText(spec.who))
+                piece.label:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+                piece.label:SetPoint("LEFT", piece, "LEFT", 0, 0)
+                w = piece.label:GetStringWidth() or 0
+                piece:EnableMouse(true)
+                piece:SetScript("OnEnter", EnemyTip)
+            elseif spec.spell then
+                local texture = (spec.spellID and ns.SpellTexture
+                    and ns.SpellTexture(spec.spellID)) or 135274
+                piece.icon:SetTexture(texture)
+                piece.icon:Show()
+                piece.label:SetText(Death.PlainText(spec.spell))
+                piece.label:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+                piece.label:SetPoint("LEFT", piece.icon, "RIGHT", 4, 0)
+                w = RICH_ICON + 4 + (piece.label:GetStringWidth() or 0)
+                piece:EnableMouse(true)
+                piece:SetScript("OnEnter", SpellTip)
+            else
+                piece.label:SetText(spec.text or "")
+                local colour = spec.colour or C.textDim
+                piece.label:SetTextColor(colour[1], colour[2], colour[3])
+                piece.label:SetPoint("LEFT", piece, "LEFT", 0, 0)
+                w = piece.label:GetStringWidth() or 0
+            end
+
+            -- Wrapped like a sentence: a piece that does not fit starts
+            -- the next line, unless it is the first thing on this one.
+            if x > 0 and x + w > width then
+                x, y = 0, y + RICH_H
+                rows = rows + 1
+            end
+            piece:SetWidth(math.max(1, w))
+            piece:ClearAllPoints()
+            piece:SetPoint("TOPLEFT", line, "TOPLEFT", x, -y)
+            piece:Show()
+            x = x + w
+        end
+        for index = used + 1, #line.pool do
+            line.pool[index].spec = nil
+            line.pool[index]:Hide()
+        end
+        line:SetHeight(rows * RICH_H)
+        return rows * RICH_H
+    end
+
+    return line
+end
+
 function Death.CreatePlaceArt(parent, width, height)
     width = width or Death.PLACE_ART_W
     height = height or Death.PLACE_ART_H
@@ -2315,10 +2458,12 @@ local function BuildWindow()
     frame.place:SetWidth(MAIN_W - 70)
     frame.place:SetWordWrap(false)
 
-    -- The guide's tile after the place, in the header too ("ggf auch oben
-    -- im header"). Placed by Show, after the words, at their measured width;
-    -- two lines tall so it keeps its shape beside an 11-point line.
-    frame.placeArt = Death.CreatePlaceArt(frame, 40, 26)
+    -- THE GUIDE'S TILE IN THE HEADER, a square the size of the portrait and
+    -- IN FRONT of it (owner, 2026-08-16: "pack es vor den avatar"): the
+    -- place first, then the mob, then the words - the row's own order,
+    -- read left to right. Placed by Show, which knows which of the two
+    -- pictures there are.
+    frame.placeArt = Death.CreatePlaceArt(frame, 54, 54)
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(24, 24)
@@ -3059,18 +3204,20 @@ function Death:Show(index)
     frame.place:SetText(snapshot.where or "")
     frame.place:SetTextColor(UI.C.accentCool[1], UI.C.accentCool[2],
         UI.C.accentCool[3])
-    frame.placeArt:ClearAllPoints()
-    frame.placeArt:SetPoint("BOTTOMLEFT", frame.place, "BOTTOMLEFT",
-        math.min(frame.place:GetStringWidth() or 0, MAIN_W - 70) + 8, -4)
-    frame.placeArt.Paint(snapshot.journal)
 
     -- The portrait decides where the header starts: with a face, the text
     -- moves out of its way; without one, it keeps the left margin every
     -- other window in this addon uses.
+    local hasTile = frame.placeArt.Paint(snapshot.journal)
+    frame.placeArt:ClearAllPoints()
+    frame.placeArt:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -12)
     local hasPortrait = PaintPortrait(snapshot.killerArt)
+    frame.portrait:ClearAllPoints()
+    frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT",
+        MAIN_X + (hasTile and 62 or 0), -12)
     frame.title:ClearAllPoints()
     frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT",
-        MAIN_X + (hasPortrait and 66 or 0), -14)
+        MAIN_X + (hasTile and 62 or 0) + (hasPortrait and 66 or 0), -14)
 
     Death.sideOffset = Death.ScrollTo(index, #self.log,
         Death.sideOffset, SIDE_ROWS)

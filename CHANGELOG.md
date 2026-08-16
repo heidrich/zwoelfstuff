@@ -126,10 +126,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   window's header too. The columns grew wider for it, the rows
   taller, and every line in them is one size. Recorded from now on: an older
   entry knows only "Dungeon".
-- **A group death opened from the log** shows the mob's face and the
-  ability's icon in front of *Killed by* and *The hit that mattered*, both
-  with their hover — the same as every row under them. *What did the
-  killing* is **Killing blow**.
+- **A group death opened from the log** shows the mob's face in front of
+  *Killed by* and *The hit that mattered*, the mob's name with the enemy tip
+  on it, and the ability with its icon in front and its tooltip — the same
+  as every row under them. The **Killing blow** line at the foot of the log
+  (it was *What did the killing*) is built the same way: every name and every
+  ability answers the mouse. The guide's tile stands in front of the pull's
+  place line in the header, and the place is blue.
+- **The welcome window says what the addon is**: *A Tank and Group Play
+  addon*, under the name.
 - **Nothing picked is a door.** Open the death log with no defensives or no
   consumables chosen and the panel offers *Set up your defensives* / *Set up
   your consumables* — one for each half that is empty — straight to the page.
