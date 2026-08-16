@@ -1033,18 +1033,39 @@ function Death.OpenJournal(journalID)
     return ok and true or false
 end
 
--- THE PICTURE AS A BUTTON: the guide's tile at a thumbnail size, and a
--- click opens the guide on that instance. One builder for the death
--- window's rows and header and the group log's rows.
-Death.PLACE_ART_W, Death.PLACE_ART_H = 52, 18
-function Death.CreatePlaceArt(parent)
+-- THE PICTURE AS A BUTTON: the guide's tile, cropped to the shape it is
+-- given rather than squashed into it, and a click opens the guide on that
+-- instance. One builder for the death window's rows and header and the
+-- group log's rows.
+--
+-- THE TILE'S OWN SHAPE is the guide's button: the file is drawn stretched
+-- into 296 by 101 there, so THAT is the picture's true proportion, not the
+-- file's. A frame narrower than that shows the middle of it, full height;
+-- a frame wider shows the middle band, full width. Owner, 2026-08-16, on
+-- the first version: "nur verzerrt und etwas zu klein ... als eigene
+-- spalte ... so hoch wie die spalte."
+local TILE_RATIO = 296 / 101
+Death.PLACE_ART_W, Death.PLACE_ART_H = 64, 46
+function Death.TileCoords(width, height)
+    local want = (width or 1) / math.max(1, height or 1)
+    if want < TILE_RATIO then
+        local keep = want / TILE_RATIO
+        local x0 = (1 - keep) / 2
+        return x0, 1 - x0, 0, 1
+    end
+    local keep = TILE_RATIO / want
+    local y0 = (1 - keep) / 2
+    return 0, 1, y0, 1 - y0
+end
+
+function Death.CreatePlaceArt(parent, width, height)
+    width = width or Death.PLACE_ART_W
+    height = height or Death.PLACE_ART_H
     local art = CreateFrame("Button", nil, parent)
-    art:SetSize(Death.PLACE_ART_W, Death.PLACE_ART_H)
+    art:SetSize(width, height)
     art.tex = art:CreateTexture(nil, "ARTWORK")
     art.tex:SetAllPoints(art)
-    -- The tile is drawn stretched into the guide's own 296x101 button, so
-    -- the whole file is picture; only its outermost pixels are trimmed.
-    art.tex:SetTexCoord(0.02, 0.98, 0.04, 0.96)
+    art.tex:SetTexCoord(Death.TileCoords(width, height))
     art.edge = ns.CreateBorder(art, 1, "OVERLAY")
     art:SetScript("OnClick", function(self)
         Death.OpenJournal(self.journal)
@@ -2290,8 +2311,9 @@ local function BuildWindow()
     frame.place:SetWordWrap(false)
 
     -- The guide's tile after the place, in the header too ("ggf auch oben
-    -- im header"). Placed by Show, after the words, at their measured width.
-    frame.placeArt = Death.CreatePlaceArt(frame)
+    -- im header"). Placed by Show, after the words, at their measured width;
+    -- two lines tall so it keeps its shape beside an 11-point line.
+    frame.placeArt = Death.CreatePlaceArt(frame, 40, 26)
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(24, 24)
@@ -2430,24 +2452,29 @@ local function BuildWindow()
         -- The place and the killer both in the orange this addon now uses
         -- for a word that answers: the whole row is a button, and these two
         -- are what it is a button ABOUT.
+        -- THE GUIDE'S TILE, A COLUMN OF ITS OWN down the right of the row,
+        -- as tall as the row and in its true shape - a button that opens the
+        -- Adventure Guide on that instance; the row underneath still opens
+        -- the death. The three text lines stop where it starts.
+        row.art = Death.CreatePlaceArt(row)
+        row.art:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
         row.where = UI.Label(row, "", 11, C.hot)
-        row.where:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -4)
+        row.where:SetPoint("TOPRIGHT", row.art, "TOPLEFT", -6, -2)
         row.where:SetJustifyH("RIGHT")
         row.where:SetWidth(96)
         row.where:SetWordWrap(false)
 
         row.who = UI.Label(row, "", 11, C.hot)
         row.who:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
-        row.who:SetWidth(SIDE_W - 16)
+        row.who:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
+        row.who:SetJustifyH("LEFT")
         row.who:SetWordWrap(false)
 
-        -- THE PLACE, NAMED, with the guide's own tile beside it. The tile is
-        -- a button that opens the Adventure Guide on that instance; the row
-        -- underneath still opens the death.
-        row.art = Death.CreatePlaceArt(row)
-        row.art:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -6, 4)
-
-        row.place = UI.Label(row, "", 11, C.textDim)
+        -- The place, named, in the blue every instance name in the addon
+        -- wears now (owner: "die dungeon namen sollten wir in blau
+        -- einfaerben").
+        row.place = UI.Label(row, "", 11, C.accentCool)
         row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
         row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
         row.place:SetJustifyH("LEFT")
@@ -2952,13 +2979,18 @@ function PaintSideList()
             row.where:SetText(snapshot.whereShort or "")
             row.who:SetText(snapshot.killer or "|cff626a76no killer named|r")
             row.place:SetText(snapshot.instance or "")
-            row.place:ClearAllPoints()
-            row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
-            if row.art.Paint(snapshot.journal) then
-                row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
-            else
-                row.place:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+            -- No tile, no column: the text lines run to the row's edge.
+            local drawn = row.art.Paint(snapshot.journal)
+            local edge = drawn and row.art or row
+            for _, label in ipairs({ row.where, row.who, row.place }) do
+                label:ClearAllPoints()
             end
+            row.where:SetPoint("TOPRIGHT", edge, drawn and "TOPLEFT" or "TOPRIGHT",
+                -6, drawn and -2 or -4)
+            row.who:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
+            row.who:SetPoint("RIGHT", edge, drawn and "LEFT" or "RIGHT", -6, 0)
+            row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
+            row.place:SetPoint("RIGHT", edge, drawn and "LEFT" or "RIGHT", -6, 0)
             local selected = index == Death.showing
             row.mark:SetShown(selected)
             if selected then
@@ -3020,8 +3052,8 @@ function Death:Show(index)
     frame.place:SetText(snapshot.where or "")
     frame.place:SetTextColor(UI.C.hot[1], UI.C.hot[2], UI.C.hot[3])
     frame.placeArt:ClearAllPoints()
-    frame.placeArt:SetPoint("LEFT", frame.place, "LEFT",
-        math.min(frame.place:GetStringWidth() or 0, MAIN_W - 70) + 8, 0)
+    frame.placeArt:SetPoint("BOTTOMLEFT", frame.place, "BOTTOMLEFT",
+        math.min(frame.place:GetStringWidth() or 0, MAIN_W - 70) + 8, -4)
     frame.placeArt.Paint(snapshot.journal)
 
     -- The portrait decides where the header starts: with a face, the text

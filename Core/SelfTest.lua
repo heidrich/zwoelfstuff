@@ -1315,6 +1315,22 @@ local function TestDeath()
             return true
         end)())
 
+    -- THE GUIDE'S TILE KEEPS ITS SHAPE: a frame narrower than the tile's
+    -- own 296:101 shows the middle of it at full height, a wider one the
+    -- middle band at full width.
+    do
+        local x0, x1, y0, y1 = Death.TileCoords(64, 46)
+        Check("A tall frame crops the sides and keeps the height",
+            y0 == 0 and y1 == 1 and x0 > 0.2 and x1 < 0.8
+                and math.abs((x1 - x0) - (64 / 46) / (296 / 101)) < 0.001)
+        local wx0, wx1, wy0, wy1 = Death.TileCoords(400, 40)
+        Check("A wide frame keeps the width and crops top and bottom",
+            wx0 == 0 and wx1 == 1 and wy0 > 0 and wy1 < 1)
+        local ex0, ex1, ey0, ey1 = Death.TileCoords(296, 101)
+        Check("The tile's own shape is the whole tile",
+            ex0 == 0 and ex1 == 1 and ey0 == 0 and ey1 == 1)
+    end
+
     Check("A snapshot with nothing readable says so in the panel",
         (function()
             local out = Death.PanelEntries({ reason = "The recap was empty." })
@@ -1673,6 +1689,27 @@ local function TestDeath()
         Check("Off the plot is clamped to the edge",
             math.abs(Replay.Scrub(-2, 10, 0) - 10) < 0.001
                 and math.abs(Replay.Scrub(7, 10, 0)) < 0.001)
+
+        -- THE DAMAGE GRAPH'S BUCKETS: oldest on the left, the death in the
+        -- last column, heals skipped, overkill carried, peak returned.
+        local buckets, peak = Replay.Buckets({
+            { t = 9.5, amount = 100 },
+            { t = 9.2, amount = 50 },
+            { t = 5.0, amount = 20, heal = true },
+            { t = 0.0, amount = 300, overkill = 200 },
+        }, 10, 0, 10)
+        Check("Ten columns across ten seconds", #buckets == 10)
+        Check("Two hits in the same second add up in the first column",
+            buckets[1].damage == 150 and buckets[2].damage == 0)
+        Check("The death itself lands in the last column, overkill with it",
+            buckets[10].damage == 300 and buckets[10].overkill == 200)
+        Check("A heal is not damage", buckets[5].damage == 0 and buckets[6].damage == 0)
+        Check("The peak is the tallest column", peak == 300)
+        Check("Each column knows its newest edge, for the playhead",
+            math.abs(buckets[1].t - 10) < 0.001
+                and math.abs(buckets[10].t - 1) < 0.001)
+        Check("An empty band draws nothing and does not divide by nought",
+            select(2, Replay.Buckets({}, 5, 5, 4)) == 0)
 
         -- The view: zoom 1 is everything, and zooming in follows a centre
         -- without ever running off either end of the story.

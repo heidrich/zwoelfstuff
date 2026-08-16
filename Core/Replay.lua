@@ -87,6 +87,19 @@ local BAR_H, BAR_GAP, BAR_ROWS = 18, 2, 4
 -- and a number left behind after it went would have left the gap behind too.
 local PLOT_BOTTOM = LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP)
 
+-- THE DAMAGE GRAPH, under the defensives lane. Owner, 2026-08-16: "koennte
+-- man hier unterhalb der spell leiste einen graphen einbauen der den dmg
+-- income zeigt? ggf als haken zum aktivieren?" - and then "bau das mal".
+-- Incoming damage over the same seconds as the axis, in as many columns
+-- as fit at a readable width, red for what landed and a lighter cap for
+-- the overkill; it scrolls and zooms with the plot because it is placed by
+-- the same view. A switch beside Zoom shows or hides it, remembered in
+-- the profile, and the window is only as tall as what is on it.
+local GRAPH_TOP = PLOT_BOTTOM + 10
+local GRAPH_H = 56
+local GRAPH_COLS = 72                    -- 10px each across the 720 plot
+local GRAPH_BLOCK = 10 + GRAPH_H + 8      -- what the graph adds to the window
+
 -- Half a second before the first thing happens, so the eye is on the plot
 -- when it starts moving rather than arriving after it.
 local LEAD = 0.5
@@ -152,6 +165,43 @@ function Replay.Fraction(t, from, to)
 end
 
 -- Is this moment on screen at all?
+-- INCOMING DAMAGE, BUCKETED ACROSS THE VISIBLE BAND. Column 1 is the
+-- oldest moment shown (`from`, the left edge), column `count` the newest
+-- (`to`). Each column carries what landed in its slice, its overkill on
+-- top of that, and the newest edge of its slice - so Paint can dim the
+-- columns the playhead has not reached. Heals are not damage and are
+-- skipped. Returns the columns and the tallest one, for the scale.
+function Replay.Buckets(events, from, to, count)
+    from = from or 1
+    to = to or 0
+    count = math.max(1, count or 1)
+    local width = (from - to) / count
+    local out, peak = {}, 0
+    for index = 1, count do
+        out[index] = { damage = 0, overkill = 0,
+            t = from - (index - 1) * width }
+    end
+    if width <= 0 then return out, 0 end
+    for _, ev in ipairs(events or {}) do
+        if not ev.heal and (ev.amount or 0) > 0 then
+            local t = ev.t or 0
+            -- Which column: 0 at the left edge, count-1 at the right. The
+            -- death itself (t = 0 = `to`) lands in the last column.
+            local index = math.floor((from - t) / width) + 1
+            -- The newest edge itself belongs to the last column, not to a
+            -- column past it: t = `to` is exactly the death.
+            if t <= to + 0.0001 then index = count end
+            if index >= 1 and index <= count then
+                local bucket = out[index]
+                bucket.damage = bucket.damage + ev.amount
+                bucket.overkill = bucket.overkill + (ev.overkill or 0)
+                if bucket.damage > peak then peak = bucket.damage end
+            end
+        end
+    end
+    return out, peak
+end
+
 -- The moment under a fraction of the plot's width - the inverse of
 -- Fraction, clamped to the band on screen. 0 is the left edge (`from`,
 -- the oldest moment shown), 1 the right edge (`to`).
@@ -537,8 +587,8 @@ local function BuildMark(parent, kind)
     return mark
 end
 
--- Written further down; the scrub surface built above needs to call it.
-local Paint
+-- Written further down; the scrub surface built above needs to call them.
+local Paint, Place
 
 local function BuildWindow()
     UI = ns.UI
@@ -831,6 +881,47 @@ local function BuildWindow()
     UI.FitRow(zoomRow)
     frame.zoomRow = zoomRow
 
+    -- The switch for the graph, beside Zoom, remembered in the profile.
+    local graphRow = UI.Row(frame, "Graph", { controlWidth = 40 })
+    graphRow:SetPoint("LEFT", zoomRow, "RIGHT", 10, 0)
+    graphRow.rule:Hide()
+    UI.Toggle(graphRow,
+        function() return Replay.GraphWanted() end,
+        function(value)
+            ns.db.death = ns.db.death or {}
+            ns.db.death.replayGraph = value and true or false
+            Replay.Relayout()
+        end)
+    UI.FitRow(graphRow)
+    frame.graphRow = graphRow
+
+    -- THE GRAPH ITSELF: a caption, a baseline, one column per bucket.
+    frame.graphLabel = UI.Eyebrow(frame, "Damage taken")
+    frame.graphLabel:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", PLOT_L,
+        -(GRAPH_TOP - 4))
+
+    frame.graphPeak = UI.Label(frame, "", 10, C.textDim)
+    frame.graphPeak:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
+        -(GRAPH_TOP - 4))
+    frame.graphPeak:SetJustifyH("RIGHT")
+
+    frame.graphBase = frame:CreateTexture(nil, "ARTWORK")
+    frame.graphBase:SetColorTexture(C.line[1], C.line[2], C.line[3], 1)
+    frame.graphBase:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L,
+        -(GRAPH_TOP + GRAPH_H))
+    frame.graphBase:SetSize(PLOT_W, 1)
+
+    frame.graphCols = {}
+    for i = 1, GRAPH_COLS do
+        local col = frame:CreateTexture(nil, "ARTWORK")
+        col:SetColorTexture(0.55, 0.11, 0.11, 0.95)
+        col:Hide()
+        local cap = frame:CreateTexture(nil, "ARTWORK")
+        cap:SetColorTexture(0.85, 0.30, 0.26, 0.95)
+        cap:Hide()
+        frame.graphCols[i] = { bar = col, cap = cap }
+    end
+
     -- THE ONE SENTENCE THIS WINDOW EXISTS TO MAKE UNNECESSARY, said anyway.
     -- The spells in it are spells, so they are drawn the way this game draws
     -- spells: an icon in front of the name and a tooltip on hover. The
@@ -878,9 +969,79 @@ end
 -- Places every mark for one death. Positions do not change while it plays;
 -- only what is lit does, which is what makes the playhead read as time
 -- passing rather than as things appearing out of nowhere.
-local function Place(snapshot, from, to)
+-- Whether the graph is wanted: on until switched off.
+function Replay.GraphWanted()
+    return not (ns.db and ns.db.death and ns.db.death.replayGraph == false)
+end
+
+-- The window is as tall as what is on it: the graph adds its block, and
+-- the playhead runs down through it. Called when the switch moves and
+-- when the window opens.
+function Replay.Relayout()
+    if not frame then return end
+    local on = Replay.GraphWanted()
+    frame:SetHeight(FRAME_H + (on and GRAPH_BLOCK or 0))
+    frame.playhead:SetHeight((on and (GRAPH_TOP + GRAPH_H) or PLOT_BOTTOM)
+        - HEALTH_Y)
+    frame.graphLabel:SetShown(on)
+    frame.graphPeak:SetShown(on)
+    frame.graphBase:SetShown(on)
+    if not on then
+        for _, col in ipairs(frame.graphCols) do
+            col.bar:Hide()
+            col.cap:Hide()
+        end
+    end
+    -- Placed again against the current view, so switching it on mid-replay
+    -- draws it at once rather than on the next scroll.
+    local state = Replay.state
+    if state then
+        Place(state.snapshot, state.viewFrom or state.span, state.viewTo or 0)
+        Paint(math.max(0, state.now))
+    end
+end
+
+-- The graph's columns against the visible band. Pure buckets, drawn.
+local function PlaceGraph(events, from, to)
+    if not Replay.GraphWanted() then return end
+    local buckets, peak = Replay.Buckets(events, from, to, GRAPH_COLS)
+    local colW = PLOT_W / GRAPH_COLS
+    for index, bucket in ipairs(buckets) do
+        local col = frame.graphCols[index]
+        col.t = bucket.t
+        if bucket.damage <= 0 or peak <= 0 then
+            col.bar:Hide()
+            col.cap:Hide()
+        else
+            local x = PLOT_L + (index - 1) * colW
+            local height = math.max(1, GRAPH_H * (bucket.damage / peak))
+            local capH = math.min(height - 1,
+                GRAPH_H * (bucket.overkill / peak))
+            col.bar:ClearAllPoints()
+            col.bar:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", x + 1,
+                -(GRAPH_TOP + GRAPH_H))
+            col.bar:SetSize(math.max(1, colW - 2), height - math.max(0, capH))
+            col.bar:Show()
+            if capH > 0 then
+                col.cap:ClearAllPoints()
+                col.cap:SetPoint("BOTTOMLEFT", col.bar, "TOPLEFT", 0, 0)
+                col.cap:SetSize(math.max(1, colW - 2), capH)
+                col.cap:Show()
+            else
+                col.cap:Hide()
+            end
+        end
+    end
+    frame.graphPeak:SetText(peak > 0
+        and string.format("peak %s per %.1fs", ns.ShortNumber(peak),
+            (from - to) / GRAPH_COLS)
+        or "")
+end
+
+function Place(snapshot, from, to)
     local events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
     local maxHP = snapshot.maxHP
+    PlaceGraph(events, from, to)
 
     -- WHAT CAME IN, above the axis. Heals are skipped rather than filtered
     -- out of the list: the list is Death's, several things read it, and
@@ -1164,6 +1325,16 @@ function Paint(now)
         end
     end
 
+    -- The graph fills in as the line passes: a column whose newest edge is
+    -- still ahead of now is dimmed like a mark that has not happened yet.
+    if Replay.GraphWanted() then
+        for _, col in ipairs(frame.graphCols) do
+            local alpha = (col.t and col.t >= now) and 1 or 0.22
+            col.bar:SetAlpha(alpha)
+            col.cap:SetAlpha(alpha)
+        end
+    end
+
     local _, hp = ns.Death.ReplayAt(state.events, now, state.maxHP)
     local pct = (state.maxHP and state.maxHP > 0)
         and math.max(0, math.min(1, (hp or 0) / state.maxHP)) or 0
@@ -1261,6 +1432,8 @@ function Replay:Open(snapshot)
     frame.playButton.label:SetText("Pause")
     frame.speedRow.Refresh()
     frame.zoomRow.Refresh()
+    frame.graphRow.Refresh()
+    Replay.Relayout()
 
     Replay.state.viewFrom, Replay.state.viewTo = span, 0
     Place(snapshot, span, 0)

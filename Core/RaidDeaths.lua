@@ -1422,12 +1422,16 @@ local function BuildRow(parent)
 
     row.spell = UI.Label(row, "", UI.FS.meta, C.hot)
     row.spell:SetPoint("LEFT", row.killer, "RIGHT", 6, 0)
-    row.spell:SetPoint("RIGHT", row, "RIGHT", -62, 0)
+    row.spell:SetPoint("RIGHT", row, "RIGHT", -70, 0)
     row.spell:SetJustifyH("LEFT")
     row.spell:SetWordWrap(false)
 
+    -- EIGHT IN FROM THE EDGE, like the clock on the left: the hover bed
+    -- ran exactly to the last digit and stopped there (owner, 2026-08-16:
+    -- "die hintergrundfarbe geht genau bis zu den zahlen"), so the row
+    -- read as cut off on the right. The head's caption sits on the same 8.
     row.amount = UI.Label(row, "", UI.FS.meta, C.harm)
-    row.amount:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.amount:SetPoint("RIGHT", row, "RIGHT", -8, 0)
     row.amount:SetJustifyH("RIGHT")
 
     -- THE MOB. There is no client API that turns a creature id into a
@@ -1582,18 +1586,19 @@ local function BuildSideRow(parent, slot)
     row.count:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -3)
     row.count:SetJustifyH("RIGHT")
 
+    -- THE GUIDE'S TILE, a column of its own down the right, row-high and
+    -- in its true shape - the death window's rows carry the same. It opens
+    -- the guide; the row underneath still opens the pull.
+    row.art = ns.Death.CreatePlaceArt(row)
+    row.art:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
     row.where = UI.Label(row, "", UI.FS.meta, C.textFaint)
     row.where:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
-    row.where:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.where:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
     row.where:SetJustifyH("LEFT")
     row.where:SetWordWrap(false)
 
-    -- THE PLACE, NAMED, with the guide's tile beside it - the death
-    -- window's rows carry the same third line. The tile opens the guide.
-    row.art = ns.Death.CreatePlaceArt(row)
-    row.art:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -6, 4)
-
-    row.place = UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.place = UI.Label(row, "", UI.FS.meta, C.accentCool)
     row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
     row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
     row.place:SetJustifyH("LEFT")
@@ -1710,7 +1715,7 @@ function RaidDeaths:Create()
     frame.headWhat = UI.Eyebrow(head, "With what")
     frame.headWhat:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 428, 0)
     frame.headAmount = UI.Eyebrow(head, "Damage")
-    frame.headAmount:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, 0)
+    frame.headAmount:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", -8, 0)
 
     local headRule = head:CreateTexture(nil, "ARTWORK")
     headRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
@@ -2768,13 +2773,17 @@ function RaidDeaths.PaintSideList()
             end
             row.where:SetText(line)
             row.place:SetText(fight.instance or "")
+            local drawn = row.art.Paint(fight.journal)
+            local edge = drawn and row.art or row
+            row.count:ClearAllPoints()
+            row.count:SetPoint("TOPRIGHT", edge, drawn and "TOPLEFT" or "TOPRIGHT",
+                -6, drawn and -2 or -3)
+            row.where:ClearAllPoints()
+            row.where:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
+            row.where:SetPoint("RIGHT", edge, drawn and "LEFT" or "RIGHT", -6, 0)
             row.place:ClearAllPoints()
             row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
-            if row.art.Paint(fight.journal) then
-                row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
-            else
-                row.place:SetPoint("RIGHT", row, "RIGHT", -6, 0)
-            end
+            row.place:SetPoint("RIGHT", edge, drawn and "LEFT" or "RIGHT", -6, 0)
 
             -- Nothing in this column is selected while the evening's page is
             -- open: two accent bars would claim the window is showing both.

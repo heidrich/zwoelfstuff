@@ -96,6 +96,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   so the press sat in the rotation row of the replay while the log called
   the stone ready and unused. It is recognised by name as well as by spell
   now, and gets its bar in the defensives lane.
+- **The replay draws the damage you took as a graph** under the defensives
+  lane — one column per slice of the visible seconds, red for what landed and
+  a lighter cap for the overkill, scrolling and zooming with the plot and
+  filling in as the line passes. A **Graph** switch beside Zoom hides it,
+  remembered per profile.
 - **The replay has the same panel down its left**, in place of the
   *"Defensives used:"* strip under the plot. **Left button held over the plot
   scrubs**: the yellow line goes where the hand goes, the replay pauses under
@@ -115,8 +120,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **The side lists name the place and show it.** Every death in the death
   window's list, and every pull in the group log's, carries a third line:
   the dungeon or raid by name with the Adventure Guide's own tile beside it
-  — **click the tile and the guide opens on that instance.** The tile sits
-  in the death window's header too. The columns grew wider for it, the rows
+  — **click the tile and the guide opens on that instance.** The tile is a
+  column of its own, as tall as the row and in its true shape; the name is
+  in the blue every place in the addon wears. The tile sits in the death
+  window's header too. The columns grew wider for it, the rows
   taller, and every line in them is one size. Recorded from now on: an older
   entry knows only "Dungeon".
 - **A group death opened from the log** shows the mob's face and the
