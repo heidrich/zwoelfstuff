@@ -322,6 +322,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **`/zs test` no longer fails during a fight.** Five checks moved real key
+  bindings or asserted a bar "waiting for combat" — run *in* combat, the game
+  refuses the former and grants the latter, and all five went red on a
+  healthy client. The binding checks now say "not checked: in combat" like
+  every other check that needs a world it is not in, and the combat-bar
+  fixture waits for whichever combat state you are not currently in.
 - **The white line to the right of a bar was the spark.** Twelve pixels wide,
   blended bright, hung by its **centre** on the fill's leading edge — so six of
   them stood outside the bar, always on the same side, which is the shape of a

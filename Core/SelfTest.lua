@@ -888,8 +888,15 @@ local function TestVisibility()
     Check("'Never' is settled enough for the list",
         ns.Visibility:Fixed(never) ~= nil)
 
+    -- WAITING FOR THE COMBAT STATE WE ARE NOT IN. Written as a literal "in"
+    -- it asserted the world: run during a fight, a bar waiting for combat IS
+    -- on screen, Explain answers nil, and the check went red on a healthy
+    -- client - his paste, five reds, all of them combat. The fixture now
+    -- waits for whichever state is not the current one, which is the same
+    -- claim in both worlds.
     local pull = Fresh()
-    pull.show.mode, pull.show.combat = "rules", "in"
+    pull.show.mode = "rules"
+    pull.show.combat = (InCombatLockdown and InCombatLockdown()) and "out" or "in"
     Check("A bar waiting for combat is explained but not badged",
         ns.Visibility:Explain(pull) ~= nil and ns.Visibility:Fixed(pull) == nil)
 
@@ -6238,7 +6245,14 @@ local function TestAnswers()
     -- screen, and the screen is right there.
     ---------------------------------------------------------------------
     Check("There is a key mode", ns.Keys ~= nil)
-    if ns.Keys then
+    -- NOT DURING A FIGHT. Every line below moves real bindings, and the game
+    -- refuses that in combat - Keys.Bind answers nil, SetActive stands down,
+    -- and four checks went red on a healthy client (his paste). A test that
+    -- can only pass out of combat says so instead of failing.
+    if ns.Keys and InCombatLockdown and InCombatLockdown() then
+        Skip("Binding a key to a place",
+            "in combat - the game does not allow a key to move during a fight")
+    elseif ns.Keys then
         local binding = ns.Externals.BindingName(1)
         local kept = ns.Keys.Current(binding)
         ns.Keys.Clear(binding)
