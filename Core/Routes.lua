@@ -108,7 +108,6 @@ end
 
 Routes.pulls = {}
 Routes.byNpc = {}          -- npcID -> { pull = index, want = how many }
-Routes.killed = {}         -- npcID -> how many have died this run
 Routes.nameToNpc = {}      -- what the mob is called -> its npcID
 Routes.spellToNpc = {}     -- a spell only one enemy here casts -> its npcID
 Routes.plateNpc = {}       -- nameplate unit -> the npcID we worked out for it
@@ -618,47 +617,20 @@ end
 ---------------------------------------------------------------------------
 -- Progress
 --
--- A pull is finished when everything it wanted has died. The count comes off
--- the combat log, which is the only thing that reports a death we did not
--- have targeted.
+-- THE COMBAT LOG IS SHUT. Measured 2026-08-16 (12.1, /zs route events):
+-- the client REFUSES an addon's RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+-- - ADDON_ACTION_FORBIDDEN, pinned to that one name, while every other
+-- event this file registers went through. RaiderIO's own source carries the
+-- same finding ("started to error upon 12.0 release"). So a death we did
+-- not have targeted cannot be counted here, and the kill counter that
+-- lived in this section - Routes:NoteKill off UNIT_DIED - is gone with its
+-- only feeder. What is left is the game's own forces counter below, which
+-- only exists in a keystone; outside one the pull is stepped by hand.
 --
--- ADVANCING IS A SUGGESTION, NOT A LAW. It moves on by itself when the pull
--- is clear, and the panel has arrows, because a route survives contact with a
--- wipe about as well as any other plan.
+-- ADVANCING IS A SUGGESTION, NOT A LAW. It moves on by itself when the
+-- counter says the pull is clear, and the panel has arrows, because a route
+-- survives contact with a wipe about as well as any other plan.
 ---------------------------------------------------------------------------
-function Routes:NoteKill(npcID)
-    if not npcID then return end
-    self.killed[npcID] = (self.killed[npcID] or 0) + 1
-
-    local db = ns.db and ns.db.routes
-    if not (db and db.autoAdvance) then return end
-
-    -- IN A KEYSTONE THE FORCES COUNTER IS THE AUTHORITY, and it is already
-    -- stepping the route on. Counting deaths as well would advance twice for
-    -- one pull and skip the next one. lastForces is only ever set by a
-    -- reading that worked, so its presence IS "there is a counter here".
-    if self.lastForces ~= nil then return end
-
-    local pull = self:Current()
-    if not pull then return end
-
-    for id, want in pairs(pull.npcs) do
-        if (self.killed[id] or 0) < want then return end
-    end
-
-    -- Everything this pull asked for is down. The kills are NOT wiped: the
-    -- same mob type in a later pull is counted from zero for that pull, which
-    -- would be wrong, so each pull is measured against the running total it
-    -- inherited.
-    for id, want in pairs(pull.npcs) do
-        self.killed[id] = (self.killed[id] or 0) - want
-    end
-    if self.index < #self.pulls then
-        self.index = self.index + 1
-        self:Sweep()
-    end
-end
-
 ---------------------------------------------------------------------------
 -- PROGRESS THE WAY THE GAME COUNTS IT
 --
@@ -793,7 +765,6 @@ function Routes:NoteForces(fraction)
 end
 
 function Routes:ResetRun()
-    wipe(self.killed)
     self.index = 1
     self.forcesAccum = 0
     self.lastForces = nil
@@ -823,13 +794,12 @@ end
 --
 -- The first login with Routes back (2026-08-16, his profile still holding
 -- `enabled` from 4.4x) met eleven ADDON_ACTION_FORBIDDEN errors out of this
--- registration loop - the client refuses at least one of these on 12.1, and
--- pcall does not catch a refusal, it only loses the name ("UNKNOWN()"). So:
--- the combat log and the cast events, which are what a 12.x client is
--- most likely to guard, are NOT registered here. Routes:Listen tries them,
--- names them one at a time, and reports which one the client refused - and
--- until it says yes, the sweep runs without them (kills are then counted
--- off the forces counter alone, and the cast door stays shut).
+-- registration loop; pcall does not catch a refusal, it only loses the name
+-- ("UNKNOWN()"). /zs route events then named the door the same evening:
+-- COMBAT_LOG_EVENT_UNFILTERED is refused on 12.1, the cast events are not.
+-- So the log is not registered anywhere in this file any more, and the
+-- cast events are the one door left - Routes:Listen knocks on them and
+-- reports whether the spell id that arrives is readable.
 Routes.SWEEP_EVENTS = {
     "NAME_PLATE_UNIT_ADDED",
     "NAME_PLATE_UNIT_REMOVED",
@@ -844,7 +814,6 @@ Routes.SWEEP_EVENTS = {
     "SCENARIO_CRITERIA_UPDATE",
 }
 Routes.DOOR_EVENTS = {
-    "COMBAT_LOG_EVENT_UNFILTERED",
     "UNIT_SPELLCAST_START",
     "UNIT_SPELLCAST_CHANNEL_START",
     "UNIT_SPELLCAST_SUCCEEDED",
@@ -880,27 +849,6 @@ function Routes:Start()
                 Routes.plateNpc[unit] = npcID
                 Routes:Sweep()
             end
-            return
-        end
-
-        if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-            -- Guarded like every other client call in this addon: the desktop
-            -- harness has no combat log, and a missing global must cost this
-            -- one feature rather than the file.
-            if not CombatLogGetCurrentEventInfo then return end
-            -- destName comes along for the same reason the nameplates need
-            -- it: the GUID in a combat log line can be withheld too, and a
-            -- kill that cannot be counted is a pull that never finishes.
-            local _, subEvent, _, _, _, _, _, destGUID, destName =
-                CombatLogGetCurrentEventInfo()
-            if subEvent ~= "UNIT_DIED" then return end
-
-            local npcID = Routes.NpcFromGUID(destGUID)
-            if not npcID and ns.CanCompute(destName)
-                and type(destName) == "string" then
-                npcID = Routes.nameToNpc[destName]
-            end
-            Routes:NoteKill(npcID)
             return
         end
 
@@ -1119,11 +1067,11 @@ function Routes:Probe()
     ---------------------------------------------------------------------
     ns.Print("|cffffd100the other doors|r")
 
-    -- UnitTokenFromGUID: the combat log names a source by GUID; if that GUID
-    -- is readable and this call answers "nameplate3", the plate is joined
-    -- to the mob without UnitGUID ever being asked.
+    -- UnitTokenFromGUID would join a combat-log source to its plate without
+    -- UnitGUID ever being asked - and the combat log is refused outright on
+    -- this patch (see the head of Progress), so it has nothing to answer.
     ns.Print("   UnitTokenFromGUID " .. (type(UnitTokenFromGUID) == "function"
-        and "|cff40ff40exists|r - answered below when the log speaks"
+        and "|cff888888exists, but the combat log it would read is refused|r"
         or "|cff888888no api|r"))
 
     -- The tooltip: what the client would show you on hover.
@@ -1179,12 +1127,12 @@ function Routes:Listen(seconds)
     local f = self.listener or CreateFrame("Frame")
     self.listener = f
     local said, left = 0, seconds or 20
-    local seenSource, seenCast = {}, {}
+    local seenCast = {}
 
-    ns.Print(string.format("|cffffd100listening for %d seconds|r - pull something, "
-        .. "or wait for a cast", left))
+    ns.Print(string.format("|cffffd100listening for %d seconds|r for a cast on a "
+        .. "nameplate - pull something that casts", left))
 
-    -- The four doors, ONE AT A TIME with a beat between them, and the
+    -- The cast doors, ONE AT A TIME with a beat between them, and the
     -- client's refusal - ADDON_ACTION_FORBIDDEN, delivered as an event of
     -- its own - is caught here and pinned to the name registered last. That
     -- is the only way to learn WHICH event the client guards: pcall does
@@ -1217,32 +1165,8 @@ function Routes:Listen(seconds)
             return
         end
         if said >= LISTEN_LINES then return end
-        if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-            if not CombatLogGetCurrentEventInfo then return end
-            local _, sub, _, srcGUID, srcName, srcFlags = CombatLogGetCurrentEventInfo()
-            -- Hostile NPCs only: the bit test needs a readable flags value.
-            local hostile = ns.CanCompute(srcFlags) and type(srcFlags) == "number"
-                and COMBATLOG_OBJECT_REACTION_HOSTILE
-                and bit.band(srcFlags, COMBATLOG_OBJECT_REACTION_HOSTILE) ~= 0
-            if not hostile then return end
-            local key = ns.CanCompute(srcGUID) and type(srcGUID) == "string"
-                and srcGUID or (ns.CanCompute(srcName) and srcName) or sub
-            if seenSource[key] then return end
-            seenSource[key] = true
-            said = said + 1
-            local token = "|cff888888-|r"
-            if type(UnitTokenFromGUID) == "function" and ns.CanCompute(srcGUID)
-                and type(srcGUID) == "string" then
-                token = Ask(UnitTokenFromGUID, srcGUID)
-            end
-            local npc = Routes.NpcFromGUID(srcGUID)
-            ns.Print(string.format("   log %s: guid %s  name %s  token %s  npc %s%s",
-                tostring(sub), Describe(true, srcGUID), Describe(true, srcName),
-                token, tostring(npc or "-"),
-                npc and self.byNpc[npc] and " |cff40ff40in the route|r" or ""))
-            return
-        end
-        -- A cast on a nameplate unit.
+        -- A cast on a nameplate unit - the one door left (the combat log
+        -- is refused outright, see the head of Progress).
         if type(unit) ~= "string" or not unit:match("^nameplate") then return end
         local id = ns.CanCompute(spellID) and type(spellID) == "number" and spellID
             or nil
@@ -1381,15 +1305,15 @@ function Routes:Dump()
     local pull = self:Current()
     if pull then
         for npcID, want in pairs(pull.npcs) do
-            ns.Print(string.format("   %s |cff888888%d|r  x%d, %d killed",
-                pull.names[npcID] or "?", npcID, want, self.killed[npcID] or 0))
+            ns.Print(string.format("   %s |cff888888%d|r  x%d",
+                pull.names[npcID] or "?", npcID, want))
         end
     end
 
-    -- WHICH OF THE TWO WAYS OF MEASURING PROGRESS IS ALIVE. In a keystone the
+    -- WHETHER THE ONE WAY OF MEASURING PROGRESS IS ALIVE. In a keystone the
     -- game's own forces counter drives the route on; outside one there is no
-    -- such counter and deaths are counted instead. They are never both on,
-    -- and which one it is changes what "it did not advance" means.
+    -- such counter, and no kill count either (the combat log is refused), so
+    -- "it did not advance" there means: step it yourself.
     local fraction, readAs = self:ForcesFraction()
     if fraction then
         local share = self:PullShare(pull)
@@ -1399,8 +1323,8 @@ function Routes:Dump()
             share and string.format("%.1f%%", share * 100) or "?",
             string.format("%.1f%%", (self.forcesAccum or 0) * 100)))
     else
-        ns.Print(string.format("Forces: |cff888888none - %s.|r Pulls step on "
-            .. "by counting kills here.", tostring(readAs)))
+        ns.Print(string.format("Forces: |cff888888none - %s.|r Step the pull "
+            .. "by hand here (|cffffd100/zs route next|r).", tostring(readAs)))
     end
 
     -- The SAME walk the sweep does. A diagnostic that finds its nameplates a

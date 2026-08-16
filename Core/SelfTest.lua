@@ -10699,9 +10699,15 @@ local function TestRoutes()
     do
         local sweep = {}
         for _, e in ipairs(R.SWEEP_EVENTS) do sweep[e] = true end
-        Check("The sweep does not register the combat log or the cast events itself",
-            not sweep.COMBAT_LOG_EVENT_UNFILTERED and not sweep.UNIT_SPELLCAST_START
-            and sweep.NAME_PLATE_UNIT_ADDED and #R.DOOR_EVENTS == 4)
+        -- The combat log is REFUSED on 12.1 (measured 2026-08-16), so
+        -- nothing in the file registers it any more; the cast events are
+        -- the doors the listener knocks on.
+        local doors = {}
+        for _, e in ipairs(R.DOOR_EVENTS) do doors[e] = true end
+        Check("Nothing registers the combat log; the sweep keeps its plates and the doors are the casts",
+            not sweep.COMBAT_LOG_EVENT_UNFILTERED and not doors.COMBAT_LOG_EVENT_UNFILTERED
+            and not sweep.UNIT_SPELLCAST_START and doors.UNIT_SPELLCAST_START
+            and sweep.NAME_PLATE_UNIT_ADDED and #R.DOOR_EVENTS == 3)
         local ok, why = R.Register(nil, "X")
         Check("Registering on nothing says no without raising", ok == false and why == nil)
     end
