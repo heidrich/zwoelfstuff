@@ -241,6 +241,38 @@ function Fill.Direction(bar, index)
     return ns.Layout.FillDirection(named)
 end
 
+-- WHICH TWO COLOURS GO INTO THE RAMP, AND IN WHICH ORDER. PURE.
+--
+-- Split out of the painting because it is a DECISION, and the decision was
+-- wrong for months in a way no check could see: a flat look put white at both
+-- ends, on the reasoning that white multiplies to one. It does not multiply -
+-- it replaces - so every bar with a flat colour drew white, and the first
+-- evidence was a screenshot. There is no GetGradient in this API, so the only
+-- way this is ever askable again is to ask it before it reaches a texture.
+--
+-- Returns orientation, the near colour, the far colour and the alpha. A flat
+-- look is the SAME colour at both ends, which is what "no ramp" has to look
+-- like on a texture that cannot have its ramp removed.
+function Fill.Ramp(colour, alpha, gradient)
+    colour = type(colour) == "table" and colour or {}
+    local r = colour[1] or 1
+    local g = colour[2] or 1
+    local b = colour[3] or 1
+
+    local orientation, swap = "HORIZONTAL", false
+    local one, two = { r, g, b }, { r, g, b }
+
+    if gradient and gradient.on then
+        orientation, swap = ns.Layout.GradientOrder(gradient.direction)
+        local far = gradient.color
+        two = type(far) == "table" and { far[1] or 1, far[2] or 1, far[3] or 1 }
+            or { r, g, b }
+    end
+    if swap then one, two = two, one end
+
+    return orientation, one, two, tonumber(alpha) or 1
+end
+
 -- THE STACK THRESHOLDS, CLEANED UP AND SORTED ASCENDING.
 --
 -- Ascending is not a tidiness preference: the order IS the draw order, because
@@ -432,47 +464,50 @@ local rampA, rampB = ColourObject(), ColourObject()
 -- here is load-bearing: texture, then white, then the ramp, and nothing may set
 -- the bar colour after this point."
 --
--- A FLAT LOOK STILL SETS A RAMP, and that is the one thing added to the old
--- shape. Media.lua:322-327 measured the other half of it: "There is no
--- ClearGradient and SetVertexColor does NOT undo a gradient: once a texture has
--- one it keeps it." Switching the gradient off would otherwise leave yesterday's
--- ramp multiplying today's colour, on a bar we are not allowed to rebuild. White
--- at both ends multiplies to one, so a white ramp is what "no ramp" looks like -
--- and it is the same picture Claim's own undo for SetGradient hands back.
+-- A FLAT LOOK IS A RAMP OF ONE COLOUR, AND THAT IS NOW MEASURED.
 --
--- THOSE TWO COMMENTS CANNOT BOTH BE RIGHT and both are written as measurements.
--- It is not blocking, because this shape is correct under either reading, but
--- the pair wants measuring in his client before anybody trusts either sentence.
+-- Two comments used to stand here and they contradicted each other. One said a
+-- gradient MULTIPLIES the vertex colour, so a bar carrying a flat tint would
+-- come out tint-times-ramp. The other said white at both ends multiplies to
+-- one, so a white ramp is what "no ramp" looks like. This file said so out
+-- loud - "those two comments cannot both be right and both are written as
+-- measurements" - and left it, because the shape was correct under either
+-- reading.
+--
+-- IT WAS NOT. Owner, first screenshot of a bar we draw ourselves: a tracking
+-- bar filled edge to edge in PURE WHITE, with a fill colour set on it.
+--
+-- So SetGradient REPLACES the vertex colour rather than multiplying it, and
+-- the flat path was setting the colour and then wiping it one line later. The
+-- bar had been white ever since a ramp was written unconditionally; on
+-- Blizzard's adopted bar the same two calls ran and the same thing happened,
+-- which is a good part of "die Farb vorschauen sind alle kacke".
+--
+-- MEDIA.LUA HAD IT RIGHT ALL ALONG. ns.Tint sets the vertex colour to white
+-- and puts the COLOUR at both ends of the ramp - a ramp of one colour - and it
+-- has been drawing every backdrop in the addon that way for months. This was
+-- the second copy of that idea and it had drifted, which is the lesson this
+-- project has now paid for three times.
+--
+-- WRITTEN TO BE RIGHT UNDER BOTH READINGS ANYWAY. White times a colour is that
+-- colour, and white replaced by a colour is that colour - so setting the bar
+-- to white and letting the ramp carry everything cannot be wrong whichever way
+-- the engine composes them.
 --
 -- Returns the fill's texture object, which the spark and the overlays anchor to.
 -- `Put` is the writer: Claim.Set on a frame Blizzard owns, a plain call on one
 -- of ours. Handed in rather than decided here, because Dress already knows the
 -- answer and asking twice is two answers to one question.
 local function Paint(Put, fill, colour, alpha, gradient)
-    local r = colour[1] or 1
-    local g = colour[2] or 1
-    local b = colour[3] or 1
-    local ramping = (gradient and gradient.on) and true or false
-
-    if ramping then
-        Put(fill, "SetStatusBarColor", 1, 1, 1, 1)
-    else
-        Put(fill, "SetStatusBarColor", r, g, b, alpha)
-    end
+    -- WHITE, ALWAYS. The colour lives in the ramp from here on, and a bar
+    -- colour left underneath it is either ignored or multiplied in twice.
+    Put(fill, "SetStatusBarColor", 1, 1, 1, 1)
 
     local texture = type(fill.GetStatusBarTexture) == "function"
         and fill:GetStatusBarTexture() or nil
     if type(texture) ~= "table" then return nil end
 
-    local orientation, swap = "HORIZONTAL", false
-    local one, two, opacity = { 1, 1, 1 }, { 1, 1, 1 }, 1
-
-    if ramping then
-        orientation, swap = ns.Layout.GradientOrder(gradient.direction)
-        two = gradient.color or colour
-        one, opacity = { r, g, b }, alpha
-    end
-    if swap then one, two = two, one end
+    local orientation, one, two, opacity = Fill.Ramp(colour, alpha, gradient)
 
     rampA.r, rampA.g, rampA.b, rampA.a = one[1], one[2], one[3], opacity
     rampB.r, rampB.g, rampB.b, rampB.a = two[1], two[2], two[3], opacity

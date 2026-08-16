@@ -74,6 +74,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   - **What that gives you back:** the name, the stack count, the charge count
     and the remaining time all on one bar, at the size, colour, texture,
     typeface and position you set, with the fill exactly as tall as the bar.
+  - **Fixed: a flat fill colour drew as pure white.** A bar with no gradient
+    was being given a white-to-white ramp on top of its colour, and that ramp
+    replaces the colour rather than tinting it. Every flat fill in the addon
+    has been white since the ramp was added. A flat look is now the same colour
+    at both ends, which is what it always should have been.
   - **Still not there: "Fill up" on a tracking bar.** Making a borrowed value
     grow instead of drain means arithmetic on a protected number. It is left
     switched off rather than half-wired; the setting is not offered.

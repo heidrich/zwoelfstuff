@@ -8353,6 +8353,38 @@ local function TestCooldownOwn()
             and Text.StackToShow(nil, 1, true) == nil)
 
     ---------------------------------------------------------------------
+    -- A FLAT FILL IS A RAMP OF ONE COLOUR
+    --
+    -- It used to be white at both ends, on the reasoning that white
+    -- multiplies to one. SetGradient REPLACES the vertex colour, so every
+    -- flat bar in the addon drew pure white - and the first evidence was a
+    -- photograph of one, because there is no GetGradient to ask.
+    ---------------------------------------------------------------------
+    local Fill = ns.Cooldowns.Fill
+    local _, near, far, opacity = Fill.Ramp({ 1, 0, 0 }, 0.85, nil)
+    Check("A flat fill puts its own colour at BOTH ends, never white",
+        near[1] == 1 and near[2] == 0 and far[1] == 1 and far[2] == 0,
+        string.format("%s,%s,%s to %s,%s,%s", tostring(near[1]),
+            tostring(near[2]), tostring(near[3]), tostring(far[1]),
+            tostring(far[2]), tostring(far[3])))
+    Check("and carries the alpha it was given", opacity == 0.85,
+        tostring(opacity))
+
+    local orientation, one, two = Fill.Ramp({ 1, 0, 0 }, 1,
+        { on = true, color = { 0, 0, 1 }, direction = "right" })
+    Check("A real ramp still runs from the fill colour to the second one",
+        one[1] == 1 and two[3] == 1 and orientation == "HORIZONTAL",
+        string.format("%s -> %s", tostring(one[1]), tostring(two[3])))
+
+    -- AND THE SWAP IS A SWAP OF THE PAIR, not of the orientation only: a ramp
+    -- that runs the other way is the same two colours in the other order.
+    local _, back, front = Fill.Ramp({ 1, 0, 0 }, 1,
+        { on = true, color = { 0, 0, 1 }, direction = "left" })
+    Check("and the other direction is the same pair, reversed",
+        back[3] == 1 and front[1] == 1,
+        string.format("%s -> %s", tostring(back[3]), tostring(front[1])))
+
+    ---------------------------------------------------------------------
     -- AND NOW ONE, DRAWN, THROUGH THE WHOLE RENDER PASS
     ---------------------------------------------------------------------
     for _, viewer in ipairs(ns.CDM.VIEWERS) do
@@ -8433,6 +8465,10 @@ local function TestCooldownOwn()
         spacing = 4, lineSpacing = 4,
         layout = "grid", flow = "rows", growX = "right", growY = "down",
         point = "CENTER", relPoint = "CENTER", x = 0, y = -300, scale = 1,
+        -- A COLOUR NOTHING ELSE IN THE FIXTURE IS, so "did the colour arrive"
+        -- and "did anything at all arrive" are different answers.
+        fillColor = { 1, 0, 0 }, fillAlpha = 0.85,
+        fillTexture = "ZS Flat",
         cells = { 77535 },
     } }
 
@@ -8522,6 +8558,58 @@ local function TestCooldownOwn()
         Check("against Blizzard's own scale",
             low == 0 and high == 30,
             string.format("%s..%s", tostring(low), tostring(high)))
+
+        -- AND THE COLOUR REALLY LANDED ON THE TEXTURE.
+        --
+        -- The rule above is asked of the pure function and holds everywhere.
+        -- This asks the WIRING - that Paint actually hands that pair to the
+        -- texture - and it can only be asked at a desk, because this API has
+        -- no way to read a gradient back. Skipped rather than quietly passed
+        -- in his client: "the rule is right" and "the rule reached the screen"
+        -- have been different answers twice in this file's history.
+        -- WHETHER THIS CLIENT CAN BE ASKED IS PROBED, NOT ASSUMED.
+        --
+        -- The first draft read the ramp back and skipped when there was none,
+        -- and the red proof caught it: a Paint that wrote NO gradient at all
+        -- printed the same "cannot ask" as a client with no way to read one.
+        -- Absent and passing again, which is the fault this whole file keeps
+        -- being written against.
+        --
+        -- So a texture of ours is given a known ramp first. If that reads
+        -- back, an empty answer on the fill means NOTHING WAS WRITTEN and is a
+        -- failure. Kept on the cell rather than made per run: nothing in this
+        -- API destroys a texture, and the cell comes back from Render's own
+        -- pool on every later run.
+        local probe = cell.dkProbe
+        if not probe then
+            probe = cell:CreateTexture()
+            cell.dkProbe = probe
+        end
+        if probe.SetGradient then
+            pcall(probe.SetGradient, probe, "HORIZONTAL",
+                { r = 1, g = 0, b = 0, a = 1 }, { r = 1, g = 0, b = 0, a = 1 })
+        end
+
+        if type(rawget(probe, "hxGradient")) == "table" then
+            local painted = own.fill:GetStatusBarTexture()
+            local ramp = type(painted) == "table"
+                and rawget(painted, "hxGradient") or nil
+
+            Check("The fill was given a ramp at all", ramp ~= nil)
+            if ramp then
+                Check("with the fill's colour at BOTH ends rather than white",
+                    ramp.from[1] == 1 and ramp.from[2] == 0
+                        and ramp.from[3] == 0
+                        and ramp.to[1] == 1 and ramp.to[2] == 0,
+                    string.format("%s,%s,%s", tostring(ramp.from[1]),
+                        tostring(ramp.from[2]), tostring(ramp.from[3])))
+                Check("and the fill's own alpha on it", ramp.from[4] == 0.85,
+                    tostring(ramp.from[4]))
+            end
+        else
+            Skip("The fill colour reaches the texture",
+                "this client cannot read a gradient back")
+        end
 
         -- AND FILL.LUA IS DRESSING OURS, not looking for one of theirs. The
         -- whole reason this file draws no texture and no spark of its own.
