@@ -31,6 +31,21 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.84.0",
+        date = "2026-08-16",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Map_01",
+                text = "|cffffd100Routes, back as an experiment.|r Off by "
+                    .. "default; |cffffd100/zs route on|r reads the pull you "
+                    .. "planned in Mythic Dungeon Tools and badges the mobs, "
+                    .. "|cffffd100/zs route probe|r asks this client every "
+                    .. "question about a mob at once. What it answers decides "
+                    .. "whether this becomes a feature.",
+            },
+        },
+    },
+    {
         version = "4.83.0",
         date = "2026-08-16",
         lines = {

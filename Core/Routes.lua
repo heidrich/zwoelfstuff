@@ -1,6 +1,18 @@
 ---------------------------------------------------------------------------
 -- Routes - your Mythic Dungeon Tools pull, marked on the mobs themselves
 --
+-- BACK FROM THE BENCH AS AN EXPERIMENT, 2026-08-16 (4.84.0), off by default.
+-- Parked 2026-08-09 after one dungeon said no to every door this file
+-- knocks on: UnitGUID, UnitName, the plate's own text - withheld; the
+-- player's own position - nil (the old anti-bot rule in instances, not the
+-- secret system). What is PROVEN to work is reading MDT's route (dungeon by
+-- zone, pulls, colours) and the forces counter; what was never measured is
+-- the cast door and the doors that did not exist then. /zs route probe now
+-- asks all of them at once, and /zs route test proves the drawing. Owner:
+-- "bau doch mal was und ich stell mich in den dungeon". The compass and
+-- transform ideas of ROUTES-PLAN.md are struck through by that same
+-- measurement - see its head note.
+--
 -- NOT GATED ON A KEYSTONE, and that is deliberate rather than an oversight.
 -- A normal dungeon holds the same mobs with the same npcIDs as the timed one,
 -- so a route marks them just as well - and MDT has data for raids too. The
@@ -1068,6 +1080,134 @@ function Routes:Probe()
     if shown == 0 then
         ns.Print("No nameplates. Stand in front of a pack and run it again.")
     end
+
+    ---------------------------------------------------------------------
+    -- THE DOORS THAT DID NOT EXIST IN 4.40, OR WERE NEVER KNOCKED ON.
+    -- Each is a possible join between a live mob and MDT's list without
+    -- reading the unit's own GUID or name.
+    ---------------------------------------------------------------------
+    ns.Print("|cffffd100the other doors|r")
+
+    -- UnitTokenFromGUID: the combat log names a source by GUID; if that GUID
+    -- is readable and this call answers "nameplate3", the plate is joined
+    -- to the mob without UnitGUID ever being asked.
+    ns.Print("   UnitTokenFromGUID " .. (type(UnitTokenFromGUID) == "function"
+        and "|cff40ff40exists|r - answered below when the log speaks"
+        or "|cff888888no api|r"))
+
+    -- The tooltip: what the client would show you on hover.
+    local firstUnit
+    self:ForEachPlate(function(unit) firstUnit = firstUnit or unit end)
+    if firstUnit and C_TooltipInfo and C_TooltipInfo.GetUnit then
+        local ok, data = pcall(C_TooltipInfo.GetUnit, firstUnit)
+        local line = ok and type(data) == "table" and type(data.lines) == "table"
+            and data.lines[1] or nil
+        ns.Print("   tooltip line 1    " .. (line
+            and Describe(true, line.leftText) or Describe(ok, data)))
+        ns.Print("   tooltip guid      " .. (ok and type(data) == "table"
+            and Describe(true, data.guid) or "|cff888888-|r"))
+    else
+        ns.Print("   tooltip           |cff888888no plate or no api|r")
+    end
+
+    -- The engine's own projection of a tracked point, and a real distance.
+    if C_Navigation then
+        ns.Print("   C_Navigation      frame " .. Ask(C_Navigation.GetFrame)
+            .. "  distance " .. Ask(C_Navigation.GetDistance)
+            .. "  on screen " .. Ask(C_Navigation.HasValidScreenPosition))
+    else
+        ns.Print("   C_Navigation      |cff888888no api|r")
+    end
+    if C_Map and C_Map.CanSetUserWaypointOnMap then
+        ns.Print("   waypoint on map   " .. Ask(C_Map.CanSetUserWaypointOnMap, best or 0))
+    end
+    if C_SuperTrack and C_SuperTrack.IsSuperTrackingAnything then
+        ns.Print("   super-tracking    " .. Ask(C_SuperTrack.IsSuperTrackingAnything))
+    end
+
+    -- And now the questions only TIME can answer: what the combat log says
+    -- about a hostile source, and what a nameplate says when it casts.
+    self:Listen(20)
+end
+
+---------------------------------------------------------------------------
+-- LISTEN FOR TWENTY SECONDS. The combat log and a cast are moments, not
+-- states; the probe above reads a state. This arms one frame, prints the
+-- first few things it hears about hostile sources - is the GUID readable,
+-- is the name, does UnitTokenFromGUID hand back a nameplate, is a cast's
+-- spell id readable and is it one of this dungeon's - and goes away again.
+-- Every value goes through Describe, so a secret one prints as "withheld"
+-- rather than raising in the handler.
+---------------------------------------------------------------------------
+local LISTEN_LINES = 8
+function Routes:Listen(seconds)
+    if self.listener then
+        self.listener:UnregisterAllEvents()
+        self.listener:SetScript("OnUpdate", nil)
+    end
+    local f = self.listener or CreateFrame("Frame")
+    self.listener = f
+    local said, left = 0, seconds or 20
+    local seenSource, seenCast = {}, {}
+
+    ns.Print(string.format("|cffffd100listening for %d seconds|r - pull something, "
+        .. "or wait for a cast", left))
+
+    pcall(f.RegisterEvent, f, "COMBAT_LOG_EVENT_UNFILTERED")
+    pcall(f.RegisterEvent, f, "UNIT_SPELLCAST_START")
+    pcall(f.RegisterEvent, f, "UNIT_SPELLCAST_CHANNEL_START")
+    pcall(f.RegisterEvent, f, "UNIT_SPELLCAST_SUCCEEDED")
+
+    f:SetScript("OnEvent", function(_, event, unit, _, spellID)
+        if said >= LISTEN_LINES then return end
+        if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+            if not CombatLogGetCurrentEventInfo then return end
+            local _, sub, _, srcGUID, srcName, srcFlags = CombatLogGetCurrentEventInfo()
+            -- Hostile NPCs only: the bit test needs a readable flags value.
+            local hostile = ns.CanCompute(srcFlags) and type(srcFlags) == "number"
+                and COMBATLOG_OBJECT_REACTION_HOSTILE
+                and bit.band(srcFlags, COMBATLOG_OBJECT_REACTION_HOSTILE) ~= 0
+            if not hostile then return end
+            local key = ns.CanCompute(srcGUID) and type(srcGUID) == "string"
+                and srcGUID or (ns.CanCompute(srcName) and srcName) or sub
+            if seenSource[key] then return end
+            seenSource[key] = true
+            said = said + 1
+            local token = "|cff888888-|r"
+            if type(UnitTokenFromGUID) == "function" and ns.CanCompute(srcGUID)
+                and type(srcGUID) == "string" then
+                token = Ask(UnitTokenFromGUID, srcGUID)
+            end
+            local npc = Routes.NpcFromGUID(srcGUID)
+            ns.Print(string.format("   log %s: guid %s  name %s  token %s  npc %s%s",
+                tostring(sub), Describe(true, srcGUID), Describe(true, srcName),
+                token, tostring(npc or "-"),
+                npc and self.byNpc[npc] and " |cff40ff40in the route|r" or ""))
+            return
+        end
+        -- A cast on a nameplate unit.
+        if type(unit) ~= "string" or not unit:match("^nameplate") then return end
+        local id = ns.CanCompute(spellID) and type(spellID) == "number" and spellID
+            or nil
+        local key = unit .. ":" .. tostring(id or spellID)
+        if seenCast[key] then return end
+        seenCast[key] = true
+        said = said + 1
+        ns.Print(string.format("   cast %s on %s: id %s%s", event:sub(16), unit,
+            Describe(true, spellID),
+            id and self.spellToNpc[id]
+                and (" |cff40ff40-> npc " .. self.spellToNpc[id] .. "|r")
+                or (id and " |cff888888(not one of this dungeon's, or shared)|r" or "")))
+    end)
+
+    f:SetScript("OnUpdate", function(frame, elapsed)
+        left = left - elapsed
+        if left > 0 then return end
+        frame:SetScript("OnUpdate", nil)
+        frame:UnregisterAllEvents()
+        ns.Print(string.format("|cffffd100listening done|r - %d line(s) heard.%s",
+            said, said == 0 and " Nothing hostile spoke; run it again in a pull." or ""))
+    end)
 end
 
 ---------------------------------------------------------------------------

@@ -10,6 +10,19 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.84.0] - 2026-08-16
+
+### Added
+
+- **Routes, back from the bench as an experiment.** Off by default. `/zs route
+  on` reads the pull you planned in Mythic Dungeon Tools and badges the mobs
+  in front of you in that pull's colour; `/zs route probe` asks this client
+  every question about a mob at once — GUID, name, tooltip, casts, the combat
+  log, `UnitTokenFromGUID`, the engine's navigation frame — and listens for
+  twenty seconds. What it answers decides whether this becomes a feature.
+  `/zs route test` badges every nameplate to prove the drawing; `next` /
+  `prev` step the pull. Reads MDT at runtime, ships nothing of MDT's.
+
 ## [4.83.0] - 2026-08-16
 
 ### Changed

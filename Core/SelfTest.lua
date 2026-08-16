@@ -477,11 +477,12 @@ local function TestCommandList()
 
     -- WHAT THE SLASH HANDLER ACTUALLY ANSWERS TO. A list that names a command
     -- with no handler behind it is worse than a short list - that is why
-    -- /zs route came out when Routes was parked.
+    -- /zs route came out when Routes was parked, and went back in with its
+    -- handler when Routes returned (4.84.0).
     local handled = {
         [""] = true, unlock = true, lock = true, build = true, minimap = true,
         cdm = true, skin = true, text = true, numbers = true, watch = true,
-        tanks = true,
+        tanks = true, route = true, routes = true,
         cotanks = true, modules = true, module = true, welcome = true,
         externals = true, external = true, taunt = true, taunts = true,
         reminders = true, reminder = true, death = true, test = true,
@@ -10580,6 +10581,41 @@ local HOUSE_COLORS = {
 local HOUSE_ALPHAS = { backdropAlpha = true, bgAlpha = true }
 local MEANING_NOT_SURFACE = { debuffs = true, buffs = true }
 
+---------------------------------------------------------------------------
+-- ROUTES - the pure rules of the experiment (4.84.0). The client-facing half
+-- is measured in a dungeon by /zs route probe; these are the rules that do
+-- not need one, and they were checked before the file was parked in 4.42.
+---------------------------------------------------------------------------
+local function TestRoutes()
+    local R = ns.Routes
+    if not R then
+        Skip("Routes", "the file is not loaded")
+        return
+    end
+    Check("A mob in the pull you are on wears 'current', the next 'next', the rest nothing",
+        R.Standing(3, 3) == "current" and R.Standing(4, 3) == "next"
+        and R.Standing(5, 3) == nil and R.Standing(2, 3) == nil
+        and R.Standing(nil, 3) == nil)
+    local frac, shape = R.ParseForces("91/591")
+    Check("The forces counter reads as a fraction",
+        shape == "fraction" and math.abs(frac - 91 / 591) < 1e-9)
+    local pct, pshape = R.ParseForces("15.40%")
+    local ger, gshape = R.ParseForces("15,40%")
+    Check("...and as a percentage, with a German comma too",
+        pshape == "percent" and math.abs(pct - 0.154) < 1e-9
+        and gshape == "percent" and math.abs(ger - 0.154) < 1e-9)
+    Check("...and says nothing for a string it does not know",
+        R.ParseForces("soon") == nil and R.ParseForces(nil) == nil)
+    Check("The npc id is field six of a creature GUID, and a player has none",
+        R.NpcFromGUID("Creature-0-4234-2662-1234-214390-00001A2B3C") == 214390
+        and R.NpcFromGUID("Player-1096-0A1B2C3D") == nil
+        and R.NpcFromGUID(nil) == nil)
+    Check("The routes defaults are on the profile, and the experiment is off",
+        type(ns.DEFAULTS.routes) == "table" and ns.DEFAULTS.routes.enabled == false)
+    Check("/zs route is listed with a handler and asks nothing of a client without MDT",
+        R:Available() == false or type(R:Available()) == "boolean")
+end
+
 local function TestHouseLook()
     local v = ns.SURFACE
 
@@ -10964,6 +11000,7 @@ function Test:Run()
         { "Placing a bar", TestCooldownRender },
         { "Places we draw ourselves", TestCooldownOwn },
         { "The house look", TestHouseLook },
+        { "Routes",         TestRoutes },
         { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },
     }

@@ -57,4 +57,3 @@ ignore:
     - Core/OptionsGroups.lua
     - Core/OptionsRoutes.lua
     - Core/Probe.lua
-    - Core/Routes.lua

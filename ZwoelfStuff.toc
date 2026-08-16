@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwölf - EU Destromath
-## Version: 4.83.0
+## Version: 4.84.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -209,6 +209,10 @@ Core\RaidDeaths.lua
 # you pressed below it. Reads Death's own pure rules (Storyline, ReplayAt,
 # RecentEvents) and adds no source of its own.
 Core\Replay.lua
+# ROUTES, BACK FROM THE BENCH AS AN EXPERIMENT (2026-08-16). Nothing on the
+# screen unless /zs route on; /zs route probe asks this client every question
+# about a mob at once. See the head of the file and ROUTES-PLAN.md.
+Core\Routes.lua
 Core\Minimap.lua
 # The other two ways in: the minimap button above, and an entry in the pause
 # menu. Both only call ns.Options at click time, so neither needs the window
@@ -299,9 +303,8 @@ Core\SelfTest.lua
 
 # Parked 2026-08-09, after measuring what a 12.0 client will say about a mob
 # inside a dungeon: its name, id, health, creature type and every position -
-# including the player's own - are all withheld or absent. Badging a mob by
-# which pull it belongs to therefore cannot be done, and the code is kept
-# rather than deleted because the MDT reading, the enemy forces progress and
-# the diagnostics are sound and may be worth something elsewhere.
-#   Core\Routes.lua        MDT route, badges, forces progress, /zs route
-#   Core\OptionsRoutes.lua the options page for the above
+# including the player's own - are all withheld or absent. Core\Routes.lua
+# itself is LOADED AGAIN since 4.84.0 (an experiment, off by default, see its
+# TOC line above); its options page stays parked until the experiment says
+# whether there is a feature to put a page on.
+#   Core\OptionsRoutes.lua the options page for Routes
