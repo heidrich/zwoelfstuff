@@ -1072,9 +1072,18 @@ end
 -- fehlen spell icons und tooltips bei den namen").
 --
 --   { text = "...", colour = C.x }        plain words
---   { who = name, art = art, summary = s } the mob, orange, enemy tip
+--   { who = name, art = art, summary = s } the mob's face + name, enemy tip
 --   { spell = name, spellID = id }        icon + ability, orange, tooltip
---   { face = art, who = name, summary = s } the mob's face alone
+--
+-- THE FACE IS PART OF THE NAME, not a piece of its own. The first version
+-- had a separate face piece at the front of the line, and it went wrong
+-- twice at once (owner, 2026-08-16): the face stood before "Killed by"
+-- instead of before the mob it belonged to - "der muss vor den gegner
+-- namen" - and where the client had no picture, the piece fell through
+-- to the name branch and printed the mob's name a second time, glued to
+-- the next words ("Primal SerpentThe hit that mattered"). A face that
+-- travels inside the name piece cannot do either: it is drawn in front of
+-- its own name when the client has it, and costs nothing when it does not.
 --
 -- Paint(pieces) lays them out inside the line's current width and sets
 -- the line's height to what it took; returns that height.
@@ -1145,23 +1154,19 @@ function Death.BuildRichLine(parent, size)
             piece:SetScript("OnEnter", nil)
 
             local w
-            if spec.face then
+            if spec.who then
+                -- The mob's face, when the client has one, right in front
+                -- of the name it belongs to; face and name are one hover.
                 if not piece.face then
                     piece.face = Death.CreateFace(piece, RICH_FACE)
                     piece.face:SetPoint("LEFT", piece, "LEFT", 0, 0)
                 end
-                piece.label:SetText("")
-                local drawn = Death.PaintFace(piece.face, spec.face)
-                w = drawn and (RICH_FACE + 6) or 0
-                if drawn then
-                    piece:EnableMouse(true)
-                    piece:SetScript("OnEnter", EnemyTip)
-                end
-            elseif spec.who then
+                local drawn = Death.PaintFace(piece.face, spec.art)
+                local lead = drawn and (RICH_FACE + 4) or 0
                 piece.label:SetText(UI.HotText(spec.who))
                 piece.label:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
-                piece.label:SetPoint("LEFT", piece, "LEFT", 0, 0)
-                w = piece.label:GetStringWidth() or 0
+                piece.label:SetPoint("LEFT", piece, "LEFT", lead, 0)
+                w = lead + (piece.label:GetStringWidth() or 0)
                 piece:EnableMouse(true)
                 piece:SetScript("OnEnter", EnemyTip)
             elseif spec.spell then
@@ -2458,12 +2463,10 @@ local function BuildWindow()
     frame.place:SetWidth(MAIN_W - 70)
     frame.place:SetWordWrap(false)
 
-    -- THE GUIDE'S TILE IN THE HEADER, a square the size of the portrait and
-    -- IN FRONT of it (owner, 2026-08-16: "pack es vor den avatar"): the
-    -- place first, then the mob, then the words - the row's own order,
-    -- read left to right. Placed by Show, which knows which of the two
-    -- pictures there are.
-    frame.placeArt = Death.CreatePlaceArt(frame, 54, 54)
+    -- No guide tile up here. It sat in front of the portrait for an
+    -- evening and came out again (owner, 2026-08-16: "zu viel und
+    -- redundant, das haben wir ja rechts") - the side column shows it on
+    -- every row, and the header names the place in its blue.
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(24, 24)
@@ -3208,16 +3211,10 @@ function Death:Show(index)
     -- The portrait decides where the header starts: with a face, the text
     -- moves out of its way; without one, it keeps the left margin every
     -- other window in this addon uses.
-    local hasTile = frame.placeArt.Paint(snapshot.journal)
-    frame.placeArt:ClearAllPoints()
-    frame.placeArt:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -12)
     local hasPortrait = PaintPortrait(snapshot.killerArt)
-    frame.portrait:ClearAllPoints()
-    frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT",
-        MAIN_X + (hasTile and 62 or 0), -12)
     frame.title:ClearAllPoints()
     frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT",
-        MAIN_X + (hasTile and 62 or 0) + (hasPortrait and 66 or 0), -14)
+        MAIN_X + (hasPortrait and 66 or 0), -14)
 
     Death.sideOffset = Death.ScrollTo(index, #self.log,
         Death.sideOffset, SIDE_ROWS)

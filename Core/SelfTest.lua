@@ -2420,7 +2420,8 @@ local function TestRaidDeaths()
     ---------------------------------------------------------------------
     local fight = {
         key = 37, when = "21:14", where = "M+7 - Ara-Kara",
-        whereShort = "M+7", duration = 121, at = 99999,
+        whereShort = "M+7", instance = "Ara-Kara, City of Echoes",
+        journal = 1271, duration = 121, at = 99999,
         entries = {
             { name = "Shuja Grimaxe", short = "Shuja Grimaxe",
               class = "SHAMAN", at = 62, seq = 1, recapID = 37, you = false,
@@ -2439,6 +2440,24 @@ local function TestRaidDeaths()
     Check("A pull is written field by field",
         saved ~= nil and saved.key == 37 and #saved.entries == 2
             and saved.whereShort == "M+7")
+    -- The side column's third line and its tile come out of these two, and
+    -- for an evening they were written by the session copy and NOT by this
+    -- one - so the tile lived until the next /reload.
+    Check("...and the place and its guide id survive the reload",
+        saved.instance == "Ara-Kara, City of Echoes" and saved.journal == 1271)
+    -- And a pull saved before they did takes them from the evening's copy
+    -- of the same pull - by key, never by position.
+    do
+        local log = { { key = 5 }, { key = 6, instance = "Kept", journal = 1 } }
+        R.Mend(log, { fights = {
+            { key = 6, instance = "Other", journal = 2 },
+            { key = 5, instance = "Murder Row", journal = 1304 } } })
+        Check("A pull without its place takes it from the evening's copy, by key",
+            log[1].instance == "Murder Row" and log[1].journal == 1304
+            and log[2].instance == "Kept" and log[2].journal == 1)
+        Check("...and nothing happens without a copy to read from",
+            #R.Mend({ { key = 1 } }, nil) == 1 and R.Mend(nil, nil) == nil)
+    end
     -- `at` is a GetTime stamp and GetTime restarts with the client, so a
     -- stored one would be a time in a clock that no longer exists.
     Check("...and the GetTime stamp is deliberately NOT written",
@@ -2507,6 +2526,44 @@ local function TestRaidDeaths()
     end
     Check("The footer's pieces carry the mob and the ability apart",
         sawWho and sawSpell and sawHint)
+    -- The face rides inside the name piece, never as a piece of its own:
+    -- a lone face piece stood in front of "Killed by" instead of the mob,
+    -- and with no picture it printed the name twice.
+    do
+        local lines = R.DetailLines({
+            blow = { who = "Primal Serpent", spell = "Piercing Hiss",
+                spellID = 9, amount = 100, overkill = 10 },
+            real = { who = "Primal Serpent", spell = "Piercing Hiss",
+                spellID = 9, landed = 90 },
+            events = {},
+        })
+        local lone, named, order = false, 0, true
+        for _, line in ipairs(lines) do
+            for index, piece in ipairs(line.pieces) do
+                if piece.face then lone = true end
+                if piece.who then
+                    named = named + 1
+                    -- The name follows the words, and the ability follows it.
+                    if not (line.pieces[index - 1] and line.pieces[index - 1].text
+                        and line.pieces[index + 2] and line.pieces[index + 2].spell) then
+                        order = false
+                    end
+                end
+            end
+        end
+        Check("A detail line names the mob once, after the words, with no lone face piece",
+            #lines == 2 and not lone and named == 2 and order)
+    end
+    -- The evening's tally finds a mob's face in whichever kept pull has it.
+    Check("The mob's face is found across the kept pulls",
+        R.ArtForWho({ { entries = { { blow = { who = "A" } } } },
+            { entries = { { events = { { who = "Shade", art = { creatureID = 7 } } } } } } },
+            "Shade").creatureID == 7
+        and R.ArtForWho({}, "Shade") == nil
+        and R.ArtForWho(nil, nil) == nil)
+    Check("The evening's fallen carry their spec, for the icon",
+        R.Fallen({ fights = { { entries = { { name = "Zed", class = "DEATHKNIGHT",
+            spec = 250 } } } } })[1].spec == 250)
     Check("...and none for a fight nobody died in", #R.FootPieces({}, 0) == 0)
 
     ---------------------------------------------------------------------

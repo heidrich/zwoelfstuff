@@ -691,7 +691,8 @@ function RaidDeaths.Fallen(session)
             local row = byName[entry.name]
             if not row then
                 row = { name = entry.name, short = entry.short or entry.name,
-                    class = entry.class, you = entry.you == true,
+                    class = entry.class, spec = entry.spec,
+                    you = entry.you == true,
                     deaths = 0, pulls = 0, avoidable = 0, unknown = 0 }
                 byName[entry.name] = row
                 out[#out + 1] = row
@@ -892,6 +893,14 @@ function RaidDeaths.Persist(fight)
         when = Plain(fight.when, "string"),
         where = Plain(fight.where, "string"),
         whereShort = Plain(fight.whereShort, "string"),
+        -- The instance's name and its guide id, for the side column's third
+        -- line and its tile. They were recorded and shown for an evening
+        -- and gone after every reload, because THIS list did not carry them
+        -- while Light's did (owner, 2026-08-16: "auf der rechten seite fehlt
+        -- das dungeon bild"): a field a save whitelists in one copy and not
+        -- the other lives exactly until the next /reload.
+        instance = Plain(fight.instance, "string"),
+        journal = Plain(fight.journal, "number"),
         duration = Plain(fight.duration, "number"),
         entries = {},
     }
@@ -1026,6 +1035,27 @@ function RaidDeaths.Save()
     end
 end
 
+-- THE PLACE, MENDED FROM THE OTHER COPY. Pulls saved before Persist
+-- carried the instance and its guide id have neither, while the evening's
+-- thin copy of the same pull - same key - has had both from the start.
+-- Read back together, the full log takes them from there, so the pulls he
+-- already has get their tile too instead of only the pulls from now on.
+-- Pure; the log is changed in place and returned.
+function RaidDeaths.Mend(log, session)
+    local byKey = {}
+    for _, light in ipairs((session and session.fights) or {}) do
+        if light.key then byKey[light.key] = light end
+    end
+    for _, fight in ipairs(log or {}) do
+        local light = fight.key and byKey[fight.key]
+        if light then
+            if fight.instance == nil then fight.instance = light.instance end
+            if fight.journal == nil then fight.journal = light.journal end
+        end
+    end
+    return log
+end
+
 function RaidDeaths.Load()
     local key = ns.CharacterKey()
     if not key then return end
@@ -1036,6 +1066,7 @@ function RaidDeaths.Load()
         RaidDeaths.session = RaidDeaths.RestoreSession(sessions[key],
             RaidDeaths.Today())
     end
+    RaidDeaths.Mend(RaidDeaths.log, RaidDeaths.session)
     RaidDeaths.showing = nil
     RaidDeaths.RefreshIcon()
 end
@@ -1317,6 +1348,7 @@ RaidDeaths.LAYOUT = {
 }
 -- One line of the evening's two tables.
 local TALLY_ROW_H = 24
+local TALLY_PIC, TALLY_PIC_X = 18, 56  -- the picture column on a tally row
 -- How many of each are drawn before the page says how many it left out. No
 -- silent caps: a list that stops at eight and does not say so reads as a
 -- list of eight.
@@ -1543,8 +1575,21 @@ local function BuildTallyRow(parent, width)
     row.count:SetWidth(44)
     row.count:SetJustifyH("LEFT")
 
+    -- THE PICTURE COLUMN between the count and the name: the mob's face on
+    -- a killer's row, the spec icon on a fallen player's - the same two
+    -- pictures the pull list under this page carries (owner, 2026-08-16:
+    -- "in der tonight uebersicht fehlen die klassen icons"). One slot,
+    -- always the same width, so the names line up whether or not the
+    -- client had a picture for that row.
+    row.face = ns.Death.CreateFace(row, TALLY_PIC)
+    row.face:SetPoint("LEFT", row, "LEFT", TALLY_PIC_X, 0)
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(TALLY_PIC, TALLY_PIC)
+    row.icon:SetPoint("LEFT", row, "LEFT", TALLY_PIC_X, 0)
+    row.icon:Hide()
+
     row.main = UI.Label(row, "", UI.FS.row, C.text)
-    row.main:SetPoint("LEFT", row, "LEFT", 56, 0)
+    row.main:SetPoint("LEFT", row, "LEFT", TALLY_PIC_X + TALLY_PIC + 8, 0)
     row.main:SetPoint("RIGHT", row, "RIGHT", -220, 0)
     row.main:SetJustifyH("LEFT")
     row.main:SetWordWrap(false)
@@ -1867,9 +1912,9 @@ function RaidDeaths:Create()
 
     detail.title = UI.Label(who, "", UI.FS.card, C.text)
 
-    -- THE TWO LINES ABOUT WHAT KILLED THEM, each a rich line: the mob's
-    -- face, the words, the mob's name with the enemy tip on it, the ability
-    -- with its icon in front and the client's tooltip on it. Owner,
+    -- THE TWO LINES ABOUT WHAT KILLED THEM, each a rich line: the words,
+    -- the mob's face in front of its name with the enemy tip on both, the
+    -- ability with its icon in front and the client's tooltip on it. Owner,
     -- 2026-08-16: "das spell icon vor den spell namen ... und der name
     -- braucht noch einen tooltip." See Death.BuildRichLine.
     detail.blow = ns.Death.BuildRichLine(detail)
@@ -2184,6 +2229,20 @@ function RaidDeaths.ArtFor(entry, who)
     return nil
 end
 
+-- The same, across every kept pull: the first face any death in the log
+-- still holds for this mob. The evening's tally names mobs out of the thin
+-- session copy, which carries no art; the full pulls beside it do.
+function RaidDeaths.ArtForWho(log, who)
+    if not who then return nil end
+    for _, fight in ipairs(log or {}) do
+        for _, entry in ipairs(fight.entries or {}) do
+            local art = RaidDeaths.ArtFor(entry, who)
+            if art then return art end
+        end
+    end
+    return nil
+end
+
 -- The opened death's two lines, as data: what ended them, and - when the
 -- killing blow was mostly wasted on a corpse - which hit actually did the
 -- work. Each carries the mob (for its face and the enemy tip) and the
@@ -2214,10 +2273,9 @@ function RaidDeaths.DetailLines(entry)
             ns.UI.HotText(ns.Death.PlainText(blow.spell or "?")), tail),
         who = blow.who, art = art, spellID = blow.spellID, spell = blow.spell,
         summary = blow.summary,
-        -- The face, the words, the mob (tip on the name), the ability
-        -- with its icon in front of it, the numbers.
+        -- The words, the mob - its face in front of its name, the tip on
+        -- both - the ability with its icon in front of it, the numbers.
         pieces = {
-            { face = art, who = blow.who, summary = blow.summary },
             { text = "Killed by " },
             { who = blow.who or "?", art = art, summary = blow.summary },
             { text = " - " },
@@ -2238,7 +2296,6 @@ function RaidDeaths.DetailLines(entry)
             spellID = entry.real.spellID, spell = entry.real.spell,
             summary = summary,
             pieces = {
-                { face = realArt, who = entry.real.who, summary = summary },
                 { text = "The hit that mattered: " },
                 { who = entry.real.who or "?", art = realArt, summary = summary },
                 { text = " - " },
@@ -2638,6 +2695,8 @@ function RaidDeaths.PaintOverview()
         if total <= TALLY_SHOWN then return end
         local row = Row()
         row.count:SetText("")
+        ns.Death.PaintFace(row.face, nil)
+        row.icon:Hide()
         row.main:SetText(string.format("and %d more", total - TALLY_SHOWN))
         row.main:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
         row.note:SetText("")
@@ -2663,6 +2722,10 @@ function RaidDeaths.PaintOverview()
             local killer = killers[index]
             local row = Row()
             row.count:SetText(killer.deaths .. "x")
+            -- The mob's face, out of whichever kept pull still has it.
+            ns.Death.PaintFace(row.face,
+                RaidDeaths.ArtForWho(RaidDeaths.log, killer.who))
+            row.icon:Hide()
             row.main:SetText(string.format("%s  %s",
                 ns.Death.PlainText(killer.spell), killer.who))
             row.main:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
@@ -2680,6 +2743,8 @@ function RaidDeaths.PaintOverview()
             local person = fallen[index]
             local row = Row()
             row.count:SetText(person.deaths .. "x")
+            ns.Death.PaintFace(row.face, nil)
+            ns.UI.PaintSpecIcon(row.icon, person.spec, person.class)
             row.main:SetText(RaidDeaths.Coloured(person.short, person.class)
                 .. (person.you and " |cffffd100(you)|r" or ""))
             row.main:SetTextColor(C.text[1], C.text[2], C.text[3])

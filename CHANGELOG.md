@@ -122,17 +122,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   the dungeon or raid by name with the Adventure Guide's own tile beside it
   — **click the tile and the guide opens on that instance.** The tile is a
   column of its own, as tall as the row and in its true shape; the name is
-  in the blue every place in the addon wears. The tile sits in the death
-  window's header too. The columns grew wider for it, the rows
-  taller, and every line in them is one size. Recorded from now on: an older
-  entry knows only "Dungeon".
-- **A group death opened from the log** shows the mob's face in front of
-  *Killed by* and *The hit that mattered*, the mob's name with the enemy tip
-  on it, and the ability with its icon in front and its tooltip — the same
-  as every row under them. The **Killing blow** line at the foot of the log
-  (it was *What did the killing*) is built the same way: every name and every
-  ability answers the mouse. The guide's tile stands in front of the pull's
-  place line in the header, and the place is blue.
+  in the blue every place in the addon wears. The columns grew wider for it,
+  the rows taller, and every line in them is one size. Recorded from now on:
+  an older entry knows only "Dungeon".
+- **A group death opened from the log** shows the mob's face in front of its
+  name in *Killed by* and *The hit that mattered*, the enemy tip on both, and
+  the ability with its icon in front and its tooltip — the same as every row
+  under them. The **Killing blow** line at the foot of the log (it was *What
+  did the killing*) is built the same way: every mob wears its face, every
+  name and every ability answers the mouse. The guide's tile stands in front
+  of the pull's place line in the header, and the place is blue.
+- **The evening's tally has pictures.** *What keeps killing us* shows each
+  mob's face, *Who is falling* each player's spec or class icon, in a column
+  between the count and the name.
 - **The welcome window says what the addon is**: *A Tank and Group Play
   addon*, under the name.
 - **Nothing picked is a door.** Open the death log with no defensives or no
@@ -172,6 +174,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The group log's pulls forgot their place on /reload.** The dungeon's name
+  and its guide tile were recorded and shown, and gone after the next reload:
+  the full pull was written without them while the evening's thin copy kept
+  them. Both copies carry them now, and pulls saved in between take theirs
+  from the evening's copy of the same pull.
 - **The co-tank trough had missed the standard look.** The step that moves
   the empty part of the bar to #1a1a1a opaque joined the migration one commit
   after the migration had already run on the author's profile, so his panel
