@@ -693,6 +693,37 @@ local NUMBERS = {
       end },
 }
 
+-- BLIZZARD'S OWN STACK STRING, HANDED ON - the timer trick, applied to the
+-- count, and it closed the door his /zs text dump named.
+--
+-- On a place we draw, Blizzard's frame for the same spell is veiled, and his
+-- dump showed exactly this state on both buff bars: `blizzard shows it true,
+-- reads blank` beside a bar drawing no number of its own. Blizzard's
+-- comparison had said YES, its string was invisible under the veil, and OUR
+-- count reader - auraDataCached, then C_UnitAuras - answered nil because
+-- these items carry neither field on his client. Three readers, no number.
+--
+-- So when our own source is dry, the engine's finished STRING is copied
+-- across, exactly as Own.lua copies the timer: formatted inside the game
+-- where the count is readable, handed on untouched. It can be a secret
+-- string - `== nil` is the only thing done to it, and it lands in SetText
+-- through a pcall. Whatever Blizzard delivers, the bar now relays.
+--
+-- ONLY on a place we draw, and ONLY while Blizzard's counter is shown: on an
+-- adopted place its string is already visible, and a hidden counter is
+-- Blizzard answering "not worth a number", which stays final.
+local function Relay(item, ours)
+    if not ours then return nil end
+    if ns.CDM:CounterShown(item, "Applications") ~= true then return nil end
+
+    local fontString = ns.CDM:CounterText(item, "Applications")
+    if not fontString then return nil end
+
+    local ok, text = pcall(fontString.GetText, fontString)
+    if not ok then return nil end
+    return text
+end
+
 -- `ours` is true when Own.lua drew this place rather than Claim adopting it.
 -- It changes nothing about how a number is drawn and one thing about whether
 -- one is - see Text.StackToShow.
@@ -720,7 +751,18 @@ function Text.Count(cell, item, style, spellID, ours)
             value = number.Value(item, spellID, ours)
         end
 
-        if value == nil then
+        -- OUR SOURCE DRY, BLIZZARD'S NOT: relay its finished string. `relayed`
+        -- is a STRING (possibly secret) and goes out through SetText; `value`
+        -- is a NUMBER (possibly secret) and goes out through
+        -- SetFormattedText. Both comparisons here are `== nil`, the one legal
+        -- question.
+        local relayed
+        if value == nil and text and text.show
+            and number.member == "Applications" then
+            relayed = Relay(item, ours)
+        end
+
+        if value == nil and relayed == nil then
             Away()
         else
             if not cell[field] then
@@ -750,7 +792,18 @@ function Text.Count(cell, item, style, spellID, ours)
             -- is the raise. pcall because a font string with no face raises
             -- on being written to, and a missing media file is a user's
             -- problem rather than an error.
-            if pcall(cell[field].SetFormattedText, cell[field], "%d", value) then
+            --
+            -- The relayed string goes through SetText for the same reason
+            -- the timer does: it is already formatted, and running it
+            -- through %d would be reading it.
+            local wrote
+            if value ~= nil then
+                wrote = pcall(cell[field].SetFormattedText, cell[field],
+                    "%d", value)
+            else
+                wrote = pcall(cell[field].SetText, cell[field], relayed)
+            end
+            if wrote then
                 cell[field]:Show()
             else
                 Away()
@@ -827,7 +880,7 @@ local function ReportCountdown(item, text)
     end
 end
 
-local function ReportCounter(item, key, what, text)
+local function ReportCounter(item, key, what, text, mine)
     local widget = ns.CDM:Counter(item, key)
     if not widget then
         ns.Print(string.format("   %-9s |cff888888this frame carries no %s - "
@@ -846,6 +899,21 @@ local function ReportCounter(item, key, what, text)
         Claim.Touched(widget) and "|cff40ff40yes|r" or "|cffff4040no|r",
         shown == nil and "|cff888888nothing to ask|r" or tostring(shown),
         Says(ns.CDM:CounterText(item, key))))
+
+    -- AND THE STRING WE DRAW, when there is one. The line above measures
+    -- BLIZZARD'S widget, and on a place we draw ourselves that widget is
+    -- under the veil and was never moved - so "asked LEFT, got BOTTOMRIGHT"
+    -- there is not a fault, it is the wrong object being measured. His dump
+    -- read exactly like a mis-anchoring until the second line existed.
+    if mine then
+        if mine:IsShown() then
+            ns.Print(string.format("   %-9s %s  |cff888888(the one we "
+                .. "draw)|r  reads %s", "", Landed(mine, text), Says(mine)))
+        else
+            ns.Print(string.format("   %-9s |cff888888our own string is "
+                .. "hidden - nothing to draw or relay right now|r", ""))
+        end
+    end
 end
 
 local function ReportCaption(cell, text)
@@ -889,11 +957,13 @@ function Text.Dump()
                         bar.name or ("bar " .. tostring(bar.id)), index,
                         ns.SpellName(spellID) or "?"))
 
+                    local cell = container and container.cells[index]
                     ReportCountdown(item, style.countdown)
-                    ReportCounter(item, "ChargeCount", "charges", style.charges)
-                    ReportCounter(item, "Applications", "stacks", style.stacks)
-                    ReportCaption(container and container.cells[index],
-                        style.spellName)
+                    ReportCounter(item, "ChargeCount", "charges",
+                        style.charges, cell and cell.chargeCount)
+                    ReportCounter(item, "Applications", "stacks",
+                        style.stacks, cell and cell.stackCount)
+                    ReportCaption(cell, style.spellName)
                 end
             end
         end

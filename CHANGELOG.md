@@ -354,6 +354,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   showing it" kept its own name and appears in `/zs cdm` beside the real
   reading, so a line where the two disagree is the explanation rather than
   something to work out.
+- **The stack count on a bar you build is relayed from the engine now.** His
+  `/zs text` dump named the exact state: *"blizzard shows it true, reads
+  blank"* beside a bar of ours drawing no number — while the standalone
+  Cooldown Manager plainly showed a 2. Blizzard's comparison had said yes, its
+  string sat invisible under the veil, and our own count readers answered
+  nothing because those items carry the count nowhere an addon may read it
+  from. So the bar now does for the count exactly what it already does for the
+  remaining time: **Blizzard's finished string is copied across** — formatted
+  inside the game where the number is readable, handed on untouched, never
+  looked at on the way. Whatever the engine delivers, the bar relays; a blank
+  relays as blank, and a protected string passes through without an error.
+  `/zs text` also prints the string *we* draw now, beside Blizzard's — its old
+  output measured Blizzard's hidden widget and read like a mis-anchoring.
 - **A full bar beside a dimmed icon of the same spell.** The fill is mirrored on
   its own script sixty times a second; the icon's lit-or-dimmed look was only
   written when Blizzard notified us that something had changed. The two could

@@ -8857,8 +8857,12 @@ local function TestCooldownOwn()
         timer:SetText("12.3")
         item.Bar:SetMinMaxValues(0, 30)
         item.Bar:SetValue(18)
-        -- A stack count Blizzard would draw and cannot be seen drawing.
+        -- A stack count Blizzard would draw and cannot be seen drawing. The
+        -- FRAME carries a STRING inside it, exactly as the client's does -
+        -- CDM:CounterText walks the regions to find it, and a bare frame
+        -- here left the relay path unreachable at the desk.
         item.Applications = CreateFrame("Frame", nil, item)
+        item.Applications:CreateFontString(nil, "OVERLAY")
         item.Applications:Show()
         item.auraDataCached = { applications = 3 }
         -- IT ANSWERS IsActive, AND THAT IS A FIXTURE DETAIL WITH TEETH.
@@ -9057,6 +9061,69 @@ local function TestCooldownOwn()
         Check("The stack count is drawn by us, and reads what Blizzard has",
             cell.stackCount ~= nil and cell.stackCount:GetText() == "3",
             cell.stackCount and cell.stackCount:GetText() or "no string")
+
+        -----------------------------------------------------------------
+        -- AND THE STATE HIS /zs text DUMP CAUGHT: our count reader DRY,
+        -- Blizzard's counter shown, its string carrying the number.
+        --
+        --   "stacks ... blizzard shows it true  reads blank" - beside a
+        --   bar of ours drawing nothing, while the standalone Cooldown
+        --   Manager plainly showed a 2.
+        --
+        -- His buff-bar items carry neither auraDataCached nor an
+        -- auraInstanceID under the names ItemStacks reads, so all three of
+        -- our sources answered nil - and Blizzard's own string sat
+        -- invisible under the veil. The relay hands that string on, the
+        -- timer trick applied to the count: formatted inside the game,
+        -- never read, only delivered.
+        -----------------------------------------------------------------
+        local cached = bars.auraDataCached
+        bars.auraDataCached = nil
+
+        local counterString = ns.CDM:CounterText(bars, "Applications")
+        Check("The fixture's counter has a string to relay",
+            counterString ~= nil)
+        if counterString then
+            counterString:SetText("2")
+
+            local Txt = ns.Cooldowns.Text
+            Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
+            Check("A dry count reader relays Blizzard's own string",
+                cell.stackCount:GetText() == "2"
+                    and cell.stackCount:IsShown() == true,
+                tostring(cell.stackCount:GetText()))
+
+            -- BLANK RELAYS AS BLANK, which is his dump's exact moment: the
+            -- buff down, the counter frame still shown, nothing in it. A
+            -- relay that invented a mark here would draw noise on every
+            -- empty bar all evening.
+            counterString:SetText("")
+            Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
+            Check("and a blank string relays as nothing visible",
+                (cell.stackCount:GetText() or "") == "",
+                tostring(cell.stackCount:GetText()))
+
+            -- AND A SECRET STRING GOES THROUGH UNTOUCHED - the engine
+            -- formatted it where the count was readable; == nil and SetText
+            -- are the only two things that may happen to it on the way.
+            if _G.__SECRET and issecretvalue and issecretvalue(_G.__SECRET) then
+                counterString:SetText(_G.__SECRET)
+                local ok = pcall(Txt.Count, cell, bars,
+                    Txt.Style(ns.db.bars[1], 24), 77535, true)
+                Check("A protected count string is relayed without a raise",
+                    ok and cell.stackCount:GetText() == _G.__SECRET,
+                    tostring(ok))
+            end
+
+            counterString:SetText("")
+        end
+
+        bars.auraDataCached = cached
+        local Txt = ns.Cooldowns.Text
+        Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
+        Check("With the reader wet again, our own number wins over the relay",
+            cell.stackCount:GetText() == "3",
+            tostring(cell.stackCount:GetText()))
         Check("The remaining time is Blizzard's own, copied across",
             own.timer:GetText() == "12.3", own.timer:GetText())
 
