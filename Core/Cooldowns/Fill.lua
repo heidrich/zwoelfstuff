@@ -221,10 +221,11 @@ end
 -- WHICH WAY THE FILL RUNS, as ns.Layout.FillDirection's entry: the four names,
 -- the orientation and the reverse flag, in the one place they are decided.
 --
--- The fallback is the translation old Bars.lua:1777 did ONCE, at migration
--- time. Store deliberately does not do it at all - it translates and never
--- rewrites - so a bar written before the four-answer control exists carries
--- only `fillSide`, and the translation has to happen on every read instead.
+-- THE TRANSLATION OF THE OLD KEY IS STORE'S, NOT THIS FILE'S. It used to be
+-- the four lines below, and Look.Style resolved the same setting WITHOUT the
+-- fallback - so a bar carrying only 4.82.0's `fillSide` ran one way on screen
+-- and the other way in the style table. Two askers, one answer, and it lives
+-- in the file whose job is translating what is on disk.
 --
 -- WHAT IS DELIBERATELY NOT HERE: `fillGrow`. On an adopted bar the clock is
 -- Blizzard's, and driving it means SetTimerDuration(durObj, interp,
@@ -233,11 +234,7 @@ end
 -- cannot take back is the one thing Claim.Set refuses, so it is named and
 -- deferred. Half-wiring it is exactly how "Fill up" came to do nothing at all.
 function Fill.Direction(bar, index)
-    local named = Option(bar, index, "fillDirection")
-    if named == nil then
-        named = Option(bar, index, "fillSide") and "left" or "right"
-    end
-    return ns.Layout.FillDirection(named)
+    return Store.FillDirection(bar, index)
 end
 
 -- WHICH TWO COLOURS GO INTO THE RAMP, AND IN WHICH ORDER. PURE.

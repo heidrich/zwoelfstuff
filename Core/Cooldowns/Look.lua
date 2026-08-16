@@ -283,9 +283,14 @@ function Look.Style(bar, index)
 
         -- Resolved to the ENTRY - orientation plus reverse - so no renderer
         -- has to know the four names and the four names live in one place.
-        -- ns.Layout.FillDirection takes an entry back unchanged, so a caller
-        -- that already resolved it cannot silently get "left to right".
-        fillDirection = ns.Layout.FillDirection(cfg.fillDirection),
+        --
+        -- ASKED OF STORE, NOT OF `cfg`, AND THAT IS A FIX. This read
+        -- `ns.Layout.FillDirection(cfg.fillDirection)` and knew nothing about
+        -- 4.82.0's `fillSide`, while Fill.Direction did - so every bar he
+        -- built before the four-answer control ran the way HE set it on
+        -- screen and left-to-right in this table. Two readers of one setting,
+        -- disagreeing on exactly the bars that carry the old key.
+        fillDirection = Store.FillDirection(bar, index),
         fillGrow      = cfg.fillGrow and true or false,
 
         -- The one fraction that is NOT a fraction of one: 0.2 is where the
@@ -389,7 +394,6 @@ function Look.Apply(item, style)
     local active = ns.CDM:ItemIsActive(item) ~= false
 
     local zoom = style.iconZoom
-    local direction = style.fillDirection
 
     -- A BAR-SHAPED FRAME NEVER GETS HERE ANY MORE, and the branch that used
     -- to dress one is gone rather than left standing.

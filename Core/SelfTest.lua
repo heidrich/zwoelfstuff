@@ -9602,6 +9602,32 @@ local function TestCooldownStyling()
     Check("A profile that predates the setting keeps its direction",
         way.value == "left", tostring(way.value))
 
+    -- AND THE OTHER READER OF THE SAME SETTING AGREES.
+    --
+    -- Look.Style resolved this key on its own and knew nothing about
+    -- `fillSide`, so a bar written in 4.82.0 - which is every bar he made -
+    -- ran the way he set it on screen and left-to-right in the style table.
+    -- Two readers of one setting, disagreeing on exactly the bars that carry
+    -- the old key, which is the quietest way for a setting to half-work.
+    --
+    -- Asked of BOTH, on the same bar, rather than of the shared function they
+    -- now both call: what broke was not the translation, it was one of them
+    -- not asking for it.
+    local old = { fillSide = true }
+    Check("The look resolver reads the old key the same way the fill does",
+        ns.Cooldowns.Look.Style(old, 1).fillDirection.value
+            == Fill.Direction(old, 1).value,
+        tostring(ns.Cooldowns.Look.Style(old, 1).fillDirection.value))
+
+    -- AND A PLACE'S OWN DIRECTION REACHES BOTH, which is what makes it a
+    -- per-place setting rather than one that happens to live on the bar.
+    local perPlace = { cells = { 1044 }, fillDirection = "right",
+        cellLook = { [1044] = { fillDirection = "up" } } }
+    Check("and a place that runs its own way is read that way by both",
+        Fill.Direction(perPlace, 1).value == "up"
+            and ns.Cooldowns.Look.Style(perPlace, 1).fillDirection.value
+                == "up")
+
     ---------------------------------------------------------------------
     -- THE THRESHOLDS ARE SORTED BECAUSE THE ORDER IS THE DRAW ORDER
     --
@@ -9614,6 +9640,21 @@ local function TestCooldownStyling()
         { value = 2, color = { 0, 1, 0 } },
         { value = 9, color = { 0, 0, 1 } },
     } }, 1)
+    -- A BAND'S OWN RAMP, WHICH HAD A READER AND NO WRITER. Fill.Thresholds has
+    -- always handed `entry.gradient` to ns.Tint and no row on the page wrote
+    -- one, so this half was paintable and unreachable - the same defect as a
+    -- setting that is stored and never painted, from the other end. The rows
+    -- exist now; this is the reader they have to agree with.
+    local ramped = Fill.Thresholds({ stackThresholds = {
+        { value = 3, color = { 1, 0, 0 },
+          gradient = { on = true, color = { 0, 0, 1 }, direction = "up" } },
+    } }, 1)
+    Check("A band carries a ramp of its own, and it is not the fill's",
+        ramped[1] and ramped[1].gradient.on == true
+            and ramped[1].gradient.color[3] == 1
+            and ramped[1].gradient.direction == "up",
+        ramped[1] and tostring(ramped[1].gradient.direction) or "no band")
+
     Check("Thresholds come back lowest first",
         #sorted == 3 and sorted[1].value == 2 and sorted[3].value == 9,
         string.format("%s,%s,%s", tostring(sorted[1] and sorted[1].value),

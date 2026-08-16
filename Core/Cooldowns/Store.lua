@@ -249,6 +249,33 @@ function Store.Own(bar, index, key)
     return nil, false
 end
 
+-- WHICH WAY A FILL RUNS, IN ONE PLACE, INCLUDING THE OLD KEY
+--
+-- 4.82.0 stored `fillSide`, a true/false "does it run left", and the control
+-- that replaced it has four answers. Store TRANSLATES rather than migrates -
+-- the bar on disk keeps the key it was written with - so the translation has
+-- to happen on every read, and this is the read.
+--
+-- IT IS HERE BECAUSE THERE ARE TWO ASKERS AND THEY HAD DIFFERENT ANSWERS.
+-- Fill.Direction carried the fallback and Look.Style did not, so the same bar
+-- ran one way on the screen and the other way in the style table - on exactly
+-- the bars written before the new control, which is every bar he made in
+-- 4.82.0. Neither file can capture the other (Look loads above Fill), and the
+-- one thing above both of them is this.
+function Store.FillDirection(bar, index)
+    local named = Store.Option(bar, index, "fillDirection")
+    if named == nil then
+        -- NOT `x and "left" or "right"` as a shortcut for the missing case:
+        -- the old key is a real boolean and false means right, which is the
+        -- answer this idiom throws away everywhere else in this addon. Here it
+        -- is safe only because both halves are strings and neither is false -
+        -- said out loud so the next reader does not copy it somewhere it is
+        -- not.
+        named = Store.Option(bar, index, "fillSide") and "left" or "right"
+    end
+    return ns.Layout.FillDirection(named)
+end
+
 -- DOES THIS PLACE CARRY ANY STYLING OF ITS OWN?
 --
 -- Owner, with the page open: "wo sehe ich denn, wenn ich einzelne bars oder

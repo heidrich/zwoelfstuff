@@ -118,6 +118,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   answers "cannot tell", which every caller already knew how to handle: on a
   place the addon draws itself, that means it writes the number itself.
 
+- **Fixed: a bar built before the direction setting could run the wrong way.**
+  Which way a fill drains used to be worked out in two places, and only one of
+  them knew about the older key — so a bar you set to run right-to-left in
+  4.82.0 did that on screen and left-to-right everywhere else the addon asked.
+  There is one answer now.
+
+- **A stack band can have its own gradient.** The renderer has always painted
+  one; nothing could set it. The same three rows every other gradient on the
+  page has, per band.
+
 - **You can style ONE place on a bar now, and see which places carry their
   own.** Click a place in the bar picture and the Look, Text, Effects and Fill
   tabs get a **Changing** switch at the top: the whole bar, or just that place.

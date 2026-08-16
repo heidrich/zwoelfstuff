@@ -461,39 +461,55 @@ end
 -- read { on, color, direction }, so this is the same three rows the co-tank
 -- panel has, pointed at a bar instead of at the panel.
 ---------------------------------------------------------------------------
-local function GradientRows(grid, bar, key, groups, note)
+-- `read` gives the stored ramp or nil, `put` takes a whole new one. Written
+-- as two callbacks rather than as a bar key so that a threshold BAND - whose
+-- ramp lives inside a list entry rather than on the bar - is the same three
+-- rows rather than a second copy of them.
+local function GradientRows(grid, groups, note, read, put)
     local L = ns.L
-
-    local function Ramp()
-        local current = Bar(bar)
-        local ramp = current and current[key]
-        return type(ramp) == "table" and ramp or nil
-    end
 
     local function Field(field, fallback)
         return function()
-            local ramp = Ramp()
-            if not ramp then return fallback end
+            local ramp = read()
+            if type(ramp) ~= "table" then return fallback end
             local value = ramp[field]
             if value == nil then return fallback end
             return value
         end
     end
 
-    -- The table is made on the first WRITE and never on a read: Store's whole
-    -- promise is that nothing is rewritten, and a bar that grew an empty
-    -- gradient by being looked at is a rewrite.
+    -- A WHOLE FRESH TABLE EVERY WRITE, never a field poked into the stored one.
+    --
+    -- It used to reach into `bar[key]` and set one field, which was the same
+    -- thing while a bar was the only thing these rows could edit. It is not
+    -- any more: reading resolves the PLACE's answer when the switch above says
+    -- so, and the table that comes back then may be the BAR's - so poking it
+    -- would edit every other place through the row of the one you picked.
+    --
+    -- It also keeps Store's promise on the read side: nothing is made until
+    -- something is written, so a bar that was only looked at is unchanged.
     local function Write(field, value)
-        local current = Bar(bar)
-        if type(current) ~= "table" then return end
-        if type(current[key]) ~= "table" then current[key] = {} end
-        current[key][field] = value
+        local was = read()
+        local out = { on = false, color = { 1, 1, 1 }, direction = "right" }
+        if type(was) == "table" then
+            out.on = was.on and true or false
+            if type(was.color) == "table" then
+                out.color = { was.color[1] or 1, was.color[2] or 1,
+                    was.color[3] or 1 }
+            end
+            out.direction = was.direction or out.direction
+        end
+        out[field] = value
+        put(out)
     end
 
     local on = Field("on", false)
 
-    UI.Toggle(grid:Row(L["Gradient"], { sublabel = note }), on,
-        function(value) Write("on", value) Refresh() end)
+    -- THE SWITCH ROW COMES BACK, so a caller whose whole block can leave the
+    -- page - a threshold band - can put it in the group that leaves with it.
+    -- The three bar-level callers ignore it: their rows are always on screen.
+    local switch = grid:Row(L["Gradient"], { sublabel = note })
+    UI.Toggle(switch, on, function(value) Write("on", value) Refresh() end)
 
     local rows = {
         UI.Swatch(grid:Row(L["Second colour"]),
@@ -512,6 +528,14 @@ local function GradientRows(grid, bar, key, groups, note)
     }
 
     groups[#groups + 1] = { when = on, rows = rows }
+    return switch
+end
+
+-- The three rows for a ramp stored under one key of the bar - which is the
+-- backdrop's, the border's and the fill's. Goes through Get and Put like every
+-- other control here, so the switch above the rows reaches it too.
+local function BarGradientRows(grid, bar, key, groups, note)
+    GradientRows(grid, groups, note, Get(bar, key, nil), Put(bar, key))
 end
 
 ---------------------------------------------------------------------------
@@ -575,7 +599,7 @@ function Panel.BuildLook(grid, bar)
     Slide(grid, bar, L["Thickness"], "borderSize",
         { min = 0, max = 4, step = 1, fallback = 1 })
     Colour(grid, bar, L["Colour"], "borderColor", { 0, 0, 0 })
-    GradientRows(grid, bar, "borderGradient", groups,
+    BarGradientRows(grid, bar, "borderGradient", groups,
         L["Only the one-pixel line - an edge file takes one colour"])
     Picture(grid, bar, L["Texture"], "border", "borderTexture", "None",
         "media-border")
@@ -590,7 +614,7 @@ function Panel.BuildLook(grid, bar)
 
     Switch(grid, bar, L["Show"], "backdrop", true)
     Colour(grid, bar, L["Colour"], "backdropColor", { 0, 0, 0 })
-    GradientRows(grid, bar, "backdropGradient", groups)
+    BarGradientRows(grid, bar, "backdropGradient", groups)
     Slide(grid, bar, L["Opacity"], "backdropAlpha",
         { min = 0, max = 1, step = 0.05, format = Percent, scale = 100,
           fallback = 0.9 })
@@ -1329,6 +1353,35 @@ local function BandRows(grid, bar)
             set = Write(index, "alpha"), apply = Refresh,
         })
 
+        -- THE BAND'S OWN RAMP, WHICH THE RENDERER HAS ALWAYS PAINTED.
+        --
+        -- Fill.Thresholds reads `entry.gradient` and hands it to ns.Tint, and
+        -- its own comment says why it is the band's own and never the fill's:
+        -- "the whole point of the band is that it is a different colour, and
+        -- inheriting the fill's would make it a different colour that ramps
+        -- the wrong way." Nothing wrote one. A setting that paints and cannot
+        -- be set is the same defect as one that is set and never painted -
+        -- this file has now found both halves within a fortnight.
+        --
+        -- The same three rows as every other ramp on this page, from the same
+        -- function, pointed at a list entry instead of at a bar key.
+        local bandGroups = {}
+        rows[#rows + 1] = GradientRows(grid, bandGroups, nil,
+            Field(index, "gradient", nil), Write(index, "gradient"))
+
+        -- ITS DETAIL ROWS ARE GATED ON BOTH, and that is the whole reason this
+        -- is not a straight append. The second colour and the direction are
+        -- there while the ramp is ON - GradientRows' own rule - and this band
+        -- is there while the bar HAS this many bands. Taking only the first
+        -- would leave three rows standing under a band that is not on the page.
+        for _, group in ipairs(bandGroups) do
+            local ramped = group.when
+            groups[#groups + 1] = {
+                when = function() return Count() >= index and ramped() end,
+                rows = group.rows,
+            }
+        end
+
         local strip = grid:Buttons({
             { text = L["Take this band away"], onClick = function()
                 local list = Held()
@@ -1398,7 +1451,7 @@ function Panel.BuildFill(grid, bar)
     Slide(grid, bar, L["Opacity"], "fillAlpha",
         { min = 0, max = 1, step = 0.05, format = Percent, scale = 100,
           fallback = 0.85 })
-    GradientRows(grid, bar, "fillGradient", groups)
+    BarGradientRows(grid, bar, "fillGradient", groups)
     Picture(grid, bar, L["Texture"], "statusbar", "fillTexture", nil,
         "media-texture", L["Same as behind the icon"])
 
