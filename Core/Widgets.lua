@@ -3607,7 +3607,16 @@ function UI.CellGrid(parent, cfg)
                 local texture = ns.SpellTexture(spellID)
                 cell.icon:SetTexture(texture or ns.WHITE)
                 cell.icon:SetDesaturated(not texture)
-                cell.icon:SetAlpha(1)
+
+                -- THE ICON'S OWN OPACITY, which the screen spends on exactly
+                -- this texture. It was a flat 1 here, so the one control the
+                -- owner had just asked to be told apart from the rest of the
+                -- place was the one the preview could not show him.
+                --
+                -- The ACTIVE value, not Look.Opacity's answer: everything in
+                -- this card is drawn as if it were up, which is what makes a
+                -- preview a picture of the settings rather than of the fight.
+                cell.icon:SetAlpha(tonumber(style and style.alpha) or 1)
 
                 local zoom = style and style.iconZoom or 0.08
                 cell.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
