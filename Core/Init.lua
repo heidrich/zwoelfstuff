@@ -1965,9 +1965,14 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         local on, total = ns.Modules:CountOn()
         ns.Print(string.format("Modules - %d of %d running:", on, total))
         for _, entry in ipairs(ns.Modules:All()) do
-            ns.Print(string.format("  |cffffd100%s|r  %s  %s",
-                entry.key, entry.title,
-                ns.Modules:IsOn(entry.key) and "|cff40ff40on|r" or "|cff888888off|r"))
+            -- A hidden entry is not listed - the switch itself still works,
+            -- which is the deliberate way back in for a benched feature.
+            if not entry.hidden then
+                ns.Print(string.format("  |cffffd100%s|r  %s  %s",
+                    entry.key, entry.title,
+                    ns.Modules:IsOn(entry.key) and "|cff40ff40on|r"
+                        or "|cff888888off|r"))
+            end
         end
 
     elseif cmd == "welcome" then

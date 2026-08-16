@@ -93,6 +93,16 @@ local LIST = {
         -- bars were removed. The drawing outlived the feature; it goes back
         -- on the feature rather than a second one being invented.
         key = "cooldowns", title = "Cooldowns", glyph = "grid", since = 5,
+        -- BENCHED AND OUT OF SIGHT, on the owner's word (2026-08-16): "das
+        -- modul komplett aus der uebersicht links rausnehmen, und dem
+        -- welcome screen. als wenn es nicht drin waere." `hidden` takes it
+        -- off every surface a user reads - the welcome window, the Settings
+        -- switches, /zs modules, both counts - while the ENTRY stays, so
+        -- every gate that asks Modules:IsOn("cooldowns") keeps its honest
+        -- false instead of the unknown-key yes. dbVersion 9 wrote that
+        -- false into every profile (Profiles.Bench). Resurrecting is: this
+        -- flag off, the page entry and NAV row back in Options.lua.
+        hidden = true,
         blurb = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
         detail = "Off, we leave Blizzard's cooldown frames alone entirely.",
         Boot = function() ns.Cooldowns.Render.Start() end,
@@ -202,7 +212,16 @@ function Modules:All() return LIST end
 -- second copy in this addon has. The rows underneath were always built from
 -- the registry, so the window has been drawing six switches under a sentence
 -- promising four.
-function Modules:Count() return #LIST end
+--
+-- HIDDEN ENTRIES ARE NOT COUNTED: a sentence promising a switch nobody can
+-- see is the stale-copy fault with extra steps.
+function Modules:Count()
+    local count = 0
+    for _, entry in ipairs(LIST) do
+        if not entry.hidden then count = count + 1 end
+    end
+    return count
+end
 
 -- THE SWITCH, and every gate in the addon reads it through here.
 --
@@ -269,13 +288,17 @@ function Modules:BootAll()
 end
 
 -- Every module the switch says is on, in list order. For the one-line status
--- the welcome window and /zs modules both print.
+-- the welcome window and /zs modules both print. Hidden entries count on
+-- neither side of the "N of M".
 function Modules:CountOn()
-    local on = 0
+    local on, total = 0, 0
     for _, entry in ipairs(LIST) do
-        if self:IsOn(entry.key) then on = on + 1 end
+        if not entry.hidden then
+            total = total + 1
+            if self:IsOn(entry.key) then on = on + 1 end
+        end
     end
-    return on, #LIST
+    return on, total
 end
 
 ---------------------------------------------------------------------------
@@ -304,7 +327,11 @@ function Modules.WelcomeDue(seen, generation, list)
 
     local fresh = {}
     for _, entry in ipairs(list) do
-        if (entry.since or 1) > seen then fresh[#fresh + 1] = entry.key end
+        -- A hidden module is never called out: a window opening to announce
+        -- something it then does not show would be the announcement lying.
+        if (entry.since or 1) > seen and not entry.hidden then
+            fresh[#fresh + 1] = entry.key
+        end
     end
     -- A generation bumped without a new module is not a reason to open a
     -- window in somebody's face.

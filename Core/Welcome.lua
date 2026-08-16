@@ -198,34 +198,41 @@ local function BuildFrame()
     -- day fail to mention one.
     frame.rows = {}
     local previous
-    for index, entry in ipairs(ns.Modules:All()) do
-        -- controlWidth 96: the toggle sits at the right end of the slot and
-        -- the NEW badge at its left end, so the two never overlap and the
-        -- label knows where to stop.
-        local row = UI.Row(frame, ns.L[entry.title], {
-            sublabel = ns.L[entry.blurb],
-            icon = entry.glyph,
-            controlWidth = 96,
-        })
-        row:SetHeight(ROW_H)
-        row:SetPoint("LEFT", frame, "LEFT", PAD, 0)
-        row:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
-        if previous then
-            row:SetPoint("TOP", previous, "BOTTOM", 0, 0)
-        else
-            row:SetPoint("TOP", warn, "BOTTOM", 0, -4)
+    for _, entry in ipairs(ns.Modules:All()) do
+        -- A hidden entry draws no row at all - "als wenn es nicht drin
+        -- waere". The rows table is appended rather than index-keyed for
+        -- exactly this line: a skipped index would leave a hole ipairs
+        -- stops at, and every row after the hidden one would silently
+        -- stop refreshing.
+        if not entry.hidden then
+            -- controlWidth 96: the toggle sits at the right end of the slot
+            -- and the NEW badge at its left end, so the two never overlap
+            -- and the label knows where to stop.
+            local row = UI.Row(frame, ns.L[entry.title], {
+                sublabel = ns.L[entry.blurb],
+                icon = entry.glyph,
+                controlWidth = 96,
+            })
+            row:SetHeight(ROW_H)
+            row:SetPoint("LEFT", frame, "LEFT", PAD, 0)
+            row:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
+            if previous then
+                row:SetPoint("TOP", previous, "BOTTOM", 0, 0)
+            else
+                row:SetPoint("TOP", warn, "BOTTOM", 0, -4)
+            end
+            previous = row
+
+            row.badge = UI.Badge(row.slot, ns.L["NEW"], "current")
+            row.badge:SetPoint("LEFT", row.slot, "LEFT", 0, 0)
+            row.badge:Hide()
+
+            UI.Toggle(row, function() return ns.Modules:IsOn(entry.key) end,
+                function(value) ns.Modules:Set(entry.key, value) end)
+
+            row.moduleKey = entry.key
+            frame.rows[#frame.rows + 1] = row
         end
-        previous = row
-
-        row.badge = UI.Badge(row.slot, ns.L["NEW"], "current")
-        row.badge:SetPoint("LEFT", row.slot, "LEFT", 0, 0)
-        row.badge:Hide()
-
-        UI.Toggle(row, function() return ns.Modules:IsOn(entry.key) end,
-            function(value) ns.Modules:Set(entry.key, value) end)
-
-        row.moduleKey = entry.key
-        frame.rows[index] = row
     end
 
     local footer = UI.Label(frame, "You can change this at any time under "
@@ -323,10 +330,16 @@ function Welcome:Show(fresh)
     -- back to this window from Settings in the same session, and a strip
     -- computed at build time would still be describing the old answer.
     local warn = frame.warn
-    local rivals = ns.Cooldowns and ns.Cooldowns.Rivals
+    -- ONLY WHILE THE COOLDOWNS MODULE IS OFFERED AT ALL. The strip explains
+    -- a switch that sits "below" it; with the module hidden there is no
+    -- switch below, and a warning about a feature this window no longer
+    -- mentions is the window talking to itself.
+    local offered = ns.Modules:Get("cooldowns")
+    offered = offered ~= nil and not offered.hidden
+    local rivals = offered and ns.Cooldowns and ns.Cooldowns.Rivals or nil
     local clash, others = false, {}
     if rivals then clash, others = rivals.Any() end
-    if clash then
+    if clash and rivals then
         warn.text:SetText(ns.L(
             "%s is already managing your cooldowns. Two addons cannot hold "
             .. "the same cooldown frames - one of them loses, and which one "

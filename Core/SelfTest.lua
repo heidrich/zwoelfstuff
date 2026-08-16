@@ -4731,8 +4731,17 @@ local function TestModules()
         end
     end
     for _, entry in ipairs(list) do
-        Check("Module '" .. entry.key .. "' has a page to be switched on from",
-            pageByModule[entry.key] ~= nil)
+        if entry.hidden then
+            -- Hidden is "als wenn es nicht drin waere" (owner, 2026-08-16):
+            -- no page, no rail row, no welcome row. A page for it would be
+            -- a door to a room the house pretends not to have.
+            Check("Module '" .. entry.key .. "' is hidden and has NO page",
+                pageByModule[entry.key] == nil)
+        else
+            Check("Module '" .. entry.key
+                .. "' has a page to be switched on from",
+                pageByModule[entry.key] ~= nil)
+        end
     end
 
 
@@ -4867,9 +4876,16 @@ local function TestModules()
             Modules.GENERATION, highest))
 
     -- The two sentences that say how many features there are do not type the
-    -- number any more; this is the list they count.
-    Check("The module count is the list's own length",
-        Modules:Count() == #Modules:All())
+    -- number any more; this is the list they count - minus what is hidden,
+    -- because a sentence promising a switch nobody can see is the stale-copy
+    -- fault with extra steps.
+    local visible = 0
+    for _, entry in ipairs(Modules:All()) do
+        if not entry.hidden then visible = visible + 1 end
+    end
+    Check("The module count is the list's own visible length",
+        Modules:Count() == visible,
+        string.format("%d vs %d", Modules:Count(), visible))
 
     -- The memory tile on Diagnostics. The client answers in KB, and the whole
     -- point of the tile is that somebody can read it at a glance - "13312 KB"
@@ -9978,17 +9994,18 @@ local function TestCooldownStyling()
     -- exactly like it worked.
     ---------------------------------------------------------------------
     do
+        -- (The "else Cooldowns" landing preference went with the benched
+        -- feature - a fresh install lands on the first live page now.)
         local PAGES = {
             { key = "settings" },
-            { key = "cooldowns", module = "cooldowns" },
-            { key = "deaths",    module = "deaths" },
+            { key = "deaths", module = "deaths" },
         }
         Check("A remembered page is where it opens",
-            ns.Options.Landing(PAGES, "deaths") == 3)
-        Check("With nothing remembered it opens on Cooldowns",
-            ns.Options.Landing(PAGES, nil) == 2)
-        Check("A page that no longer exists falls back to Cooldowns",
-            ns.Options.Landing(PAGES, "gone") == 2)
+            ns.Options.Landing(PAGES, "deaths") == 2)
+        Check("With nothing remembered it opens on the first page",
+            ns.Options.Landing(PAGES, nil) == 1)
+        Check("A page that no longer exists falls back to the first",
+            ns.Options.Landing(PAGES, "gone") == 1)
 
         -- THE FALLBACK THAT MATTERS. A remembered page whose module has been
         -- switched off is one the rail no longer shows, and landing on it is
@@ -9997,7 +10014,7 @@ local function TestCooldownStyling()
         ns.db.modules = ns.db.modules or {}
         ns.db.modules.deaths = false
         Check("A remembered page whose module is off is not landed on",
-            ns.Options.Landing(PAGES, "deaths") == 2)
+            ns.Options.Landing(PAGES, "deaths") == 1)
         ns.db.modules.deaths = was
     end
 

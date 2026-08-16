@@ -49,13 +49,16 @@ function Page:BuildPage(page, width)
         ns.Modules:Count()))
 
     for _, entry in ipairs(ns.Modules:All()) do
-        UI.Toggle(grid:Row(L[entry.title], { sublabel = L[entry.blurb] }),
-            function() return ns.Modules:IsOn(entry.key) end,
-            function(value)
-                ns.Modules:Set(entry.key, value)
-                -- The rail and the page behind this one both change.
-                ns.Options:Refresh()
-            end)
+        -- A hidden entry gets no switch - "als wenn es nicht drin waere".
+        if not entry.hidden then
+            UI.Toggle(grid:Row(L[entry.title], { sublabel = L[entry.blurb] }),
+                function() return ns.Modules:IsOn(entry.key) end,
+                function(value)
+                    ns.Modules:Set(entry.key, value)
+                    -- The rail and the page behind this one both change.
+                    ns.Options:Refresh()
+                end)
+        end
     end
 
     grid:Buttons({

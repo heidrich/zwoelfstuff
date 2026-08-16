@@ -769,20 +769,13 @@ local PAGES = {
       },
       build = function(page, width) return ns.OptionsRaidBar:BuildPage(page, width) end },
 
-    -- THE COOLDOWN MANAGER, rebuilt. The bewaehrte layout: the lattice in a
-    -- sticky band at the top, the settings under it, and every spell this
-    -- character can be shown in the third column. The picker is SpellPane -
-    -- the same one the reminders and the death log use, which is the whole
-    -- reason it was lifted out of the old workspace rather than deleted with
-    -- it.
-    { key = "cooldowns", title = "Cooldowns", glyph = "grid", module = "cooldowns",
-      cooldowns = true,
-      subtitle = "Blizzard's Cooldown Manager, on bars you arrange yourself.",
-      -- NO HEADER ACTION. "What it holds" printed the Cooldown Manager's whole
-      -- catalogue into the chat - a diagnostic, sitting where a page's own
-      -- verb belongs. Owner, with a picture of it: "das kann raus, auch der
-      -- button. verstehen die leute nicht." `/zs cdm` still prints it.
-      build = function(page, width) return ns.OptionsCooldowns:BuildPage(page, width) end },
+    -- THE COOLDOWN MANAGER PAGE IS GONE FROM THIS LIST, on the owner's word
+    -- (2026-08-16): "das modul komplett aus der uebersicht links rausnehmen
+    -- ... als wenn es nicht drin waere." The page builder
+    -- (OptionsCooldowns) still loads and the module entry still exists,
+    -- hidden - see Core/Modules.lua - so `/zs modules cooldowns` can
+    -- resurrect the feature without an install. Putting the page back is
+    -- one entry here and one NAV row below.
 
     -- NO THIRD COLUMN. Everything on it is a yes-or-no about something that
     -- happens without you, and there is no list to pick from - the two boxes
@@ -885,11 +878,8 @@ Options.PAGES = PAGES
 ---------------------------------------------------------------------------
 local NAV = {
     { gap = true },
-    -- ABOVE CO-TANKS, at the owner's word 2026-08-15: "pack den cdm einfach
-    -- ueber co-tanks". It is also where it was before the bars were removed,
-    -- and the rail is a list people navigate by position rather than by
-    -- reading - see the note further down about not moving rows.
-    { page = "cooldowns" },
+    -- Cooldowns stood here, above co-tanks, until the owner benched the
+    -- feature (2026-08-16): "komplett aus der uebersicht links rausnehmen".
     { page = "cotanks" },
     { page = "reminders" },
     { page = "externals" },
@@ -1032,13 +1022,12 @@ end
 -- what was last remembered.
 --
 --   the remembered key, if that page still exists and its module is on
---   else Cooldowns, which is where the owner wants a fresh install to land
 --   else the first page there is, which is Settings and always exists
 --
--- Pure so the desk can ask it every one of those three ways without a window.
--- The middle line is the one that would otherwise be untestable: it only
--- happens on a profile that has never opened the window, which is nobody's
--- machine after the first minute.
+-- (The middle preference - "else Cooldowns, where a fresh install lands" -
+-- went with the Cooldowns page when the owner benched the feature.)
+--
+-- Pure so the desk can ask it every one of those ways without a window.
 function Options.Landing(pages, remembered)
     local firstLive
     for index, entry in ipairs(pages or {}) do
@@ -1046,13 +1035,6 @@ function Options.Landing(pages, remembered)
         if live then
             if entry.key == remembered then return index end
             firstLive = firstLive or index
-        end
-    end
-
-    for index, entry in ipairs(pages or {}) do
-        if entry.key == "cooldowns"
-            and (not entry.module or ns.Modules:IsOn(entry.module)) then
-            return index
         end
     end
 
@@ -1727,7 +1709,6 @@ function Options:Create()
         local withDeaths = entry.deaths and moduleOn or false
         local withExternals = entry.externals and moduleOn or false
         local withRaidBar = entry.raidbar and moduleOn or false
-        local withCooldowns = entry.cooldowns and moduleOn or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
@@ -1737,7 +1718,7 @@ function Options:Create()
         -- the half that is still live is the half that edits settings for
         -- something that is not running.
         local third = withExplain or withTanks or withReminders
-            or withDeaths or withExternals or withRaidBar or withCooldowns
+            or withDeaths or withExternals or withRaidBar
         SetStageWidth(third)
         sideHost:SetShown(third)
         explain:SetShown(withExplain)
@@ -1746,13 +1727,11 @@ function Options:Create()
         ShowPane("deaths", withDeaths)
         ShowPane("externals", withExternals)
         ShowPane("raidbar", withRaidBar)
-        ShowPane("cooldowns", withCooldowns)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
         if withDeaths then ns.OptionsDeaths:Refresh() end
         if withExternals then panes.externals.Refresh() end
         if withRaidBar then panes.raidbar.Refresh() end
-        if withCooldowns then panes.cooldowns.Refresh() end
 
         -- THROUGH L, and the fallback is what makes this free: a page whose
         -- title has no translation gets its own English word back, which is
