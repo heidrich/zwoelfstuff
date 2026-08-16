@@ -1215,6 +1215,11 @@ function Replay:Open(snapshot)
     end
     if not frame then BuildWindow() end
 
+    -- A death recorded before presses carried an item id gets it now, so
+    -- the stone is a bar in the defensives lane and the potion is pictured
+    -- as the bottle - see Death.Upgrade.
+    ns.Death.Upgrade(snapshot)
+
     local events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
     local story = ns.Death.Storyline(events, snapshot.casts)
     if #story == 0 then

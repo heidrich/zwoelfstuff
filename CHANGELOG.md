@@ -102,6 +102,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   it, and zoomed in the band follows the line. The wheel still pans.
 - **The mob in the hover tip is a portrait, not a turning model** — in the
   death window, the replay and the group death log.
+- **Every hit row wears the face of what did it**, in front of the WHEN
+  column, in the death window and in a group death opened from the log —
+  point at it for the same enemy tip the other windows show. Deaths recorded
+  before this update are brought up to date when they are shown: a potion
+  gets its bottle, a Healthstone its bar.
 - **The reminder list shows which one is picked.** Each name sits on a chip
   and the chosen one is lit, the same way the filter chips over the spell
   list are; one orange word in a row of grey ones did not read as a choice.

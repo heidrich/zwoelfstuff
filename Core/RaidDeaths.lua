@@ -2402,7 +2402,7 @@ function RaidDeaths.PaintDetail(entry, info)
         row:SetPoint("TOPLEFT", detail.content, "TOPLEFT", 0,
             -((index - 1) * (EVENT_H + 2)))
         row:SetPoint("RIGHT", detail.content, "RIGHT", 0, 0)
-        ns.Death.PaintEventRow(row, ev, entry.maxHP)
+        ns.Death.PaintEventRow(row, ev, entry.maxHP, events)
     end
     for index = #events + 1, #detail.rows do
         detail.rows[index].ev = nil

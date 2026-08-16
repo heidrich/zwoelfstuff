@@ -536,6 +536,48 @@ function Death.Analyse(events, maxHP, avail, casts)
     return out
 end
 
+-- A SNAPSHOT WRITTEN BEFORE PRESSES CARRIED AN ITEM ID, brought up to date
+-- in place: the item is worked out again from the spell and the name, the
+-- same two doors a fresh press goes through, and a press that turns out to
+-- be a picked consumable becomes a defensive. Idempotent and cheap, so it
+-- runs every time a death is shown or replayed rather than once at load -
+-- item names are not always loaded when the log is (owner, 2026-08-16:
+-- "bei den bestehenden logs sind die heal potion bilder immer noch nicht
+-- korrekt und der healthstone ist immer noch auf der schadensleiste").
+-- Returns how many presses it changed.
+function Death.Upgrade(snapshot, map)
+    if type(snapshot) ~= "table" then return 0 end
+    map = map or Death.DefensiveMap(Death.Defensives(), Death.PickedItems(),
+        function(itemID)
+            if not (C_Item and C_Item.GetItemSpell) then return nil end
+            local ok, _, spellID = pcall(C_Item.GetItemSpell, itemID)
+            return ok and spellID or nil
+        end,
+        Death.ItemName)
+    local moved = 0
+    for _, cast in ipairs(snapshot.casts or {}) do
+        if not cast.itemID then
+            local itemID = Death.CastItem(map, cast.spellID, cast.name)
+            if itemID then
+                cast.itemID = itemID
+                cast.defensive = true
+                moved = moved + 1
+            end
+        end
+    end
+    -- The story's own copy of the used list, so the verdict line and the
+    -- replay agree with the panel about which press was the potion.
+    local used = snapshot.analysis and snapshot.analysis.defensivesUsed
+    if moved > 0 and type(used) == "table" then
+        for _, entry in ipairs(used) do
+            if not entry.itemID then
+                entry.itemID = Death.CastItem(map, entry.spellID, entry.name)
+            end
+        end
+    end
+    return moved
+end
+
 -- The judgement lines alone, for the window. A snapshot written before the
 -- lists moved to the panel carries no `verdict`; its lines are sorted by
 -- what they begin with, which is how those lines were always told apart.
@@ -1488,8 +1530,16 @@ local SCALE_MIN, SCALE_MAX = 0.6, 1.4
 -- The four columns of the event table, measured from the row's left edge.
 -- The header labels and the cells read the SAME numbers, or a header is a
 -- decoration that drifts away from what it names.
-local COL_ICON = 52
-local COL_WHAT = 74
+-- THE MOB'S FACE IN FRONT OF THE ROW, before WHEN (owner, 2026-08-16:
+-- "da fehlt vor dem when das gegner avatar und hover infos - also von wem
+-- kam der spell / hit. dann ist das auch konsistent mit den anderen
+-- fenstern"). The same face and the same hover tip the group log's rows
+-- and the replay's marks carry.
+local COL_FACE = 4
+local FACE_W = 18
+local COL_WHEN = COL_FACE + FACE_W + 8
+local COL_ICON = 52 + COL_WHEN - 6
+local COL_WHAT = 74 + COL_WHEN - 6
 local COL_WHAT_W = 180
 local COL_AMOUNT_R = -132
 local COL_LEFT_R = -6
@@ -1518,7 +1568,7 @@ function Death.BuildEventHead(parent, width, whatLabel)
     head:SetSize(width, 16)
 
     head.when = UI.Eyebrow(head, "When")
-    head.when:SetPoint("LEFT", head, "LEFT", 6, 0)
+    head.when:SetPoint("LEFT", head, "LEFT", COL_WHEN, 0)
     head.what = UI.Eyebrow(head, whatLabel or "What hit you")
     head.what:SetPoint("LEFT", head, "LEFT", COL_WHAT, 0)
     head.amount = UI.Eyebrow(head, "Damage")
@@ -1573,8 +1623,25 @@ function Death.BuildEventRow(parent, width)
     -- what this row cost. A HEAL is painted back to the neutral text colour
     -- in the painter below, because a heal drawn in the damage colour is the
     -- one thing this table must never say.
+    -- The face of whatever did this, and the enemy tip on it. Hidden when
+    -- the recap gave no art for the source; the WHEN column stays where it
+    -- is either way, so the rows line up whoever hit you.
+    row.face = Death.CreateFace(row, FACE_W)
+    row.face:SetPoint("LEFT", row, "LEFT", COL_FACE, 0)
+    row.face:EnableMouse(true)
+    row.face:SetScript("OnEnter", function(self)
+        local ev = row.ev
+        if not (ev and ev.who) then return end
+        Death.ShowEnemyTip(self, {
+            who = ev.who,
+            art = ev.art,
+            summary = Death.SourceSummary(row.events, ev.who),
+        })
+    end)
+    row.face:SetScript("OnLeave", Death.HideEnemyTip)
+
     row.when = UI.Label(row, "", 11, C.harm)
-    row.when:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.when:SetPoint("LEFT", row, "LEFT", COL_WHEN, 0)
 
     -- The spell's icon, when the recap names a readable id. EllesmereUI
     -- resolves recap icons exactly this way in shipping code.
@@ -1655,9 +1722,12 @@ end
 -- One event drawn into one row. The row keeps the event it is showing,
 -- because these frames are pooled across every death in the list and a
 -- closure would answer for the one it was built with.
-function Death.PaintEventRow(row, ev, maxHP)
+function Death.PaintEventRow(row, ev, maxHP, events)
     if not (row and ev) then return end
     row.ev = ev
+    -- The whole list, for the face's tip: "12 hits from it, 900k in total".
+    row.events = events
+    Death.PaintFace(row.face, ev.art)
     -- THE WIDTH IT REALLY HAS, not the one it was born with. A row anchored
     -- on both sides follows the window it is in, and a bar drawn against the
     -- build-time number would stop short of the row or run past it. The
@@ -1752,7 +1822,7 @@ end
 -- strands a name on the next line without its picture, and a strip of
 -- chips under the table grew into the table when there were many.
 ---------------------------------------------------------------------------
-local PANEL_HEAD_H = 22
+local PANEL_HEAD_H = 24
 local PANEL_ROW_H = 20
 local PANEL_GAP = 10          -- air above the second and third heading
 
@@ -1779,7 +1849,10 @@ function Death.PanelEntries(snapshot)
         return string.format("-%.1fs", math.max(0, t or 0))
     end
 
-    out[#out + 1] = { kind = "head", text = "Defensives used" }
+    -- GREEN FOR WHAT WAS PRESSED, RED FOR WHAT WAS NOT (owner, 2026-08-16):
+    -- the two headings answer the one question the window is opened for,
+    -- and the colour says which is the good half before the word does.
+    out[#out + 1] = { kind = "head", text = "Defensives used", tone = "good" }
     if #used == 0 then
         out[#out + 1] = { kind = "none", text = "None" }
     end
@@ -1795,7 +1868,7 @@ function Death.PanelEntries(snapshot)
     -- if the press had never happened). Matched by id and by name: a
     -- snapshot written before presses carried an item id still names the
     -- potion the same way in both lists.
-    out[#out + 1] = { kind = "head", text = "Unused defensives" }
+    out[#out + 1] = { kind = "head", text = "Unused defensives", tone = "harm" }
     if snapshot.reason then
         out[#out + 1] = { kind = "none", text = snapshot.reason }
     else
@@ -1910,7 +1983,9 @@ function Death.BuildDefensivePanel(parent, width)
         local row = CreateFrame("Frame", nil, host.content)
         row:SetSize(rowWidth, PANEL_ROW_H)
 
-        row.head = UI.Eyebrow(row, "")
+        -- A tick larger than an eyebrow (owner, 2026-08-16), still upper
+        -- case; the tone is painted per heading below.
+        row.head = UI.Label(row, "", 12, C.textDim)
         row.head:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 4)
 
         row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -1964,7 +2039,10 @@ function Death.BuildDefensivePanel(parent, width)
                 heads = heads + 1
                 if heads > 1 then y = y + PANEL_GAP end
                 height = PANEL_HEAD_H
-                row.head:SetText(entry.text)
+                row.head:SetText((entry.text or ""):upper())
+                local tone = (entry.tone == "good" and C.inUse)
+                    or (entry.tone == "harm" and C.harm) or C.textDim
+                row.head:SetTextColor(tone[1], tone[2], tone[3])
             elseif entry.kind == "item" then
                 row.icon:SetTexture(Death.PanelIcon(entry) or 134400)
                 row.name:SetText(entry.name or "?")
@@ -2740,6 +2818,7 @@ function Death:Show(index)
     frame.disarmClear()
     Death.ApplyScale()
     frame.scaleRow.Refresh()
+    Death.Upgrade(snapshot)
 
     -- The killer, when the recap named one readably. The name is already
     -- through SafeName's door or it would not be in the snapshot.
@@ -2843,7 +2922,7 @@ function Death:Show(index)
 
         -- The row, its columns and its bars are all painted by the one
         -- function the group log paints its rows with.
-        Death.PaintEventRow(row, ev, maxHP)
+        Death.PaintEventRow(row, ev, maxHP, events)
     end
     -- Rows the pool has and this death does not need. It is a POOL, so it
     -- is as long as the messiest death seen this session, not as long as

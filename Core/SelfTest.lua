@@ -1217,6 +1217,29 @@ local function TestDeath()
     Check("The potion by its spell",
         Death.CastItem(map, 1234768, "Silvermoon Health Potion") == 212263)
 
+    -- An OLD death, brought up to date: the stone becomes a defensive with
+    -- its item, the potion gets its bottle, a spell is left alone, and a
+    -- second pass changes nothing.
+    local old = {
+        casts = {
+            { t = 5, spellID = 49998, name = "Death Strike" },
+            { t = 4, spellID = 462156, name = "Use Healthstone" },
+            { t = 2, spellID = 1234768, name = "Silvermoon Health Potion",
+              defensive = true },
+        },
+        analysis = { defensivesUsed = {
+            { spellID = 1234768, name = "Silvermoon Health Potion" },
+        } },
+    }
+    Check("An old death's presses get their items back",
+        Death.Upgrade(old, map) == 2
+            and old.casts[2].itemID == 5512 and old.casts[2].defensive == true
+            and old.casts[3].itemID == 212263
+            and old.casts[1].itemID == nil and old.casts[1].defensive == nil)
+    Check("and so does the story's own list of what was used",
+        old.analysis.defensivesUsed[1].itemID == 212263)
+    Check("A second pass finds nothing to do", Death.Upgrade(old, map) == 0)
+
     ---------------------------------------------------------------------
     -- The panel's rows: used, unused, the rest - and a used one does not
     -- also stand in the unused list with its cooldown.
