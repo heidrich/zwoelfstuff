@@ -841,7 +841,7 @@ function Routes:Start()
         -- a second and only looks at what is casting right then.
         if event == "UNIT_SPELLCAST_START"
             or event == "UNIT_SPELLCAST_CHANNEL_START" then
-            if type(unit) ~= "string" or not unit:match("^nameplate") then return end
+            if not ns.CanCompute(unit) or type(unit) ~= "string" or not unit:match("^nameplate") then return end
             local id = ns.CanCompute(spellID) and type(spellID) == "number"
                 and spellID or Routes.CastSpell(unit)
             local npcID = id and Routes.spellToNpc[id]
@@ -1127,7 +1127,7 @@ function Routes:Listen(seconds)
     local f = self.listener or CreateFrame("Frame")
     self.listener = f
     local said, left = 0, seconds or 20
-    local seenCast = {}
+    local seenCast, saidSecret = {}, false
 
     ns.Print(string.format("|cffffd100listening for %d seconds|r for a cast on a "
         .. "nameplate - pull something that casts", left))
@@ -1167,6 +1167,17 @@ function Routes:Listen(seconds)
         if said >= LISTEN_LINES then return end
         -- A cast on a nameplate unit - the one door left (the combat log
         -- is refused outright, see the head of Progress).
+        if not ns.CanCompute(unit) then
+            -- The token itself came back secret: that is an answer too, and
+            -- a silent return would file it as "nothing cast".
+            if not saidSecret then
+                saidSecret = true
+                said = said + 1
+                ns.Print("   cast " .. event:sub(16) .. ": |cffff8040the unit token "
+                    .. "itself is withheld|r - the event fires, the plate cannot be named")
+            end
+            return
+        end
         if type(unit) ~= "string" or not unit:match("^nameplate") then return end
         local id = ns.CanCompute(spellID) and type(spellID) == "number" and spellID
             or nil
