@@ -715,18 +715,36 @@ local NUMBERS = {
       end },
 }
 
--- TWO DETOURS DIED HERE AND NEITHER MAY COME BACK. The RELAY read Blizzard's
--- counter string off the veiled frame, and the string was empty with the
--- stacks plainly up ("es wird nix angezeigt") - the engine does not write
--- text into a counter nobody can see, and you cannot copy what is never
--- written. The VEIL-PIERCING then made the counter itself visible
--- (SetIgnoreParentAlpha, anchored onto our cell) so the engine would feed it
--- - and it still did not ("die aufladungen bei den bars jetzt auch weg"):
--- its updates key on the ITEM, not on the string's own visibility. So a
--- place we draw writes its own numbers from sources this addon can hold -
--- the charge API in plain numbers, a stack count wherever a reader answers -
--- which is the mechanism that was already working before either detour.
+-- BLIZZARD'S OWN STACK STRING, HANDED ON - the timer trick, applied to the
+-- count. It failed once and the FAILURE was misread: the string really was
+-- blank, but not because relaying is wrong - because the item it was read
+-- off was veiled whole (alpha 0, unanchored), which is the one state the
+-- engine stops feeding. The item on a place we draw is CLAIMED now - placed
+-- on the cell, alpha 1, its parts silenced one by one (Claim.Quiet) - which
+-- is precisely how the addon whose bars do show counts keeps its children,
+-- and its relay is this same GetText/SetText pair.
 --
+-- The string can be secret: `== nil` is the only thing done to it, and it
+-- lands in SetText through a pcall. Whatever the engine delivers, the bar
+-- relays. Our own readable sources still win when they answer - the relay is
+-- the fallback for the state his items are actually in, where the count is
+-- readable nowhere.
+--
+-- ONLY on a place we draw, and ONLY while Blizzard's counter is shown: on an
+-- adopted place its string is already visible, and a hidden counter is
+-- Blizzard answering "not worth a number", which stays final.
+local function Relay(item, ours)
+    if not ours then return nil end
+    if ns.CDM:CounterShown(item, "Applications") ~= true then return nil end
+
+    local fontString = ns.CDM:CounterText(item, "Applications")
+    if not fontString then return nil end
+
+    local ok, text = pcall(fontString.GetText, fontString)
+    if not ok then return nil end
+    return text
+end
+
 -- `ours` is true when Own.lua drew this place rather than Claim adopting it.
 -- It changes nothing about how a number is drawn and one thing about whether
 -- one is - see Text.StackToShow.
@@ -754,7 +772,18 @@ function Text.Count(cell, item, style, spellID, ours)
             value = number.Value(item, spellID, ours)
         end
 
-        if value == nil then
+        -- OUR SOURCE DRY, BLIZZARD'S NOT: relay its finished string.
+        -- `relayed` is a STRING (possibly secret) and goes out through
+        -- SetText; `value` is a NUMBER (possibly secret) and goes out
+        -- through SetFormattedText. Both comparisons here are `== nil`,
+        -- the one legal question.
+        local relayed
+        if value == nil and text and text.show
+            and number.member == "Applications" then
+            relayed = Relay(item, ours)
+        end
+
+        if value == nil and relayed == nil then
             Away()
         else
             if not cell[field] then
@@ -784,8 +813,18 @@ function Text.Count(cell, item, style, spellID, ours)
             -- is the raise. pcall because a font string with no face raises
             -- on being written to, and a missing media file is a user's
             -- problem rather than an error.
-            if pcall(cell[field].SetFormattedText, cell[field],
-                    "%d", value) then
+            --
+            -- The relayed string goes through SetText for the same reason
+            -- the timer does: it is already formatted, and running it
+            -- through %d would be reading it.
+            local wrote
+            if value ~= nil then
+                wrote = pcall(cell[field].SetFormattedText, cell[field],
+                    "%d", value)
+            else
+                wrote = pcall(cell[field].SetText, cell[field], relayed)
+            end
+            if wrote then
                 cell[field]:Show()
             else
                 Away()
@@ -964,4 +1003,133 @@ function Text.Dump()
         .. "marked SECRET may not be compared to anything, which is why "
         .. "'blizzard shows it' is the only honest answer to 'should this "
         .. "number be here'.|r")
+end
+
+---------------------------------------------------------------------------
+-- /zs watch - a dozen seconds of the cells' lives, one line per CHANGE
+--
+-- Text.Dump is a photograph, and both of the owner's open bugs are films:
+-- "the engine only feeds what it thinks is visible" and "the spark stays lit
+-- on an empty bar" are claims about what happens WHILE a buff builds and
+-- falls off. Reasoning about them from the code was wrong three times in one
+-- day. So the client is asked, live: every placed cell is read once a
+-- second, and the moment anything about one changes, a line says so.
+--
+-- Nothing here stores or compares a secret. Every reading is classified the
+-- moment it is taken - blank, SECRET, or the string itself when it is plain
+-- - and only those classifications are kept and compared between ticks.
+---------------------------------------------------------------------------
+
+-- One cell's whole state in one plain string. Exported for the desk: a
+-- watcher that only ever ran on a timer in the client would be an exported
+-- loop nobody calls, checked by nothing.
+function Text.Glance(item)
+    if type(item) ~= "table" then return nil end
+
+    -- Active is the tri-state the spark, the icon dim and the bar empty all
+    -- run on - plain by construction, never a secret.
+    local active = ns.CDM:ItemLooksActive(item)
+    local line = "active " .. (active == nil and "?" or tostring(active))
+
+    -- The spark, if this item's fill carries one.
+    local Fill = Cooldowns.Fill
+    local spark = Fill and Fill.Spark and Fill.Spark(item) or nil
+    if spark then
+        local lit = spark.IsShown and spark:IsShown()
+        line = line .. "  spark " .. (lit and "ON" or "off")
+    end
+
+    for _, pair in ipairs(COUNTERS) do
+        local widget = ns.CDM:Counter(item, pair.key)
+        if widget then
+            -- IsShown can hand back a secret here - a visibility decided
+            -- from a count we may not read is itself unreadable. pcall
+            -- guards the call, CanCompute guards the answer - ON the line
+            -- that tests it, exactly as CDM:CounterShown writes it, which
+            -- is the shape the frame-contract guard can see.
+            local frame = "?"
+            local ok, shown = pcall(widget.IsShown, widget)
+            if ok and not ns.CanCompute(shown) then frame = "SECRET" end
+            if ok and ns.CanCompute(shown) then frame = shown and "shows" or "hidden" end
+            line = string.format("%s  %s %s reads %s", line, pair.element,
+                frame, Says(ns.CDM:CounterText(item, pair.key)))
+        end
+    end
+
+    return line
+end
+
+local watching
+
+function Text.Watch(seconds)
+    if watching then
+        watching:Cancel()
+        watching = nil
+    end
+
+    if not (ns.CDM.IsAvailable and ns.CDM:IsAvailable()) then
+        ns.Print("|cffff4040Cooldown Manager unavailable|r - "
+            .. (ns.CDM:UnavailableReason() or "reason unknown"))
+        return
+    end
+
+    seconds = math.max(5, math.min(60, tonumber(seconds) or 12))
+
+    -- The spells, not the frames: the pools churn mid-watch, so each tick
+    -- finds the item fresh and a frame that went away says so instead of
+    -- reading stale.
+    local targets = {}
+    for _, bar in pairs(Store.Bars()) do
+        if type(bar) == "table" and bar.id then
+            local cells = Store.Cells(bar)
+            for index = 1, Store.Capacity(bar) do
+                local spellID = cells[index]
+                if spellID and ns.CDM:ItemForSpell(spellID) then
+                    targets[#targets + 1] = {
+                        spellID = spellID,
+                        label = string.format("%s %d %s",
+                            bar.name or ("bar " .. tostring(bar.id)), index,
+                            ns.SpellName(spellID) or "?"),
+                    }
+                end
+            end
+        end
+    end
+
+    if #targets == 0 then
+        ns.Print("No cell on any bar has a live frame right now - nothing "
+            .. "to watch. /zs cdm says whether Blizzard holds anything.")
+        return
+    end
+
+    ns.Print(string.format("|cffffd100--- watching %d cells for %ds - build "
+        .. "your stacks, spend your charges ---|r", #targets, seconds))
+    for _, target in ipairs(targets) do
+        local item = ns.CDM:ItemForSpell(target.spellID)
+        target.last = item and Text.Glance(item) or "the frame went away"
+        ns.Print(string.format("  |cff7ec6d4%s|r  %s", target.label,
+            target.last))
+    end
+
+    if not (C_Timer and C_Timer.NewTicker) then return end
+
+    local tick = 0
+    watching = C_Timer.NewTicker(1, function()
+        tick = tick + 1
+        for _, target in ipairs(targets) do
+            local item = ns.CDM:ItemForSpell(target.spellID)
+            local now = item and Text.Glance(item) or "the frame went away"
+            if now ~= target.last then
+                target.last = now
+                ns.Print(string.format("+%ds  |cff7ec6d4%s|r  %s", tick,
+                    target.label, now))
+            end
+        end
+        if tick >= seconds then
+            if watching then watching:Cancel() end
+            watching = nil
+            ns.Print("|cffffd100--- watch over. Copy ALL of the above lines "
+                .. "- the changes are the answer. ---|r")
+        end
+    end, seconds)
 end

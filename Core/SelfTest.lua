@@ -480,7 +480,8 @@ local function TestCommandList()
     -- /zs route came out when Routes was parked.
     local handled = {
         [""] = true, unlock = true, lock = true, build = true, minimap = true,
-        cdm = true, skin = true, text = true, numbers = true, tanks = true,
+        cdm = true, skin = true, text = true, numbers = true, watch = true,
+        tanks = true,
         cotanks = true, modules = true, module = true, welcome = true,
         externals = true, external = true, taunt = true, taunts = true,
         reminders = true, reminder = true, death = true, test = true,
@@ -9045,18 +9046,30 @@ local function TestCooldownOwn()
         Render.Refresh()
 
         -----------------------------------------------------------------
-        -- AND BLIZZARD'S FRAME IS NOT TOUCHED
+        -- AND BLIZZARD'S FRAME RIDES THE CELL, ALIVE AND SILENT
         --
-        -- Not claimed, not moved, not stripped - veiled by the takeover pass
-        -- like any other frame nobody placed. That is not tidiness: its clock
-        -- is what ours mirrors, and a frame we had hidden would stop feeding
-        -- it.
+        -- It used to be veiled whole - alpha 0, unanchored - and that is
+        -- the one state the engine stops feeding: counter text arrived
+        -- blank with the stacks plainly up, by two different mechanisms.
+        -- The working reference (EllesmereUI) keeps its child claimed,
+        -- anchored, alpha 1, with the PARTS silenced one by one - so ours
+        -- does too now. Alive to the engine, invisible to the user.
         -----------------------------------------------------------------
-        Check("Blizzard's frame for it was never placed on our cell",
-            bars:GetNumPoints() == 0, tostring(bars:GetNumPoints()))
-        Check("It is veiled rather than hidden, so its clock keeps running",
-            bars:GetAlpha() == 0 and bars:IsShown() ~= false,
+        Check("Blizzard's frame is placed on our cell, alive",
+            (select(2, bars:GetPoint(1))) == cell,
+            tostring(select(2, bars:GetPoint(1))))
+        Check("at alpha 1, so the engine keeps feeding it",
+            bars:GetAlpha() == 1 and bars:IsShown() ~= false,
             tostring(bars:GetAlpha()))
+        Check("with its picture parts silenced one by one",
+            (bars.Icon == nil or bars.Icon:GetAlpha() == 0)
+                and (bars.Bar == nil or bars.Bar:GetAlpha() == 0)
+                and (bars.Applications == nil
+                    or bars.Applications:GetAlpha() == 0),
+            string.format("icon %s bar %s counter %s",
+                tostring(bars.Icon and bars.Icon:GetAlpha()),
+                tostring(bars.Bar and bars.Bar:GetAlpha()),
+                tostring(bars.Applications and bars.Applications:GetAlpha())))
 
         -----------------------------------------------------------------
         -- THE THREE THINGS HE SAID USED TO WORK ON A BAR
@@ -9121,6 +9134,70 @@ local function TestCooldownOwn()
             cellD.chargeCount == nil or cellD.chargeCount:IsShown() == false,
             cellD.chargeCount and tostring(cellD.chargeCount:GetText())
                 or "none")
+
+        -----------------------------------------------------------------
+        -- THE RELAY, on the state his items are actually in: our count
+        -- reader DRY, Blizzard's counter shown, its string carrying the
+        -- number. With the item ALIVE on the cell the engine feeds that
+        -- string - that is the whole point of Claim.Quiet - and the bar
+        -- hands it on exactly as it hands on the timer.
+        -----------------------------------------------------------------
+        local cached = bars.auraDataCached
+        bars.auraDataCached = nil
+
+        local counterString = ns.CDM:CounterText(bars, "Applications")
+        Check("The fixture's counter has a string to relay",
+            counterString ~= nil)
+        if counterString then
+            counterString:SetText("2")
+
+            Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
+            Check("A dry count reader relays Blizzard's own string",
+                cell.stackCount:GetText() == "2"
+                    and cell.stackCount:IsShown() == true,
+                tostring(cell.stackCount:GetText()))
+
+            -- BLANK RELAYS AS BLANK: the buff down, the counter frame still
+            -- shown, nothing in it. A relay that invented a mark here would
+            -- draw noise on every empty bar all evening.
+            counterString:SetText("")
+            Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
+            Check("and a blank string relays as nothing visible",
+                (cell.stackCount:GetText() or "") == "",
+                tostring(cell.stackCount:GetText()))
+
+            -- AND A SECRET STRING GOES THROUGH UNTOUCHED - the engine
+            -- formatted it where the count was readable; == nil and SetText
+            -- are the only two things that may happen to it on the way.
+            if _G.__SECRET and issecretvalue and issecretvalue(_G.__SECRET) then
+                counterString:SetText(_G.__SECRET)
+                local ok = pcall(Txt.Count, cell, bars,
+                    Txt.Style(ns.db.bars[1], 24), 77535, true)
+                Check("A protected count string is relayed without a raise",
+                    ok and cell.stackCount:GetText() == _G.__SECRET,
+                    tostring(ok))
+            end
+
+            counterString:SetText("")
+        end
+
+        bars.auraDataCached = cached
+        Txt.Count(cell, bars, Txt.Style(ns.db.bars[1], 24), 77535, true)
+        Check("With the reader wet again, our own number wins over the relay",
+            cell.stackCount:GetText() == "3",
+            tostring(cell.stackCount:GetText()))
+
+        -- AND THE WATCH CAN DESCRIBE THIS CELL. /zs watch is the film
+        -- version of /zs text; Glance is its one reading, exported so the
+        -- desk can hold it still. It must never touch what it describes.
+        local glance = Txt.Glance(bars)
+        Check("The watch reads this cell in one plain line",
+            type(glance) == "string"
+                and glance:find("active true", 1, true) ~= nil
+                and glance:find("stacks", 1, true) ~= nil,
+            tostring(glance))
+        Check("and a non-frame gives it nothing to say",
+            Txt.Glance(nil) == nil and Txt.Glance(7) == nil)
         Check("The remaining time is Blizzard's own, copied across",
             own.timer:GetText() == "12.3", own.timer:GetText())
 

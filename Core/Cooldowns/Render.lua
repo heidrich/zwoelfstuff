@@ -185,18 +185,31 @@ local function DrawBar(bar, claimed, factor)
             local spellID = cells[index]
 
             if item and Own.Wanted(item) then
-                -- OURS TO DRAW, AND BLIZZARD'S FRAME IS DELIBERATELY NOT
-                -- CLAIMED.
+                -- OURS TO DRAW - AND BLIZZARD'S FRAME RIDES THE CELL, ALIVE
+                -- AND SILENT.
                 --
-                -- It is left out of `claimed`, so the takeover pass below
-                -- veils it like any other frame nobody placed - alpha 0, still
-                -- shown, still updating. That is not a side effect being
-                -- tolerated, it is the mechanism: Own.lua MIRRORS that bar's
-                -- value and copies its timer string, because the remaining
-                -- time is a secret value and Blizzard is the only one allowed
-                -- to work it out. See Own.lua's header.
+                -- It used to be left out of `claimed`, so the takeover pass
+                -- veiled it whole - alpha 0, unanchored. That is the state
+                -- the engine stops feeding: counter text arrived blank with
+                -- the stacks plainly up, twice, by two different mechanisms.
+                -- The one addon on this machine whose bars DO show counts
+                -- (EllesmereUI, studied never copied) keeps its Blizzard
+                -- child claimed, anchored and at alpha 1, and silences its
+                -- PARTS one by one - and its counters read live. So this
+                -- item is placed on the cell at the icon square, revealed,
+                -- and made quiet part by part: to the engine it is a visible
+                -- frame it keeps feeding, to the user it is nothing at all.
+                -- Own.lua still MIRRORS its bar value and copies its timer
+                -- string - the remaining time is a secret and Blizzard is
+                -- the only one allowed to work it out.
                 local band = Own.Draw(cell, item, bar, index, spellID, at,
                     style, Look.Style(bar, index), factor)
+
+                Claim.Strip(item)
+                Claim.Place(item, { "LEFT", cell, "LEFT", 0, 0 }, at.h, at.h)
+                Claim.Quiet(item)
+                Claim.Reveal(item)
+                claimed[item] = true
 
                 -- THE SAME THREE CALLS THE ADOPTED BRANCH MAKES, and that is
                 -- the point of making them here rather than inside Own: the

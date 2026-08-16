@@ -1780,6 +1780,9 @@ ns.COMMANDS = {
     { cmd = "/zs cdm",
       text = "what Blizzard's Cooldown Manager currently holds - the "
         .. "catalogue the death log and the reminders read" },
+    { cmd = "/zs watch",
+      text = "watch every placed cell for twelve seconds and print each "
+        .. "change - build stacks or spend charges while it runs" },
 
     { group = "Auras" },
     { cmd = "/zs auras",
@@ -1898,6 +1901,12 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     elseif cmd == "numbers" or cmd == "text" then
         local text = ns.Cooldowns and ns.Cooldowns.Text
         if text and text.Dump then text.Dump() else
+            ns.Print("The cooldown text module is not loaded.")
+        end
+
+    elseif cmd == "watch" then
+        local text = ns.Cooldowns and ns.Cooldowns.Text
+        if text and text.Watch then text.Watch(rest) else
             ns.Print("The cooldown text module is not loaded.")
         end
 

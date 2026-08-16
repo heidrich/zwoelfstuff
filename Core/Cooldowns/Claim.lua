@@ -368,6 +368,42 @@ function Claim.Strip(item)
     end
 end
 
+-- MAKES A LIVE ITEM SILENT - the data-carrier for a place we draw.
+--
+-- Read off the one addon on this machine whose bars DO show live counts
+-- (EllesmereUICooldownManager, studied never copied): it never veils a
+-- Blizzard child whole. The child stays claimed, anchored and at alpha 1 -
+-- ALIVE, as far as the engine's own update passes care - and every part of
+-- it that draws is silenced one by one. Its hooks file states the rule this
+-- addon paid three failed mechanisms to learn: "the engine rewrites the
+-- counter's TEXT on charge changes but never its alpha." A whole-frame veil
+-- at alpha 0 is exactly the state the engine stops feeding; a live frame
+-- with quiet parts is the state it keeps feeding.
+--
+-- Through Claim.Set part by part, so Give's ordinary Parts walk restores
+-- every one of them without knowing this function exists. The item ITSELF is
+-- deliberately not in the list - its alpha is the pin's (Reveal), and
+-- setting it here would fight the hook that holds it.
+function Claim.Quiet(item)
+    if not item then return end
+    if not Hold(item) then return end
+
+    local parts = {
+        item.Icon, item.Cooldown, item.Bar,
+        item.ChargeCount, item.Applications, item.Name, item.Duration,
+    }
+    if type(item.Icon) == "table" then
+        parts[#parts + 1] = item.Icon.Applications
+        parts[#parts + 1] = item.Icon.ChargeCount
+    end
+
+    for _, part in ipairs(parts) do
+        if type(part) == "table" then
+            Claim.Set(part, "SetAlpha", 0)
+        end
+    end
+end
+
 ---------------------------------------------------------------------------
 -- BEING TOLD WHEN A FRAME GOES BACK
 --

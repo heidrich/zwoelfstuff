@@ -354,22 +354,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   showing it" kept its own name and appears in `/zs cdm` beside the real
   reading, so a line where the two disagree is the explanation rather than
   something to work out.
-- **The numbers on a bar you build are written by the addon itself.** Two
-  cleverer routes were tried against the live client and both failed the same
-  way. Copying the engine's finished stack string arrived blank with the
-  stacks plainly up — the engine writes no text into a counter nobody can
-  see. Making Blizzard's own counter visible through the veil (ignoring the
-  hidden item's fade, anchored onto our cell) got fed nothing either — and
-  took the charge counts down with it, because "Blizzard is already drawing
-  one" then stood our own number down everywhere. The engine keys its counter
-  updates on the **item** the counter belongs to, not on whether the string
-  itself could be seen. So a bar you build draws its own numbers again, from
-  what an addon can actually hold: the charge count comes off the spell's own
-  charge API in plain numbers, and a stack count is written wherever a
-  reading exists — with Blizzard's one legal verdict still honoured: a
-  counter it *hides* is it saying "not worth a number", and that stays final.
-  `/zs text` prints the string *we* draw beside Blizzard's — its old output
-  measured Blizzard's hidden widget and read like a mis-anchoring.
+- **The stack and charge counts on a bar you build, and the root of why they
+  kept not arriving.** Blizzard's frame for a spell on one of our bars used
+  to be *veiled whole* — faded to nothing, parked nowhere — and that is the
+  one state the engine stops feeding: its counter text stayed empty however
+  it was read, which sank two whole mechanisms (copying the string, and
+  making the counter ignore the fade). The addon whose bars demonstrably do
+  show counts keeps its Blizzard child **alive** — anchored, full opacity —
+  and silences its *parts* one by one. Ours does the same now: the frame
+  rides the cell invisibly, the engine keeps feeding it, and the bar writes
+  its numbers from that — the charge count off the spell's own charge API in
+  plain numbers, the stack count from the aura data where it is readable and
+  relayed from the engine's own finished string where it is not. Blizzard's
+  one legal verdict is still honoured: a counter it *hides* is it saying
+  "not worth a number", and that stays final. `/zs text` prints the string
+  *we* draw beside Blizzard's, and the new **`/zs watch`** watches every
+  placed cell for twelve seconds and prints each change — the film version
+  of `/zs text`, for the class of bug a snapshot cannot catch.
 - **A cooldown icon greyed when a target was selected, the second half.** The
   first fix removed the borrowed `IsShown` fallback; the greying then came
   back on cooldown icons through the front door, because `IsActive` on a
