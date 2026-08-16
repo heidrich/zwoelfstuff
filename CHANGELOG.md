@@ -354,19 +354,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   showing it" kept its own name and appears in `/zs cdm` beside the real
   reading, so a line where the two disagree is the explanation rather than
   something to work out.
-- **The stack count on a bar you build is relayed from the engine now.** His
-  `/zs text` dump named the exact state: *"blizzard shows it true, reads
-  blank"* beside a bar of ours drawing no number — while the standalone
-  Cooldown Manager plainly showed a 2. Blizzard's comparison had said yes, its
-  string sat invisible under the veil, and our own count readers answered
-  nothing because those items carry the count nowhere an addon may read it
-  from. So the bar now does for the count exactly what it already does for the
-  remaining time: **Blizzard's finished string is copied across** — formatted
-  inside the game where the number is readable, handed on untouched, never
-  looked at on the way. Whatever the engine delivers, the bar relays; a blank
-  relays as blank, and a protected string passes through without an error.
-  `/zs text` also prints the string *we* draw now, beside Blizzard's — its old
-  output measured Blizzard's hidden widget and read like a mis-anchoring.
+- **The numbers on a bar you build are written by the addon itself.** Two
+  cleverer routes were tried against the live client and both failed the same
+  way. Copying the engine's finished stack string arrived blank with the
+  stacks plainly up — the engine writes no text into a counter nobody can
+  see. Making Blizzard's own counter visible through the veil (ignoring the
+  hidden item's fade, anchored onto our cell) got fed nothing either — and
+  took the charge counts down with it, because "Blizzard is already drawing
+  one" then stood our own number down everywhere. The engine keys its counter
+  updates on the **item** the counter belongs to, not on whether the string
+  itself could be seen. So a bar you build draws its own numbers again, from
+  what an addon can actually hold: the charge count comes off the spell's own
+  charge API in plain numbers, and a stack count is written wherever a
+  reading exists — with Blizzard's one legal verdict still honoured: a
+  counter it *hides* is it saying "not worth a number", and that stays final.
+  `/zs text` prints the string *we* draw beside Blizzard's — its old output
+  measured Blizzard's hidden widget and read like a mis-anchoring.
+- **A cooldown icon greyed when a target was selected, the second half.** The
+  first fix removed the borrowed `IsShown` fallback; the greying then came
+  back on cooldown icons through the front door, because `IsActive` on a
+  *cooldown* item does not mean "it is running" — it means "this item is
+  being tracked", and on this build that moves with the target too. For a
+  cooldown, inactive means **recharging**, and the spell's own cooldown API
+  answers that readably and target-blind — so that is what the greying asks
+  now. Buff items keep asking the item, which is the question `IsActive`
+  actually answers there.
 - **A full bar beside a dimmed icon of the same spell.** The fill is mirrored on
   its own script sixty times a second; the icon's lit-or-dimmed look was only
   written when Blizzard notified us that something had changed. The two could

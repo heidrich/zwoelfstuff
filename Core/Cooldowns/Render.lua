@@ -205,7 +205,7 @@ local function DrawBar(bar, claimed, factor)
                 -- implementation is how "Stack count" came to be a control
                 -- that worked on one half of a bar.
                 Text.Caption(cell, style, spellID, band, bar.iconPlacement)
-                Text.Count(cell, item, style, spellID)
+                Text.Count(cell, item, style, spellID, true)
                 Effects.Track(item, cell, bar, spellID)
                 drawn = drawn + 1
 

@@ -402,7 +402,7 @@ local COUNTERS = {
     { key = "Applications", element = "stacks"  },
 }
 
-local function Counters(item, style, cell)
+local function Counters(item, style)
     for _, pair in ipairs(COUNTERS) do
         local widget = ns.CDM:Counter(item, pair.key)
         local text = style[pair.element]
@@ -429,34 +429,25 @@ local function Counters(item, style, cell)
             -- than on the square, and moving it now would move a number he
             -- has already placed.
             --
-            -- ON A PLACE WE DRAW, THE ANCHOR IS OUR CELL AND THE VEIL IS
-            -- PIERCED. The item there is at alpha 0 and its counter goes
-            -- down with it - and the engine, reasonably, does not write text
-            -- nobody can see: relaying the string was tried and arrived
-            -- blank with the stacks plainly up ("es wird nix angezeigt").
-            -- SetIgnoreParentAlpha lets the counter draw at its OWN alpha
-            -- while the item stays veiled, and anchoring it to our cell puts
-            -- it where his setting says. Blizzard keeps feeding its own
-            -- string - live, formatted inside the engine, never read by us.
-            -- Both writes go through Claim, so Give puts both back.
+            -- NEVER TO OUR OWN CELL, AND THE VEIL IS NOT PIERCED. One
+            -- version tried SetIgnoreParentAlpha plus an anchor onto the
+            -- cell, so Blizzard's counter would show through the veiled
+            -- item and the engine would feed it. It does not: the charges
+            -- vanished from his bars and the stacks never arrived ("die
+            -- aufladungen bei den bars jetzt auch weg") - the engine keys
+            -- its counter updates on the ITEM it belongs to, not on whether
+            -- the string itself could be seen. A place we draw writes its
+            -- own numbers instead - Text.Count, the mechanism that was
+            -- working before that detour.
             local x, y = Text.Offset(text)
-            if cell then
-                Claim.Set(widget, "SetIgnoreParentAlpha", true)
-                Claim.Anchor(widget, text.anchor, cell, text.anchor, x, y)
-            else
-                Claim.Anchor(widget, text.anchor, item, text.anchor, x, y)
-            end
+            Claim.Anchor(widget, text.anchor, item, text.anchor, x, y)
         end
     end
 end
 
 -- THE THREE NUMBERS ON ONE ADOPTED FRAME. Font, colour, alpha and position -
 -- never the text.
---
--- `cell` is passed on a place WE draw - Own.lua - and reroutes the counters
--- onto it, through the veil. Absent on an adopted place, where the item
--- itself is visible and is the right thing to hang a number on.
-function Text.Apply(item, style, cell)
+function Text.Apply(item, style)
     if not (item and style) then return end
 
     -- type-checked, not truth-checked: this is a member on somebody else's
@@ -480,7 +471,7 @@ function Text.Apply(item, style, cell)
         end
     end
 
-    Counters(item, style, cell)
+    Counters(item, style)
 end
 
 ---------------------------------------------------------------------------
@@ -621,22 +612,37 @@ function Text.ChargesUp(spellID)
     return now
 end
 
--- THE `ours` SPECIAL CASE IS GONE, and the reason is the counter now coming
--- through the veil. It existed because on a place we draw, Blizzard's counter
--- was "shown" in the API sense and invisible in the user's - so we passed the
--- count out ourselves. Two things killed that: our own count readers answer
--- nil on his buff-bar items (the count exists nowhere an addon may read),
--- and the engine does not write text into a counter nobody can see, so even
--- relaying its string arrived blank. Text.Counters pierces the veil instead
--- - SetIgnoreParentAlpha, anchored to our cell - so Blizzard's counter IS
--- visible on our own places now, and "shown" means seen again on both kinds.
-function Text.StackToShow(shown, count)
+-- `ours` says WE are drawing this place - Own.lua - which changes exactly one
+-- of the four branches and did silently empty the corner it fills when it was
+-- taken out.
+--
+-- On a place we draw, Blizzard's frame for the same spell is veiled at alpha
+-- 0. Its counter frame is still SHOWN in the sense the API means, so without
+-- `ours` the first branch reads "Blizzard is already drawing one" and stands
+-- down - and the number goes missing. The frame being shown is not the
+-- question. Whether the USER can see it is, and on our own place he cannot:
+-- piercing the veil (SetIgnoreParentAlpha onto our cell) was tried and the
+-- engine still fed it nothing, because its updates key on the ITEM, not on
+-- the string's own visibility.
+--
+-- The other half of that branch survives untouched and has to: `shown ==
+-- false` is Blizzard saying it looked at a count we may not look at ourselves
+-- and decided it was not worth a number. That IS the comparison, it is the
+-- only legal one on this patch, and it stays final on both kinds of place.
+function Text.StackToShow(shown, count, ours)
+    if shown == true and ours then
+        -- Blizzard would draw it and cannot be seen doing so. Its comparison
+        -- has already said yes, so the count goes straight out - possibly a
+        -- secret, which is why it reaches SetFormattedText and nothing else.
+        return count
+    end
+
     -- BLIZZARD'S ANSWER IS FINAL EITHER WAY. `true` means it is already
-    -- drawing one - visibly, on whichever kind of place - and a second
-    -- number in the same corner is worse than none; `false` means it looked
-    -- at a count we may not look at ourselves and decided there is nothing
-    -- worth showing, which IS the comparison this code may not make. Only
-    -- nil - no counter frame at all - leaves the question to us.
+    -- drawing one and a second number in the same corner is worse than none;
+    -- `false` means it looked at a count we may not look at ourselves and
+    -- decided there is nothing worth showing, which IS the comparison this
+    -- code may not make. Only nil - no counter frame at all - leaves the
+    -- question to us.
     if shown ~= nil then return nil end
     if count == nil then return nil end
 
@@ -665,7 +671,7 @@ end
 -- stack half landed first and the same hole was left under it.
 local NUMBERS = {
     { key = "stacks",  member = "Applications", field = "stackCount",
-      Value = function(item, spellID)
+      Value = function(item, spellID, ours)
           -- NOT `ItemStacks(item) or nil`. The count this answers can be a
           -- SECRET, and `X or nil` is a boolean test on X - the same raise
           -- as CDM.lua:1103, four times in his chat, one wave ago. The
@@ -674,10 +680,10 @@ local NUMBERS = {
           local count
           if ns.CDM.ItemStacks then count = ns.CDM:ItemStacks(item) end
           return Text.StackToShow(
-              ns.CDM:CounterShown(item, "Applications"), count)
+              ns.CDM:CounterShown(item, "Applications"), count, ours)
       end },
     { key = "charges", member = "ChargeCount", field = "chargeCount",
-      Value = function(item, spellID)
+      Value = function(item, spellID, ours)
           -- A DIFFERENT GATE FROM THE STACKS, AND THE ASYMMETRY IS THE POINT.
           --
           -- For a stack count we defer to Blizzard COMPLETELY, because the
@@ -695,26 +701,36 @@ local NUMBERS = {
           -- frame EXISTING is not the question - his own bar has one on all
           -- three places and shows no number on any of them.
           --
-          -- ON EVERY KIND OF PLACE now: the counter comes through the veil
-          -- on our own places too, so a shown counter is a VISIBLE first
-          -- number wherever it is, and ours would be the second.
-          if ns.CDM:CounterShown(item, "ChargeCount") == true then
+          -- AND NOT ON A PLACE WE DRAW. The only thing we owe Blizzard here
+          -- is not putting a second number beside one of its own; on our own
+          -- bar there is no visible first one to sit beside - the item is
+          -- veiled, and the engine does not feed a veiled item's counter
+          -- even when the counter itself is told to ignore the alpha. This
+          -- `not ours` went out once, and the charges went out with it:
+          -- "die aufladungen bei den bars jetzt auch weg".
+          if not ours and ns.CDM:CounterShown(item, "ChargeCount") == true then
               return nil
           end
           return Text.ChargesUp(spellID)
       end },
 }
 
--- THE RELAY THAT LIVED HERE FOR ONE VERSION IS GONE, and the reason is worth
--- its epitaph: it read Blizzard's counter string off the veiled frame, and
--- the string was empty WITH THE STACKS PLAINLY UP ("es wird nix angezeigt")
--- - the engine does not write text into a counter nobody can see. You cannot
--- copy what is never written. Text.Counters pierces the veil instead:
--- SetIgnoreParentAlpha on the counter, anchored to our cell, and the engine
--- writes into it BECAUSE it is visible. Blizzard feeds its own string, on
--- our bar, live - and this function draws only what our readable sources
--- answer, one rule for every kind of place.
-function Text.Count(cell, item, style, spellID)
+-- TWO DETOURS DIED HERE AND NEITHER MAY COME BACK. The RELAY read Blizzard's
+-- counter string off the veiled frame, and the string was empty with the
+-- stacks plainly up ("es wird nix angezeigt") - the engine does not write
+-- text into a counter nobody can see, and you cannot copy what is never
+-- written. The VEIL-PIERCING then made the counter itself visible
+-- (SetIgnoreParentAlpha, anchored onto our cell) so the engine would feed it
+-- - and it still did not ("die aufladungen bei den bars jetzt auch weg"):
+-- its updates key on the ITEM, not on the string's own visibility. So a
+-- place we draw writes its own numbers from sources this addon can hold -
+-- the charge API in plain numbers, a stack count wherever a reader answers -
+-- which is the mechanism that was already working before either detour.
+--
+-- `ours` is true when Own.lua drew this place rather than Claim adopting it.
+-- It changes nothing about how a number is drawn and one thing about whether
+-- one is - see Text.StackToShow.
+function Text.Count(cell, item, style, spellID, ours)
     if not (cell and item and style) then return end
 
     for _, number in ipairs(NUMBERS) do
@@ -735,7 +751,7 @@ function Text.Count(cell, item, style, spellID)
         -- and is never looked at on the way.
         local value
         if text and text.show then
-            value = number.Value(item, spellID)
+            value = number.Value(item, spellID, ours)
         end
 
         if value == nil then

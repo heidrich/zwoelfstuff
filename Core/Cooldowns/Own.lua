@@ -537,14 +537,13 @@ function Own.Draw(cell, item, bar, index, spellID, slot, style, look, factor)
     own.worn = active
     Wear(own, look, active)
 
-    -- BLIZZARD'S COUNTERS, THROUGH THE VEIL AND ONTO THIS CELL. The count
-    -- exists nowhere an addon may read it - our readers answer nil, and the
-    -- engine does not write text into a counter nobody can see, so even
-    -- relaying its string arrived blank with the stacks plainly up. So the
-    -- counter itself is made to ignore the veiled item's alpha and anchored
-    -- here, and the engine feeds its own string on our bar, live. All of it
-    -- through Claim, so letting the frame go puts it back.
-    Text.Apply(item, style, cell)
+    -- NO Text.Apply HERE, AND THAT IS A DECISION WITH A HISTORY. It was
+    -- called once, to reroute Blizzard's counters through the veil and onto
+    -- this cell (SetIgnoreParentAlpha) - and the engine fed them nothing,
+    -- because its counter updates key on the ITEM, not on the string's own
+    -- visibility. The numbers on a place we draw are OURS: Render calls
+    -- Text.Count with `ours` set, and it writes from sources this addon can
+    -- hold. Blizzard's veiled frame is left entirely alone.
 
     -- THE PLACE ITSELF carries the show rules and nothing else. Written every
     -- pass rather than only when it is not 1: a cell comes back out of Render's

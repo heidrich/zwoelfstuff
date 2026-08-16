@@ -8733,32 +8733,34 @@ local function TestCooldownOwn()
         -- AND THE THIRD ANSWER REACHES THE DECISION IT WAS MADE FOR: nil is
         -- not false. False is Blizzard saying it looked at a count and decided
         -- it was not worth a number - final. Nil is nobody having said
-        -- anything, and that means we judge it ourselves, which is the
-        -- number he asked for three times.
-        Check("and with nobody saying anything we write our own number",
-            ns.Cooldowns.Text.StackToShow(said, 3) == 3)
+        -- anything, and on a place we draw that means we judge it ourselves,
+        -- which is the number he asked for three times.
+        Check("and a place we draw still writes its own number",
+            ns.Cooldowns.Text.StackToShow(said, 3, true) == 3)
     else
         Skip("A counter that will not say", "this client cannot make a secret")
     end
 
-    -- ONE RULE FOR EVERY KIND OF PLACE, and the `ours` special case is GONE.
-    -- It existed because Blizzard's counter was "shown" in the API sense and
-    -- invisible under the veil in the user's; Text.Counters pierces the veil
-    -- now - SetIgnoreParentAlpha, anchored onto our cell - so a shown
-    -- counter is a SEEN counter wherever it is, and a second number of ours
-    -- beside it would be exactly the fault the old branch guarded against,
-    -- committed by us.
+    -- THE `ours` BRANCH, WHICH WENT OUT ONCE AND TOOK THE NUMBERS WITH IT.
+    -- On a place we draw, Blizzard's counter frame is "shown" in the API
+    -- sense and invisible in the user's - the item under it is veiled, and
+    -- the engine does not feed a veiled item's counter even when the string
+    -- is told to ignore the alpha. So "shown" may not stand our own number
+    -- down there; the count goes out through us.
     local Text = ns.Cooldowns.Text
-    Check("A counter Blizzard draws is left alone on every kind of place",
+    Check("On a borrowed place we leave Blizzard's number alone",
         Text.StackToShow(true, 3) == nil)
+    Check("On one we draw, that same number is ours to write",
+        Text.StackToShow(true, 3, true) == 3,
+        tostring(Text.StackToShow(true, 3, true)))
     -- AND THE HALF THAT MUST NOT MOVE. `false` is Blizzard saying it looked at
     -- a count we may not look at and decided it was not worth a number. That
     -- is the only legal comparison on this patch and it is final on both kinds.
     Check("Blizzard deciding a count is not worth showing is still final",
-        Text.StackToShow(false, 3) == nil)
+        Text.StackToShow(false, 3, true) == nil)
     Check("and with no counter frame at all we judge it ourselves",
-        Text.StackToShow(nil, 3) == 3
-            and Text.StackToShow(nil, 1) == nil)
+        Text.StackToShow(nil, 3, true) == 3
+            and Text.StackToShow(nil, 1, true) == nil)
 
     ---------------------------------------------------------------------
     -- A FLAT FILL IS A RAMP OF ONE COLOUR
@@ -9063,42 +9065,62 @@ local function TestCooldownOwn()
         Check("The spell name is on the bar",
             cell.caption ~= nil and cell.caption:IsShown() == true)
         -----------------------------------------------------------------
-        -- THE COUNTER COMES THROUGH THE VEIL, and this is the wave his
-        -- "es wird nix angezeigt" bought.
-        --
-        -- The count exists nowhere an addon may read it - all three of our
-        -- sources answer nil on his items - and RELAYING Blizzard's string
-        -- was tried and arrived blank with the stacks plainly up, because
-        -- the engine does not write text into a counter nobody can see.
-        -- You cannot copy what is never written. So the counter itself is
-        -- made visible: it ignores the veiled item's alpha and is anchored
-        -- onto OUR cell, and the engine feeds its own string there, live.
+        -- THE NUMBERS ON A PLACE WE DRAW ARE OURS, and this rule has now
+        -- been paid for three times. The relay copied Blizzard's string off
+        -- the veiled frame and it arrived blank ("es wird nix angezeigt") -
+        -- the engine writes no text into a counter nobody can see. The
+        -- veil-piercing then made the counter itself visible
+        -- (SetIgnoreParentAlpha, anchored onto our cell) and the engine
+        -- STILL fed it nothing ("die aufladungen bei den bars jetzt auch
+        -- weg") - its updates key on the item, not on the string. So we
+        -- write our own, from sources this addon can hold, which is the
+        -- mechanism that worked before either detour.
         -----------------------------------------------------------------
-        local counter = ns.CDM:Counter(bars, "Applications")
-        Check("The veiled item's counter is anchored onto OUR cell",
-            counter ~= nil and (select(2, counter:GetPoint(1))) == cell,
-            tostring(counter and select(2, counter:GetPoint(1))))
-        Check("and it ignores the veil's alpha, so the engine keeps writing",
-            counter ~= nil and counter:IsIgnoringParentAlpha() == true)
-        -- Asserted against what the STYLE resolves, not a literal: his
-        -- profile says LEFT, this fixture bar says nothing and so gets the
-        -- stacks default - hardcoding either is a test that asserts the
-        -- world.
-        local askedAnchor = ns.Cooldowns.Text.Style(ns.db.bars[1], 24)
-            .stacks.anchor
-        Check("at the anchor the stacks setting names",
-            counter ~= nil and (counter:GetPoint(1)) == askedAnchor,
-            string.format("%s, asked %s",
-                tostring(counter and counter:GetPoint(1)),
-                tostring(askedAnchor)))
+        Check("The stack count is drawn by us, and reads what Blizzard has",
+            cell.stackCount ~= nil and cell.stackCount:GetText() == "3",
+            cell.stackCount and cell.stackCount:GetText() or "no string")
 
-        -- AND OUR OWN NUMBER STANDS DOWN BESIDE IT. Blizzard's counter is
-        -- SHOWN and now genuinely visible, so a number of ours in the same
-        -- corner would be the two-numbers fault the adopted places have
-        -- always guarded against - committed by us, on our own bar.
-        Check("With Blizzard's counter seen, our own string stays empty",
-            cell.stackCount == nil or cell.stackCount:IsShown() == false,
-            cell.stackCount and tostring(cell.stackCount:GetText()) or "none")
+        -- AND BLIZZARD'S OWN COUNTER IS LEFT ENTIRELY ALONE - not pierced,
+        -- not moved onto our cell. A pierced counter the engine never feeds
+        -- is an empty string floating on the bar, and the moment the engine
+        -- DID feed it there would be two numbers in one corner.
+        local counter = ns.CDM:Counter(bars, "Applications")
+        Check("The veiled item's counter is not made to ignore the veil",
+            counter ~= nil and counter:IsIgnoringParentAlpha() == false)
+        Check("and it is not anchored onto our cell",
+            counter ~= nil and (select(2, counter:GetPoint(1))) ~= cell,
+            tostring(counter and select(2, counter:GetPoint(1))))
+
+        -----------------------------------------------------------------
+        -- AND THE CHARGES, WIRED AND NOT JUST THE RULE. The harness had no
+        -- charge API at all, so Text.ChargesUp returned at its first guard
+        -- and the whole path had never run out here - which is how the
+        -- `not ours` gate could go out and take the charges on his bars
+        -- with it while every desk light stayed green. 47568 is Empowered
+        -- Rune Weapon in the harness: two charges, one spent.
+        -----------------------------------------------------------------
+        local Txt = ns.Cooldowns.Text
+        local styleC = Txt.Style(ns.db.bars[1], 24)
+        local itemC = CreateFrame("Frame")
+        itemC.ChargeCount = CreateFrame("Frame", nil, itemC)
+        itemC.ChargeCount:Show()
+
+        local cellC = CreateFrame("Frame")
+        Txt.Count(cellC, itemC, styleC, 47568, true)
+        Check("A place we draw writes the charge count itself",
+            cellC.chargeCount ~= nil and cellC.chargeCount:GetText() == "1"
+                and cellC.chargeCount:IsShown() == true,
+            cellC.chargeCount and tostring(cellC.chargeCount:GetText())
+                or "no string")
+
+        -- The other half of the same gate: on an adopted place Blizzard's
+        -- counter is genuinely visible, and ours would be the second number.
+        local cellD = CreateFrame("Frame")
+        Txt.Count(cellD, itemC, styleC, 47568)
+        Check("and beside Blizzard's visible one it stands down",
+            cellD.chargeCount == nil or cellD.chargeCount:IsShown() == false,
+            cellD.chargeCount and tostring(cellD.chargeCount:GetText())
+                or "none")
         Check("The remaining time is Blizzard's own, copied across",
             own.timer:GetText() == "12.3", own.timer:GetText())
 
@@ -9595,12 +9617,14 @@ local function TestCooldownOwn()
         Check("and gives Blizzard's frame its brightness back",
             bars:GetAlpha() == 1, tostring(bars:GetAlpha()))
 
-        -- AND THE COUNTER'S OBEDIENCE COMES BACK WITH IT. The veil-piercing
-        -- is a Claim write like any other: an addon that let go and left a
-        -- counter ignoring its parent's alpha would leave one bright number
-        -- floating over Blizzard's own display for the rest of the session.
+        -- AND THE COUNTER STILL OBEYS ITS PARENT'S ALPHA. Nothing pierces
+        -- the veil any more - the engine never fed a pierced counter - but
+        -- the Claim UNDO entry for SetIgnoreParentAlpha stays, and so does
+        -- this: an addon that released a frame and left its counter ignoring
+        -- the parent's alpha would leave one bright number floating over
+        -- Blizzard's own display for the rest of the session.
         local pierced = ns.CDM:Counter(bars, "Applications")
-        Check("and its counter obeys its parent's alpha again",
+        Check("and its counter obeys its parent's alpha after release",
             pierced ~= nil and pierced:IsIgnoringParentAlpha() == false,
             tostring(pierced and pierced:IsIgnoringParentAlpha()))
     end)
