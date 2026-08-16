@@ -400,8 +400,12 @@ ns.DEFAULTS = {
     --    floor under every worked-out size. See ns.ApplyHouseLook - the
     --    version step moves only what still carries an older DEFAULT, and
     --    the "Standard look" button in Settings is the same rule with force.
+    -- 9: the cooldown bars stand down, on the owner's word ("bitte
+    --    abschalten", 2026-08-16). One write: modules.cooldowns = false,
+    --    once, over any saved yes. Every bar and setting is kept, and the
+    --    switch stays in Settings and /zs modules. See Profiles.Bench.
     -- See Bars:Migrate and Profiles.Migrate.
-    dbVersion  = 8,
+    dbVersion  = 9,
 
     -- WHICH FEATURES ARE RUNNING. See Core/Modules.lua for what counts as one
     -- and what does not.

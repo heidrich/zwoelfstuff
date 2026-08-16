@@ -144,6 +144,34 @@ function Profiles.HouseLook(profile)
 end
 
 ---------------------------------------------------------------------------
+-- Version 9: the cooldown bars stand down, for now
+--
+-- Owner, 2026-08-16, after two days against the counter and the veil:
+-- "wenn wir das jetzt hinbekommen, dann deaktivieren wir den cdm im addon
+-- vorerst" - and then, plainly: "bitte abschalten". This is the ONE
+-- migration in the addon that switches a feature off over a saved yes, and
+-- it may only exist because the addon's own owner asked for it in words.
+-- Everything the feature wrote is KEPT - bars, cells, looks, all of it -
+-- and the switch stays on the Settings page and in /zs modules, so turning
+-- it back on is one click and finds everything where it was left.
+--
+-- Runs before ApplyDefaults for the same reason HouseLook does: a profile
+-- with no dbVersion must still read as old here.
+---------------------------------------------------------------------------
+function Profiles.Bench(profile)
+    if type(profile) ~= "table" then return false end
+
+    local version = tonumber(profile.dbVersion) or 0
+    if version >= 9 then return false end
+
+    profile.modules = type(profile.modules) == "table" and profile.modules
+        or {}
+    profile.modules.cooldowns = false
+    profile.dbVersion = 9
+    return true
+end
+
+---------------------------------------------------------------------------
 -- Opening up
 --
 -- Called from ADDON_LOADED, and again by hand every time the active profile
@@ -177,6 +205,7 @@ function ns.OpenProfile()
     end
 
     Profiles.HouseLook(store.profiles[name])
+    Profiles.Bench(store.profiles[name])
 
     ns.db = ns.ApplyDefaults(store.profiles[name], ns.DEFAULTS)
     ns.profileKey = key

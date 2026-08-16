@@ -10447,6 +10447,39 @@ local function TestHouseLook()
     Check("and pressing it twice is the same as pressing it once",
         ns.ApplyHouseLook(pressed, true) == 0,
         tostring(ns.ApplyHouseLook(pressed, true)))
+
+    ---------------------------------------------------------------------
+    -- VERSION 9: THE BARS STAND DOWN, ON THE OWNER'S WORD
+    --
+    -- The one migration that switches a feature off over a saved yes
+    -- ("bitte abschalten", 2026-08-16). It may take the switch and NOTHING
+    -- else: every bar, cell and look stays, so turning it back on finds
+    -- the room as it was left.
+    ---------------------------------------------------------------------
+    local benched = OldProfile()
+    benched.dbVersion = 8
+    benched.modules = { cooldowns = true, cotanks = true }
+    Check("Version 9 takes the cooldown switch off over a saved yes",
+        Profiles.Bench(benched) == true
+            and benched.modules.cooldowns == false
+            and benched.dbVersion == 9,
+        string.format("%s at version %s",
+            tostring(benched.modules.cooldowns),
+            tostring(benched.dbVersion)))
+    Check("and touches nothing else on the way",
+        benched.modules.cotanks == true and benched.bars[1] ~= nil
+            and benched.bars[1].name == "one")
+    Check("A second login does not repeat it",
+        Profiles.Bench(benched) == false)
+    benched.modules.cooldowns = true
+    Check("so a yes given AFTER the update is kept",
+        Profiles.Bench(benched) == false
+            and benched.modules.cooldowns == true)
+    local unversioned = OldProfile()
+    unversioned.dbVersion = nil
+    Check("A profile with no version at all is benched too",
+        Profiles.Bench(unversioned) == true
+            and unversioned.modules.cooldowns == false)
 end
 
 function Test:Run()
