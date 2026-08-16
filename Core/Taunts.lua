@@ -81,7 +81,7 @@ Taunts.BUTTON_DEFAULTS = {
     borderSize      = 1,
     borderTexture   = "None",
     backdrop        = true,
-    backdropAlpha   = 0.90,
+    backdropAlpha   = 1.00,
     backdropTexture = "Blizzard",
     iconZoom        = 0.08,
 }
@@ -93,8 +93,8 @@ function Taunts.Config()
     for key, value in pairs(Taunts.BUTTON_DEFAULTS) do
         if cfg[key] == nil then cfg[key] = value end
     end
-    cfg.borderColor = cfg.borderColor or { 0, 0, 0 }
-    cfg.backdropColor = cfg.backdropColor or { 0, 0, 0 }
+    cfg.borderColor = cfg.borderColor or ns.SurfaceColor()
+    cfg.backdropColor = cfg.backdropColor or ns.SurfaceColor()
 
     -- The channels are seeded HERE and not in ns.DEFAULTS, for the reason the
     -- externals ones are: a channel you switch OFF is stored by being
@@ -348,12 +348,12 @@ function Taunts.Style()
     local cfg = Taunts.Config()
     return {
         borderSize       = math.max(0, cfg.borderSize or 1),
-        borderColor      = cfg.borderColor or { 0, 0, 0 },
+        borderColor      = cfg.borderColor or ns.SurfaceColor(),
         borderTexture    = cfg.borderTexture or "None",
         borderGradient   = cfg.borderGradient,
         backdrop         = cfg.backdrop ~= false,
-        backdropColor    = cfg.backdropColor or { 0, 0, 0 },
-        backdropAlpha    = cfg.backdropAlpha or 0.9,
+        backdropColor    = cfg.backdropColor or ns.SurfaceColor(),
+        backdropAlpha    = cfg.backdropAlpha or 1,
         backdropTexture  = cfg.backdropTexture or "Blizzard",
         backdropGradient = cfg.backdropGradient,
         iconZoom         = cfg.iconZoom or 0.08,
@@ -533,7 +533,7 @@ end
 -- different causes - a setting that never reached the painter, and a black
 -- line on a black plate - and this tells them apart in one line.
 local function StyleLine(style)
-    local colour = style.borderColor or { 0, 0, 0 }
+    local colour = style.borderColor or ns.SurfaceColor()
     -- FLOORED. A colour channel is a fraction; %02x on 0.77 * 255 truncates
     -- on the client's Lua 5.1 and RAISES on 5.4. It survived this long
     -- because the default border is black and 0.0 is integer-representable -

@@ -120,6 +120,20 @@ Register("enUS", {
     ["Bar text"] = true,
     ["Panel font"] = true,
     ["Take the display over"] = true,
+    ["Standard look"] = true,
+    ["Everything this addon draws OUT ON THE SCREEN - the names, the counts "
+        .. "and the timers on your bars, icons and panels. The standard is "
+        .. "Expressway: narrow, so more name fits in the same bar, and "
+        .. "outlined, because all of it is read over a moving scene. If your "
+        .. "client has no Expressway the closest face it does have is used."]
+        = true,
+    ["Puts every background, every border and every typeface back to the "
+        .. "standard: #1a1a1a behind and around everything, opaque, and "
+        .. "Expressway outlined on top. It touches only those - your bars, "
+        .. "your spells, your positions and your sizes stay exactly where "
+        .. "they are."] = true,
+    ["%d settings put back to the standard look."] = true,
+    ["Everything was already on the standard look."] = true,
 
     -- Sounds. THE FOUR EVENT NAMES ARE LOOKED UP THROUGH A VARIABLE -
     -- L[event.text] - so the scanner that checks every literal L["..."] is
@@ -608,6 +622,32 @@ Register("deDE", {
     ["Bar text"] = "Leistentext",
     ["Panel font"] = "Schrift der Fenster",
     ["Take the display over"] = "Anzeige übernehmen",
+    ["Standard look"] = "Standard-Aussehen",
+    ["Everything this addon draws OUT ON THE SCREEN - the names, the counts "
+        .. "and the timers on your bars, icons and panels. The standard is "
+        .. "Expressway: narrow, so more name fits in the same bar, and "
+        .. "outlined, because all of it is read over a moving scene. If your "
+        .. "client has no Expressway the closest face it does have is used."]
+        = "Alles, was dieses Addon AUF DEM BILDSCHIRM zeichnet - die Namen, "
+        .. "die Zahlen und die Restzeiten auf deinen Leisten, Symbolen und "
+        .. "Panels. Standard ist Expressway: schmal, damit mehr Name in "
+        .. "dieselbe Leiste passt, und mit Kontur, weil das alles über einer "
+        .. "bewegten Szene gelesen wird. Hat dein Client kein Expressway, "
+        .. "wird die nächstbeste vorhandene Schrift genommen.",
+    ["Puts every background, every border and every typeface back to the "
+        .. "standard: #1a1a1a behind and around everything, opaque, and "
+        .. "Expressway outlined on top. It touches only those - your bars, "
+        .. "your spells, your positions and your sizes stay exactly where "
+        .. "they are."]
+        = "Setzt jeden Hintergrund, jeden Rahmen und jede Schrift auf den "
+        .. "Standard zurück: #1a1a1a hinter und um alles herum, deckend, "
+        .. "und Expressway mit Kontur darauf. Mehr nicht - deine Leisten, "
+        .. "deine Zauber, deine Positionen und deine Größen bleiben genau "
+        .. "so, wie sie sind.",
+    ["%d settings put back to the standard look."]
+        = "%d Einstellungen auf das Standard-Aussehen zurückgesetzt.",
+    ["Everything was already on the standard look."]
+        = "Es war schon alles auf dem Standard-Aussehen.",
 
     ["Sounds"] = "Töne",
     ["When you ask for a cooldown"] = "Wenn du einen Cooldown anforderst",

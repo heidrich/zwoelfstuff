@@ -452,7 +452,7 @@ function OptionsCoTanks:BuildPage(page, width)
 
     UI.Swatch(grid:Row("Border colour"),
         function()
-            local colour = TCfg().borderColor or { 0, 0, 0 }
+            local colour = TCfg().borderColor or ns.SurfaceColor()
             return colour[1], colour[2], colour[3]
         end,
         function(r, g, b) TCfg().borderColor = { r, g, b } end,
@@ -473,7 +473,7 @@ function OptionsCoTanks:BuildPage(page, width)
 
     UI.Swatch(grid:Row("Backdrop colour"),
         function()
-            local colour = TCfg().backdropColor or { 0, 0, 0 }
+            local colour = TCfg().backdropColor or ns.SurfaceColor()
             return colour[1], colour[2], colour[3]
         end,
         function(r, g, b) TCfg().backdropColor = { r, g, b } end,

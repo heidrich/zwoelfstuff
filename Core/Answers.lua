@@ -70,7 +70,7 @@ Answers.DEFAULTS = {
     borderSize      = 1,
     borderTexture   = "None",
     backdrop        = true,
-    backdropAlpha   = 0.90,
+    backdropAlpha   = 1.00,
     backdropTexture = "Blizzard",
     iconZoom        = 0.08,
     onlyInInstance  = false,
@@ -82,8 +82,8 @@ function Answers.Config()
     for key, value in pairs(Answers.DEFAULTS) do
         if cfg[key] == nil then cfg[key] = value end
     end
-    cfg.borderColor = cfg.borderColor or { 0, 0, 0 }
-    cfg.backdropColor = cfg.backdropColor or { 0, 0, 0 }
+    cfg.borderColor = cfg.borderColor or ns.SurfaceColor()
+    cfg.backdropColor = cfg.backdropColor or ns.SurfaceColor()
     -- Which of your spells you are willing to be asked for. Absent means
     -- "not answered yet", and Offers reads that as yes - a spell you have
     -- never seen a switch for should be on the bar, not silently missing.
@@ -476,12 +476,12 @@ function Answers.Style()
     local cfg = Answers.Config()
     return {
         borderSize       = math.max(0, cfg.borderSize or 1),
-        borderColor      = cfg.borderColor or { 0, 0, 0 },
+        borderColor      = cfg.borderColor or ns.SurfaceColor(),
         borderTexture    = cfg.borderTexture or "None",
         borderGradient   = cfg.borderGradient,
         backdrop         = cfg.backdrop ~= false,
-        backdropColor    = cfg.backdropColor or { 0, 0, 0 },
-        backdropAlpha    = cfg.backdropAlpha or 0.9,
+        backdropColor    = cfg.backdropColor or ns.SurfaceColor(),
+        backdropAlpha    = cfg.backdropAlpha or 1,
         backdropTexture  = cfg.backdropTexture or "Blizzard",
         backdropGradient = cfg.backdropGradient,
         iconZoom         = cfg.iconZoom or 0.08,

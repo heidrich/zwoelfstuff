@@ -40,6 +40,17 @@ ns.CHANGELOG = {
                     .. "and group play features, and there are a lot of other "
                     .. "very good CDM addons that do the job better.",
             },
+            {
+                icon = "Interface\\Icons\\INV_Misc_Gem_Pearl_01",
+                text = "|cffffd100One look, out of the box.|r Every "
+                    .. "background and border in the addon is #1a1a1a and "
+                    .. "opaque, and everything drawn on your screen is set "
+                    .. "in Expressway, outlined, never under 10 pixels. Your "
+                    .. "own choices are kept - only settings still wearing an "
+                    .. "older default move. |cffffd100Settings|r has a "
+                    .. "|cffffd100Standard look|r button for when you want it "
+                    .. "all back on purpose.",
+            },
             -- The one thing from that page a player can go looking for. Its
             -- number is untouched in your account file; only the row moved.
             {

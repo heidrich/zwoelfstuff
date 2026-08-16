@@ -792,7 +792,12 @@ function Fill.Paint(bar, index)
 
         back = {
             on    = Option(bar, index, "fillBack") and true or false,
-            color = type(backColour) == "table" and backColour or { 0, 0, 0 },
+            -- THE TROUGH IS A SURFACE, so it is the house colour. `markColor`
+            -- above is not: a charge mark is a LINE drawn across the fill to
+            -- say where one charge ends, and it has to sit against whatever
+            -- colour the fill is - it takes its own default and keeps it.
+            color = type(backColour) == "table" and backColour
+                or ns.SurfaceColor(),
             alpha = tonumber(Option(bar, index, "fillBackAlpha")) or 0.5,
         },
     }

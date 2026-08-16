@@ -460,12 +460,12 @@ function RaidBar.Style()
     local cfg = RaidBar.Config()
     return {
         borderSize      = math.max(0, cfg.borderSize or 1),
-        borderColor     = cfg.borderColor or { 0, 0, 0 },
+        borderColor     = cfg.borderColor or ns.SurfaceColor(),
         borderTexture   = cfg.borderTexture or "None",
         borderGradient  = cfg.borderGradient,
         backdrop        = cfg.backdrop ~= false,
-        backdropColor   = cfg.backdropColor or { 0, 0, 0 },
-        backdropAlpha   = cfg.backdropAlpha or 0.9,
+        backdropColor   = cfg.backdropColor or ns.SurfaceColor(),
+        backdropAlpha   = cfg.backdropAlpha or 1,
         backdropTexture = cfg.backdropTexture or "Blizzard",
         backdropGradient = cfg.backdropGradient,
         iconZoom        = cfg.iconZoom or 0.06,

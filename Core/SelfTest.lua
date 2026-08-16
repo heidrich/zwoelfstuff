@@ -9752,6 +9752,300 @@ local function TestCooldownStyling()
         "ns.CDM.ItemStacks is " .. type(ns.CDM and ns.CDM.ItemStacks))
 end
 
+---------------------------------------------------------------------------
+-- THE HOUSE LOOK: one surface, one face, one floor.
+--
+-- Owner, 2026-08-16: "standard BG farben bei allem -> 100% 1a1a1a ... also
+-- icons, bars, border. ueberall im addon", "standard Fonts ausserhalb von der
+-- addon font ist expressway mit outline und minimum 10 pixel", "nimm das
+-- automatisch bitte raus."
+--
+-- WHY THIS SUITE IS LONGER THAN THE CHANGE LOOKS. The colour was written out
+-- fourteen times in fourteen files before this, which is the shape of a
+-- decision that cannot be changed - and putting it in one place only helps
+-- for as long as nobody writes a fifteenth. The walk below is what stops
+-- that: it asks every default the addon ships whether it wears the house
+-- colour, so a new module that types { 0, 0, 0 } goes red on the first run
+-- rather than on somebody's screenshot in a month.
+--
+-- AND THE HALF THAT ACTUALLY MOVES SOMEBODY'S DATA gets asserted hardest.
+-- ns.ApplyHouseLook writes into a saved profile. It has exactly two ways to
+-- be wrong: leaving a colour the owner picked alone is the whole promise, and
+-- running twice must not be different from running once.
+---------------------------------------------------------------------------
+
+-- The keys the walker cares about, and the one place a colour of that name
+-- is meaning rather than surface. Written out HERE rather than read from
+-- Init.lua on purpose: a test that imports the list it is checking agrees
+-- with the code by construction and would pass with the list empty.
+local HOUSE_COLORS = {
+    backdropColor = true, borderColor = true,
+    bgColor = true, fillBackColor = true,
+}
+local HOUSE_ALPHAS = { backdropAlpha = true, bgAlpha = true }
+local MEANING_NOT_SURFACE = { debuffs = true, buffs = true }
+
+local function TestHouseLook()
+    local v = ns.SURFACE
+
+    ---------------------------------------------------------------------
+    -- THE TOKEN
+    ---------------------------------------------------------------------
+    Check("The surface colour is #1a1a1a",
+        math.abs(v - 26 / 255) < 0.0005,
+        string.format("%.4f, wanted %.4f", v, 26 / 255))
+
+    -- A SHARED TABLE WOULD BE ONE COLOUR PICKER MOVING TWO PANELS, and it
+    -- would only show up on the second character somebody made - half this
+    -- addon writes its fallback straight into the profile.
+    local first, second = ns.SurfaceColor(), ns.SurfaceColor()
+    first[1] = 0.5
+    Check("Each surface colour is a table of its own", second[1] ~= 0.5,
+        tostring(second[1]))
+
+    local r, g, b, a = ns.SurfaceRGB()
+    Check("The four-number form is the same colour and opaque",
+        r == v and g == v and b == v and a == 1,
+        string.format("%.3f %.3f %.3f %.3f", r, g, b, a))
+
+    local _, _, _, faded = ns.SurfaceRGB(0.4)
+    Check("and it still takes an alpha when something asks for one",
+        faded == 0.4, tostring(faded))
+
+    ---------------------------------------------------------------------
+    -- EVERY DEFAULT THE ADDON SHIPS
+    ---------------------------------------------------------------------
+    local wrong = {}
+
+    local function Walk(tbl, path, guarded)
+        for key, value in pairs(tbl) do
+            local where = path .. "." .. tostring(key)
+            if HOUSE_COLORS[key] and not guarded then
+                local ok = type(value) == "table"
+                    and math.abs((tonumber(value[1]) or -1) - v) < 0.005
+                    and math.abs((tonumber(value[2]) or -1) - v) < 0.005
+                    and math.abs((tonumber(value[3]) or -1) - v) < 0.005
+                if not ok then wrong[#wrong + 1] = where end
+            elseif HOUSE_ALPHAS[key] then
+                if value ~= 1 then
+                    wrong[#wrong + 1] = where .. "=" .. tostring(value)
+                end
+            elseif type(value) == "table" then
+                Walk(value, where,
+                    guarded or MEANING_NOT_SURFACE[key] or false)
+            end
+        end
+    end
+
+    Walk(ns.DEFAULTS, "DEFAULTS", false)
+    Walk(ns.GROUP_DEFAULTS, "GROUP_DEFAULTS", false)
+    if ns.Answers and ns.Answers.DEFAULTS then
+        Walk(ns.Answers.DEFAULTS, "Answers", false)
+    end
+    if ns.Taunts and ns.Taunts.BUTTON_DEFAULTS then
+        Walk(ns.Taunts.BUTTON_DEFAULTS, "Taunts", false)
+    end
+
+    Check("Every background and border the addon ships is #1a1a1a and opaque",
+        #wrong == 0, table.concat(wrong, ", "))
+
+    -- AND THE ONE PAIR THAT IS DELIBERATELY NOT GREY. Red for a debuff and
+    -- green for a buff is the only thing that says which strip you are
+    -- looking at, so a walk that turned those grey would be this rule eating
+    -- the one place it does not belong.
+    local strips = ns.DEFAULTS.coTanks
+    Check("but a debuff strip keeps its red edge",
+        strips and strips.debuffs and strips.debuffs.borderColor[1] > 0.5,
+        strips and strips.debuffs
+            and tostring(strips.debuffs.borderColor[1]) or "absent")
+    Check("and a buff strip keeps its green one",
+        strips and strips.buffs and strips.buffs.borderColor[2] > 0.4,
+        strips and strips.buffs
+            and tostring(strips.buffs.borderColor[2]) or "absent")
+
+    -- A bar-shaped place resolved through the real reader, not the table.
+    local Look = ns.Cooldowns and ns.Cooldowns.Look
+    if Look then
+        local style = Look.Style({}, nil)
+        Check("A bar with nothing set on it wears the house plate",
+            math.abs(style.backdropColor[1] - v) < 0.005
+                and style.backdropAlpha == 1,
+            string.format("%.3f at %s", style.backdropColor[1],
+                tostring(style.backdropAlpha)))
+        -- The cooldown sweep is NOT a surface: it is drawn over the picture
+        -- to say how much is left, and a grey veil makes a ready icon and a
+        -- spent one look more alike.
+        Check("but the cooldown sweep keeps its black",
+            style.swipeColor[1] == 0, tostring(style.swipeColor[1]))
+    end
+
+    ---------------------------------------------------------------------
+    -- THE FACE AND THE FLOOR
+    ---------------------------------------------------------------------
+    local kept = ns.db and ns.db.font
+    if ns.db then ns.db.font = nil end
+    Check("With nothing chosen the screen is set in Expressway",
+        ns.ScreenFontName() == "Expressway", tostring(ns.ScreenFontName()))
+    if ns.db then
+        ns.db.font = ""
+        Check("An empty choice is not a choice", ns.ScreenFontName()
+            == ns.SCREEN_FONT)
+        ns.db.font = "Friz Quadrata TT"
+        Check("but a face the user picked still wins",
+            ns.ScreenFontName() == "Friz Quadrata TT")
+        ns.db.font = kept
+    end
+
+    local Text = ns.Cooldowns and ns.Cooldowns.Text
+    if Text then
+        -- A 24px bar: the worked-out name size is 24 * 0.45 = 10.8, which is
+        -- above the floor, and the stacks want 7.2, which is not.
+        local auto = Text.Style({}, 24)
+        Check("A worked-out size never comes out under ten",
+            auto.stacks.size >= ns.FONT_FLOOR
+                and auto.charges.size >= ns.FONT_FLOOR
+                and auto.countdown.size >= ns.FONT_FLOOR
+                and auto.spellName.size >= ns.FONT_FLOOR,
+            string.format("%.1f/%.1f/%.1f/%.1f", auto.countdown.size,
+                auto.stacks.size, auto.charges.size, auto.spellName.size))
+
+        -- HIS OWN PROFILE CARRIES A NINE. The rail's minimum moved, which
+        -- stops a new one being made; a stored one is clamped where it is
+        -- READ, so nothing reaches into a saved setting to do it.
+        local typed = Text.Style({ countdown = { size = 6 } }, 40)
+        Check("and a size typed before the rail moved is clamped, not obeyed",
+            typed.countdown.size == ns.FONT_FLOOR,
+            tostring(typed.countdown.size))
+
+        -- THE ONE ELEMENT THAT SHIPPED WITH NO OUTLINE AT ALL, which is why
+        -- it was the one that disappeared over a bright floor.
+        Check("The spell name is outlined like everything else on screen",
+            auto.spellName.outline == ns.SCREEN_OUTLINE,
+            "\"" .. tostring(auto.spellName.outline) .. "\"")
+
+        Check("and an element with no face of its own takes the screen's",
+            auto.stacks.font == ns.ScreenFontName(),
+            tostring(auto.stacks.font))
+    end
+
+    -- A NAME THE CLIENT CANNOT LOAD FALLS THROUGH THE HOUSE CHAIN. Straight
+    -- to Blizzard's serif was a DIFFERENT DESIGN rather than one substituted
+    -- face, and every band width in this addon is measured against a narrow
+    -- grotesk.
+    if ns.Media and ns.Media.ScreenFont then
+        local named = ns.Media.Font("no such font is registered anywhere")
+        Check("An unknown face falls through to a narrow grotesk",
+            named == ns.Media.Font(ns.Media.ScreenFont()),
+            tostring(named))
+    end
+
+    -- THE FLOOR IS IN ONE PLACE, so eleven call sites cannot each forget it.
+    local asked = {}
+    local fake = { SetFont = function(_, path, size, flags)
+        asked = { path = path, size = size, flags = flags }
+        return true
+    end }
+    ns.StyleFont(fake, 6)
+    Check("The screen face clamps a six to the floor and outlines it",
+        asked.size == ns.FONT_FLOOR and asked.flags == ns.SCREEN_OUTLINE,
+        string.format("%s %s", tostring(asked.size), tostring(asked.flags)))
+
+    ---------------------------------------------------------------------
+    -- MOVING SOMEBODY'S SAVED SETTINGS
+    ---------------------------------------------------------------------
+    local Profiles = ns.Profiles
+    if not (Profiles and Profiles.HouseLook) then
+        Skip("Putting the house look on an old profile",
+            "Core/Profiles.lua is not loaded")
+        return
+    end
+
+    local function OldProfile()
+        return {
+            dbVersion = 7,
+            font = "Arial Narrow",
+            borderColor = { 0, 0, 0 },
+            backdropColor = { 0, 0, 0 },
+            backdropAlpha = 0.9,
+            bars = {
+                { name = "one", backdropColor = { 0, 0, 0 },
+                  backdropAlpha = 0.9,
+                  -- PICKED. The whole promise of the automatic step.
+                  borderColor = { 0.9, 0.2, 0.2 },
+                  spellName = { size = 9, outline = "", font = "" } },
+            },
+            coTanks = {
+                bgColor = { 0.05, 0.05, 0.06 }, bgAlpha = 0.85,
+                debuffs = { borderColor = { 0.75, 0.15, 0.15 } },
+                buffs = { borderColor = { 0.25, 0.55, 0.30 } },
+            },
+        }
+    end
+
+    local old = OldProfile()
+    local moved = Profiles.HouseLook(old)
+    Check("An old profile gets the house look on the version it lands on",
+        moved > 0 and old.dbVersion == 8,
+        string.format("%d moved, version %s", moved, tostring(old.dbVersion)))
+    Check("Its plates and lines are #1a1a1a and opaque now",
+        math.abs(old.backdropColor[1] - v) < 0.005
+            and old.backdropAlpha == 1
+            and math.abs(old.bars[1].backdropColor[1] - v) < 0.005,
+        string.format("%.3f at %s", old.backdropColor[1],
+            tostring(old.backdropAlpha)))
+    Check("The panel's near-black plate joins them",
+        math.abs(old.coTanks.bgColor[1] - v) < 0.005
+            and old.coTanks.bgAlpha == 1,
+        string.format("%.3f", old.coTanks.bgColor[1]))
+    Check("The screen face moves off the window's",
+        old.font == ns.SCREEN_FONT, tostring(old.font))
+    Check("A name with no outline gets one",
+        old.bars[1].spellName.outline == ns.SCREEN_OUTLINE,
+        "\"" .. tostring(old.bars[1].spellName.outline) .. "\"")
+
+    -- THE PROMISE. Anything else here would be the addon overwriting a
+    -- decision somebody made and never telling them.
+    Check("but a colour he PICKED is left exactly where it was",
+        old.bars[1].borderColor[1] == 0.9,
+        tostring(old.bars[1].borderColor[1]))
+    Check("and a size he typed is not rewritten either",
+        old.bars[1].spellName.size == 9,
+        tostring(old.bars[1].spellName.size))
+    Check("and the two strips keep the colours that tell them apart",
+        old.coTanks.debuffs.borderColor[1] > 0.5
+            and old.coTanks.buffs.borderColor[2] > 0.4)
+
+    -- ONCE PER PROFILE, EVER. Without the stamp this would move a colour back
+    -- every login and the person who wants pure black would fight the addon
+    -- once a session without ever finding out why.
+    old.backdropColor = { 0, 0, 0 }
+    Check("A second login does not do it again", Profiles.HouseLook(old) == 0
+        and old.backdropColor[1] == 0, tostring(old.backdropColor[1]))
+
+    -- A PROFILE FROM BEFORE dbVersion EXISTED IS OLD, NOT NEW - which is only
+    -- true because this runs BEFORE ApplyDefaults stamps it.
+    local ancient = OldProfile()
+    ancient.dbVersion = nil
+    Check("A profile with no version at all counts as old",
+        Profiles.HouseLook(ancient) > 0 and ancient.dbVersion == 8)
+
+    -- THE BUTTON. The same rule with force, which is what "put it all back"
+    -- has to mean - including the colour the automatic step promised to leave
+    -- alone.
+    local pressed = OldProfile()
+    pressed.dbVersion = 8
+    local forced = ns.ApplyHouseLook(pressed, true)
+    Check("The Standard look button reaches even a colour that was picked",
+        forced > 0 and math.abs(pressed.bars[1].borderColor[1] - v) < 0.005,
+        string.format("%d moved, %.3f", forced, pressed.bars[1].borderColor[1]))
+    Check("and it still leaves the two strips their meaning",
+        pressed.coTanks.debuffs.borderColor[1] > 0.5
+            and pressed.coTanks.buffs.borderColor[2] > 0.4)
+    Check("and pressing it twice is the same as pressing it once",
+        ns.ApplyHouseLook(pressed, true) == 0,
+        tostring(ns.ApplyHouseLook(pressed, true)))
+end
+
 function Test:Run()
     passed, failed, notes = 0, {}, {}
 
@@ -9793,6 +10087,7 @@ function Test:Run()
         { "Claiming and letting go", TestCooldownClaim },
         { "Placing a bar", TestCooldownRender },
         { "Places we draw ourselves", TestCooldownOwn },
+        { "The house look", TestHouseLook },
         { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },
     }

@@ -322,6 +322,44 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **One look, out of the box.** Every background and every border in the addon
+  — icons, bars, plates, troughs, panels — is now **#1a1a1a and opaque**, and
+  everything the addon writes on the screen is set in **Expressway, outlined,
+  never under 10 pixels**. Owner: *"wir müssen den usern direkt vom start weg
+  eine schöne UI anbieten."*
+  - **It was one decision written down fourteen times**, in fourteen files, as
+    the literal `{ 0, 0, 0 }` — which is not fourteen settings, it is one
+    setting that cannot be changed. It is named once now and asked for by
+    name; a new module that types black instead fails the desk on the first
+    run.
+  - **Two automatics went out.** Bar text used to fall back to "whatever your
+    other addons happen to have registered", and tracking-group text was drawn
+    in Blizzard's number face — so a group and a bar side by side were set in
+    two different fonts and no setting anywhere said so. There is one screen
+    face now, and one control that sets it.
+  - **The "Bar text" control is back.** It had a default, a translation and a
+    reader, and the row that set it had gone missing — the one setting that
+    decides what every bar is written in could only be changed by editing a
+    saved-variables file.
+  - **The minimum text size moved from 6 to 10.** Six is where a number stops
+    being legible at all; ten is where it starts being worth putting on
+    screen. A size stored below it is clamped as it is read — nothing rewrites
+    a number you typed.
+  - **Two colours deliberately stayed.** The co-tank panel's aura strips keep
+    their red and green edges — that line is the only thing that says which
+    strip you are looking at — and the cooldown sweep keeps its black, because
+    a grey veil makes a ready icon and a spent one look more alike.
+  - **Your existing profile is brought along, once.** Anything still wearing an
+    older default moves to the new one; **anything you picked yourself stays
+    exactly where it is**, and it happens once per profile rather than every
+    login. **Settings › Standard look** is the same rule with force, for when
+    you want it all back on purpose. It reports how many settings it moved
+    rather than saying "done".
+  - **The options window is unchanged.** It has its own face and its own
+    palette; this is about what the addon draws out on the screen.
+  - **We do not ship Expressway.** If your client has it — most UI addons
+    install it — you get it. If not, the closest narrow grotesk you do have is
+    used instead of Blizzard's serif.
 - **The welcome window lost its strapline.** "8 features in one addon. Pick
   the ones you want running." sat over eight rows that are the features, each
   with a switch on it — it narrated the thing underneath it, and the number in

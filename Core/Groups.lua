@@ -56,7 +56,7 @@ local function SkinIcon(button, host, cfg, spellID)
 
     local bg = button:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(button)
-    bg:SetColorTexture(0, 0, 0, cfg.backdropAlpha)
+    bg:SetColorTexture(ns.SurfaceRGB(cfg.backdropAlpha))
 
     local icon = button:CreateTexture(nil, "ARTWORK")
     local inset = cfg.borderSize
@@ -130,7 +130,7 @@ local function SkinBar(button, host, cfg, spellID)
 
     local bg = button:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(button)
-    bg:SetColorTexture(0, 0, 0, cfg.backdropAlpha)
+    bg:SetColorTexture(ns.SurfaceRGB(cfg.backdropAlpha))
 
     local inset = cfg.borderSize
     local iconWidth = 0

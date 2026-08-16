@@ -86,6 +86,40 @@ function Media.PanelFont()
     return Media.DEFAULT.font
 end
 
+-- AND THE OTHER SIDE OF THAT SAME DECISION, which is the owner's own split:
+-- "standard Fonts ausserhalb von der addon font ist expressway". The window
+-- above keeps Arial Narrow; what the addon writes OUT ON THE SCREEN is set in
+-- Expressway - ns.SCREEN_FONT, named once in Init.lua.
+--
+-- WHY THIS IS NOT THE THING THE COMMENT ABOVE ARGUES AGAINST. That paragraph
+-- is about a default that CHANGES depending on which other addons you have.
+-- This one does not: the profile stores the string "Expressway" whether the
+-- client has the file or not, so every player on this version is asking for
+-- the same face and the picker shows them the same answer. What differs is
+-- only what the engine can actually load, and the chain below makes that
+-- difference as small as it can be made.
+--
+-- THE CHAIN, and the order is the whole point: a narrow grotesk, then another
+-- narrow grotesk, then whatever there is. Falling straight to Blizzard's
+-- serif - which is what Media.Font did for any missing name - turns "we do
+-- not ship this font" into a completely different design rather than a
+-- slightly different one.
+--
+-- THE ONLY WAY TO MAKE IT EXACT IS TO SHIP THE FILE. Nothing here can conjure
+-- a font the machine does not have, and this addon ships no .ttf today. Named
+-- rather than papered over: until Expressway is embedded, a player without it
+-- gets Arial Narrow and a screenshot that does not match ours.
+local SCREEN_FONTS = { "Expressway", "Arial Narrow", "Friz Quadrata TT" }
+
+function Media.ScreenFont()
+    if LSM then
+        for _, name in ipairs(SCREEN_FONTS) do
+            if LSM:Fetch("font", name, true) then return name end
+        end
+    end
+    return Media.DEFAULT.font
+end
+
 ---------------------------------------------------------------------------
 -- Lookup
 ---------------------------------------------------------------------------
@@ -95,7 +129,35 @@ local function Fetch(kind, key)
     return path or FALLBACK[kind]
 end
 
-function Media.Font(key)      return Fetch("font", key) end
+-- THE ONE LOOKUP THAT DOES NOT FALL STRAIGHT TO BLIZZARD'S FALLBACK.
+--
+-- Every other kind here answers `path or FALLBACK[kind]`, and for a texture
+-- that is right: a missing bar texture and a plain white one look like the
+-- same kind of thing. A missing FACE does not. FRIZQT is a serif at a
+-- different weight and a different width, so one player without Expressway
+-- was not getting "the design with one font substituted", he was getting a
+-- different design - and every size, every offset and every band width in
+-- this addon is measured against a narrow grotesk.
+--
+-- So a name the client cannot load falls through SCREEN_FONTS first, and
+-- only what is left over lands on FRIZQT. Blizzard's own font is still the
+-- last word rather than an error: a client with no LibSharedMedia at all is
+-- a client where nothing can be looked up, and drawing nothing is worse than
+-- drawing the wrong face.
+function Media.Font(key)
+    if not LSM then return FALLBACK.font end
+
+    if key then
+        local path = LSM:Fetch("font", key, true)
+        if path then return path end
+    end
+
+    for _, name in ipairs(SCREEN_FONTS) do
+        local path = LSM:Fetch("font", name, true)
+        if path then return path end
+    end
+    return FALLBACK.font
+end
 function Media.Statusbar(key) return Fetch("statusbar", key) end
 function Media.Border(key)    return Fetch("border", key) end
 function Media.Background(key) return Fetch("background", key) end

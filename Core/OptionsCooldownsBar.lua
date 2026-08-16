@@ -233,7 +233,14 @@ end
 -- THE SMALLEST A NUMBER WITH AN OUTLINE CAN BE READ AT. Measured on his own
 -- screenshot rather than chosen: the outline eats a pixel on each side, so
 -- below this the glyph is two pixels of colour between two of black.
-local TEXT_FLOOR = 6
+--
+-- IT WAS SIX AND IT IS ns.FONT_FLOOR NOW. Owner, 2026-08-16: "minimum 10
+-- pixel". Six was the point at which a number stops being legible AT ALL,
+-- which is a different question from the point at which it is worth putting
+-- on screen - and the rail offered four positions between them that nobody
+-- has a use for. One number for both, named where the rest of the house look
+-- is named, so the rail, the worked-out size and the migration cannot drift.
+local TEXT_FLOOR = ns.FONT_FLOOR
 
 local function Percent(value)
     return string.format("%d%%", math.floor((value or 0) * 100 + 0.5))
@@ -627,7 +634,7 @@ function Panel.BuildLook(grid, bar)
 
     Slide(grid, bar, L["Thickness"], "borderSize",
         { min = 0, max = 4, step = 1, fallback = 1 })
-    Colour(grid, bar, L["Colour"], "borderColor", { 0, 0, 0 })
+    Colour(grid, bar, L["Colour"], "borderColor", ns.SurfaceColor())
     BarGradientRows(grid, bar, "borderGradient", groups,
         L["Only the one-pixel line - an edge file takes one colour"])
     Picture(grid, bar, L["Texture"], "border", "borderTexture", "None",
@@ -642,11 +649,11 @@ function Panel.BuildLook(grid, bar)
         .. "along a border, and behind a bar-shaped place."])
 
     Switch(grid, bar, L["Show"], "backdrop", true)
-    Colour(grid, bar, L["Colour"], "backdropColor", { 0, 0, 0 })
+    Colour(grid, bar, L["Colour"], "backdropColor", ns.SurfaceColor())
     BarGradientRows(grid, bar, "backdropGradient", groups)
     Slide(grid, bar, L["Opacity"], "backdropAlpha",
         { min = 0, max = 1, step = 0.05, format = Percent, scale = 100,
-          fallback = 0.9 })
+          fallback = 1 })
     -- WITH A WAY BACK. ns.PaintSurface treats an unknown or empty key as a
     -- flat colour fill, which is sharper on a square than a bar texture
     -- stretched over one - and without a row for it a picker is one-way:
@@ -1494,7 +1501,7 @@ function Panel.BuildFill(grid, bar)
         when = backOn,
         rows = {
             Colour(grid, bar, L["Background colour"], "fillBackColor",
-                { 0, 0, 0 }),
+                ns.SurfaceColor()),
             Slide(grid, bar, L["Background opacity"], "fillBackAlpha",
                 { min = 0, max = 1, step = 0.05, format = Percent,
                   scale = 100, fallback = 0.5 }),

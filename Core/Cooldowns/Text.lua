@@ -102,20 +102,32 @@ local Store = Cooldowns.Store
 -- Charges and stacks share a scale on purpose - they are the same kind of
 -- small number in the same corner, and a charge count that came out larger
 -- than a stack count would read as a different display.
+--
+-- THE FLOORS ARE ns.FONT_FLOOR NOW, not 8 and 9. Owner, 2026-08-16: "minimum
+-- 10 pixel". Those numbers came off 4.82.0 and they are the one part of this
+-- table that was never a measurement of his bars - they are the size at which
+-- the worked-out number stops shrinking, and eight pixels of outlined digit
+-- over a moving scene is not a number anybody reads. The SCALES and the
+-- CEILINGS stay exactly as measured: they are what his four bars are drawn
+-- at, and moving one would reflow a bar he has already arranged.
 local ELEMENTS = {
-    { key = "countdown", scale = 0.42, floor = 9, ceiling = 20,
-      anchor = "CENTER",      outline = "OUTLINE" },
-    { key = "stacks",    scale = 0.30, floor = 8, ceiling = 16,
-      anchor = "BOTTOMRIGHT", outline = "OUTLINE" },
+    { key = "countdown", scale = 0.42, floor = ns.FONT_FLOOR, ceiling = 20,
+      anchor = "CENTER",      outline = ns.SCREEN_OUTLINE },
+    { key = "stacks",    scale = 0.30, floor = ns.FONT_FLOOR, ceiling = 16,
+      anchor = "BOTTOMRIGHT", outline = ns.SCREEN_OUTLINE },
     -- INHERITS FROM stacks, FIELD BY FIELD, and that is a read-time
     -- translation rather than a migration - Store's promise. A bar written
     -- before the two were split carries no `charges` at all, and the one
     -- setting it does carry is the one it was drawn with; falling back to the
     -- defaults instead would move a number somebody had placed.
-    { key = "charges",   scale = 0.30, floor = 8, ceiling = 16,
-      anchor = "BOTTOMRIGHT", outline = "OUTLINE", inherit = "stacks" },
-    { key = "spellName", scale = 0.45, floor = 9, ceiling = 14,
-      anchor = "LEFT",        outline = "" },
+    { key = "charges",   scale = 0.30, floor = ns.FONT_FLOOR, ceiling = 16,
+      anchor = "BOTTOMRIGHT", outline = ns.SCREEN_OUTLINE, inherit = "stacks" },
+    -- AND THE NAME IS OUTLINED TOO NOW. It was the one element shipped with
+    -- no outline at all, which made it the one element that disappeared over
+    -- a bright floor - "mit outline" was not a preference, it was the reason
+    -- the other three were already readable and this one was not.
+    { key = "spellName", scale = 0.45, floor = ns.FONT_FLOOR, ceiling = 14,
+      anchor = "LEFT",        outline = ns.SCREEN_OUTLINE },
 }
 
 local function Field(stored, inherit, key)
@@ -145,15 +157,35 @@ local function Element(bar, spec, height)
     local size = tonumber(Field(stored, inherit, "size")) or 0
     if size <= 0 then
         size = math.max(spec.floor, math.min(spec.ceiling, height * spec.scale))
+    else
+        -- AND THE FLOOR IS UNDER THE TYPED NUMBER TOO. "minimum 10 pixel" is
+        -- a fact about what can be read on a screen, so it cannot depend on
+        -- whether the size was worked out or entered - and profiles written
+        -- before the rail's own minimum moved still carry sixes and nines.
+        --
+        -- CLAMPED AT READ TIME RATHER THAN REWRITTEN IN THE PROFILE. Nothing
+        -- here reaches into a saved setting: the stored nine is still a nine,
+        -- and the day the floor changes it means whatever the floor says
+        -- then.
+        size = math.max(ns.FONT_FLOOR, size)
     end
 
-    -- An empty font means "whatever Settings says", resolved HERE so nothing
-    -- downstream has to know the rule. Nil rather than the empty string when
-    -- there is no profile open: ns.Media.Font answers its own fallback for
-    -- nil, and this file stays askable with no client and no saved variables.
+    -- AN EMPTY FONT MEANS THE ONE SCREEN FACE, and that is where the automatic
+    -- went out.
+    --
+    -- It used to answer `(ns.db and ns.db.font) or nil`, and nil is what
+    -- ns.Media.Font turned into Blizzard's Friz Quadrata - so a bar in a
+    -- profile that had never been given a face was drawn in a serif while
+    -- every tracking group beside it was drawn in Blizzard's number face, and
+    -- no control anywhere named either rule.
+    --
+    -- ns.ScreenFontName is the one answer now: the user's `ns.db.font` if
+    -- there is one, ns.SCREEN_FONT otherwise. The setting survives - it is
+    -- still "one place to change the typeface on every bar" - it just cannot
+    -- resolve to nothing any more.
     local font = Field(stored, inherit, "font")
     if type(font) ~= "string" or font == "" then
-        font = (ns.db and ns.db.font) or nil
+        font = ns.ScreenFontName()
     end
 
     local anchor = Field(stored, inherit, "anchor")

@@ -396,10 +396,31 @@ function Page:BuildPage(page, width)
         .. "makes the values multiply where they overlap and no surface "
         .. "keeps its colour. Judge it in a bright zone, not a dark one."])
 
-    -- Two fonts, two jobs, two sections. Panel text is read in rows in a
-    -- window; bar text is read at a glance over a moving scene. The design
-    -- draws the window in a narrow grotesk, and the client's own face is not
-    -- one - which is why this is not the same setting as "Bar text" above.
+    -- TWO FONTS, TWO JOBS, TWO ROWS - and for a while there was only one row.
+    --
+    -- The comment that used to stand here said "this is not the same setting
+    -- as Bar text above", and there was no Bar text row above: `ns.db.font`
+    -- had a default, a translation and a reader, and the control that set it
+    -- was gone. So the one setting that decides what every bar in the addon
+    -- is written in could only be changed by editing a saved-variables file.
+    -- The row is back, and it is directly above the window's own so the two
+    -- can be told apart by standing next to each other.
+    UI.MediaPicker(grid:FullRow(L["Bar text"], { controlWidth = 220 }), "font",
+        function() return ns.ScreenFontName() end,
+        function(value) ns.db.font = value end,
+        function() ns.Profiles:Reload() end)
+
+    grid:Note(L["Everything this addon draws OUT ON THE SCREEN - the names, "
+        .. "the counts and the timers on your bars, icons and panels. The "
+        .. "standard is Expressway: narrow, so more name fits in the same "
+        .. "bar, and outlined, because all of it is read over a moving "
+        .. "scene. If your client has no Expressway the closest face it does "
+        .. "have is used."])
+
+    -- Panel text is read in rows in a window; bar text is read at a glance
+    -- over a moving scene. The design draws the window in a narrow grotesk,
+    -- and the client's own face is not one - which is why this is a separate
+    -- setting from the one directly above.
     UI.MediaPicker(grid:FullRow(L["Panel font"], { controlWidth = 220 }), "font",
         function() return ns.db.panelFont or ns.Media.PanelFont() end,
         function(value) ns.db.panelFont = value end,
@@ -407,6 +428,39 @@ function Page:BuildPage(page, width)
 
     grid:Note(L["The window you are looking at - its labels, values and "
         .. "headings."])
+
+    -- THE WAY BACK TO THE STANDARD, and the reason it is a button rather than
+    -- a promise in a changelog.
+    --
+    -- The version 7 -> 8 step moves only what still carries an OLD DEFAULT,
+    -- because a colour somebody picked is theirs. That is the right rule and
+    -- it leaves one honest gap: somebody who tried a colour, kept it for a
+    -- month and now wants the house look back has nothing to press. This is
+    -- that thing, it is the SAME rule with force, and it says how many
+    -- settings it moved rather than "done".
+    grid:Buttons({
+        { text = L["Standard look"], onClick = function()
+            local moved = ns.ApplyHouseLook(ns.db, true)
+            if moved == 0 then
+                ns.Print(L["Everything was already on the standard look."])
+            else
+                ns.Print(L("%d settings put back to the standard look.",
+                    moved))
+            end
+            -- Profiles:Reload rather than Options:Refresh - the same
+            -- sequence a profile switch runs. Refreshing the WINDOW would
+            -- redraw the rows and leave every bar on screen wearing the old
+            -- colours until the next login, which is the half of "it did
+            -- nothing" that is hardest to argue with.
+            ns.Profiles:Reload()
+        end },
+    }, 14)
+
+    grid:Note(L["Puts every background, every border and every typeface back "
+        .. "to the standard: #1a1a1a behind and around everything, opaque, "
+        .. "and Expressway outlined on top. It touches only those - your "
+        .. "bars, your spells, your positions and your sizes stay exactly "
+        .. "where they are."])
 
     ---------------------------------------------------------------------
     -- Ways in

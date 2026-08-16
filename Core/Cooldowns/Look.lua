@@ -172,11 +172,21 @@ Look.KEYS = {
 -- bar texture stretched over one. All four of his bars name "Blizzard", so on
 -- his screen the plate is a real texture and this branch is the untravelled
 -- one.
+--
+-- THE PLATE AND THE BORDER ARE #1a1a1a AND OPAQUE. Owner, 2026-08-16:
+-- "standard BG farben bei allem -> 100% 1a1a1a ... also icons, bars, border."
+-- The colour is named once in Init.lua and asked for here by name.
+--
+-- THE SWIPE IS NOT ONE OF THEM AND KEEPS ITS BLACK. It is not a surface: it
+-- is the shadow the engine wipes across an icon to say how much cooldown is
+-- left, and it is drawn OVER the picture rather than behind it. A swipe in
+-- #1a1a1a at 70% is a grey veil that makes a ready icon and a spent one look
+-- more alike, which is the one thing that mark exists to tell apart.
 local DEFAULTS = {
     alpha              = 1,
-    backdropAlpha      = 0.9,
-    backdropColor      = { 0, 0, 0 },
-    borderColor        = { 0, 0, 0 },
+    backdropAlpha      = 1,
+    backdropColor      = ns.SurfaceColor(),
+    borderColor        = ns.SurfaceColor(),
     borderSize         = 1,
     borderTexture      = "None",
     iconZoom           = 0.08,

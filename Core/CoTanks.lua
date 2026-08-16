@@ -463,10 +463,13 @@ local function ChromeStyle(db)
     }
 end
 
+-- ns.FONT_FLOOR under both answers, the typed one and the worked-out one.
+-- Owner: "minimum 10 pixel" - it is a property of what can be read over a
+-- moving scene, not of how the number got here.
 local function TextSize(element, rowHeight, fallbackScale)
     local size = element and element.size or 0
-    if size and size > 0 then return size end
-    return math.max(8, math.min(20, rowHeight * fallbackScale))
+    if size and size > 0 then return math.max(ns.FONT_FLOOR, size) end
+    return math.max(ns.FONT_FLOOR, math.min(20, rowHeight * fallbackScale))
 end
 
 local function StyleStrip(row, strip, cfg)
@@ -515,7 +518,9 @@ local function StyleStrip(row, strip, cfg)
         -- the next SetText rather than doing nothing, and that has already
         -- taken a whole feature down in this addon once.
         local textSize = cfg.countdownSize
-        if not textSize or textSize <= 0 then textSize = math.max(8, size * 0.42) end
+        if not textSize or textSize <= 0 then
+            textSize = math.max(ns.FONT_FLOOR, size * 0.42)
+        end
         ns.Media.ApplyFont(button.text, cfg.font, textSize,
             cfg.outline or "OUTLINE", { 1, 1, 1 })
         button.text:ClearAllPoints()
@@ -523,7 +528,9 @@ local function StyleStrip(row, strip, cfg)
         button.text:SetShown(cfg.countdown and true or false)
 
         local countSize = cfg.stacksSize
-        if not countSize or countSize <= 0 then countSize = math.max(8, size * 0.36) end
+        if not countSize or countSize <= 0 then
+            countSize = math.max(ns.FONT_FLOOR, size * 0.36)
+        end
         ns.Media.ApplyFont(button.count, cfg.font, countSize,
             cfg.outline or "OUTLINE", { 1, 1, 1 })
         button.count:ClearAllPoints()
@@ -1393,7 +1400,8 @@ local function BuildEngineStrip(strip, cfg, filter)
                     -- settings, wrong for a number read at a glance over a
                     -- moving scene, and it meant these two numbers changed
                     -- typeface depending on which patch drew them.
-                    ns.Media.ApplyFont(count, cfg.font, math.max(8, countSize),
+                    ns.Media.ApplyFont(count, cfg.font,
+                        math.max(ns.FONT_FLOOR, countSize),
                         cfg.outline or "OUTLINE", { 1, 1, 1 })
                     count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
                     -- minCount 2 blanks a single application engine-side, so
@@ -1431,7 +1439,8 @@ local function BuildEngineStrip(strip, cfg, filter)
                     -- Fonted BEFORE registration: the engine writes into it at
                     -- bind time and an unfonted string hard-errors. Same face
                     -- as the stack count above, and the same reason.
-                    ns.Media.ApplyFont(text, cfg.font, math.max(8, textSize),
+                    ns.Media.ApplyFont(text, cfg.font,
+                        math.max(ns.FONT_FLOOR, textSize),
                         cfg.outline or "OUTLINE", { 1, 1, 1 })
                     text:SetPoint("CENTER", button, "CENTER", 0, 0)
                     ns.Engine.BindDurationText(button, text)

@@ -62,6 +62,234 @@ ns.PRIMARY_SPELL_ID = 1265968
 ns.WHITE = "Interface\\Buttons\\WHITE8X8"
 
 ---------------------------------------------------------------------------
+-- THE HOUSE LOOK: one surface colour, one face, one floor.
+--
+-- Owner, 2026-08-16, three sentences and one design:
+--
+--   "standard BG farben bei allem -> 100% 1a1a1a bitte bei allen bg farben
+--    und Border Farben einfuegen ... also icons, bars, border. ueberall im
+--    addon"
+--   "standard Fonts ausserhalb von der addon font ist expressway mit outline
+--    und minimum 10 pixel"
+--   "nimm das automatisch bitte raus. wir muessen den usern direkt vom start
+--    weg eine schoene ui anbieten"
+--
+-- THE LAST SENTENCE IS THE REASON THIS BLOCK EXISTS AT ALL. Every one of
+-- these numbers was already written down - fourteen times for the colour, in
+-- fourteen files, each of them the literal `{ 0, 0, 0 }`. Fourteen copies of
+-- one decision is not fourteen settings, it is one setting that cannot be
+-- changed: the next person to want a different surface has to find all of
+-- them and will find thirteen. "A second copy of a list is already stale."
+--
+-- So they are named once here, above everything that draws, and every default
+-- table below and in every other file asks for them by name.
+---------------------------------------------------------------------------
+
+-- #1a1a1a. ONE NUMBER, because the colour is a grey and r = g = b is a fact
+-- about it rather than a coincidence three literals have to keep agreeing on.
+ns.SURFACE = 0x1a / 255
+
+-- A FRESH TABLE EVERY CALL, and that is not caution for its own sake: half
+-- the modules in this addon write their fallback straight into the profile
+-- (`cfg.borderColor = cfg.borderColor or ...`), so one shared table handed to
+-- two profiles is one colour picker moving two panels - and the bug would
+-- only show up on the second character somebody made.
+function ns.SurfaceColor()
+    local v = ns.SURFACE
+    return { v, v, v }
+end
+
+-- The same colour for the setters that take four numbers rather than a table.
+-- Opaque unless something asks otherwise: "100% 1a1a1a" is one instruction,
+-- and a surface at 90% over a moving scene is never the colour it names.
+function ns.SurfaceRGB(alpha)
+    local v = ns.SURFACE
+    return v, v, v, alpha == nil and 1 or alpha
+end
+
+-- WHAT THE ADDON WRITES ON THE SCREEN IS SET IN EXPRESSWAY. Not the options
+-- window - that is "die addon font" and stays the narrow grotesk Media.lua
+-- argues for. This is the other side of his sentence: the names, the numbers
+-- and the counters out on the bars.
+--
+-- A NAME RATHER THAN A PATH, because it goes through LibSharedMedia and has
+-- to survive being read back by a picker. Media.Font falls through
+-- Media.SCREEN_FONTS when the client has no Expressway, so the worst case is
+-- a different narrow grotesk rather than Blizzard's serif.
+ns.SCREEN_FONT = "Expressway"
+
+-- OUTLINED, ALWAYS. Everything this addon draws sits over a moving scene, and
+-- an unoutlined glyph on a bright floor is the one thing that cannot be fixed
+-- by picking a colour.
+ns.SCREEN_OUTLINE = "OUTLINE"
+
+-- THE FLOOR UNDER EVERY WORKED-OUT SIZE. His "minimum 10 pixel".
+--
+-- The automatic size STAYS - it is what keeps a 22px bar and a 64px icon
+-- looking like one design, and it is not the "automatic" he asked me to take
+-- out. What went out is the automatic FACE: a default that read "whatever
+-- font your other addons happen to have installed" is not a default, and two
+-- players comparing screenshots of one version saw different type.
+ns.FONT_FLOOR = 10
+
+-- WHICH FACE THE SCREEN IS SET IN, AND THERE IS ONLY ONE ANSWER TO IT.
+--
+-- `ns.db.font` is a real setting - "the font every piece of text on every bar
+-- uses unless that one piece has been given its own" - and ns.SCREEN_FONT is
+-- what it defaults to. Both are resolved HERE so that ns.StyleFont (tracking
+-- groups) and Cooldowns.Text (bars and icons) cannot answer differently,
+-- which is exactly what they used to do: one asked ns.db.font and the other
+-- asked Blizzard for its number face.
+--
+-- Askable with no client and no saved variables, which is what lets the desk
+-- prove it.
+function ns.ScreenFontName()
+    local chosen = ns.db and ns.db.font
+    if type(chosen) == "string" and chosen ~= "" then return chosen end
+    return ns.SCREEN_FONT
+end
+
+---------------------------------------------------------------------------
+-- PUTTING THE HOUSE LOOK ON A PROFILE THAT ALREADY EXISTS
+--
+-- A changed default reaches a NEW profile and nothing else. Every setting
+-- below has been written into the owner's saved variables for versions, so
+-- "the standard background is #1a1a1a now" would have been a sentence that
+-- changed nothing on the one screen it was written for. That is the oldest
+-- failure in this project - a setting that kept its reader and lost its
+-- writer - and it is why this function exists rather than a comment saying
+-- "new profiles only".
+--
+-- ONE RULE, TWO CALLERS, and that is the whole design:
+--
+--   force = false   the version 7 -> 8 step in Profiles.Migrate. It moves
+--                   only what still carries an OLD DEFAULT. A colour somebody
+--                   PICKED is theirs; a default is not licence to reach into
+--                   a saved setting.
+--   force = true    the "Standard look" button in Settings. That button means
+--                   "put it all back", so it does, and the person pressing it
+--                   said so.
+--
+-- WALKED BY KEY NAME RATHER THAN BY A LIST OF PLACES. There are eleven
+-- containers holding one of these settings today - answers, taunts,
+-- externals, the raid bar, the co-tank panel, every bar, every tracking group
+-- - and a list of them is a second copy that is stale the first time somebody
+-- adds a twelfth. The walk asks what a key is CALLED, which is the one thing
+-- that does not drift.
+---------------------------------------------------------------------------
+
+-- Keys whose value is a SURFACE: a plate behind something, the trough of a
+-- bar, the line around it.
+local SURFACE_COLOR = {
+    backdropColor = true, borderColor = true,
+    bgColor = true, fillBackColor = true,
+}
+local SURFACE_ALPHA = { backdropAlpha = true, bgAlpha = true }
+
+-- AND THE ONE PLACE A COLOUR OF THAT NAME IS NOT A SURFACE. The aura strips
+-- on the co-tank panel are bordered red for a debuff and green for a buff,
+-- and that line is the only thing that says which strip you are looking at.
+-- Reached by the key that leads INTO the table, because that is all a walk
+-- knows about where it is standing.
+local NOT_A_SURFACE = { debuffs = true, buffs = true }
+
+-- What the addon used to ship. Recognised rather than assumed: everything
+-- else is somebody's choice.
+local WAS_SURFACE = { { 0, 0, 0 }, { 0.05, 0.05, 0.06 } }
+local WAS_ALPHA = { 0.9, 0.85 }
+
+-- A TOLERANCE RATHER THAN `==`, because these numbers have been through
+-- SavedVariables. The file is written as decimal text and read back as a
+-- double, and 0.05 is not exactly representable either way - so an equality
+-- test would answer "somebody picked this" for a value nobody ever touched.
+local function SameColor(colour, r, g, b)
+    if type(colour) ~= "table" then return false end
+    return math.abs((tonumber(colour[1]) or -1) - r) < 0.005
+        and math.abs((tonumber(colour[2]) or -1) - g) < 0.005
+        and math.abs((tonumber(colour[3]) or -1) - b) < 0.005
+end
+
+local function WoreOldColor(colour)
+    for _, was in ipairs(WAS_SURFACE) do
+        if SameColor(colour, was[1], was[2], was[3]) then return true end
+    end
+    return false
+end
+
+local function WoreOldAlpha(value)
+    for _, was in ipairs(WAS_ALPHA) do
+        if type(value) == "number" and math.abs(value - was) < 0.005 then
+            return true
+        end
+    end
+    return false
+end
+
+-- Returns how many settings it moved, which is what the button reports and
+-- what the desk asserts. A run that changes nothing answers 0 rather than
+-- claiming success, so "it did nothing" and "there was nothing to do" are
+-- told apart by the one number.
+function ns.ApplyHouseLook(profile, force)
+    if type(profile) ~= "table" then return 0 end
+    local v, moved = ns.SURFACE, 0
+
+    local function Walk(tbl, depth, guarded)
+        for key, value in pairs(tbl) do
+            if SURFACE_COLOR[key] then
+                if not guarded and (force or WoreOldColor(value))
+                    and not SameColor(value, v, v, v) then
+                    tbl[key] = ns.SurfaceColor()
+                    moved = moved + 1
+                end
+
+            elseif SURFACE_ALPHA[key] then
+                if (force or WoreOldAlpha(value)) and value ~= 1 then
+                    tbl[key] = 1
+                    moved = moved + 1
+                end
+
+            elseif key == "outline" then
+                -- ONLY AN EMPTY ONE, AND IN BOTH MODES. "" is no outline at
+                -- all, which is the state his spell name shipped in and the
+                -- reason it was the one element that disappeared over a
+                -- bright floor. A THICKOUTLINE somewhere else is a choice
+                -- with a reason - the reminder text is read across the whole
+                -- screen - and flattening it would be this function deciding
+                -- something nobody asked it to.
+                if value == "" then
+                    tbl[key] = ns.SCREEN_OUTLINE
+                    moved = moved + 1
+                end
+
+            elseif key == "font" then
+                -- THE ROOT `font` IS THE ONE SETTING FOR EVERY BAR; a `font`
+                -- further down belongs to a single element and empty means
+                -- "follow the root". So the root gets a name and the rest get
+                -- put back to following it - and outside force mode only the
+                -- old default is touched.
+                if depth == 0 then
+                    if force or value == "Arial Narrow" then
+                        if value ~= ns.SCREEN_FONT then
+                            tbl[key] = ns.SCREEN_FONT
+                            moved = moved + 1
+                        end
+                    end
+                elseif force and value ~= "" then
+                    tbl[key] = ""
+                    moved = moved + 1
+                end
+
+            elseif type(value) == "table" then
+                Walk(value, depth + 1, guarded or NOT_A_SURFACE[key] or false)
+            end
+        end
+    end
+
+    Walk(profile, 0, false)
+    return moved
+end
+
+---------------------------------------------------------------------------
 -- One tracking group. Groups are the general form of "show me these auras":
 -- any number of them, icons or bars, laid out in rows, columns or a grid.
 --
@@ -100,9 +328,12 @@ ns.GROUP_DEFAULTS = {
 
     -- Looks
     borderSize    = 1,
-    borderColor   = { 0.00, 0.00, 0.00 },
+    borderColor   = ns.SurfaceColor(),
     barColor      = { 1.00, 0.44, 0.16 },
-    backdropAlpha = 0.90,
+    -- OPAQUE. `trackAlpha` below is the bar's OWN colour showing through where
+    -- it is not filled, which is a different question and keeps its own
+    -- number - the surface behind everything is what "100%" was about.
+    backdropAlpha = 1.00,
     trackAlpha    = 0.08,
 
     showSwipe  = true,
@@ -140,8 +371,13 @@ ns.DEFAULTS = {
     --    spec can stop two characters of one class overwriting each other.
     --    Version 6 is therefore now a split INSIDE one character's profile:
     --    the spec you are in decides which spells its bars hold.
-    -- See Bars:Migrate.
-    dbVersion  = 7,
+    -- 8: the house look. One surface colour (#1a1a1a, opaque) behind and
+    --    around everything, one screen face (Expressway, outlined), one
+    --    floor under every worked-out size. See ns.ApplyHouseLook - the
+    --    version step moves only what still carries an older DEFAULT, and
+    --    the "Standard look" button in Settings is the same rule with force.
+    -- See Bars:Migrate and Profiles.Migrate.
+    dbVersion  = 8,
 
     -- WHICH FEATURES ARE RUNNING. See Core/Modules.lua for what counts as one
     -- and what does not.
@@ -248,11 +484,11 @@ ns.DEFAULTS = {
         scale            = 1.0,
         alpha            = 1.0,
         borderSize       = 0,
-        borderColor      = { 0.00, 0.00, 0.00 },
+        borderColor      = ns.SurfaceColor(),
         borderTexture    = "None",
         backdrop         = true,
-        backdropColor    = { 0.00, 0.00, 0.00 },
-        backdropAlpha    = 0.90,
+        backdropColor    = ns.SurfaceColor(),
+        backdropAlpha    = 1.00,
         backdropTexture  = "Blizzard",
         iconZoom         = 0.08,
     },
@@ -306,15 +542,22 @@ ns.DEFAULTS = {
     -- has been given its own. One place to change it, and no need to visit
     -- three sections on four bars to change a typeface.
     --
-    -- Arial Narrow rather than the client's own Friz Quadrata: bar text is
-    -- read at a glance over a moving scene, and a narrow grotesk fits more
-    -- name into the same bar without dropping in size. It is what the panel
-    -- uses too, so the addon reads as one thing out of the box.
+    -- EXPRESSWAY rather than Arial Narrow, and that is the owner's own split:
+    -- "standard Fonts ausserhalb von der addon font ist expressway". Both are
+    -- narrow grotesks - bar text is read at a glance over a moving scene, and
+    -- a narrow face fits more name into the same bar without dropping in size
+    -- - but the WINDOW and the SCREEN are two jobs and now say so.
+    --
+    -- Read through ns.ScreenFontName, which is the only thing that resolves
+    -- this key. It is a real setting rather than a constant: one place to
+    -- change the typeface on every bar, without visiting three sections on
+    -- four bars.
     --
     -- ONLY REACHES A NEW PROFILE. Anyone who already has one keeps the face
     -- stored in it, deliberate or not; a default is not licence to reach into
-    -- a saved setting.
-    font       = "Arial Narrow",
+    -- a saved setting - which is what the version 8 step in Profiles.Migrate
+    -- and the "Standard look" button in Settings are for.
+    font       = ns.SCREEN_FONT,
 
     -- The PANEL font - the options window, not the bars. Two different jobs:
     -- bar text is read at a glance over a moving scene, panel text is read in
@@ -420,14 +663,19 @@ ns.DEFAULTS = {
         healthMid     = { 0.90, 0.72, 0.16 },
         healthLow     = { 0.80, 0.14, 0.14 },
 
-        -- The plate behind the bar, and the empty part of the bar itself
-        bgColor       = { 0.05, 0.05, 0.06 },
-        bgAlpha       = 0.85,
+        -- The plate behind the bar, and the empty part of the bar itself.
+        --
+        -- This one was NOT black - it was 0.05,0.05,0.06, a near-black with a
+        -- blue cast that nothing else in the addon shared. That is exactly
+        -- what one named surface is for: the co-tank panel had drifted a
+        -- shade off every other plate and no one setting was wrong.
+        bgColor       = ns.SurfaceColor(),
+        bgAlpha       = 1.00,
         bgGradient    = { on = false, color = { 0.10, 0.10, 0.12 }, direction = "down" },
         trackAlpha    = 0.12,     -- the unfilled part, in the bar's own colour
 
         borderSize    = 1,
-        borderColor   = { 0.00, 0.00, 0.00 },
+        borderColor   = ns.SurfaceColor(),
         borderTexture = "None",
         borderGradient = { on = false, color = { 0.35, 0.35, 0.35 }, direction = "right" },
 
@@ -450,15 +698,23 @@ ns.DEFAULTS = {
 
         -- Text. The same seven controls per element as a bar's, from the same
         -- shape, so the panel generator and the anchor rules are shared.
+        --
+        -- `font` NAMES A FACE rather than standing empty. An empty string
+        -- meant "whatever Settings says", and Settings said "whatever font
+        -- one of your other addons happened to register" - which is the
+        -- automatic the owner asked to have taken out. `size = 0` is a
+        -- different thing and stays: it means "work it out from the row
+        -- height", which is what keeps one panel looking like one design at
+        -- any size, and its floor is ns.FONT_FLOOR.
         name = {
-            show = true, font = "", size = 0, color = { 1, 1, 1 },
-            outline = "OUTLINE", anchor = "LEFT", x = 0, y = 0,
+            show = true, font = ns.SCREEN_FONT, size = 0, color = { 1, 1, 1 },
+            outline = ns.SCREEN_OUTLINE, anchor = "LEFT", x = 0, y = 0,
             classColor = true,
             maxLength = 0,       -- 0 keeps the whole name
         },
         health = {
-            show = true, font = "", size = 0, color = { 1, 1, 1 },
-            outline = "OUTLINE", anchor = "RIGHT", x = 0, y = 0,
+            show = true, font = ns.SCREEN_FONT, size = 0, color = { 1, 1, 1 },
+            outline = ns.SCREEN_OUTLINE, anchor = "RIGHT", x = 0, y = 0,
             classColor = false,
             -- percent | current | both | deficit
             -- On this patch a health value may arrive protected, and then
@@ -521,16 +777,22 @@ ns.DEFAULTS = {
         -- strips draw in TEST MODE only - so every setting here is adjustable
         -- today and correct the moment the patch lands. The panel says this in
         -- as many words rather than showing an empty strip.
-        -- font "" is the SHARED bar font, the same default the name and the
-        -- health text carry. The two numbers on an aura icon are read over a
-        -- moving scene like everything else on this panel, so they belong to
+        -- The font is the SHARED screen face, the same default the name and
+        -- the health text carry. The two numbers on an aura icon are read over
+        -- a moving scene like everything else on this panel, so they belong to
         -- that family and not to the window's.
+        --
+        -- THE TWO BORDER COLOURS HERE ARE THE ONE PAIR THAT DID NOT GO GREY.
+        -- Red and green are not decoration on these two strips, they are the
+        -- only thing that says which strip you are looking at - a debuff and a
+        -- buff at the same size in the same corner, both in #1a1a1a, is one
+        -- setting saying nothing twice.
         debuffs = {
             show = true, max = 8, size = 22, spacing = 1, perRow = 8,
             anchor = "TOPLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.75, 0.15, 0.15 },
-            font = "", outline = "OUTLINE",
+            font = ns.SCREEN_FONT, outline = ns.SCREEN_OUTLINE,
             countdown = true, countdownSize = 0,
             stacks = true, stacksSize = 0,
             swipe = true,
@@ -540,7 +802,7 @@ ns.DEFAULTS = {
             anchor = "BOTTOMLEFT", growth = "right",
             x = 0, y = 0,
             borderSize = 1, borderColor = { 0.25, 0.55, 0.30 },
-            font = "", outline = "OUTLINE",
+            font = ns.SCREEN_FONT, outline = ns.SCREEN_OUTLINE,
             countdown = true, countdownSize = 0,
             stacks = true, stacksSize = 0,
             -- THE SWEEP ON THE ICON, engine-driven. On by default, and that
@@ -1031,16 +1293,47 @@ function ns.ShortNumber(value)
     return sign .. string.format("%d", value)
 end
 
--- Font paths are read from live font objects, so no hardcoded path can break.
+-- THE FACE FOR EVERYTHING THIS ADDON DRAWS OUT ON THE SCREEN.
 --
--- Two fonts, because they have different jobs. The number font is built for
--- digits over a busy 3D scene - tight, heavy, outlined - and it is the right
--- choice for a cooldown countdown on an icon. It is the wrong choice for
--- panel text, where it reads cramped and slightly wrong at every size. Panel
--- text uses the client's own UI font instead.
+-- Two fonts, because they have different jobs. This one is for digits and
+-- short words over a busy 3D scene - narrow, outlined, read at a glance. It
+-- is the wrong choice for panel text, which reads cramped in it at every
+-- size; that is ns.StyleUIFont below.
+--
+-- IT USED TO BE `NumberFontNormalLarge:GetFont()`, AND THAT WAS THE OTHER
+-- HALF OF THE AUTOMATIC. Blizzard's number face is whatever the client makes
+-- it - it changes with the locale, and it is a different design from
+-- everything else this addon draws, because every OTHER string on screen goes
+-- through Media.ApplyFont with a name out of the profile. So a tracking
+-- group's timer and a cooldown bar's timer were set in two different faces
+-- and no setting anywhere said so.
+--
+-- Owner: "nimm das automatisch bitte raus. wir muessen den usern direkt vom
+-- start weg eine schoene ui anbieten."
+--
+-- BY NAME RATHER THAN BY PATH, and that is the opposite of what ns.PANEL_FONT
+-- does one screen down - deliberately. The panel is pinned to a file the
+-- client ships so no other addon can move it. Expressway is a file we do NOT
+-- ship, so the only way to reach it at all is to ask the registry for the
+-- name; Media.Font falls through the house chain when nobody has it.
+--
+-- The floor is applied HERE rather than at eleven call sites. Every one of
+-- them worked its size out from a cell height, and the smallest of them asked
+-- for eight - his "minimum 10 pixel" is a property of the face on screen, not
+-- of each thing that happens to use it.
 function ns.StyleFont(fontString, size, flags)
-    local path = NumberFontNormalLarge:GetFont()
-    fontString:SetFont(path, size, flags or "OUTLINE")
+    size = math.max(ns.FONT_FLOOR, tonumber(size) or ns.FONT_FLOOR)
+    flags = flags or ns.SCREEN_OUTLINE
+
+    local path = ns.Media and ns.Media.Font
+        and ns.Media.Font(ns.ScreenFontName()) or nil
+
+    -- SetFont answers whether the file loaded, and a string that silently
+    -- took no font draws NOTHING - which is how a missing face turns into
+    -- "the stack count stopped working" rather than into "it looks wrong".
+    if not (path and fontString:SetFont(path, size, flags)) then
+        fontString:SetFont(NumberFontNormalLarge:GetFont(), size, flags)
+    end
 end
 
 -- THE PANEL FONT IS THE ONE THE USER PICKED, not the client's.
@@ -1237,7 +1530,7 @@ function ns.CreateBorder(frame, thickness, layer)
     end
 
     border:SetThickness(border.thickness)
-    border:SetColor(0, 0, 0, 1)
+    border:SetColor(ns.SurfaceRGB())
     return border
 end
 

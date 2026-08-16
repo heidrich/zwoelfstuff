@@ -300,7 +300,7 @@ function Page:BuildPage(page, width)
 
     UI.Swatch(grid:Row(L["Colour"]),
         function()
-            local colour = Cfg().borderColor or { 0, 0, 0 }
+            local colour = Cfg().borderColor or ns.SurfaceColor()
             return colour[1], colour[2], colour[3]
         end,
         function(r, g, b) Cfg().borderColor = { r, g, b } end, Apply)
@@ -318,7 +318,7 @@ function Page:BuildPage(page, width)
 
     UI.Swatch(grid:Row(L["Colour"]),
         function()
-            local colour = Cfg().backdropColor or { 0, 0, 0 }
+            local colour = Cfg().backdropColor or ns.SurfaceColor()
             return colour[1], colour[2], colour[3]
         end,
         function(r, g, b) Cfg().backdropColor = { r, g, b } end, Apply)

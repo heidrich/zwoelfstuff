@@ -111,6 +111,39 @@ function Profiles.Migrate(store)
 end
 
 ---------------------------------------------------------------------------
+-- VERSION 7 -> 8: THE HOUSE LOOK.
+--
+-- The first step in this file that is keyed off a VERSION NUMBER rather than
+-- off the shape of the data, and it has to be: "this plate is still the old
+-- black" is not a shape, it is a value, and a value can legitimately be set
+-- to the old black again the day after by somebody who wants it. Shape-keyed
+-- steps are idempotent for free; this one has to be told when it is done.
+--
+-- WHICH IS THE WHOLE REASON FOR THE STAMP. Without it this would move a
+-- colour back every login, and the person who deliberately picked pure black
+-- would fight the addon once a session and never work out why. With it, it
+-- runs exactly once per profile - and the "Standard look" button in Settings
+-- is how anybody asks for it a second time.
+--
+-- A PROFILE WITH NO dbVersion AT ALL IS OLD, NOT NEW. This runs before
+-- ApplyDefaults - see ns.OpenProfile - precisely so that nil still means nil
+-- here. A step later and every existing profile would already be stamped 8
+-- by the default table and this would never run for anybody.
+--
+-- Exported for the desk, like Migrate above and for the same reason: it is a
+-- function that writes into somebody's saved settings.
+function Profiles.HouseLook(profile)
+    if type(profile) ~= "table" then return 0 end
+
+    local version = tonumber(profile.dbVersion) or 0
+    if version >= 8 then return 0 end
+
+    local moved = ns.ApplyHouseLook(profile, false)
+    profile.dbVersion = 8
+    return moved
+end
+
+---------------------------------------------------------------------------
 -- Opening up
 --
 -- Called from ADDON_LOADED, and again by hand every time the active profile
@@ -142,6 +175,8 @@ function ns.OpenProfile()
     if ns.CoTanks and ns.CoTanks.Migrate then
         pcall(ns.CoTanks.Migrate, ns.CoTanks, store.profiles[name].coTanks)
     end
+
+    Profiles.HouseLook(store.profiles[name])
 
     ns.db = ns.ApplyDefaults(store.profiles[name], ns.DEFAULTS)
     ns.profileKey = key
