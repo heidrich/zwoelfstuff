@@ -1346,6 +1346,12 @@ function Effects.Step(now, inCombat, span)
         local entry = watched[index]
         if entry and entry.cell then
             walked = walked + 1
+            -- pcall ON A FUNCTION THAT ALREADY EXISTS, arguments on the stack.
+            -- Wrapping this in `pcall(function() ... end)` reads better and
+            -- builds a closure over four upvalues per cell per tick: measured
+            -- at 45.7 KB over 200 ticks for ONE cell, against 0.4 for this
+            -- line. Twelve cells at sixteen ticks a second is the whole of an
+            -- evening's collector work, made by a loop nobody is looking at.
             local ok, err = pcall(TickCell, entry, now, inCombat, span or 0)
             if not ok then
                 -- One bad cell must not stop the other eleven, and it must

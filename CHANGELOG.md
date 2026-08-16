@@ -100,6 +100,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     addon sits at about 3 MB until you open the settings window. Everything
     above that is the window, and a frame in this game cannot be freed once
     made — so a page you opened once is held until you reload.
+  - **And the memory the bars use while you play stops growing.** The window is
+    the half you can see; the other half is what the bars do many times a
+    second with the window shut, and that never stops. Two of those loops made
+    a little rubbish on every single tick — a stack count was read in a way
+    that built four throwaway functions each time, and the ticker that pushes
+    the count in built two throwaway lists a tick. Both are gone: the same work
+    now allocates nothing at all. Nothing on screen changes; your machine just
+    stops sweeping up after us.
 
 - **The addon now notices when another one is managing your cooldowns.** Two
   addons cannot both hold Blizzard's cooldown frames — whichever loads second

@@ -355,17 +355,17 @@ end
 
 -- IS THERE ANYTHING TO FEED A THRESHOLD WITH?
 --
--- CDM:ItemStacks went with the old CDM.lua and has not come back: the rebuilt
--- reader has no stack reader at all. It has to return verbatim from
--- cdm-full-4.82.0:Core/CDM.lua:416-455 - the double-guarded read whose own
--- comment says the 12.1 change is that "reading a field of one of those is an
--- ERROR rather than a nil" - and it is not this file's to write, because the
--- stack TEXT half of this same wave needs the identical answer and two readers
--- would be two answers to one question.
+-- CDM:ItemStacks answers it, and this asks for it BY NAME rather than assuming
+-- it. It was gone for one wave - it went out with the old CDM.lua and came back
+-- verbatim from cdm-full-4.82.0:Core/CDM.lua:416-455 - and while it was gone NO
+-- threshold was drawn at all, on a bar the owner had already set three of them
+-- on. A band that never appears is a setting that looks unfinished; a band that
+-- appears and never changes colour looks like the addon lying about what it can
+-- see. So the switch stays, and /zs cdm prints its answer.
 --
--- Until it is there, NO threshold is drawn at all. A band that never appears is
--- a setting that looks unfinished; a band that appears and never changes colour
--- looks like the addon lying about what it can see. /zs cdm prints this.
+-- It stays ONE reader, in CDM.lua, because the stack TEXT half of the same wave
+-- needs the identical answer and two readers would be two answers to one
+-- question.
 function Fill.CanFeed()
     return type(ns.CDM and ns.CDM.ItemStacks) == "function"
 end
@@ -948,22 +948,51 @@ local function Remeasure(item)
     return not Dress(item, fill, note.bar, note.index, note.spellID)
 end
 
-local function Tick()
-    -- Collected before either loop runs. Both of them clear entries, and
-    -- mutating a table you are walking with `next` is undefined in Lua - the
-    -- same trap Cooldowns.Each documents.
-    local measure, feed = {}, {}
-    for item in pairs(measuring) do measure[#measure + 1] = item end
-    for item in pairs(feeding) do feed[#feed + 1] = item end
+-- THE TWO LISTS THE TICK WALKS, MADE ONCE AND REUSED FOR EVER.
+--
+-- They have to exist: both loops clear entries out of the set they came from,
+-- and mutating a table you are walking with `next` is undefined in Lua - the
+-- same trap Cooldowns.Each documents. What they do NOT have to be is new.
+--
+-- A fresh pair per tick is two tables ten times a second for as long as
+-- anything is fed, which on an evening of raiding is the same shape the mirror
+-- had: small enough to be invisible in one tick and endless. MEASURED at the
+-- desk on one fed bar: 21.5 KB over 200 ticks, against 0.2 for this version.
+-- Owner: "schlimm waere es nur, wenn im zu zustand so viele ressourcen
+-- verbraucht werden" - and this ticker runs with the window shut, because its
+-- whole job is the bars on screen.
+--
+-- EMPTIED AT THE END AS WELL AS AT THE START, and that is not belt and braces.
+-- These hold Blizzard's pooled item frames, and `feeding` and `measuring` are
+-- weak-keyed exactly so a frame the pool has re-issued drops out by itself. A
+-- strong list left full between ticks would pin every one of them until the
+-- next tick happened to overwrite the slot - the weakness would still be there
+-- and would no longer mean anything.
+local measureList, feedList = {}, {}
+
+-- EXPORTED for the same reason Effects.Step is: the harness deliberately does
+-- not fire tickers - its C_Timer.NewTicker hands back something cancellable
+-- that never runs - so a local one is a loop the desk cannot walk even once.
+-- That is how the two tables above went unseen: nothing out there had a way to
+-- call this, and a check that cannot run is worth exactly what an absent one
+-- is.
+function Fill.Tick()
+    wipe(measureList)
+    wipe(feedList)
+    for item in pairs(measuring) do measureList[#measureList + 1] = item end
+    for item in pairs(feeding) do feedList[#feedList + 1] = item end
 
     -- Measuring first. A re-dress writes SetValue(0) into every overlay, so the
     -- feed below puts the real count back inside the same frame.
-    for _, item in ipairs(measure) do
+    for _, item in ipairs(measureList) do
         if not Remeasure(item) then measuring[item] = nil end
     end
-    for _, item in ipairs(feed) do
+    for _, item in ipairs(feedList) do
         if not Feed(item) then feeding[item] = nil end
     end
+
+    wipe(measureList)
+    wipe(feedList)
 
     if next(measuring) == nil and next(feeding) == nil then Stop() end
 end
@@ -972,7 +1001,7 @@ local function Watch()
     if ticker then return end
     if next(measuring) == nil and next(feeding) == nil then return end
     if not (C_Timer and C_Timer.NewTicker) then return end
-    ticker = C_Timer.NewTicker(TICK, Tick)
+    ticker = C_Timer.NewTicker(TICK, Fill.Tick)
 end
 
 ---------------------------------------------------------------------------

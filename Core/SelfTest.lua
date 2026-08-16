@@ -8573,6 +8573,13 @@ local function TestCooldownOwn()
         fillColor = { 1, 0, 0 }, fillAlpha = 0.85,
         fillTexture = "ZS Flat",
         cells = { 77535 },
+        -- BOTH CLOCKS ARMED, and that is what makes the two cost checks below
+        -- mean anything. A bar with no effect switched on is never watched and
+        -- a bar with no stack band is never fed, so the fixture as it stood
+        -- measured two loops that were walking nothing at all - which is the
+        -- shape of a guard that reads one line and reports green.
+        effects = { readyGlow = true },
+        stackThresholds = { { value = 3, color = { 0, 1, 0 }, alpha = 1 } },
     } }
 
     local ok, err = pcall(function()
@@ -8809,6 +8816,89 @@ local function TestCooldownOwn()
             ns.Cooldowns.Fill.Bar(bars) == own.fill)
         Check("while Blizzard's is still reachable for the mirror",
             ns.Cooldowns.Fill.Blizzard(bars) == mirror)
+
+        -----------------------------------------------------------------
+        -- THE OTHER TWO CLOCKS COST NOTHING PER TICK EITHER
+        --
+        -- The mirror above was measured on the wave that wrote it. These two
+        -- are older, they run in the same state - bars on screen, window shut,
+        -- which is the half the owner said matters - and NOTHING HAD EVER
+        -- WALKED THEM OUT HERE. Effects.Step's own header says it is exported
+        -- so the desk can drive it, and no test called it; Fill's tick was
+        -- local, which is worse, because there was nothing to call.
+        --
+        -- BOTH ARE ASSERTED TO BE WALKING SOMETHING FIRST. An empty loop
+        -- allocates nothing and answers this question with a green line that
+        -- means nothing at all - and the first draft of this measured exactly
+        -- that: no bar has effects switched on by default and none has a stack
+        -- band, so the fixture ran both clocks over zero entries. The fixture
+        -- carries `effects` and `stackThresholds` because of this paragraph.
+        --
+        -- CALIBRATED ON THE DEFECT, both of them measured by putting it back:
+        --
+        --   effects  one closure per cell per tick     45.7 KB / 200 ticks
+        --            what it does now                   0.4 KB
+        --   fill     two fresh lists per tick          21.5 KB / 200 ticks
+        --            what it does now                   0.2 KB
+        --
+        -- Two KB sits comfortably above both floors and an order of magnitude
+        -- below either defect.
+        -----------------------------------------------------------------
+        local FX = ns.Cooldowns.Effects
+        local walked = FX.Step(GetTime(), false, 0.06)
+        Check("The effects ticker is actually walking this cell", walked == 1,
+            tostring(walked) .. " cells")
+
+        collectgarbage("collect")
+        collectgarbage("collect")
+        local before = collectgarbage("count")
+        for _ = 1, 200 do FX.Step(GetTime(), false, 0.06) end
+        local grew = collectgarbage("count") - before
+        Check("and allocates nothing while it does", grew < 2,
+            string.format("%.1f KB over 200 ticks", grew))
+
+        -----------------------------------------------------------------
+        -- THE FILL TICKER, AND THE COUNT REALLY REACHING THE BAND
+        --
+        -- The cost check needs this one beside it, and not as a nicety: a tick
+        -- that returned at its first guard would allocate nothing and pass the
+        -- line below on its own. What proves the loop is doing its job is the
+        -- stack count arriving in the overlay - the band is a StatusBar whose
+        -- range is (value-1, value), so the count going in is the whole
+        -- mechanism, and it is the one thing no other test asks.
+        --
+        -- The overlay is reached as the fill's only child frame rather than
+        -- through a new export: the trough, the spark and the charge marks are
+        -- all textures, so a band is the only thing that can answer here.
+        -----------------------------------------------------------------
+        Check("The fill ticker has this bar on its list", Fill.Watching() == 1,
+            tostring(Fill.Watching()))
+
+        Fill.Tick()
+        local band = own.fill:GetChildren()
+        Check("A stack band was built for the threshold", band ~= nil)
+        if band then
+            Check("and the tick pushed the live count into it",
+                band:GetValue() == 3, tostring(band:GetValue()))
+            local low, high = band:GetMinMaxValues()
+            Check("against the range that does the comparing for us",
+                low == 2 and high == 3,
+                string.format("%s..%s", tostring(low), tostring(high)))
+        end
+
+        collectgarbage("collect")
+        collectgarbage("collect")
+        before = collectgarbage("count")
+        for _ = 1, 200 do Fill.Tick() end
+        grew = collectgarbage("count") - before
+        Check("and it allocates nothing per tick", grew < 2,
+            string.format("%.1f KB over 200 ticks", grew))
+
+        -- AND IT STILL HAS ITS CLIENT AFTERWARDS. A tick that quietly dropped
+        -- the bar off its own list would go silent, cost nothing for ever and
+        -- read exactly like the line above passing.
+        Check("and it still has the bar after two hundred of them",
+            Fill.Watching() == 1, tostring(Fill.Watching()))
 
         -----------------------------------------------------------------
         -- SWITCHING IT OFF
@@ -9188,13 +9278,14 @@ local function TestCooldownStyling()
     -- SOMETHING CAN READ A STACK COUNT AT ALL, which is the question every
     -- band above depends on and none of them could ask.
     --
-    -- Fill.CanFeed tests for ns.CDM.ItemStacks by name. That function went
-    -- with the old CDM.lua and did not come back, so it answered false on
-    -- every client - Fill.Overlays was handed an empty list whatever was
-    -- stored, the ticker gave up before it started, and not one band painted
-    -- on a bar he had already set three of them on. Every test above passed
-    -- throughout: they check that a threshold SURVIVES the filter, which says
-    -- nothing about whether anything downstream can ever feed it.
+    -- Fill.CanFeed tests for ns.CDM.ItemStacks by name. For one wave that
+    -- function was gone, so it answered false on every client - Fill.Overlays
+    -- was handed an empty list whatever was stored, the ticker gave up before
+    -- it started, and not one band painted on a bar he had already set three of
+    -- them on. Every test above passed throughout: they check that a threshold
+    -- SURVIVES the filter, which says nothing about whether anything downstream
+    -- can ever feed it. The band arriving at a real overlay is asked where the
+    -- ticker is walked, in "Places we draw ourselves".
     Check("A stack count can be read off a frame at all",
         Fill.CanFeed() == true,
         "ns.CDM.ItemStacks is " .. type(ns.CDM and ns.CDM.ItemStacks))
