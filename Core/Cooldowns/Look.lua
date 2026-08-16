@@ -398,6 +398,23 @@ function Look.Apply(item, style)
         -- 5 puts on the same widget - which is the one thing that must be
         -- true about two files writing one StatusBar.
         local fill = BarFill(item)
+
+        -- THE FILL FOLLOWS THE FRAME. Without this the StatusBar keeps
+        -- whatever height Blizzard's template gave it while everything around
+        -- it grows with Bar height - the plate, the border and the icon all
+        -- move and the coloured bar sits in the middle of them at its
+        -- original size. That is the whole of "da wird nur der bg hoeher".
+        --
+        -- Anchored BESIDE THE ICON rather than over it: the icon is the one
+        -- part of this template that must not be touched, and the two pixels
+        -- of gap are measured off his own screenshot rather than invented -
+        -- Blizzard's own layout leaves a visible sliver there and closing it
+        -- would be a change nobody asked for.
+        local beside = Door("Beside")
+        if fill and beside then
+            beside(fill, item, item.Icon, 2, 0)
+        end
+
         Claim.Set(fill, "SetOrientation", direction.orientation)
         Claim.Set(fill, "SetReverseFill", direction.reverse)
 

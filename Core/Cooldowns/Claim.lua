@@ -725,6 +725,50 @@ function Claim.Fill(object, frame, inset)
 end
 
 
+-- THE REST OF A FRAME, BESIDE SOMETHING ELSE IN IT.
+--
+-- Claim.Fill's case is "the whole of this region covers its parent". This is
+-- the other one wave 5 turned out to have: a tracked bar's StatusBar covers
+-- everything the square icon at one end does not.
+--
+-- WHY IT EXISTS AT ALL. Blizzard's TrackedBar template lays its own parts
+-- out, and this addon deliberately leaves them where the template put them -
+-- forcing an ICON to fill a bar-shaped frame is what smeared one across a
+-- quarter of the screen in 4.5.0. But leaving EVERYTHING alone means the
+-- StatusBar keeps whatever height the template gave it while the frame around
+-- it grows, so "Bar height" moved the plate behind the bar and not the bar.
+-- Owner: "die bar hoehe wird komisch dargestellt, da wird nur der bg hoeher."
+--
+-- 4.82.0 did not have the fault and did not fix it either: the bar you SAW
+-- there was our own StatusBar on a cell we sized. Deleting the second
+-- renderer deleted the only thing that ever obeyed the setting - the same
+-- shape as "a removal makes its neighbour load-bearing", one more time.
+--
+-- The whole point list is recorded first, exactly as Claim.Fill does, so the
+-- undo is the template's own layout and not an approximation of it.
+function Claim.Beside(object, frame, after, gap, inset)
+    if type(object) ~= "table" or type(object.SetPoint) ~= "function" then
+        return false
+    end
+    gap = tonumber(gap) or 0
+    inset = tonumber(inset) or 0
+
+    RememberPoints(object)
+    pcall(object.ClearAllPoints, object)
+
+    -- No neighbour to sit beside is not an error: a template without the
+    -- square icon is a bar all the way across, which is the same call with
+    -- the frame as its own left edge.
+    if type(after) == "table" and type(after.GetRight) == "function" then
+        pcall(object.SetPoint, object, "TOPLEFT", after, "TOPRIGHT", gap, -inset)
+    else
+        pcall(object.SetPoint, object, "TOPLEFT", frame, "TOPLEFT", gap, -inset)
+    end
+    pcall(object.SetPoint, object, "BOTTOMRIGHT", frame, "BOTTOMRIGHT",
+        -inset, inset)
+    return true
+end
+
 -- Everything we changed on this object, put back.
 --
 -- `false` in the record means "there was nothing to read and no default": we
