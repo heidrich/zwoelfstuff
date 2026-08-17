@@ -1,5 +1,5 @@
 ﻿---------------------------------------------------------------------------
--- OptionsReminders - the Reminders page and its spell list.
+-- OptionsReminders - the reminders page, and the editor every book of reminders shares.
 --
 -- THE SHAPE, AND WHY IT IS THIS SHAPE.
 --
@@ -23,18 +23,42 @@
 ---------------------------------------------------------------------------
 local _, ns = ...
 
-local OptionsReminders = {}
-ns.OptionsReminders = OptionsReminders
+-- ONE PAGE FOR TWO BOOKS (4.84.0). Everything below is a CLASS - an editor
+-- for a book of reminders (Core/Reminders.lua) - and ns.OptionsReminders is
+-- its first instance. The answer page's Alerts tab is the second, on the
+-- answer alerts' book: owner, 2026-08-17, "bau doch einfach die reminder-seite
+-- da ein". What differs between the two is a small SPEC (words, the trigger
+-- rows, the sound event, the section keys); what is the same - the list, the
+-- card, the text, the spell slot, the look, the flash, the rules - is written
+-- once here.
+--
+--   prefix     section/anchor keys ("rm")
+--   intro      the note at the top of the page
+--   newLabel   the button that adds one          ("New reminder")
+--   full       the line when the list is full
+--   emptyHint  what the card says with nothing to edit
+--   sound      the Sounds event the sound row edits ("reminder"), or nil
+--   soundNote  the note under the sound row
+--   Trigger(self, grid, Body, Get, Set, Apply)  builds the rows between the
+--              spell and the switch - "Appears" for a reminder, "Ends" for
+--              an alert - and returns a Paint hook (cfg) or nil
+--   StateLine(book, cfg) -> the sentence under the spell name
+local Editor = {}
+Editor.__index = Editor
+ns.RemindersEditor = Editor
+
+function Editor.New(book, spec)
+    return setmetatable({ book = book, spec = spec }, Editor)
+end
 
 local UI = ns.UI
 local C = UI.C
-local Reminders = ns.Reminders
 
 -- Which reminder the page is showing. Clamped on every read rather than
 -- fixed up on delete: a stale index after a removal is the everyday case, and
 -- a clamp in one place beats a correction in six.
-function OptionsReminders:Current()
-    local count = Reminders:Count()
+function Editor:Current()
+    local count = self.book:Count()
     if count == 0 then
         self.index = nil
         return nil, nil
@@ -43,21 +67,21 @@ function OptionsReminders:Current()
     if index > count then index = count end
     if index < 1 then index = 1 end
     self.index = index
-    return index, Reminders:Get(index)
+    return index, self.book:Get(index)
 end
 
-function OptionsReminders:Select(index)
+function Editor:Select(index)
     self.index = index
     self:Refresh()
 end
 
 -- Every control ends here. Style redraws the frame from the settings; Rebuild
 -- is only needed when the NUMBER of reminders changed.
-local function Apply()
-    local index = OptionsReminders.index
-    if index then Reminders:Style(index) end
-    Reminders:Refresh()
-    OptionsReminders:Refresh()
+function Editor:Apply()
+    local index = self.index
+    if index then self.book:Style(index) end
+    self.book:Refresh()
+    self:Refresh()
 end
 
 ---------------------------------------------------------------------------
@@ -65,7 +89,7 @@ end
 ---------------------------------------------------------------------------
 local STAGE_H = 120
 
-local function BuildStage(parent, width)
+local function BuildStage(self, parent, width)
     local card = UI.Card(parent, width)
     card:SetHeight(STAGE_H)
 
@@ -90,11 +114,11 @@ local function BuildStage(parent, width)
     card.state:SetJustifyH("LEFT")
     card.state:SetWordWrap(false)
 
-    card:SetScript("OnHide", function() OptionsReminders:ReleaseFrame() end)
+    card:SetScript("OnHide", function() self:ReleaseFrame() end)
     return card
 end
 
-function OptionsReminders:BorrowFrame()
+function Editor:BorrowFrame()
     local index = self:Current()
     if not (index and self.stage) then return end
 
@@ -106,15 +130,15 @@ function OptionsReminders:BorrowFrame()
     if self.borrowed and self.borrowed ~= index then self:ReleaseFrame() end
     if self.borrowed == index then return end
 
-    local frame = Reminders:Borrow(index, self.stage.slot)
+    local frame = self.book:Borrow(index, self.stage.slot)
     if not frame then return end
     self.borrowed = index
 end
 
-function OptionsReminders:ReleaseFrame()
+function Editor:ReleaseFrame()
     if not self.borrowed then return end
     self.borrowed = nil
-    Reminders:Release()
+    self.book:Release()
 end
 
 ---------------------------------------------------------------------------
@@ -127,7 +151,7 @@ end
 local LIST_H = 30
 local CHIP_GAP = 6
 
-local function BuildList(parent, width)
+local function BuildList(self, parent, width)
     local host = CreateFrame("Frame", nil, parent)
     host:SetSize(width, LIST_H)
     host.chips = {}
@@ -136,15 +160,15 @@ local function BuildList(parent, width)
     -- method written as `function(self)` gets nil and raises on the first
     -- field it touches. Every Refresh in this file closes over what it needs.
     host.Refresh = function()
-        local count = Reminders:Count()
-        local current = OptionsReminders:Current()
+        local count = self.book:Count()
+        local current = self:Current()
         local x = 0
 
         for index = 1, count do
             local chip = host.chips[index]
             if not chip then
                 chip = UI.GhostButton(host, "", function()
-                    OptionsReminders:Select(index)
+                    self:Select(index)
                 end)
                 -- A BED UNDER EVERY CHIP, and the chosen one's is lit. They
                 -- were bare words - the chosen one orange, the rest grey -
@@ -157,8 +181,8 @@ local function BuildList(parent, width)
                 chip.bed:SetAllPoints(chip)
                 host.chips[index] = chip
             end
-            local cfg = Reminders:Get(index)
-            local label = Reminders:Label(cfg, index)
+            local cfg = self.book:Get(index)
+            local label = self.book:Label(cfg, index)
             -- A switched-off reminder still gets a chip - it is still one of
             -- your reminders - but it says so, or "why is it not showing" has
             -- an answer you have to click to find.
@@ -183,8 +207,19 @@ end
 ---------------------------------------------------------------------------
 -- The page
 ---------------------------------------------------------------------------
-function OptionsReminders:BuildPage(page, width)
+function Editor:BuildPage(page, width)
     local grid = UI.Page(page, width)
+    self:BuildInto(grid, width)
+    page.Refresh = function() self:Refresh() end
+    page:SetScript("OnHide", function() self:ReleaseFrame() end)
+    return grid
+end
+
+-- Into a grid somebody else made - the answer page's Alerts tab. The stage
+-- card releases the borrowed frame on its own OnHide, so a page that hides
+-- with the tab needs nothing more.
+function Editor:BuildInto(grid, width)
+    local function Apply() self:Apply() end
 
     -- Everything that is about the SELECTED reminder, so it can all go away
     -- together when there is not one. Rows know how to hide themselves
@@ -193,42 +228,39 @@ function OptionsReminders:BuildPage(page, width)
     local bodyRows, bodyBlocks = {}, {}
     local function Body(row) bodyRows[#bodyRows + 1] = row; return row end
 
-    grid:Note("A line of text on your screen when something is wrong - a buff "
-        .. "that has fallen off, a cooldown that is ready and sitting there. "
-        .. "Drag the spell in from the list on the right.")
+    grid:Note(self.spec.intro)
 
     -- The list, and the two buttons that change what is in it.
-    local list = BuildList(grid.content, width - 190)
+    local list = BuildList(self, grid.content, width - 190)
     grid:Wide(list, LIST_H, 4, 8)
 
     local addRow = CreateFrame("Frame", nil, grid.content)
     addRow:SetHeight(28)
 
-    local addBtn = UI.Button(addRow, "New reminder", 132, function()
-        local index = Reminders:Add()
+    local addBtn = UI.Button(addRow, self.spec.newLabel, 132, function()
+        local index = self.book:Add()
         if not index then
-            ns.Print("That is as many reminders as this addon will hold ("
-                .. Reminders.MAX .. ").")
+            ns.Print(self.spec.full .. " (" .. self.book.MAX .. ").")
             return
         end
-        OptionsReminders:Select(index)
+        self:Select(index)
     end)
     addBtn:SetPoint("LEFT", addRow, "LEFT", 0, 0)
 
     local removeBtn = UI.Button(addRow, "Delete", 84, function()
-        local index = OptionsReminders:Current()
+        local index = self:Current()
         if not index then return end
         -- The borrowed frame goes home FIRST. Removing the config out from
         -- under a frame that is still parented to the card leaves it there
         -- with nothing to style it and no way to reach it again.
-        OptionsReminders:ReleaseFrame()
-        Reminders:Remove(index)
-        OptionsReminders:Refresh()
+        self:ReleaseFrame()
+        self.book:Remove(index)
+        self:Refresh()
     end, "quiet")
     removeBtn:SetPoint("LEFT", addBtn, "RIGHT", 8, 0)
     grid:Wide(addRow, 28, 0, 12)
 
-    self.stage = BuildStage(grid.content, width)
+    self.stage = BuildStage(self, grid.content, width)
     grid:Wide(self.stage, STAGE_H, 0, 14)
 
     ---------------------------------------------------------------------
@@ -236,7 +268,7 @@ function OptionsReminders:BuildPage(page, width)
     ---------------------------------------------------------------------
     local function Get(key, fallback)
         return function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if not cfg then return fallback end
             local value = cfg[key]
             if value == nil then return fallback end
@@ -245,7 +277,7 @@ function OptionsReminders:BuildPage(page, width)
     end
     local function Set(key)
         return function(value)
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if cfg then cfg[key] = value end
         end
     end
@@ -256,13 +288,13 @@ function OptionsReminders:BuildPage(page, width)
     local textRow = CreateFrame("Frame", nil, grid.content)
     textRow:SetHeight(80)
     local area = UI.TextArea(textRow, width, 80, function(text)
-        local _, cfg = OptionsReminders:Current()
+        local _, cfg = self:Current()
         if not cfg then return end
         cfg.text = text
         -- Styled, not fully refreshed: this runs on every keystroke, and
         -- Refresh would rewrite the box you are typing into.
-        local index = OptionsReminders.index
-        if index then Reminders:Style(index) end
+        local index = self.index
+        if index then self.book:Style(index) end
     end, "The words that appear on your screen")
     area:SetPoint("TOPLEFT", textRow, "TOPLEFT", 0, 0)
     self.area = area
@@ -278,17 +310,17 @@ function OptionsReminders:BuildPage(page, width)
     local slot = UI.SpellSlot(spellRow, {
         size = 46,
         get = function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             return cfg and cfg.spellID
         end,
         onPick = function(spellID)
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if not cfg then return end
             cfg.spellID = spellID
             Apply()
         end,
         onClear = function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if not cfg then return end
             cfg.spellID = nil
             Apply()
@@ -311,15 +343,11 @@ function OptionsReminders:BuildPage(page, width)
     grid:Wide(spellRow, 52, 0, 10)
     bodyBlocks[#bodyBlocks + 1] = spellRow
 
-    Body(UI.Dropdown(grid:FullRow("Appears", { controlWidth = 190 }),
-        ns.REMINDER_TRIGGERS, Get("trigger", "missing"), Set("trigger"),
-        { apply = Apply }))
-
-    grid:Note("Active is the game's own answer for that spell.")
+    local paintTrigger = self.spec.Trigger(self, grid, Body, Get, Set, Apply)
 
     Body(UI.Toggle(grid:FullRow("Switched on", { controlWidth = 124 }),
         Get("enabled", true), function(value)
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if cfg then cfg.enabled = value end
             Apply()
         end))
@@ -332,34 +360,34 @@ function OptionsReminders:BuildPage(page, width)
     -- A reminder with no spell in it has nothing to key a sound to and can
     -- only use the one Settings chose for all of them; the row says so
     -- rather than writing into a nil.
-    Body(UI.MediaPicker(grid:FullRow("Sound", { controlWidth = 190 }),
-        "sound",
-        function()
-            local _, cfg = OptionsReminders:Current()
-            return cfg and cfg.spellID
-                and ns.Sounds.Get("reminder", cfg.spellID) or ""
-        end,
-        function(value)
-            local _, cfg = OptionsReminders:Current()
-            if cfg and cfg.spellID then
-                ns.Sounds.Set("reminder", cfg.spellID, value)
-            end
-        end,
-        function()
-            local _, cfg = OptionsReminders:Current()
-            if cfg and cfg.spellID then
-                ns.Sounds.Preview(ns.Sounds.Get("reminder", cfg.spellID))
-            end
-        end,
-        "Settings"))
+    local soundEvent = self.spec.sound
+    if soundEvent then
+        Body(UI.MediaPicker(grid:FullRow("Sound", { controlWidth = 190 }),
+            "sound",
+            function()
+                local _, cfg = self:Current()
+                return cfg and cfg.spellID
+                    and ns.Sounds.Get(soundEvent, cfg.spellID) or ""
+            end,
+            function(value)
+                local _, cfg = self:Current()
+                if cfg and cfg.spellID then
+                    ns.Sounds.Set(soundEvent, cfg.spellID, value)
+                end
+            end,
+            function()
+                local _, cfg = self:Current()
+                if cfg and cfg.spellID then
+                    ns.Sounds.Preview(ns.Sounds.Get(soundEvent, cfg.spellID))
+                end
+            end,
+            "Settings"))
 
-    grid:Note("Played once when the message appears, not while it is up. "
-        .. "The sound follows the SPELL, so two reminders watching the same "
-        .. "one share it - a reminder with no spell picked uses whatever "
-        .. "|cffffd100Settings - Sounds|r chose.")
+        grid:Note(self.spec.soundNote)
+    end
 
     ---------------------------------------------------------------------
-    grid:Section("How it looks", "rm-look")
+    grid:Section("How it looks", self.spec.prefix .. "-look")
 
     Body(UI.MediaPicker(grid:FullRow("Font", { controlWidth = 190 }), "font",
         Get("font", ""), Set("font"), Apply, "Settings"))
@@ -375,12 +403,12 @@ function OptionsReminders:BuildPage(page, width)
 
     Body(UI.Swatch(grid:FullRow("Colour", { controlWidth = 124 }),
         function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             local colour = (cfg and cfg.color) or { 1, 1, 1 }
             return colour[1], colour[2], colour[3]
         end,
         function(r, g, b)
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if cfg then cfg.color = { r, g, b } end
         end, Apply))
 
@@ -400,7 +428,7 @@ function OptionsReminders:BuildPage(page, width)
     }))
 
     ---------------------------------------------------------------------
-    grid:Section("Flashing", "rm-flash")
+    grid:Section("Flashing", self.spec.prefix .. "-flash")
 
     Body(UI.Toggle(grid:FullRow("Flash", { controlWidth = 124 }),
         Get("flash", true), Set("flash")))
@@ -431,15 +459,15 @@ function OptionsReminders:BuildPage(page, width)
     ---------------------------------------------------------------------
     ns.OptionsWhen.Build(grid, {
         title = "When it may appear",
-        anchor = "rm-rules",
+        anchor = self.spec.prefix .. "-rules",
         open = false,
         holder = function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             return cfg
         end,
         apply = Apply,
         relevant = function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             return cfg and true or false
         end,
     })
@@ -455,7 +483,7 @@ function OptionsReminders:BuildPage(page, width)
     -- sets and a Layout that runs first places rows it is about to hide.
     ---------------------------------------------------------------------
     local function Paint()
-        local _, cfg = OptionsReminders:Current()
+        local _, cfg = self:Current()
         local has = cfg and true or false
 
         list.Refresh()
@@ -475,35 +503,31 @@ function OptionsReminders:BuildPage(page, width)
         -- well as to a reader. Gating on the boolean cost eight "check for
         -- nil" warnings that were all about the same missing connection.
         if not cfg then
-            OptionsReminders.stage.state:SetText(
-                "No reminders yet. New reminder, then drag a spell in from "
-                .. "the right.")
-            OptionsReminders.area:SetText("")
-            OptionsReminders.slot.Refresh()
+            self.stage.state:SetText(self.spec.emptyHint)
+            self.area:SetText("")
+            self.slot.Refresh()
             return
         end
 
         -- NOT WHILE IT IS BEING TYPED IN. Every keystroke calls Apply, which
         -- ends here; rewriting the box from the config would put the caret
         -- back at the start on every character.
-        if not OptionsReminders.area.input:HasFocus() then
-            OptionsReminders.area:SetText(cfg.text or "")
+        if not self.area.input:HasFocus() then
+            self.area:SetText(cfg.text or "")
         end
-        OptionsReminders.slot.Refresh()
+        self.slot.Refresh()
 
         if cfg.spellID then
-            OptionsReminders.spellName:SetText(ns.SpellName(cfg.spellID)
+            self.spellName:SetText(ns.SpellName(cfg.spellID)
                 or ("Spell " .. cfg.spellID))
-            local state, why = Reminders:State(cfg)
-            OptionsReminders.spellHint:SetText(state
-                and ("The Cooldown Manager says: " .. state)
-                or ("Cannot tell - " .. (why or "no reason given")))
+            self.spellHint:SetText(self.spec.StateLine(self.book, cfg))
         else
-            OptionsReminders.spellName:SetText("Nothing yet")
-            OptionsReminders.spellHint:SetText(
+            self.spellName:SetText("Nothing yet")
+            self.spellHint:SetText(
                 "Drag a spell out of the list on the right.")
         end
 
+        if paintTrigger then paintTrigger(cfg) end
         iconSizeRow:SetRelevant(cfg.iconSide ~= "none")
         local flashing = cfg.flash and true or false
         flashRate:SetRelevant(flashing)
@@ -511,25 +535,23 @@ function OptionsReminders:BuildPage(page, width)
 
         -- The live sentence. Green when it is on screen, because that is the
         -- only question anybody asks on this page.
-        local reason = Reminders:Explain(cfg)
-        OptionsReminders.stage.state:SetText(reason
+        local reason = self.book:Explain(cfg)
+        self.stage.state:SetText(reason
             and ("|cff888888" .. reason .. "|r")
             or "|cff40ff40On your screen right now.|r")
 
-        OptionsReminders:BorrowFrame()
+        self:BorrowFrame()
     end
 
     grid:Layout()
     self.Paint = Paint
-    page.Refresh = function() OptionsReminders:Refresh() end
-    page:SetScript("OnHide", function() OptionsReminders:ReleaseFrame() end)
     self.grid = grid
     Paint()
     grid:Layout()
     return grid
 end
 
-function OptionsReminders:Refresh()
+function Editor:Refresh()
     if self.Paint then self.Paint() end
     if self.grid then
         self.grid:Layout()
@@ -545,7 +567,7 @@ end
 -- the list, the search, the chips, the grouping, the sorting and the drag are
 -- one implementation, and this page only says what a click means here.
 ---------------------------------------------------------------------------
-function OptionsReminders:BuildSide(parent, pad)
+function Editor:BuildSide(parent, pad)
     local side = CreateFrame("Frame", nil, parent)
     side:SetAllPoints(parent)
     side:Hide()
@@ -571,30 +593,66 @@ function OptionsReminders:BuildSide(parent, pad)
         -- already on a bar is. One entry at most, because a reminder watches
         -- one thing.
         Used = function()
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if not (cfg and cfg.spellID) then return {} end
             return { [cfg.spellID] = "Watched" }
         end,
         Assign = function(spellID)
-            local _, cfg = OptionsReminders:Current()
+            local _, cfg = self:Current()
             if not cfg then
                 ns.Print("Make a reminder first - the New reminder button.")
                 return
             end
             cfg.spellID = spellID
-            Apply()
+            self:Apply()
         end,
         Hint = function(spellID)
-            local index, cfg = OptionsReminders:Current()
+            local index, cfg = self:Current()
             if not cfg then return "Make a reminder first." end
             if cfg.spellID == spellID then
                 return "This reminder already watches it."
             end
             return string.format("Click to have \"%s\" watch it.",
-                Reminders:Label(cfg, index))
+                self.book:Label(cfg, index))
         end,
     })
 
     self.side = side
     return side
 end
+
+---------------------------------------------------------------------------
+-- THE REMINDERS PAGE - the first instance, on the reminders' own book. The
+-- answer alerts' page is made in Core/OptionsAnswers.lua on theirs.
+---------------------------------------------------------------------------
+Editor.REMINDER_SPEC = {
+    prefix    = "rm",
+    intro     = "A line of text on your screen when something is wrong - a "
+        .. "buff that has fallen off, a cooldown that is ready and sitting "
+        .. "there. Drag the spell in from the list on the right.",
+    newLabel  = "New reminder",
+    full      = "That is as many reminders as this addon will hold",
+    emptyHint = "No reminders yet. New reminder, then drag a spell in from "
+        .. "the right.",
+    sound     = "reminder",
+    soundNote = "Played once when the message appears, not while it is up. "
+        .. "The sound follows the SPELL, so two reminders watching the same "
+        .. "one share it - a reminder with no spell picked uses whatever "
+        .. "|cffffd100Settings - Sounds|r chose.",
+
+    Trigger = function(_, grid, Body, Get, Set, Apply)
+        Body(UI.Dropdown(grid:FullRow("Appears", { controlWidth = 190 }),
+            ns.REMINDER_TRIGGERS, Get("trigger", "missing"), Set("trigger"),
+            { apply = Apply }))
+        grid:Note("Active is the game's own answer for that spell.")
+        return nil
+    end,
+
+    StateLine = function(book, cfg)
+        local state, why = book:State(cfg)
+        return state and ("The Cooldown Manager says: " .. state)
+            or ("Cannot tell - " .. (why or "no reason given"))
+    end,
+}
+
+ns.OptionsReminders = Editor.New(ns.Reminders, Editor.REMINDER_SPEC)

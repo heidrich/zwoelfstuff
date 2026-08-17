@@ -1709,8 +1709,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         ns.OpenProfile()
 
         -- Same reason, one line down: a reminder saved before a setting
-        -- existed has to gain it before anything reads it.
+        -- existed has to gain it before anything reads it. The answer alerts
+        -- are reminders too (Core/AnswerAlerts.lua) and get the same.
         ns.Reminders:Migrate()
+        ns.AnswerAlerts:Migrate()
 
         -- Auras deliberately has no seeding step, and calling one here used to
         -- throw on every login. Its recorder registers itself when the file

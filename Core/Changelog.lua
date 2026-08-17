@@ -36,14 +36,14 @@ ns.CHANGELOG = {
         lines = {
             {
                 icon = "Interface\\Icons\\Spell_Holy_PainSupression",
-                text = "|cffffd100The answer bar gets an alert.|r When somebody "
-                    .. "asks you for one of yours, a line goes up near the "
-                    .. "middle of the screen - |cffffd100Akui asks for Pain "
-                    .. "Suppression|r - flashing, in your font and colour. "
-                    .. "You pick when it comes down: when answered, after "
-                    .. "so many seconds, or so many flashes. One switch per "
-                    .. "spell you offer, a sound per spell, placed in Edit "
-                    .. "mode. Off until you switch it on.",
+                text = "|cffffd100The answer bar gets alerts - and they are "
+                    .. "reminders.|r The new Alerts tab is the reminders page "
+                    .. "on a book of its own: a line goes up the moment "
+                    .. "somebody asks you for the spell - |cffffd100Akui asks "
+                    .. "for Pain Suppression|r - in your font, colour and "
+                    .. "flash. Your answer spells sit on the right; drag one "
+                    .. "in. You pick when it comes down: when answered, after "
+                    .. "so many seconds, or so many flashes.",
                 link = { label = "Open the Alerts tab", page = "answers" },
             },
             {

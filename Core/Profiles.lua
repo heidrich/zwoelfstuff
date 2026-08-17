@@ -440,9 +440,11 @@ end
 ---------------------------------------------------------------------------
 function Profiles:Reload()
     if ns.Reminders and ns.Reminders.Migrate then ns.Reminders:Migrate() end
+    if ns.AnswerAlerts then ns.AnswerAlerts:Migrate() end
 
     ns.Auras:Invalidate()
     ns.Reminders:Rebuild()
+    if ns.AnswerAlerts then ns.AnswerAlerts:Rebuild() end
 
     -- BOTH, and in this order. ApplyLayout moves the rows and re-reads what
     -- each one shows; Refresh fills them in. Calling only the second leaves

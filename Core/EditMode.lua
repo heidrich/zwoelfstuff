@@ -643,20 +643,6 @@ local function ApplyAnswerMove(x, y)
     ns.Answers.Rebuild()
 end
 
--- THE ANSWER ALERT - the line that goes up when somebody asks. Its frame
--- exists only once something has raised it, and placing raises a sample
--- (AnswerAlerts:SetPlacing), so in edit mode there is always one to sit on.
-local function AnswerAlertLine()
-    local frame = ns.AnswerAlerts and ns.AnswerAlerts.Frame()
-    if frame and frame:IsShown() then return frame end
-    return nil
-end
-
-local function ApplyAnswerAlertMove(x, y)
-    local cfg = ns.AnswerAlerts.Config()
-    cfg.x, cfg.y = x, y
-    ns.AnswerAlerts.Refresh()
-end
 
 ---------------------------------------------------------------------------
 -- EVERY PLACED PANEL, IN ONE LIST, DESCRIBED ONCE.
@@ -740,16 +726,6 @@ PANEL_MOVERS = {
           return cfg.x or 0, cfg.y or 0
       end },
 
-    -- ITS MODULE AND PAGE ARE THE ANSWERS', as the taunt button's are the
-    -- co-tanks': the alert is part of that feature and this row says so.
-    { key = "answeralert", module = "answers",
-      panel = AnswerAlertLine, apply = ApplyAnswerAlertMove,
-      label = "Answer alert", page = "answers",
-      config = function() return ns.AnswerAlerts.Config() end,
-      origin = function()
-          local cfg = ns.AnswerAlerts.Config()
-          return cfg.x or 0, cfg.y or 0
-      end },
 
     { key = "raidbar", module = "raidbar",
       panel = RaidBarPanel, apply = ApplyRaidBarMove,
@@ -806,18 +782,30 @@ end
 -- condition fires, so without Reminders:SetPlacing there would be nothing to
 -- drag except during the exact moment you are too busy to drag it.
 ---------------------------------------------------------------------------
-local reminderMovers = {}
+-- TWO BOOKS OF REMINDERS, ONE SET OF MOVERS (4.84.0). ns.Reminders and
+-- ns.AnswerAlerts are the same class (Core/Reminders.lua) with different
+-- specs, and their messages are placed the same way. So a mover belongs to
+-- a BOOK and an index, and everything below that used to say ns.Reminders
+-- says `book`. The list is walked in order; each row carries its own module
+-- switch and options page, as the panel rows above do.
+local BOOKS = {
+    { book = function() return ns.Reminders end,
+      module = "reminders", page = "reminders", movers = {} },
+    { book = function() return ns.AnswerAlerts end,
+      module = "answers", page = "answers", movers = {} },
+}
 
-local function ApplyReminderMove(index, x, y)
-    local cfg = ns.Reminders:Get(index)
+local function ApplyReminderMove(entry, index, x, y)
+    local book = entry.book()
+    local cfg = book and book:Get(index)
     if not cfg then return end
     -- Centre terms, like the panel and like a bar with no anchor.
     cfg.point, cfg.relPoint = "CENTER", "CENTER"
     cfg.x, cfg.y = math.floor(x + 0.5), math.floor(y + 0.5)
-    ns.Reminders:Style(index)
+    book:Style(index)
 end
 
-local function CreateReminderMover(index)
+local function CreateReminderMover(entry, index)
     local mover = CreateFrame("Button", nil, overlay)
     mover:SetFrameLevel(overlay:GetFrameLevel() + 10)
     mover:RegisterForDrag("LeftButton")
@@ -842,20 +830,21 @@ local function CreateReminderMover(index)
     -- centring, the settings page - is the same act on either surface.
     local spec = {
         label = "",
-        page = "reminders",
-        module = "reminders",
-        config = function() return ns.Reminders:Get(index) end,
+        page = entry.page,
+        module = entry.module,
+        config = function() return entry.book():Get(index) end,
         origin = function()
-            local cfg = ns.Reminders:Get(index)
+            local cfg = entry.book():Get(index)
             if not cfg then return 0, 0 end
             return cfg.x or 0, cfg.y or 0
         end,
-        apply = function(x, y) ApplyReminderMove(index, x, y) end,
+        apply = function(x, y) ApplyReminderMove(entry, index, x, y) end,
         switchOff = { text = "Switch this one off", onClick = function()
-            local cfg = ns.Reminders:Get(index)
+            local book = entry.book()
+            local cfg = book:Get(index)
             if not cfg then return end
             cfg.enabled = false
-            ns.Reminders:Rebuild()
+            book:Rebuild()
             EditMode:Refresh()
             ns.Options:Refresh()
         end },
@@ -876,7 +865,7 @@ local function CreateReminderMover(index)
     mover.coords:SetWordWrap(false)
 
     mover:SetScript("OnDragStart", function(self)
-        local cfg = ns.Reminders:Get(self.dkIndex)
+        local cfg = entry.book():Get(self.dkIndex)
         if not cfg then return end
 
         -- A PINNED REMINDER DOES NOT MOVE, which is the whole point of the
@@ -900,11 +889,14 @@ local function CreateReminderMover(index)
     mover:SetScript("OnMouseUp", Stop)
 
     mover.dkIndex = index
+    mover.dkBook = entry
     return mover
 end
 
 local function DragReminders()
-    for index, mover in ipairs(reminderMovers) do
+  for _, entry in ipairs(BOOKS) do
+    local book = entry.book()
+    for index, mover in ipairs(entry.movers) do
         if mover.grab then
             if not IsMouseButtonDown("LeftButton") then
                 mover.grab = nil
@@ -913,7 +905,7 @@ local function DragReminders()
                 return
             end
 
-            local frame = ns.Reminders:Frame(index)
+            local frame = book and book:Frame(index)
             if not frame then return end
 
             local cursorX, cursorY = CursorPosition()
@@ -930,12 +922,13 @@ local function DragReminders()
                 lineX, lineY = gx, gy
             end
 
-            ApplyReminderMove(index, x, y)
+            ApplyReminderMove(entry, index, x, y)
             ShowGuide(guideX, lineX, true)
             ShowGuide(guideY, lineY, false)
             return
         end
     end
+  end
 end
 
 ---------------------------------------------------------------------------
@@ -1144,28 +1137,31 @@ local function RefreshBarMovers()
 end
 
 local function RefreshReminderMovers()
+  for _, entry in ipairs(BOOKS) do
+    local book = entry.book()
+    local movers = entry.movers
     -- Same as the panel above: switched off, there is nothing to place, and
     -- the frames of a module that ran earlier this session are still there.
-    local count = ns.Modules:IsOn("reminders") and ns.Reminders:Count() or 0
+    local count = (book and ns.Modules:IsOn(entry.module)) and book:Count() or 0
 
     for index = 1, count do
-        local mover = reminderMovers[index]
+        local mover = movers[index]
         if not mover then
-            mover = CreateReminderMover(index)
-            reminderMovers[index] = mover
+            mover = CreateReminderMover(entry, index)
+            movers[index] = mover
         end
 
-        local frame = ns.Reminders:Frame(index)
-        local cfg = ns.Reminders:Get(index)
+        local frame = book:Frame(index)
+        local cfg = book:Get(index)
         -- Not while the options page has it: the frame is then parented into
         -- a card inside a window, and a mover pinned to it would be a box
         -- floating over the settings.
-        if not (frame and cfg and EditMode.overlayShown and not ns.Reminders.hosted) then
+        if not (frame and cfg and EditMode.overlayShown and not book.hosted) then
             mover:Hide()
         else
             mover:ClearAllPoints()
             mover:SetAllPoints(frame)
-            mover.name:SetText(ns.Reminders:Label(cfg, index))
+            mover.name:SetText(book:Label(cfg, index))
             mover.coords:SetText(string.format("%d, %d", cfg.x or 0, cfg.y or 0))
             mover.coords:SetShown(Prefs().showCoords or mover.grab ~= nil)
             -- The padlock has to say which way it is, and a reminder can be
@@ -1175,7 +1171,8 @@ local function RefreshReminderMovers()
         end
     end
 
-    for index = count + 1, #reminderMovers do reminderMovers[index]:Hide() end
+    for index = count + 1, #movers do movers[index]:Hide() end
+  end
 end
 
 local function OnUpdate()
@@ -1649,7 +1646,9 @@ end
 -- went five days wearing neither.
 function EditMode:ReminderMovers()
     local out = {}
-    for index, mover in ipairs(reminderMovers) do out[index] = mover end
+    for _, entry in ipairs(BOOKS) do
+        for _, mover in ipairs(entry.movers) do out[#out + 1] = mover end
+    end
     return out
 end
 
@@ -1738,7 +1737,7 @@ function EditMode:SetUnlocked(state)
     -- for Bone Shield to fall off in order to place the message about Bone
     -- Shield falling off is not a workflow.
     if ns.Reminders then ns.Reminders:SetPlacing(state) end
-    -- And the answer alert, which is up only while somebody is asking.
+    -- And the answer alerts, which are up only while somebody is asking.
     if ns.AnswerAlerts then ns.AnswerAlerts:SetPlacing(state) end
 
     if state then

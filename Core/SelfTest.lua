@@ -10664,108 +10664,122 @@ local function TestWhenBlock()
 end
 
 ---------------------------------------------------------------------------
--- ANSWER ALERTS - the line that goes up when somebody asks (4.84.0). The
--- pure rules, then the two moments the answers tell it about, run against
--- the frame itself.
+-- ANSWER ALERTS (4.84.0) - a second BOOK of reminders, on the answer bar's
+-- own switch and list, that fires when somebody asks. The pure rules, then
+-- the book against the two moments Answers.lua tells it about.
 ---------------------------------------------------------------------------
 local function TestAnswerAlerts()
-    local A = ns.AnswerAlerts
-    if not (A and ns.Answers) then
+    local A, R = ns.AnswerAlerts, ns.AnswerAlertRules
+    if not (A and R and ns.Answers and ns.Reminders) then
         Skip("Answer alerts", "the file is not loaded")
         return
     end
 
-    -- Where it lives, and that its tables are its own.
-    local cfg = A.Config()
-    Check("The alert's settings sit inside the answers' (cfg.alert)",
-        ns.Answers.Config().alert == cfg)
-    Check("...off out of the box, like the bar",
-        A.DEFAULTS.enabled == false and cfg.enabled == false)
-    Check("...and its colour is a copy, not the default table itself",
-        cfg.color ~= A.DEFAULTS.color and cfg.color[1] == A.DEFAULTS.color[1])
+    -- A book of reminders, not a copy of them.
+    Check("The answer alerts are a book of reminders - same class, second instance",
+        getmetatable(A) == getmetatable(ns.Reminders) and A ~= ns.Reminders)
+    Check("...on the answers' own switch and in the answers' own settings",
+        A.spec.module == "answers" and A:All() == ns.Answers.Config().alerts)
+    local d = A:Defaults()
+    Check("...with the reminders' fields plus an ending of its own",
+        d.ending == "asked" and d.seconds == 4 and d.flashes == 3
+        and d.flash ~= nil and d.size ~= nil and d.iconSide ~= nil
+        and type(d.text) == "string" and d.text:find("%%who") ~= nil)
     Check("Every ending the page offers is one the rule knows",
-        #A.ENDINGS == 3 and A.ENDINGS[1].value == "asked"
-        and A.ENDINGS[2].value == "seconds" and A.ENDINGS[3].value == "flashes")
-
-    -- Who gets a line.
-    Check("Switched off, nothing gets a line",
-        A.Wants({ enabled = false, spells = {} }, 6940) == false)
-    Check("Switched on, a spell nobody touched does",
-        A.Wants({ enabled = true, spells = {} }, 6940) == true)
-    Check("...a spell switched off does not",
-        A.Wants({ enabled = true, spells = { [6940] = false } }, 6940) == false)
-    Check("...and a taunt request, which names no spell, does",
-        A.Wants({ enabled = true, spells = {} }, nil) == true)
+        #ns.ALERT_ENDINGS == 3 and ns.ALERT_ENDINGS[1].value == "asked"
+        and ns.ALERT_ENDINGS[2].value == "seconds"
+        and ns.ALERT_ENDINGS[3].value == "flashes")
 
     -- The words.
-    Check("The line names who and what",
-        A.Text("Akui", 6940, false) == "Akui asks for "
-            .. (ns.SpellName(6940) or "a cooldown"),
-        A.Text("Akui", 6940, false))
-    Check("...a taunt in words, not as a nil",
-        A.Text("Akui", nil, true) == "Akui asks for a taunt")
+    Check("The words take the asker and the spell",
+        R.Words("%who asks for %spell", "Akui", 6940, false)
+            == "Akui asks for " .. (ns.SpellName(6940) or "a cooldown"),
+        R.Words("%who asks for %spell", "Akui", 6940, false))
+    Check("...a taunt in words, not as a name",
+        R.Words("%who asks for %spell", "Akui", 355, true) == "Akui asks for a taunt")
     Check("...and nobody is Somebody",
-        A.Text(nil, nil, true) == "Somebody asks for a taunt")
+        R.Words("%who!", nil, 6940, false) == "Somebody!")
+    Check("Words with no token are left alone",
+        R.Words("Sac me", "Akui", 6940, false) == "Sac me")
 
     -- When it comes down.
     Check("'asked' lasts as long as the request itself",
-        A.Until({ ending = "asked" }, 100, 8) == 108)
+        R.Until({ ending = "asked" }, 100, 8) == 108)
     Check("'seconds' lasts what it says",
-        A.Until({ ending = "seconds", seconds = 4 }, 100, 8) == 104)
+        R.Until({ ending = "seconds", seconds = 4 }, 100, 8) == 104)
     Check("'flashes' is counted in the flash's own time",
-        math.abs(A.Until({ ending = "flashes", flashes = 3, flashRate = 1.5 },
-            100, 8) - (100 + 2)) < 1e-9)
+        math.abs(R.Until({ ending = "flashes", flashes = 3, flashRate = 1.5 },
+            100, 8) - 102) < 1e-9)
     Check("...and with no rate at all, one a second",
-        A.Until({ ending = "flashes", flashes = 3, flashRate = 0 }, 100, 8) == 103)
+        R.Until({ ending = "flashes", flashes = 3, flashRate = 0 }, 100, 8) == 103)
     Check("An unknown ending falls back to the request's own life",
-        A.Until({ ending = "whenever" }, 100, 8) == 108
-        and A.Until(nil, 100, 8) == 108)
+        R.Until({ ending = "whenever" }, 100, 8) == 108
+        and R.Until(nil, 100, 8) == 108)
+    Check("A request is live until its ending and not a moment longer",
+        R.Live({ ending = "seconds", seconds = 4 }, { at = 100 }, 103.9, 8) == true
+        and R.Live({ ending = "seconds", seconds = 4 }, { at = 100 }, 104, 8) == false
+        and R.Live({ ending = "asked" }, nil, 100, 8) == false)
 
-    -- What answers it.
-    Check("A spell line is answered by its spell and nothing else",
-        A.Answers({ spellID = 6940 }, 6940, false) == true
-        and A.Answers({ spellID = 6940 }, 33206, false) == false)
-    Check("A taunt line is answered by any taunt",
-        A.Answers({ taunt = true }, 355, true) == true
-        and A.Answers({ taunt = true }, 6940, false) == false)
-    Check("Nothing is answered by nothing", A.Answers(nil, 6940, false) == false)
+    -- Where a request is filed: its spell, or the one taunt drawer.
+    Check("A spell's requests are filed under the spell", R.Key(6940) == 6940)
+    Check("...and any taunt's under the taunt drawer",
+        ns.Taunts and ns.Taunts.IsTaunt(56222) and R.Key(56222) == "taunt")
 
-    -- The two moments, against the frame.
-    local was = { enabled = cfg.enabled, placing = A.placing }
-    A.placing = false
-    A.Clear()
-    cfg.enabled = false
-    Check("Switched off, a request raises nothing",
-        A.Fire({ fromShort = "Akui", spellID = 6940, kind = "cd" }) == false
-        and (A.Frame() == nil or not A.Frame():IsShown()))
+    -- The book, against the two moments.
+    local before = A:Count()
+    local index = A:Add()
+    if not index then
+        Skip("Answer alerts", "the book is full")
+        return
+    end
+    local cfg = A:Get(index)
+    cfg.spellID = 6940
     cfg.enabled = true
-    local up = A.Fire({ fromShort = "Akui", spellID = 6940, kind = "cd" })
-    Check("Switched on, it goes up with the words on it",
-        up == true and A.Frame() ~= nil and A.Frame():IsShown()
-        and A.current and A.current.text == A.Text("Akui", 6940, false))
-    Check("...sized from its text, not a fixed box",
-        A.Frame():GetWidth() >= 1 and A.Frame():GetHeight() >= 1)
-    Check("...with a deadline set by the ending",
-        A.current.deadline ~= nil and A.current.deadline > A.current.at)
+    A:Rebuild()
+    A.ClearAsks()
+
+    Check("With nobody asking, the alert is idle and off the screen",
+        A:State(cfg) == "idle" and A:ShouldShow(cfg) == false
+        and A:Explain(cfg) ~= nil)
+    Check("The book knows which spells it watches",
+        A.Watches(6940, false) == true and A.Watches(1, false) == false)
+
+    local moduleOn = ns.Modules and ns.Modules:IsOn("answers")
+    local heard = A.Asked({ fromShort = "Akui", spellID = 6940, kind = "cd" })
+    Check("Somebody asks: the request is heard by the alert that watches it",
+        heard == true and A:State(cfg) == "asked")
+    Check("...the words carry the asker's name",
+        A.spec.Text(cfg) == "Akui asks for " .. (ns.SpellName(6940) or "a cooldown"),
+        A.spec.Text(cfg))
+    if moduleOn then
+        A:Refresh()
+        Check("...and the frame is up",
+            A:Frame(index) ~= nil and A:Frame(index):IsShown())
+    else
+        Skip("...and the frame is up", "the answers module is off here")
+    end
+    Check("A request for something else is not this alert's",
+        A.Asked({ fromShort = "Bob", spellID = 33206, kind = "cd" }) == false
+        and A:State(cfg) == "asked")
+    A.Settle(33206)
     Check("Casting something else leaves it up",
-        A.Settle(33206) == false and A.Frame():IsShown())
+        A.Settle(1) == false and A:State(cfg) == "asked")
     Check("Casting the answer takes it down",
-        A.Settle(6940) == true and not A.Frame():IsShown() and A.current == nil)
+        A.Settle(6940) == true and A:State(cfg) == "idle")
+    if moduleOn then
+        A:Refresh()
+        Check("...off the screen again", not A:Frame(index):IsShown())
+    end
 
-    -- Placing shows a sample and takes it away again.
+    -- Placing shows it with nobody asking, like every reminder.
     A:SetPlacing(true)
-    Check("Placing puts a sample up to move",
-        A.placing == true and A.Frame():IsShown() and A.current ~= nil)
-    Check("...and a real request does not move the box under the hand",
-        A.Fire({ fromShort = "Akui", spellID = 6940, kind = "cd" }) == true
-        and A.current.who == "Somebody")
+    Check("Placing puts it up to move", A:ShouldShow(cfg) == true)
     A:SetPlacing(false)
-    Check("...and leaving edit mode clears it",
-        A.placing == false and not A.Frame():IsShown())
+    Check("...and leaving edit mode takes it down", A:ShouldShow(cfg) == false)
 
-    cfg.enabled = was.enabled
-    A.placing = was.placing
-    A.Clear()
+    A.ClearAsks()
+    A:Remove(index)
+    Check("The test put the book back", A:Count() == before)
 end
 
 local function TestHouseLook()

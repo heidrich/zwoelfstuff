@@ -158,8 +158,15 @@ local LIST = {
         Boot = function()
             ns.Answers:Create()
             ns.Answers:Start()
+            -- The alerts are the answers' own reminders (Core/AnswerAlerts):
+            -- same switch, same boot.
+            ns.AnswerAlerts:Rebuild()
+            ns.AnswerAlerts:Start()
         end,
-        Apply = function() ns.Answers.Refresh() end,
+        Apply = function()
+            ns.Answers.Refresh()
+            ns.AnswerAlerts:Refresh()
+        end,
     },
     {
         -- ONE MODULE, TWO THINGS ON SCREEN: the bar and the raid check window

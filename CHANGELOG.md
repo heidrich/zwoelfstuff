@@ -14,16 +14,18 @@ oldest versions move over.
 
 ### Added
 
-- **The answer bar gets an alert.** A new *Alerts* tab on the answer page:
-  when somebody asks you for one of yours, a line in the reminders' type goes
-  up near the middle of the screen — "Akui asks for Pain Suppression" — with
-  the spell's icon, flashing, in your font, size and colour. **When it comes
-  down is yours to pick:** when answered or run out, after a number of
-  seconds, or after a number of flashes; casting the answer takes it down
-  early under every one. One switch per spell your spec offers — and only
-  those — plus the per-spell sound for "when somebody asks you", which had no
-  picker until now. Placed in Edit mode like every other panel. Off until you
-  switch it on; the reminders are untouched.
+- **The answer bar gets alerts — and they are reminders.** A new *Alerts*
+  tab on the answer page is the reminders page, one for one — the list, the
+  preview card, *What it says*, *What it watches*, the look, the flash, the
+  rules — on a book of its own that fires when **somebody asks you** for the
+  spell. The right-hand column lists your answer spells; click or drag one
+  onto the slot. The words carry the asker: `%who asks for %spell` is the
+  default and both tokens are filled in when it fires. **When it comes down
+  is yours to pick** — when answered or run out, after a number of seconds,
+  or after a number of flashes; casting the answer takes it down early under
+  every one. Each alert is placed in Edit mode like every reminder. Under
+  the hood the reminders became a class with two instances, so the two
+  cannot drift; the Reminders page itself is unchanged.
 - **The answer bar gets its display conditions** — the same *When to show
   it* block the reminders and the bars carry: always / only when… / never,
   combat, group, target, rested, the six kinds of place, and — new for every

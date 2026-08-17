@@ -1027,7 +1027,7 @@ function Answers:Start()
         -- myself" - so the line and the chime go up for them too, and only
         -- the chat hint stays as the pointer to the bar.
         local cfg = Answers.Config()
-        local alerted = ns.AnswerAlerts and ns.AnswerAlerts.Fire(ask) or false
+        local alerted = ns.AnswerAlerts and ns.AnswerAlerts.Asked(ask) or false
 
         if not cfg.enabled then
             Answers.Announce(ask.fromShort, ask.spellID)
@@ -1167,8 +1167,8 @@ function Answers.OnCast(spellID)
     local now = GetTime and GetTime() or 0
     local answered = nil
 
-    -- The line comes down first, and on its own: it may be up with the bar
-    -- switched off, in which case `pending` below has nothing to say.
+    -- The alerts come down first, and on their own: they may be up with the
+    -- bar switched off, in which case `pending` below has nothing to say.
     if ns.AnswerAlerts then ns.AnswerAlerts.Settle(spellID) end
 
     for index = #Answers.pending, 1, -1 do
