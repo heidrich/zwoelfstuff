@@ -3499,8 +3499,8 @@ function Death.RefreshIcon()
 end
 
 ---------------------------------------------------------------------------
--- The probe - every question at once, the way the Routes questions were
--- settled in one trip instead of five. Run it dead, on a corpse, after a
+-- The probe - every question at once, so the answers come from one trip
+-- instead of five. Run it dead, on a corpse, after a
 -- wipe: /zs death probe. What it prints decides which window fields stop
 -- saying "unknown".
 ---------------------------------------------------------------------------

@@ -477,12 +477,12 @@ local function TestCommandList()
 
     -- WHAT THE SLASH HANDLER ACTUALLY ANSWERS TO. A list that names a command
     -- with no handler behind it is worse than a short list - that is why
-    -- /zs route came out when Routes was parked, and went back in with its
-    -- handler when Routes returned (4.84.0).
+    -- /zs route came out when Routes was parked (and stayed out when Routes
+    -- left, 4.84.0).
     local handled = {
         [""] = true, unlock = true, lock = true, build = true, minimap = true,
         cdm = true, skin = true, text = true, numbers = true, watch = true,
-        tanks = true, route = true, routes = true,
+        tanks = true,
         cotanks = true, modules = true, module = true, welcome = true,
         externals = true, external = true, taunt = true, taunts = true,
         reminders = true, reminder = true, death = true, test = true,
@@ -10582,11 +10582,6 @@ local HOUSE_ALPHAS = { backdropAlpha = true, bgAlpha = true }
 local MEANING_NOT_SURFACE = { debuffs = true, buffs = true }
 
 ---------------------------------------------------------------------------
--- ROUTES - the pure rules of the experiment (4.84.0). The client-facing half
--- is measured in a dungeon by /zs route probe; these are the rules that do
--- not need one, and they were checked before the file was parked in 4.42.
----------------------------------------------------------------------------
----------------------------------------------------------------------------
 -- WHEN TO SHOW IT, the third customer: the answer bar's rule (4.84.0), the
 -- role rule that came with it, and the builder's two pure helpers.
 ---------------------------------------------------------------------------
@@ -10666,53 +10661,6 @@ local function TestWhenBlock()
         A.placing = was
         Check("...and 1 while it is being placed", placed)
     end
-end
-
-local function TestRoutes()
-    local R = ns.Routes
-    if not R then
-        Skip("Routes", "the file is not loaded")
-        return
-    end
-    Check("A mob in the pull you are on wears 'current', the next 'next', the rest nothing",
-        R.Standing(3, 3) == "current" and R.Standing(4, 3) == "next"
-        and R.Standing(5, 3) == nil and R.Standing(2, 3) == nil
-        and R.Standing(nil, 3) == nil)
-    local frac, shape = R.ParseForces("91/591")
-    Check("The forces counter reads as a fraction",
-        shape == "fraction" and math.abs(frac - 91 / 591) < 1e-9)
-    local pct, pshape = R.ParseForces("15.40%")
-    local ger, gshape = R.ParseForces("15,40%")
-    Check("...and as a percentage, with a German comma too",
-        pshape == "percent" and math.abs(pct - 0.154) < 1e-9
-        and gshape == "percent" and math.abs(ger - 0.154) < 1e-9)
-    Check("...and says nothing for a string it does not know",
-        R.ParseForces("soon") == nil and R.ParseForces(nil) == nil)
-    Check("The npc id is field six of a creature GUID, and a player has none",
-        R.NpcFromGUID("Creature-0-4234-2662-1234-214390-00001A2B3C") == 214390
-        and R.NpcFromGUID("Player-1096-0A1B2C3D") == nil
-        and R.NpcFromGUID(nil) == nil)
-    Check("The routes defaults are on the profile, and the experiment is off",
-        type(ns.DEFAULTS.routes) == "table" and ns.DEFAULTS.routes.enabled == false)
-    -- The sweep starts without the combat log and the cast events; those
-    -- are doors the listener knocks on one at a time.
-    do
-        local sweep = {}
-        for _, e in ipairs(R.SWEEP_EVENTS) do sweep[e] = true end
-        -- The combat log is REFUSED on 12.1 (measured 2026-08-16), so
-        -- nothing in the file registers it any more; the cast events are
-        -- the doors the listener knocks on.
-        local doors = {}
-        for _, e in ipairs(R.DOOR_EVENTS) do doors[e] = true end
-        Check("Nothing registers the combat log; the sweep keeps its plates and the doors are the casts",
-            not sweep.COMBAT_LOG_EVENT_UNFILTERED and not doors.COMBAT_LOG_EVENT_UNFILTERED
-            and not sweep.UNIT_SPELLCAST_START and doors.UNIT_SPELLCAST_START
-            and sweep.NAME_PLATE_UNIT_ADDED and #R.DOOR_EVENTS == 3)
-        local ok, why = R.Register(nil, "X")
-        Check("Registering on nothing says no without raising", ok == false and why == nil)
-    end
-    Check("/zs route is listed with a handler and asks nothing of a client without MDT",
-        R:Available() == false or type(R:Available()) == "boolean")
 end
 
 local function TestHouseLook()
@@ -11052,20 +11000,26 @@ local function TestHouseLook()
             and chosen.dbVersion == 10)
 
     ---------------------------------------------------------------------
-    -- Version 11: the routes experiment starts off - a switch left on by
-    -- 4.4x is not a choice anybody made this year.
+    -- Version 12: Routes is gone, its table leaves the profile. 11 is a
+    -- hole on purpose (stamped by a build that never shipped).
     ---------------------------------------------------------------------
     local stale = OldProfile()
     stale.dbVersion = 10
     stale.routes = { enabled = true, alpha = 0.9 }
-    Check("Version 11 switches a stale routes experiment off, once",
-        Profiles.Rest(stale) == true and stale.routes.enabled == false
-            and stale.routes.alpha == 0.9 and stale.dbVersion == 11
-            and Profiles.Rest(stale) == false)
+    Check("Version 12 takes the routes table off the profile, once",
+        Profiles.Depart(stale) == true and stale.routes == nil
+            and stale.dbVersion == 12 and Profiles.Depart(stale) == false)
+    local eleven = OldProfile()
+    eleven.dbVersion = 11
+    eleven.routes = { enabled = false }
+    Check("...also from a profile the unshipped 11 had already stamped",
+        Profiles.Depart(eleven) == true and eleven.routes == nil
+            and eleven.dbVersion == 12)
     local fresh = OldProfile()
     fresh.dbVersion = 10
     Check("...and a profile without routes is only stamped",
-        Profiles.Rest(fresh) == false and fresh.dbVersion == 11)
+        Profiles.Depart(fresh) == false and fresh.dbVersion == 12)
+    Check("Nothing puts a routes table back", ns.DEFAULTS.routes == nil)
     local bare = OldProfile()
     bare.dbVersion = 9
     bare.coTanks = nil
@@ -11115,7 +11069,6 @@ function Test:Run()
         { "Placing a bar", TestCooldownRender },
         { "Places we draw ourselves", TestCooldownOwn },
         { "The house look", TestHouseLook },
-        { "Routes",         TestRoutes },
         { "When to show it", TestWhenBlock },
         { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },

@@ -209,10 +209,6 @@ Core\RaidDeaths.lua
 # you pressed below it. Reads Death's own pure rules (Storyline, ReplayAt,
 # RecentEvents) and adds no source of its own.
 Core\Replay.lua
-# ROUTES, BACK FROM THE BENCH AS AN EXPERIMENT (2026-08-16). Nothing on the
-# screen unless /zs route on; /zs route probe asks this client every question
-# about a mob at once. See the head of the file and ROUTES-PLAN.md.
-Core\Routes.lua
 Core\Minimap.lua
 # The other two ways in: the minimap button above, and an entry in the pause
 # menu. Both only call ns.Options at click time, so neither needs the window
@@ -304,10 +300,9 @@ Core\SelfTest.lua
 #   Core\CoTanks.lua       co-tank panel with engine aura strips
 #   Core\OptionsGroups.lua the options page for the above
 
-# Parked 2026-08-09, after measuring what a 12.0 client will say about a mob
-# inside a dungeon: its name, id, health, creature type and every position -
-# including the player's own - are all withheld or absent. Core\Routes.lua
-# itself is LOADED AGAIN since 4.84.0 (an experiment, off by default, see its
-# TOC line above); its options page stays parked until the experiment says
-# whether there is a feature to put a page on.
-#   Core\OptionsRoutes.lua the options page for Routes
+# Removed 2026-08-17 (git history has it): Routes, the MDT pull badges on
+# nameplates. Parked 2026-08-09 after measuring that a 12.0 client withholds a
+# dungeon mob's name, id, health, creature type and every position; brought
+# back as an experiment for 4.84.0 to ask the last doors (combat log: refused;
+# a cast names the TYPE of a mob, not which one, and only once it casts). No
+# door leads to "this mob is pull 7", and pull trackers without one exist.

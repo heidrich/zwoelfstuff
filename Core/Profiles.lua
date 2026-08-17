@@ -195,27 +195,30 @@ function Profiles.Trough(profile)
 end
 
 ---------------------------------------------------------------------------
--- Version 11: the routes experiment starts OFF for everybody
+-- Version 12: Routes is gone, and its settings leave the profile with it
 --
--- Routes came back in 4.84.0 as an experiment behind db.routes.enabled -
--- and the owner's profile still carried `enabled = true` from the 4.4x
--- days, so it started at login on its own and eleven ADDON_ACTION_FORBIDDEN
--- errors met him before he had typed a thing (2026-08-16). A switch that
--- was left on by a version that no longer exists is not a choice anybody
--- made this year; it goes off, once, and /zs route on is the way back.
+-- Routes (MDT pull badges on nameplates, 4.40-4.41, parked 4.42) wrote a
+-- `routes` table into every profile of that time. It came back for one
+-- evening in 4.84.0 as an experiment, measured the last doors shut (the
+-- combat log is refused on 12.1; a cast names the kind of mob, not which
+-- one, and only once it casts), and left for good (2026-08-17). A table
+-- nothing reads is not a setting; it goes, once, and ApplyDefaults has no
+-- `routes` to put back.
+--
+-- WHY 12 AND NOT 11: version 11 (`Rest`, "the experiment starts off") was
+-- stamped on the owner's profile by a build that never shipped. Reusing the
+-- number would skip this step on exactly that profile - the version-10
+-- lesson, one paragraph up - so the number moves on and 11 stays a hole.
 ---------------------------------------------------------------------------
-function Profiles.Rest(profile)
+function Profiles.Depart(profile)
     if type(profile) ~= "table" then return false end
 
     local version = tonumber(profile.dbVersion) or 0
-    if version >= 11 then return false end
+    if version >= 12 then return false end
 
-    local moved = false
-    if type(profile.routes) == "table" and profile.routes.enabled then
-        profile.routes.enabled = false
-        moved = true
-    end
-    profile.dbVersion = 11
+    local moved = profile.routes ~= nil
+    profile.routes = nil
+    profile.dbVersion = 12
     return moved
 end
 
@@ -255,7 +258,7 @@ function ns.OpenProfile()
     Profiles.HouseLook(store.profiles[name])
     Profiles.Bench(store.profiles[name])
     Profiles.Trough(store.profiles[name])
-    Profiles.Rest(store.profiles[name])
+    Profiles.Depart(store.profiles[name])
 
     ns.db = ns.ApplyDefaults(store.profiles[name], ns.DEFAULTS)
     ns.profileKey = key

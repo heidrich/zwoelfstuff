@@ -494,22 +494,6 @@ ns.DEFAULTS = {
         gap         = 2,
     },
 
-    -- ROUTES - the experiment (2026-08-16). Off, and nothing runs: the sweep
-    -- is only started when this is on. /zs route on|off is the switch until
-    -- the experiment says whether there is a feature to put a page on.
-    routes     = {
-        enabled         = false,
-        showNext        = true,
-        showNumber      = true,
-        alpha           = 0.9,
-        nextAlpha       = 0.45,
-        size            = 30,
-        offsetX         = 0,
-        offsetY         = 4,
-        autoAdvance     = true,
-        forcesThreshold = 0.8,
-    },
-
     -- THE INVITE TOOL, and every switch in it is missing on purpose. Each one
     -- makes something happen without you, so the code reads `cfg.onWhisper
     -- and true` - absent is off, and there is no default that could turn one
@@ -1789,11 +1773,6 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- that is switched off boots nothing at all - no frame, no event.
         ns.Modules:BootAll()
 
-        -- The routes experiment, only when it was switched on by hand.
-        if ns.db and ns.db.routes and ns.db.routes.enabled and ns.Routes then
-            Boot("Routes", function() ns.Routes:Start() end)
-        end
-
         -- The two ways in. Not modules: they are how you REACH the window,
         -- and a switch you can only find through a door you switched off is
         -- a switch nobody can find.
@@ -1828,8 +1807,9 @@ end)
 -- under whichever heading came last. Colour codes are allowed in `text`
 -- because both readers are FontStrings and both render them.
 --
--- /zs route is back (4.84.0) with a handler behind it - it was listed here
--- once with none, which is worse than a short menu.
+-- A command listed here must have a handler behind it: /zs route was listed
+-- once with none, and a menu naming something that does nothing is worse
+-- than a short menu. (Routes itself left in 4.84.0.)
 ns.COMMANDS = {
     { group = "Getting around" },
     { cmd = "/zs", text = "open the window" },
@@ -1891,12 +1871,6 @@ ns.COMMANDS = {
     { cmd = "/zs death raid", text = "everybody who died this fight, in the "
         .. "order they fell, and what ended each one (|cffffd100chat|r prints "
         .. "it instead of opening the window)" },
-    { cmd = "/zs route", text = "the MDT route experiment: what MDT holds and "
-        .. "what the mobs in front of you resolved to (|cffffd100on|r / "
-        .. "|cffffd100off|r switches it, |cffffd100probe|r asks the client "
-        .. "every question at once, |cffffd100events|r which events the "
-        .. "client lets us register, |cffffd100test|r badges every plate, "
-        .. "|cffffd100next|r / |cffffd100prev|r step the pull)" },
 
     { group = "Housekeeping" },
     { cmd = "/zs test", text = "run the addon's own checks and report failures" },
@@ -2157,47 +2131,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
     -- and it does NOT re-stamp anything you had not read.
     elseif cmd == "news" or cmd == "whatsnew" then
         ns.News:Toggle()
-
-    elseif cmd == "route" or cmd == "routes" then
-        local R = ns.Routes
-        if not R then return end
-        local sub = (rest or ""):match("^(%S*)"):lower()
-        if sub == "on" or sub == "off" then
-            db.routes = db.routes or {}
-            db.routes.enabled = (sub == "on")
-            if sub == "on" then
-                R:Start()
-                R:Sync()
-            end
-            R:Sweep()
-            ns.Print("Routes: " .. (sub == "on"
-                and "|cff40ff40on|r - MDT's route is read and the pull is badged"
-                or "|cffff4040off|r - nothing is drawn"))
-        elseif sub == "probe" then
-            R:Start()
-            R:Sync()
-            R:Probe()
-        elseif sub == "events" then
-            R:ProbeEvents()
-        elseif sub == "test" then
-            R:Start()
-            R:SetTesting(not R.testing)
-            ns.Print("Routes test mode: " .. (R.testing
-                and "|cff40ff40on|r - every nameplate wears a badge"
-                or "|cffff4040off|r"))
-        elseif sub == "next" then
-            R:Step(1)
-            R:Dump()
-        elseif sub == "prev" or sub == "back" then
-            R:Step(-1)
-            R:Dump()
-        elseif sub == "sync" then
-            R:Sync()
-            R:Dump()
-        else
-            R:Sync()
-            R:Dump()
-        end
 
     elseif cmd == "test" then
         ns.SelfTest:Run()

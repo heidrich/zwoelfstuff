@@ -44,15 +44,6 @@ ns.CHANGELOG = {
                     .. "size, the key, the shout's ring.",
                 link = { label = "Open the answer bar", page = "answers" },
             },
-            {
-                icon = "Interface\\Icons\\INV_Misc_Map_01",
-                text = "|cffffd100Routes, back as an experiment.|r Off by "
-                    .. "default; |cffffd100/zs route on|r reads the pull you "
-                    .. "planned in Mythic Dungeon Tools and badges the mobs, "
-                    .. "|cffffd100/zs route probe|r asks this client every "
-                    .. "question about a mob at once. What it answers decides "
-                    .. "whether this becomes a feature.",
-            },
         },
     },
     {

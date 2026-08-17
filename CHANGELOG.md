@@ -31,14 +31,15 @@ oldest versions move over.
   builder now, so every page with a rule shows the same rows in the same
   order — the reminders page shows the role and rested rules for the first
   time.
-- **Routes, back from the bench as an experiment.** Off by default. `/zs route
-  on` reads the pull you planned in Mythic Dungeon Tools and badges the mobs
-  in front of you in that pull's colour; `/zs route probe` asks this client
-  every question about a mob at once — GUID, name, tooltip, casts, the combat
-  log, `UnitTokenFromGUID`, the engine's navigation frame — and listens for
-  twenty seconds. What it answers decides whether this becomes a feature.
-  `/zs route test` badges every nameplate to prove the drawing; `next` /
-  `prev` step the pull. Reads MDT at runtime, ships nothing of MDT's.
+
+### Removed
+
+- **Routes** (MDT pull badges on nameplates, parked since 4.42) is gone from
+  the source. Brought back for one evening as an experiment, it measured the
+  last doors shut: 12.1 refuses the combat log outright, and a cast names the
+  kind of mob, not which one — and only once it is already casting. Nothing
+  leads to "this mob is pull 7", and pull trackers without that exist in
+  plenty. A `routes` table left in your profile by 4.4x is removed.
 
 ## [4.83.0] - 2026-08-16
 
