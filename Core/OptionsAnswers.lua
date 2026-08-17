@@ -250,8 +250,12 @@ function Page:BuildPage(page, width)
         grid:ShowTab(name)
         strip:Select(name)
     end)
-    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
-    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
+    -- UI.PAD above the band's foot, so the first line of whichever tab is
+    -- open does not sit on the strip's rule - it did, twice ("hier klebt
+    -- wieder der text an der linie", "der text muss weiter runter"). The
+    -- co-tank page keeps the same gap between its strip and its body.
+    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, UI.PAD)
+    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, UI.PAD)
     grid.strip = strip
 
     -- The band is as tall as it actually needs to be. Sized for the largest
@@ -278,7 +282,7 @@ function Page:BuildPage(page, width)
         -- the cells and the button column, so a class with two offers held a
         -- band three buttons deep.
         host:SetHeight(count > 0 and size or 20)
-        band:SetHeight(BAND_HEAD + host:GetHeight() + 10 + 34)
+        band:SetHeight(BAND_HEAD + host:GetHeight() + 10 + 34 + UI.PAD)
         strip:Layout()
     end
     band.Fit()
