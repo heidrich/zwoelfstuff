@@ -199,11 +199,10 @@ function Page:BuildPage(page, width)
     local bandTitle = UI.Eyebrow(band, "What you can be asked for")
     bandTitle:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -10)
 
-    local bandRule = band:CreateTexture(nil, "ARTWORK")
-    bandRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
-    bandRule:SetHeight(1)
-    bandRule:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
-    bandRule:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
+    -- NO RULE OF ITS OWN at the foot: the tab strip below carries one, and
+    -- two lines sixteen pixels apart read as the text sitting on the lower
+    -- one (owner, 2026-08-17: "der text muss weiter runter ... nicht den
+    -- rest noch weiter hoch").
 
     -- THE THINGS YOU DO TO THE BAR ARE IN THE WINDOW'S HEADER BAND, beside
     -- the page title, with every other page's - see the PAGES table in
@@ -250,12 +249,12 @@ function Page:BuildPage(page, width)
         grid:ShowTab(name)
         strip:Select(name)
     end)
-    -- UI.PAD above the band's foot, so the first line of whichever tab is
-    -- open does not sit on the strip's rule - it did, twice ("hier klebt
-    -- wieder der text an der linie", "der text muss weiter runter"). The
-    -- co-tank page keeps the same gap between its strip and its body.
-    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, UI.PAD)
-    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, UI.PAD)
+    -- A FEW PIXELS above the band's foot, so the first line of whichever
+    -- tab is open does not sit on the strip's rule ("hier klebt wieder der
+    -- text an der linie"). The note under it adds its own six.
+    local STRIP_GAP = 8
+    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, STRIP_GAP)
+    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, STRIP_GAP)
     grid.strip = strip
 
     -- The band is as tall as it actually needs to be. Sized for the largest
@@ -282,7 +281,7 @@ function Page:BuildPage(page, width)
         -- the cells and the button column, so a class with two offers held a
         -- band three buttons deep.
         host:SetHeight(count > 0 and size or 20)
-        band:SetHeight(BAND_HEAD + host:GetHeight() + 10 + 34 + UI.PAD)
+        band:SetHeight(BAND_HEAD + host:GetHeight() + 10 + 34 + STRIP_GAP)
         strip:Layout()
     end
     band.Fit()
