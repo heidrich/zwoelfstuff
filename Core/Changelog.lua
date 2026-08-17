@@ -35,6 +35,18 @@ ns.CHANGELOG = {
         date = "2026-08-16",
         lines = {
             {
+                icon = "Interface\\Icons\\Spell_Holy_PainSupression",
+                text = "|cffffd100The answer bar gets an alert.|r When somebody "
+                    .. "asks you for one of yours, a line goes up near the "
+                    .. "middle of the screen - |cffffd100Akui asks for Pain "
+                    .. "Suppression|r - flashing, in your font and colour. "
+                    .. "You pick when it comes down: when answered, after "
+                    .. "so many seconds, or so many flashes. One switch per "
+                    .. "spell you offer, a sound per spell, placed in Edit "
+                    .. "mode. Off until you switch it on.",
+                link = { label = "Open the Alerts tab", page = "answers" },
+            },
+            {
                 icon = "Interface\\Icons\\Spell_Holy_PowerWordShield",
                 text = "|cffffd100The answer bar gets its display conditions|r "
                     .. "- always, only when..., never; combat, group, target, "

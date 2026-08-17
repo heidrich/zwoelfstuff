@@ -195,6 +195,10 @@ Core\Externals.lua
 # Below Externals and Taunts, whose spell lists it reads to know what you can
 # be asked for.
 Core\Answers.lua
+# The line on the screen when somebody asks: the answers' own alert, in the
+# reminders' type. Below Answers (it is told by it) and Reminders (it borrows
+# Extent and FlashAlpha), above EditMode, which places it.
+Core\AnswerAlerts.lua
 # The group fills itself. Below Chat, whose rules about which channel you are
 # actually in it shares, and it holds no frame at all - a chat event and four
 # plain calls. Everything it does is off until switched on; see the file.

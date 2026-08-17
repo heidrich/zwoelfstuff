@@ -1021,14 +1021,22 @@ function Answers:Start()
             ask.spellID = wanted
         end
 
-        if not Answers.Config().enabled then
-            Answers.Announce(ask.fromShort, ask.spellID)
-            return
-        end
+        -- THE ALERT, whether or not the bar is up. It is the same moment
+        -- said larger (Core/AnswerAlerts.lua), and somebody who keeps the
+        -- bar off and the alert on has said "tell me, I will cast it
+        -- myself" - so the line and the chime go up for them too, and only
+        -- the chat hint stays as the pointer to the bar.
+        local cfg = Answers.Config()
+        local alerted = ns.AnswerAlerts and ns.AnswerAlerts.Fire(ask) or false
 
-        Answers.Remember(Answers.pending, ask,
-            GetTime and GetTime() or 0)
-        Answers.Repaint()
+        if not cfg.enabled then
+            Answers.Announce(ask.fromShort, ask.spellID)
+            if not alerted then return end
+        else
+            Answers.Remember(Answers.pending, ask,
+                GetTime and GetTime() or 0)
+            Answers.Repaint()
+        end
 
         -- THE CHIME MOVED, IT DID NOT CHANGE. 8959 is now named in
         -- Core/Sounds.lua as this event's built-in, so a profile that has
@@ -1036,7 +1044,7 @@ function Answers:Start()
         -- one that picks a sound of its own gets that instead, per SPELL.
         -- Picking "None" silences it without switching the answers off, which
         -- the toggle below could never do on its own.
-        if Answers.Config().sound ~= false and ns.Sounds then
+        if cfg.sound ~= false and ns.Sounds then
             ns.Sounds.Play("asked", ask.spellID)
         end
     end)
@@ -1158,6 +1166,10 @@ end
 function Answers.OnCast(spellID)
     local now = GetTime and GetTime() or 0
     local answered = nil
+
+    -- The line comes down first, and on its own: it may be up with the bar
+    -- switched off, in which case `pending` below has nothing to say.
+    if ns.AnswerAlerts then ns.AnswerAlerts.Settle(spellID) end
 
     for index = #Answers.pending, 1, -1 do
         local entry = Answers.pending[index]

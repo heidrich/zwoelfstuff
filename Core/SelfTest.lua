@@ -10663,6 +10663,111 @@ local function TestWhenBlock()
     end
 end
 
+---------------------------------------------------------------------------
+-- ANSWER ALERTS - the line that goes up when somebody asks (4.84.0). The
+-- pure rules, then the two moments the answers tell it about, run against
+-- the frame itself.
+---------------------------------------------------------------------------
+local function TestAnswerAlerts()
+    local A = ns.AnswerAlerts
+    if not (A and ns.Answers) then
+        Skip("Answer alerts", "the file is not loaded")
+        return
+    end
+
+    -- Where it lives, and that its tables are its own.
+    local cfg = A.Config()
+    Check("The alert's settings sit inside the answers' (cfg.alert)",
+        ns.Answers.Config().alert == cfg)
+    Check("...off out of the box, like the bar",
+        A.DEFAULTS.enabled == false and cfg.enabled == false)
+    Check("...and its colour is a copy, not the default table itself",
+        cfg.color ~= A.DEFAULTS.color and cfg.color[1] == A.DEFAULTS.color[1])
+    Check("Every ending the page offers is one the rule knows",
+        #A.ENDINGS == 3 and A.ENDINGS[1].value == "asked"
+        and A.ENDINGS[2].value == "seconds" and A.ENDINGS[3].value == "flashes")
+
+    -- Who gets a line.
+    Check("Switched off, nothing gets a line",
+        A.Wants({ enabled = false, spells = {} }, 6940) == false)
+    Check("Switched on, a spell nobody touched does",
+        A.Wants({ enabled = true, spells = {} }, 6940) == true)
+    Check("...a spell switched off does not",
+        A.Wants({ enabled = true, spells = { [6940] = false } }, 6940) == false)
+    Check("...and a taunt request, which names no spell, does",
+        A.Wants({ enabled = true, spells = {} }, nil) == true)
+
+    -- The words.
+    Check("The line names who and what",
+        A.Text("Akui", 6940, false) == "Akui asks for "
+            .. (ns.SpellName(6940) or "a cooldown"),
+        A.Text("Akui", 6940, false))
+    Check("...a taunt in words, not as a nil",
+        A.Text("Akui", nil, true) == "Akui asks for a taunt")
+    Check("...and nobody is Somebody",
+        A.Text(nil, nil, true) == "Somebody asks for a taunt")
+
+    -- When it comes down.
+    Check("'asked' lasts as long as the request itself",
+        A.Until({ ending = "asked" }, 100, 8) == 108)
+    Check("'seconds' lasts what it says",
+        A.Until({ ending = "seconds", seconds = 4 }, 100, 8) == 104)
+    Check("'flashes' is counted in the flash's own time",
+        math.abs(A.Until({ ending = "flashes", flashes = 3, flashRate = 1.5 },
+            100, 8) - (100 + 2)) < 1e-9)
+    Check("...and with no rate at all, one a second",
+        A.Until({ ending = "flashes", flashes = 3, flashRate = 0 }, 100, 8) == 103)
+    Check("An unknown ending falls back to the request's own life",
+        A.Until({ ending = "whenever" }, 100, 8) == 108
+        and A.Until(nil, 100, 8) == 108)
+
+    -- What answers it.
+    Check("A spell line is answered by its spell and nothing else",
+        A.Answers({ spellID = 6940 }, 6940, false) == true
+        and A.Answers({ spellID = 6940 }, 33206, false) == false)
+    Check("A taunt line is answered by any taunt",
+        A.Answers({ taunt = true }, 355, true) == true
+        and A.Answers({ taunt = true }, 6940, false) == false)
+    Check("Nothing is answered by nothing", A.Answers(nil, 6940, false) == false)
+
+    -- The two moments, against the frame.
+    local was = { enabled = cfg.enabled, placing = A.placing }
+    A.placing = false
+    A.Clear()
+    cfg.enabled = false
+    Check("Switched off, a request raises nothing",
+        A.Fire({ fromShort = "Akui", spellID = 6940, kind = "cd" }) == false
+        and (A.Frame() == nil or not A.Frame():IsShown()))
+    cfg.enabled = true
+    local up = A.Fire({ fromShort = "Akui", spellID = 6940, kind = "cd" })
+    Check("Switched on, it goes up with the words on it",
+        up == true and A.Frame() ~= nil and A.Frame():IsShown()
+        and A.current and A.current.text == A.Text("Akui", 6940, false))
+    Check("...sized from its text, not a fixed box",
+        A.Frame():GetWidth() >= 1 and A.Frame():GetHeight() >= 1)
+    Check("...with a deadline set by the ending",
+        A.current.deadline ~= nil and A.current.deadline > A.current.at)
+    Check("Casting something else leaves it up",
+        A.Settle(33206) == false and A.Frame():IsShown())
+    Check("Casting the answer takes it down",
+        A.Settle(6940) == true and not A.Frame():IsShown() and A.current == nil)
+
+    -- Placing shows a sample and takes it away again.
+    A:SetPlacing(true)
+    Check("Placing puts a sample up to move",
+        A.placing == true and A.Frame():IsShown() and A.current ~= nil)
+    Check("...and a real request does not move the box under the hand",
+        A.Fire({ fromShort = "Akui", spellID = 6940, kind = "cd" }) == true
+        and A.current.who == "Somebody")
+    A:SetPlacing(false)
+    Check("...and leaving edit mode clears it",
+        A.placing == false and not A.Frame():IsShown())
+
+    cfg.enabled = was.enabled
+    A.placing = was.placing
+    A.Clear()
+end
+
 local function TestHouseLook()
     local v = ns.SURFACE
 
@@ -11070,6 +11175,7 @@ function Test:Run()
         { "Places we draw ourselves", TestCooldownOwn },
         { "The house look", TestHouseLook },
         { "When to show it", TestWhenBlock },
+        { "Answer alerts",  TestAnswerAlerts },
         { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },
     }

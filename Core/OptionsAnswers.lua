@@ -173,6 +173,20 @@ function Page:BuildPage(page, width)
         none:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -6)
     end
 
+    -- THE TWO TABS, at the foot of the band so the offers stay in view on
+    -- both: "Bar" is everything the page was, "Alerts" is the line that goes
+    -- up when somebody asks (Core/AnswerAlerts.lua). Owner, 2026-08-17: "wir
+    -- fuegen einen tab alerts ein". Built here, laid out once the band knows
+    -- its width, and mounted on `grid.strip` as the cooldowns page does.
+    local strip
+    strip = UI.TabStrip(band, { "Bar", "Alerts" }, function(name)
+        grid:ShowTab(name)
+        strip:Select(name)
+    end)
+    strip:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", 0, 0)
+    strip:SetPoint("BOTTOMRIGHT", band, "BOTTOMRIGHT", -14, 0)
+    grid.strip = strip
+
     -- The band is as tall as it actually needs to be. Sized for the largest
     -- class it would hold a third of the page empty for everybody else.
     band.Fit = function()
@@ -197,9 +211,15 @@ function Page:BuildPage(page, width)
         -- the cells and the button column, so a class with two offers held a
         -- band three buttons deep.
         host:SetHeight(count > 0 and size or 20)
-        band:SetHeight(BAND_HEAD + host:GetHeight() + 10)
+        band:SetHeight(BAND_HEAD + host:GetHeight() + 10 + 34)
+        strip:Layout()
     end
     band.Fit()
+
+    -- EVERYTHING FROM HERE TO THE ALERTS TAB IS THE BAR'S. Grid:Tab files
+    -- every row made after it under this name; the alerts tab below is
+    -- deferred until somebody presses it (see Grid:LazyTab).
+    grid:Tab("Bar")
 
     grid:Note("Click one to stop offering it. Only spells your spec can cast "
         .. "are here. To put the bar somewhere, open |cffffd100Edit mode|r at "
@@ -481,7 +501,12 @@ function Page:BuildPage(page, width)
         function() return Cfg().backdropTexture end,
         function(value) Cfg().backdropTexture = value end, Apply)
 
+    grid:LazyTab("Alerts", function() Page:BuildAlerts(grid, width) end)
+
+    grid.tab = "Bar"
     grid:Layout()
+    strip:Layout()
+    strip:Select("Bar")
 
     page.Refresh = function()
         band.Fit()
@@ -495,4 +520,206 @@ function Page:BuildPage(page, width)
     -- the grid for one visible control, and it can ask neither of a page that
     -- hands back nothing.
     return grid
+end
+
+---------------------------------------------------------------------------
+-- THE ALERTS TAB - the line that goes up when somebody asks
+--
+-- The reminders' vocabulary on purpose (font, size, edge, colour, icon,
+-- flash), because it IS a reminder in shape and the two pages should read as
+-- one addon; plus the one thing a reminder never needed - when to stop - and
+-- the per-spell switches, which can only name the spells your spec offers.
+-- Owner, 2026-08-17: "das kannste auch nur mit genau den spells die du zur
+-- verfuegung hast da so konfigurieren."
+---------------------------------------------------------------------------
+function Page:BuildAlerts(grid, width)
+    grid:Tab("Alerts")
+    local A = ns.AnswerAlerts
+    local function ACfg() return A.Config() end
+    local function Restyle() A.Refresh() end
+
+    grid:Section("Switch it on", "aa-on", true)
+
+    UI.Toggle(grid:Row("Show a line when asked"),
+        function() return ACfg().enabled end,
+        function(value) ACfg().enabled = value and true or false end)
+
+    grid:Note("Large type near the middle of the screen - \"Akui asks for "
+        .. "Pain Suppression\" - the moment a request comes in, whether the "
+        .. "bar is up or not. To put it somewhere, open |cffffd100Edit mode|r "
+        .. "at the top of the list on the left; |cffffd100Show me|r below "
+        .. "puts a sample up under the real rules.")
+
+    grid:Buttons({
+        { text = "Show me", onClick = function() A.Preview() end },
+    }, 4)
+
+    ---------------------------------------------------------------------
+    -- WHEN IT GOES AWAY. The one setting the reminders never needed.
+    ---------------------------------------------------------------------
+    grid:Section("How long it stays", "aa-end", true)
+
+    local endRow = grid:FullRow("Ends", { controlWidth = 260 })
+    UI.Dropdown(endRow, function() return A.ENDINGS end,
+        function() return ACfg().ending end,
+        function(value)
+            ACfg().ending = value
+            grid:Refresh()
+        end)
+
+    local secondsRow = grid:Row("Seconds")
+    UI.Slider(secondsRow, {
+        get = function() return ACfg().seconds end,
+        set = function(value) ACfg().seconds = value end,
+        min = 1, max = 20, step = 1,
+        format = function(v) return string.format("%ds", v or 0) end,
+    })
+    local flashesRow = grid:Row("Flashes")
+    UI.Slider(flashesRow, {
+        get = function() return ACfg().flashes end,
+        set = function(value) ACfg().flashes = value end,
+        min = 1, max = 10, step = 1,
+        format = function(v) return string.format("%dx", v or 0) end,
+    })
+
+    -- ONLY THE COUNT THAT APPLIES IS LIVE. Two sliders for one setting,
+    -- with the other one greyed, is how the page says which one the
+    -- dropdown is reading right now.
+    local paintSeconds, paintFlashes = secondsRow.Refresh, flashesRow.Refresh
+    secondsRow.Refresh = function()
+        if paintSeconds then paintSeconds() end
+        secondsRow:SetRelevant(ACfg().ending == "seconds")
+    end
+    flashesRow.Refresh = function()
+        if paintFlashes then paintFlashes() end
+        flashesRow:SetRelevant(ACfg().ending == "flashes")
+    end
+
+    grid:Note("Casting the answer takes the line down early under every "
+        .. "one of these. \"When answered or run out\" follows the bar's own "
+        .. "|cffffd100How long it shouts|r.")
+
+    ---------------------------------------------------------------------
+    -- WHICH OF YOURS. One switch per spell the spec offers, the same list
+    -- the band above shows - and only that list.
+    ---------------------------------------------------------------------
+    grid:Section("Which of your spells", "aa-spells", true)
+
+    local _, class = UnitClass("player")
+    local mine = ns.Answers.Offers(class, nil, ns.KnowsSpell)
+    local Comm = ns.Comm
+    local any = false
+    for _, offer in ipairs(mine) do
+        if offer.spellID then
+            any = true
+            local spellID = offer.spellID
+            local row = grid:Row("")
+            UI.MakeRowASpell(row, spellID)
+            row.label:SetText(offer.kind == (Comm and Comm.TAUNT)
+                and "A taunt" or (ns.SpellName(spellID) or tostring(spellID)))
+            UI.Toggle(row,
+                function() return ACfg().spells[spellID] ~= false end,
+                function(value)
+                    ACfg().spells[spellID] = (not value) and false or nil
+                end)
+        end
+    end
+    if not any then
+        grid:Note("Your class has nothing to offer here, so there is nothing "
+            .. "to be asked for.")
+    end
+
+    grid:Note("Left alone, every spell you offer gets a line. Switch one off "
+        .. "to keep the bar's ring and skip the words for it.")
+
+    ---------------------------------------------------------------------
+    -- SOUNDS. The "asked" event has ONE sound per spell, and the bar plays
+    -- it - this is where it is picked, because this tab is where the spells
+    -- are listed. Same shape as the request page's sound rows.
+    ---------------------------------------------------------------------
+    grid:Section("Sounds", "aa-sounds", true)
+
+    for _, offer in ipairs(mine) do
+        if offer.spellID then
+            local spellID = offer.spellID
+            local row = grid:FullRow("", { controlWidth = 220 })
+            UI.MediaPicker(row, "sound",
+                function() return ns.Sounds.Get("asked", spellID) end,
+                function(value) ns.Sounds.Set("asked", spellID, value) end,
+                function() ns.Sounds.Preview(ns.Sounds.Get("asked", spellID)) end,
+                "Same as everywhere")
+            local paintControl = row.Refresh
+            row.Refresh = function()
+                if paintControl then paintControl() end
+                UI.MakeRowASpell(row, spellID)
+                row.label:SetText(offer.kind == (Comm and Comm.TAUNT)
+                    and "A taunt" or (ns.SpellName(spellID) or tostring(spellID)))
+            end
+        end
+    end
+
+    grid:Note("Played once when the request comes in, line or no line. Left "
+        .. "alone, each one uses whatever |cffffd100Settings - Sounds|r chose "
+        .. "for \"When somebody asks you\".")
+
+    ---------------------------------------------------------------------
+    -- HOW IT LOOKS - the reminders' rows, one for one.
+    ---------------------------------------------------------------------
+    grid:Section("How it looks", "aa-look", true)
+
+    UI.MediaPicker(grid:FullRow("Font", { controlWidth = 190 }), "font",
+        function() return ACfg().font end,
+        function(value) ACfg().font = value end, Restyle, "Same as everywhere")
+    UI.Slider(grid:FullRow("Size", { controlWidth = 124 }), {
+        get = function() return ACfg().size end,
+        set = function(value) ACfg().size = value end,
+        min = 12, max = 72, step = 1, apply = Restyle,
+    })
+    UI.Dropdown(grid:FullRow("Edge", { controlWidth = 150 }),
+        ns.Media.OUTLINES,
+        function() return ACfg().outline end,
+        function(value) ACfg().outline = value end, { apply = Restyle })
+    UI.Swatch(grid:FullRow("Colour", { controlWidth = 124 }),
+        function()
+            local c = ACfg().color
+            return c[1], c[2], c[3]
+        end,
+        function(r, g, b) ACfg().color = { r, g, b } end, Restyle)
+    UI.Dropdown(grid:FullRow("Icon", { controlWidth = 150 }),
+        ns.REMINDER_ICON_SIDES,
+        function() return ACfg().iconSide end,
+        function(value) ACfg().iconSide = value end, { apply = Restyle })
+    UI.Slider(grid:FullRow("Icon size", { controlWidth = 124 }), {
+        get = function() return ACfg().iconSize end,
+        set = function(value) ACfg().iconSize = value end,
+        min = 12, max = 96, step = 1, apply = Restyle,
+    })
+    UI.Slider(grid:FullRow("Scale", { controlWidth = 124 }), {
+        get = function() return ACfg().scale end,
+        set = function(value) ACfg().scale = value end,
+        min = 0.5, max = 2, step = 0.05,
+        format = function(v) return string.format("%d%%", (v or 1) * 100) end,
+        apply = Restyle,
+    })
+
+    grid:Section("Flashing", "aa-flash", true)
+
+    UI.Toggle(grid:FullRow("Flash", { controlWidth = 124 }),
+        function() return ACfg().flash end,
+        function(value) ACfg().flash = value and true or false end)
+    UI.Slider(grid:FullRow("Speed", { controlWidth = 124 }), {
+        get = function() return ACfg().flashRate end,
+        set = function(value) ACfg().flashRate = value end,
+        min = 0.3, max = 3, step = 0.1,
+        format = function(v) return string.format("%.1f/s", v or 0) end,
+    })
+    UI.Slider(grid:FullRow("Fades to", { controlWidth = 124 }), {
+        get = function() return ACfg().flashMin end,
+        set = function(value) ACfg().flashMin = value end,
+        min = 0, max = 0.9, step = 0.05,
+        format = function(v) return string.format("%d%%", (v or 0) * 100) end,
+    })
+
+    grid:Note("It never fades all the way out. \"After a number of flashes\" "
+        .. "counts these.")
 end

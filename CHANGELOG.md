@@ -14,6 +14,16 @@ oldest versions move over.
 
 ### Added
 
+- **The answer bar gets an alert.** A new *Alerts* tab on the answer page:
+  when somebody asks you for one of yours, a line in the reminders' type goes
+  up near the middle of the screen — "Akui asks for Pain Suppression" — with
+  the spell's icon, flashing, in your font, size and colour. **When it comes
+  down is yours to pick:** when answered or run out, after a number of
+  seconds, or after a number of flashes; casting the answer takes it down
+  early under every one. One switch per spell your spec offers — and only
+  those — plus the per-spell sound for "when somebody asks you", which had no
+  picker until now. Placed in Edit mode like every other panel. Off until you
+  switch it on; the reminders are untouched.
 - **The answer bar gets its display conditions** — the same *When to show
   it* block the reminders and the bars carry: always / only when… / never,
   combat, group, target, rested, the six kinds of place, and — new for every

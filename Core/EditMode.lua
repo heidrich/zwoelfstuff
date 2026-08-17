@@ -643,6 +643,21 @@ local function ApplyAnswerMove(x, y)
     ns.Answers.Rebuild()
 end
 
+-- THE ANSWER ALERT - the line that goes up when somebody asks. Its frame
+-- exists only once something has raised it, and placing raises a sample
+-- (AnswerAlerts:SetPlacing), so in edit mode there is always one to sit on.
+local function AnswerAlertLine()
+    local frame = ns.AnswerAlerts and ns.AnswerAlerts.Frame()
+    if frame and frame:IsShown() then return frame end
+    return nil
+end
+
+local function ApplyAnswerAlertMove(x, y)
+    local cfg = ns.AnswerAlerts.Config()
+    cfg.x, cfg.y = x, y
+    ns.AnswerAlerts.Refresh()
+end
+
 ---------------------------------------------------------------------------
 -- EVERY PLACED PANEL, IN ONE LIST, DESCRIBED ONCE.
 --
@@ -722,6 +737,17 @@ PANEL_MOVERS = {
       config = function() return ns.Answers.Config() end,
       origin = function()
           local cfg = ns.Answers.Config()
+          return cfg.x or 0, cfg.y or 0
+      end },
+
+    -- ITS MODULE AND PAGE ARE THE ANSWERS', as the taunt button's are the
+    -- co-tanks': the alert is part of that feature and this row says so.
+    { key = "answeralert", module = "answers",
+      panel = AnswerAlertLine, apply = ApplyAnswerAlertMove,
+      label = "Answer alert", page = "answers",
+      config = function() return ns.AnswerAlerts.Config() end,
+      origin = function()
+          local cfg = ns.AnswerAlerts.Config()
           return cfg.x or 0, cfg.y or 0
       end },
 
@@ -1712,6 +1738,8 @@ function EditMode:SetUnlocked(state)
     -- for Bone Shield to fall off in order to place the message about Bone
     -- Shield falling off is not a workflow.
     if ns.Reminders then ns.Reminders:SetPlacing(state) end
+    -- And the answer alert, which is up only while somebody is asking.
+    if ns.AnswerAlerts then ns.AnswerAlerts:SetPlacing(state) end
 
     if state then
         -- The window would sit behind the overlay, catching clicks that were
