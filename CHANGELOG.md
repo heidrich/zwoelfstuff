@@ -10,7 +10,7 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
-## [4.84.0] - 2026-08-16
+## [4.84.0] - 2026-08-17
 
 ### Added
 

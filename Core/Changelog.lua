@@ -32,7 +32,7 @@ end
 ns.CHANGELOG = {
     {
         version = "4.84.0",
-        date = "2026-08-16",
+        date = "2026-08-17",
         lines = {
             {
                 icon = "Interface\\Icons\\Spell_Holy_PainSupression",
