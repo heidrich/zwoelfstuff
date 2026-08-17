@@ -38,8 +38,36 @@
 ---------------------------------------------------------------------------
 local _, ns = ...
 
+-- ONE FILE, TWO BOOKS (4.84.0). Everything below is a CLASS: a book of
+-- messages with its own list, its own frames and its own tick, told by a
+-- SPEC what it watches and how it words itself. ns.Reminders is the book
+-- this file always was (the reminders spec, at the foot of the file);
+-- Core/AnswerAlerts.lua makes a second one for the answer bar - "eigentlich
+-- ist das der reminder" (owner, 2026-08-17) - so the alerts ARE reminders in
+-- code and not a copy of them that drifts. The spec is small on purpose:
+--
+--   key      the name for stores and printouts   ("reminders")
+--   module   the switch that decides whether anything shows
+--   noun     what one is called                  ("Reminder")
+--   store()  -> the saved list this book edits
+--   Defaults(base) may add to / change the base defaults, returns them
+--   State(cfg) -> state, why   the fact the trigger reads, or why it cannot
+--   Fires(cfg, state) -> boolean   does that state put the message up
+--   WhyNot(cfg, state) -> string   the sentence for "state, but not firing"
+--   Text(cfg) -> string   optional: the words to draw (default cfg.text)
+--   sound    optional: the Sounds event played on the rising edge
+--   watchCDM optional: refresh when the Cooldown Manager re-pools
 local Reminders = {}
-ns.Reminders = Reminders
+Reminders.__index = Reminders
+
+function Reminders.New(spec)
+    local self = setmetatable({}, Reminders)
+    self.spec = spec
+    self.frames = {}
+    self.phase = 0
+    self.elapsedSinceCheck = 0
+    return self
+end
 
 -- More than this is a screen nobody can read anyway, and the number is here
 -- rather than inline so the options page and the evaluator cannot disagree.
@@ -87,7 +115,7 @@ ns.REMINDER_ICON_SIDES = {
 }
 
 function Reminders:Defaults()
-    return {
+    local base = {
         enabled = true,
         text    = "",
         spellID = nil,
@@ -127,6 +155,8 @@ function Reminders:Defaults()
         y        = 180,
         scale    = 1.0,
     }
+    if self.spec.Defaults then return self.spec.Defaults(base) end
+    return base
 end
 
 -- A NAME THAT IS NEVER EMPTY. The list on the options page needs something to
@@ -148,7 +178,7 @@ function Reminders:Label(cfg, index)
             return firstLine
         end
     end
-    return "Reminder " .. tostring(index or "?")
+    return (self.spec.noun or "Reminder") .. " " .. tostring(index or "?")
 end
 
 ---------------------------------------------------------------------------
@@ -164,15 +194,7 @@ end
 -- nothing to show. ns.db.reminders is left where it is for the version
 -- before this one.
 function Reminders:All()
-    local mine = ns.SpecStore("remindersBySpec", "reminders")
-    if mine then return mine end
-
-    -- Only while the client has not named the spec. A throwaway rather than
-    -- the profile-wide list, because adding a reminder in that second would
-    -- otherwise write into a list that every spec then inherits.
-    local list = ns.db and ns.db.reminders
-    if type(list) ~= "table" then return {} end
-    return list
+    return self.spec.store() or {}
 end
 
 function Reminders:Count()
@@ -224,30 +246,8 @@ end
 -- reported as missing, or every reminder anybody mistyped would sit on screen
 -- permanently insisting a buff is gone. Unanswerable means silent.
 function Reminders:State(cfg)
-    if not cfg then return nil, "no reminder" end
-    if not cfg.spellID then return nil, "no spell picked yet" end
-
-    if not (ns.CDM and ns.CDM:IsAvailable()) then
-        return nil, ns.CDM and ns.CDM:UnavailableReason()
-            or "the Cooldown Manager is not up"
-    end
-
-    local item = ns.CDM:ItemForSpell(cfg.spellID)
-    if not item then
-        -- "Not tracking" was the wrong words and sent people looking in the
-        -- wrong place. Most spells the Cooldown Manager KNOWS sit in its
-        -- Hidden category by default - our picker lists them under Cooldowns
-        -- with everything else, marked on the entry - and a spell with no
-        -- frame on screen has nothing for us to read. The fix is one drag in
-        -- Blizzard's own settings, so that is what the sentence says.
-        return nil, "Blizzard is not showing this spell in its Cooldown "
-            .. "Manager, so there is no frame to read. Drag it into one of "
-            .. "its viewers in Blizzard's own Cooldown Manager settings"
-    end
-
-    local active = ns.CDM:ItemIsActive(item)
-    if active == nil then return nil, "the frame will not say" end
-    return active and "active" or "idle"
+    if not cfg then return nil, "no " .. (self.spec.noun or "reminder"):lower() end
+    return self.spec.State(cfg)
 end
 
 -- Does the state satisfy the trigger? Pure, and exported for the test: this
@@ -270,14 +270,14 @@ function Reminders:ShouldShow(cfg)
     -- The module switch outranks even the two below it, for the reason the
     -- co-tank panel's does: preview and placing are requests to see a feature
     -- that is running, and there is nobody at a greyed-out page to ask.
-    if ns.Modules and not ns.Modules:IsOn("reminders") then return false end
+    if ns.Modules and not ns.Modules:IsOn(self.spec.module) then return false end
     if self.previewing == cfg then return true end
     if self.placing then return true end
     if not cfg.enabled then return false end
     if not ns.Visibility:Evaluate(cfg) then return false end
 
     local state = self:State(cfg)
-    return self.Fires(cfg.trigger, state)
+    return self.spec.Fires(cfg, state)
 end
 
 -- Edit Mode holds every reminder on screen while the overlay is up, or there
@@ -292,14 +292,17 @@ end
 -- The options page prints this under the spell, so "it does not work" has an
 -- answer without anybody reading code.
 function Reminders:Explain(cfg)
-    if not cfg then return "no reminder" end
+    local noun = (self.spec.noun or "Reminder"):lower()
+    if not cfg then return "no " .. noun end
     -- THE SWITCH IS REPORTED FIRST. A page that explains at length why one
     -- reminder is not firing, while the whole module is off, is a page that
     -- sends somebody reading their own trigger for a fault that is not there.
-    if ns.Modules and not ns.Modules:IsOn("reminders") then
-        return "The Reminders module is switched off."
+    if ns.Modules and not ns.Modules:IsOn(self.spec.module) then
+        local entry = ns.Modules:Get(self.spec.module)
+        return "The " .. (entry and entry.title or self.spec.module)
+            .. " module is switched off."
     end
-    if not cfg.enabled then return "This reminder is switched off." end
+    if not cfg.enabled then return "This " .. noun .. " is switched off." end
 
     local state, why = self:State(cfg)
     if not state then
@@ -309,10 +312,8 @@ function Reminders:Explain(cfg)
     local ruleReason = ns.Visibility:Explain(cfg)
     if ruleReason then return ruleReason end
 
-    if not self.Fires(cfg.trigger, state) then
-        return state == "active"
-            and "It is active right now, so there is nothing to remind you of."
-            or "It is not active right now, and this reminder waits for it to be."
+    if not self.spec.Fires(cfg, state) then
+        return self.spec.WhyNot(cfg, state)
     end
     return nil
 end
@@ -320,8 +321,6 @@ end
 ---------------------------------------------------------------------------
 -- The frames
 ---------------------------------------------------------------------------
-local frames = {}
-
 local function BuildFrame()
     local frame = CreateFrame("Frame", nil, UIParent)
     frame:SetFrameStrata("HIGH")
@@ -364,12 +363,12 @@ local ICON_GAP = 8
 
 function Reminders:Style(index)
     local cfg = self:Get(index)
-    local frame = frames[index]
+    local frame = self.frames[index]
     if not (cfg and frame) then return end
 
     ns.Media.ApplyFont(frame.text, cfg.font ~= "" and cfg.font or nil,
         cfg.size, cfg.outline, cfg.color)
-    frame.text:SetText(cfg.text or "")
+    frame.text:SetText(self.spec.Text and self.spec.Text(cfg) or cfg.text or "")
 
     local side = cfg.iconSide or "left"
     local hasIcon = (side == "left" or side == "right") and cfg.spellID
@@ -410,11 +409,11 @@ function Reminders:Style(index)
 end
 
 function Reminders:Frame(index)
-    return frames[index]
+    return self.frames[index]
 end
 
 function Reminders:SavePosition(index)
-    local frame, cfg = frames[index], self:Get(index)
+    local frame, cfg = self.frames[index], self:Get(index)
     if not (frame and cfg) or self.hosted then return end
     local point, _, relPoint, x, y = frame:GetPoint(1)
     if not point then return end
@@ -429,11 +428,11 @@ end
 function Reminders:Rebuild()
     local count = self:Count()
     for index = 1, count do
-        if not frames[index] then frames[index] = BuildFrame() end
+        if not self.frames[index] then self.frames[index] = BuildFrame() end
         self:Style(index)
     end
-    for index = count + 1, #frames do
-        frames[index]:Hide()
+    for index = count + 1, #self.frames do
+        self.frames[index]:Hide()
     end
     self:Refresh()
 end
@@ -445,10 +444,6 @@ end
 -- second; the flash is recomputed every frame, because a fade that steps at
 -- 10 Hz is a strobe rather than a pulse.
 ---------------------------------------------------------------------------
-local ticker
-local elapsedSinceCheck = 0
-local phase = 0
-
 -- The alpha of a flashing reminder at a moment in its cycle. A cosine rather
 -- than a sawtooth: a linear ramp snaps back to full at the wrap and reads as
 -- a stutter, and a reminder that looks broken is a reminder you distrust.
@@ -465,7 +460,7 @@ end
 
 function Reminders:Refresh()
     for index = 1, self:Count() do
-        local cfg, frame = self:Get(index), frames[index]
+        local cfg, frame = self:Get(index), self.frames[index]
         if cfg and frame then
             local show = self:ShouldShow(cfg)
             if show and not frame:IsShown() then
@@ -473,7 +468,7 @@ function Reminders:Refresh()
                 -- than wherever the shared clock happens to be, or a message
                 -- that appears mid-fade looks like it was already there and
                 -- you missed it.
-                frame.flashFrom = phase
+                frame.flashFrom = self.phase
 
                 -- AND THE SOUND, ON THE SAME EDGE - the frame's own IsShown
                 -- is the "was it up a moment ago" flag, so there is nothing
@@ -485,8 +480,9 @@ function Reminders:Refresh()
                 -- noise: dragging a reminder around the screen would chime at
                 -- every refresh, and the preview button would chime whether
                 -- or not the buff it watches is actually missing.
-                if ns.Sounds and not (self.placing or self.previewing) then
-                    ns.Sounds.Play("reminder", cfg.spellID)
+                if self.spec.sound and ns.Sounds
+                    and not (self.placing or self.previewing) then
+                    ns.Sounds.Play(self.spec.sound, cfg.spellID)
                 end
             end
             frame:SetShown(show)
@@ -496,22 +492,22 @@ function Reminders:Refresh()
 end
 
 function Reminders:Start()
-    if ticker then return end
-    ticker = CreateFrame("Frame")
-    ticker:SetScript("OnUpdate", function(_, elapsed)
-        phase = phase + elapsed
+    if self.ticker then return end
+    self.ticker = CreateFrame("Frame")
+    self.ticker:SetScript("OnUpdate", function(_, elapsed)
+        self.phase = self.phase + elapsed
 
-        elapsedSinceCheck = elapsedSinceCheck + elapsed
-        if elapsedSinceCheck >= CHECK_INTERVAL then
-            elapsedSinceCheck = 0
-            Reminders:Refresh()
+        self.elapsedSinceCheck = self.elapsedSinceCheck + elapsed
+        if self.elapsedSinceCheck >= CHECK_INTERVAL then
+            self.elapsedSinceCheck = 0
+            self:Refresh()
         end
 
-        for index = 1, Reminders:Count() do
-            local cfg, frame = Reminders:Get(index), frames[index]
+        for index = 1, self:Count() do
+            local cfg, frame = self:Get(index), self.frames[index]
             if cfg and frame and frame:IsShown() and cfg.flash then
                 frame:SetAlpha(Reminders.FlashAlpha(
-                    phase - (frame.flashFrom or 0), cfg.flashRate, cfg.flashMin))
+                    self.phase - (frame.flashFrom or 0), cfg.flashRate, cfg.flashMin))
             end
         end
     end)
@@ -520,8 +516,8 @@ function Reminders:Start()
     -- reminder looks its spell up in is rebuilt under it. Nothing here caches
     -- across that - State asks CDM every time - but the message wants to go
     -- away in the same frame rather than a tenth of a second later.
-    if ns.CDM and ns.CDM.OnChanged then
-        ns.CDM:OnChanged(function() Reminders:Refresh() end)
+    if self.spec.watchCDM and ns.CDM and ns.CDM.OnChanged then
+        ns.CDM:OnChanged(function() self:Refresh() end)
     end
 end
 
@@ -533,7 +529,7 @@ end
 -- drawing of it, because two renderers drift and this addon has the scars.
 ---------------------------------------------------------------------------
 function Reminders:Borrow(index, host)
-    local frame = frames[index]
+    local frame = self.frames[index]
     if not frame then return nil end
 
     self.hosted = index
@@ -551,7 +547,7 @@ function Reminders:Release()
     local index = self.hosted
     self.hosted = nil
     self.previewing = nil
-    local frame = index and frames[index]
+    local frame = index and self.frames[index]
     if not frame then return end
     frame:SetParent(UIParent)
     self:Style(index)
@@ -569,7 +565,7 @@ function Reminders:Dump()
     ns.Print("|cffffd100----------------------------------------|r")
     local count = self:Count()
     if count == 0 then
-        ns.Print("No reminders. |cffffd100/zs|r, then Reminders in the list on the left.")
+        ns.Print(self.spec.empty or "Nothing here.")
         return
     end
 
@@ -583,10 +579,85 @@ function Reminders:Dump()
         ns.Print(string.format("      watches %s |cff888888%s|r, %s",
             cfg.spellID and (ns.SpellName(cfg.spellID) or "?") or "|cffff4040nothing|r",
             tostring(cfg.spellID or "-"),
-            cfg.trigger == "active" and "while active" or "when not active"))
+            self.spec.When and self.spec.When(cfg)
+                or (cfg.trigger == "active" and "while active" or "when not active")))
         ns.Print("      " .. (state and ("state: " .. state)
             or ("|cffff8040cannot tell:|r " .. (why or "?"))))
         local reason = self:Explain(cfg)
         if reason then ns.Print("      |cff888888" .. reason .. "|r") end
     end
 end
+
+---------------------------------------------------------------------------
+-- THE REMINDERS THEMSELVES - the spec this file always was, and the book
+-- everybody means by ns.Reminders.
+---------------------------------------------------------------------------
+Reminders.REMINDER_SPEC = {
+    key      = "reminders",
+    module   = "reminders",
+    noun     = "Reminder",
+    sound    = "reminder",
+    watchCDM = true,
+    empty    = "No reminders. |cffffd100/zs|r, then Reminders in the list on the left.",
+
+    -- Which list. The reminders follow the SPEC (see ns.SpecStore): a
+    -- reminder about Bone Shield on a Blood death knight is not one about
+    -- Frost, and switching specs should not mean being reminded of something
+    -- else entirely. The whole LIST moves, not the individual reminders: a
+    -- reminder carries its own position, and one that belongs to a spec you
+    -- are not playing has nothing to show. ns.db.reminders is left where it
+    -- is for the version before this one.
+    store = function()
+        local mine = ns.SpecStore("remindersBySpec", "reminders")
+        if mine then return mine end
+        -- Only while the client has not named the spec. A throwaway rather
+        -- than the profile-wide list, because adding a reminder in that
+        -- second would otherwise write into a list that every spec then
+        -- inherits.
+        local list = ns.db and ns.db.reminders
+        if type(list) ~= "table" then return {} end
+        return list
+    end,
+
+    -- The fact: what Blizzard's own Cooldown Manager says about the spell.
+    -- Nil with a reason when it cannot be read - and it is nil, not
+    -- "missing", or every reminder anybody mistyped would sit on screen
+    -- permanently insisting a buff is gone. Unanswerable means silent.
+    State = function(cfg)
+        if not cfg.spellID then return nil, "no spell picked yet" end
+
+        if not (ns.CDM and ns.CDM:IsAvailable()) then
+            return nil, ns.CDM and ns.CDM:UnavailableReason()
+                or "the Cooldown Manager is not up"
+        end
+
+        local item = ns.CDM:ItemForSpell(cfg.spellID)
+        if not item then
+            -- "Not tracking" was the wrong words and sent people looking in the
+            -- wrong place. Most spells the Cooldown Manager KNOWS sit in its
+            -- Hidden category by default - our picker lists them under Cooldowns
+            -- with everything else, marked on the entry - and a spell with no
+            -- frame on screen has nothing for us to read. The fix is one drag in
+            -- Blizzard's own settings, so that is what the sentence says.
+            return nil, "Blizzard is not showing this spell in its Cooldown "
+                .. "Manager, so there is no frame to read. Drag it into one of "
+                .. "its viewers in Blizzard's own Cooldown Manager settings"
+        end
+
+        local active = ns.CDM:ItemIsActive(item)
+        if active == nil then return nil, "the frame will not say" end
+        return active and "active" or "idle"
+    end,
+
+    Fires = function(cfg, state)
+        return Reminders.Fires(cfg.trigger, state)
+    end,
+
+    WhyNot = function(_, state)
+        return state == "active"
+            and "It is active right now, so there is nothing to remind you of."
+            or "It is not active right now, and this reminder waits for it to be."
+    end,
+}
+
+ns.Reminders = Reminders.New(Reminders.REMINDER_SPEC)
