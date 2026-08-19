@@ -59,6 +59,31 @@ function CastBar:Create()
     panel.track = panel.fill:CreateTexture(nil, "BACKGROUND")
     panel.track:SetAllPoints(panel.fill)
 
+    -----------------------------------------------------------------------
+    -- EVERYTHING THAT HAS TO BE READ LIVES ABOVE THE FILL, ON ITS OWN FRAME
+    --
+    -- Owner, out of a key: "der name wird noch nicht auf der castbar
+    -- angezeigt" - and, asked which parts were missing, "icon ja". That
+    -- pair IS the diagnosis, and it is not about secret values at all.
+    --
+    -- panel.fill is a CHILD FRAME, and a child frame draws above every draw
+    -- layer of its parent - OVERLAY included. So the name, the aim word,
+    -- the "on you" stripe and the important glow were all being painted
+    -- underneath the bar's own fill and its track, which are opaque. The
+    -- icon was the one thing that showed because it hangs OUTSIDE the panel,
+    -- to the left, where the fill cannot reach it. A draw layer only orders
+    -- things within one frame; it says nothing across two.
+    --
+    -- Both cast bars on this client do it this way and neither puts text on
+    -- the bar itself: EXBoss builds bar.TextFrame (MythicCast.lua:973) and
+    -- EllesmereUI builds holder.textFrame
+    -- (EUI_MythicTimer_TargetedSpellBars.lua:106). ns.CreateChrome has used
+    -- the same +5 in this addon since the beginning.
+    -----------------------------------------------------------------------
+    panel.face = CreateFrame("Frame", nil, panel)
+    panel.face:SetAllPoints(panel)
+    panel.face:SetFrameLevel(panel.fill:GetFrameLevel() + 3)
+
     -- THE ICON LIVES IN ITS OWN LITTLE FRAME, and that is not tidiness.
     -- ns.CreateBorder anchors its four edges to the frame it is MADE FROM,
     -- and this border was made from the panel - so it drew a second edge
@@ -81,22 +106,22 @@ function CastBar:Create()
     --
     -- It is a full-height stripe rather than a word, because a word would
     -- have to be written by Lua and a stripe is a texture the engine fades.
-    panel.atMe = panel:CreateTexture(nil, "OVERLAY")
+    panel.atMe = panel.face:CreateTexture(nil, "OVERLAY")
     panel.atMe:SetAlpha(0)
 
     -- And the same trick for "the game calls this one important"
     -- (C_Spell.IsSpellImportant, secret) - the glow EllesmereUI draws on its
     -- nameplates (EllesmereUINameplates.lua:7162).
-    panel.important = panel:CreateTexture(nil, "OVERLAY")
+    panel.important = panel.face:CreateTexture(nil, "OVERLAY")
     panel.important:SetColorTexture(1, 0.55, 0.1, 0.35)
     panel.important:SetAlpha(0)
 
-    local text = panel:CreateFontString(nil, "OVERLAY")
+    local text = panel.face:CreateFontString(nil, "OVERLAY")
     ns.Media.ApplyFont(text, nil, 12, "OUTLINE")
     text:SetJustifyH("LEFT")
     panel.name = text
 
-    local aim = panel:CreateFontString(nil, "OVERLAY")
+    local aim = panel.face:CreateFontString(nil, "OVERLAY")
     ns.Media.ApplyFont(aim, nil, 12, "OUTLINE")
     aim:SetJustifyH("RIGHT")
     panel.aim = aim
@@ -110,7 +135,7 @@ function CastBar:Create()
     --
     -- Above the bar rather than on it, so it never has to share a line with
     -- the spell name or crowd the aim word out of one.
-    local onYou = panel:CreateFontString(nil, "OVERLAY")
+    local onYou = panel.face:CreateFontString(nil, "OVERLAY")
     ns.Media.ApplyFont(onYou, nil, 14, "OUTLINE")
     onYou:SetJustifyH("CENTER")
     onYou:SetAlpha(0)

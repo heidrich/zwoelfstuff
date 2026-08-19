@@ -37,7 +37,11 @@ ns.CHANGELOG = {
             {
                 icon = "Interface\\Icons\\INV_Misc_Wrench_01",
                 text = "|cffffd100Casts on you - the first round from a real "
-                    .. "key.|r Test mode claimed three casts were on screen "
+                    .. "key.|r The spell's name was being painted "
+                    .. "UNDERNEATH the bar and had never once been visible - "
+                    .. "the icon showed because it hangs outside, which is "
+                    .. "what gave it away. Test mode claimed three casts "
+                    .. "were on screen "
                     .. "while the module was off, when the bar refuses to "
                     .. "draw at all then; the cast icon had no border and "
                     .. "the bar had two; and a value the client refuses can "

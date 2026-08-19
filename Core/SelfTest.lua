@@ -10996,6 +10996,45 @@ local function TestCasts()
     -- (C_ChallengeMode.GetMapTable), never typed out - so what is checked
     -- here is the rule that uses it, with a season handed in.
     ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    -- NOTHING READABLE MAY SIT UNDER THE FILL
+    --
+    -- Owner: "der name wird noch nicht auf der castbar angezeigt" - and,
+    -- asked which parts were missing, "icon ja". That pair was the whole
+    -- diagnosis and it had nothing to do with secret values: the fill is a
+    -- CHILD FRAME, a child frame draws above every draw layer of its
+    -- parent, and the name, the aim, the stripe and the glow were all being
+    -- painted underneath it. The icon showed because it hangs outside the
+    -- panel where the fill cannot reach.
+    --
+    -- A DRAW LAYER ORDERS THINGS WITHIN ONE FRAME AND SAYS NOTHING ACROSS
+    -- TWO, which is why "it is on OVERLAY" felt like an answer and was not.
+    -- So this asks the widgets themselves rather than trusting the word.
+    ---------------------------------------------------------------------
+    local bar = ns.CastBar.Frame() or ns.CastBar:Create()
+    if bar and bar.face and bar.fill then
+        Check("The bar's face is drawn above its fill",
+            bar.face:GetFrameLevel() > bar.fill:GetFrameLevel(),
+            string.format("face %d, fill %d", bar.face:GetFrameLevel(),
+                bar.fill:GetFrameLevel()))
+
+        local buried
+        for _, part in ipairs({ "name", "aim", "onYou", "atMe", "important" }) do
+            local region = bar[part]
+            if not region then
+                buried = part .. " is not there at all"
+            elseif region:GetParent() ~= bar.face then
+                buried = part .. " hangs off the panel, under the fill"
+            end
+        end
+        Check("Every readable part of the bar hangs off that face",
+            buried == nil, buried)
+    else
+        Skip("The bar's face is drawn above its fill", "no bar was built")
+        Skip("Every readable part of the bar hangs off that face",
+            "no bar was built")
+    end
+
     local SEASON = { ["Halls of Atonement"] = true, ["Tazavesh"] = true }
 
     Check("A raid is in, and needs no list",

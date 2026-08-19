@@ -22,6 +22,13 @@ real key found.*
   when the module is off, which is its first line. A test mode that reports a
   screen nobody can see is worse than none — it sends you looking for a
   drawing bug instead of at a switch. It now says which it is.
+- **The spell's name was painted underneath the bar.** It was there the
+  whole time and you could never see it: the fill is a frame of its own, a
+  frame draws above every layer of the one it sits in, and the name, the aim
+  word, the "on you" stripe and the glow were all underneath it. The icon
+  showed because it hangs outside the bar, where the fill cannot reach - and
+  that pair, name gone and icon fine, is what gave it away. Everything that
+  has to be read now sits on its own face above the fill.
 - **The cast icon had no border, and the bar had two.** The icon's border was
   built from the bar rather than from the icon, so it drew a second edge
   around the whole bar and left the icon bare.
