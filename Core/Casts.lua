@@ -98,6 +98,14 @@ Casts.RANKS = {
 -- returns a secret boolean that SetAlphaFromBoolean draws, which is how
 -- EXBoss marks its own bars (Modules/Tools/MythicCast.lua:844). The bar
 -- shows it; no rule may branch on it.
+-- WHICH HALVES OF THE "ON YOU" MARK ARE DRAWN.
+Casts.MARKS = {
+    { value = "both",   text = "The words and a stripe" },
+    { value = "word",   text = "The words only" },
+    { value = "stripe", text = "A stripe only" },
+    { value = "off",    text = "Neither" },
+}
+
 Casts.AIMS = {
     { key = "me",      text = "At you" },
     { key = "tank",    text = "At another tank" },
@@ -184,6 +192,29 @@ function Rules.Aim(unique, role, classFile, playerIdentity, hasTarget)
     if member.isPlayer then return "me" end
     if (role or ""):upper() == "TANK" then return "tank" end
     return "group"
+end
+
+-- WHICH HALVES OF THE MARK, as two plain booleans. Pure, and separate from
+-- the bar for the usual reason: a rule read only inside a repaint is a rule
+-- no test can ask a question about.
+function Rules.Mark(mode)
+    if mode == "off" then return false, false end
+    if mode == "stripe" then return true, false end
+    if mode == "word" then return false, true end
+    return true, true
+end
+
+-- WHAT THE CLIENT ACTUALLY HANDED OVER, in one word.
+--
+-- THREE ANSWERS, NEVER TWO, and that is the whole point of it. "withheld" is
+-- not "missing": a secret value IS there, the engine can draw it, and only
+-- our own Lua may not look at it. Rounding the two together sends somebody
+-- hunting for a drawing bug that is not there - which is exactly the hour
+-- this function was written to save.
+function Casts.Tell(value)
+    if value == nil then return "missing" end
+    if ns.CanCompute(value) then return "readable" end
+    return "withheld"
 end
 
 -- DOES THIS CAST GET A LINE, given a config and what we found out. The
@@ -555,6 +586,82 @@ function Casts.Where()
     return UNKNOWN_PLACE
 end
 
+---------------------------------------------------------------------------
+-- WHICH PLACES GO IN THE LIST AT ALL
+--
+-- Owner, 2026-08-19: "bei den spells bauen wir nur alle dungons der season 2
+-- und die raids ein, nicht alles."
+--
+-- THE SEASON'S DUNGEONS ARE NOT TYPED OUT HERE, and that is the whole design
+-- of this. A list of Season 2's dungeons written from memory is exactly the
+-- kind of knowledge this project has been wrong about before, and it would
+-- go wrong again on the day the season turns - silently, because a stale
+-- list looks identical to a correct one. C_ChallengeMode.GetMapTable() is
+-- the game's own answer to "which dungeons are in the current season", and
+-- it changes when the season does with nobody editing this file.
+--
+-- Matched by NAME, because both sides are the game talking: GetInstanceInfo
+-- names where you are standing and GetMapUIInfo names each of the season's
+-- dungeons, both localised, both from the same client. No id mapping to get
+-- wrong in between.
+--
+-- RAIDS ARE IN WITHOUT A LIST - "raid" is what the client calls the place,
+-- and there is nothing to keep up to date.
+---------------------------------------------------------------------------
+local seasonNames, seasonCount
+
+local function SeasonDungeons()
+    if not (C_ChallengeMode and C_ChallengeMode.GetMapTable
+        and C_ChallengeMode.GetMapUIInfo) then
+        return nil
+    end
+
+    local ok, maps = pcall(C_ChallengeMode.GetMapTable)
+    if not ok or type(maps) ~= "table" then return nil end
+
+    -- Rebuilt only when the season's size changes, which is once. The scan
+    -- asks this on every cast it sees and a table walk per cast is the
+    -- resting-state cost the owner's rule is about.
+    if seasonNames and seasonCount == #maps then return seasonNames end
+
+    local names = {}
+    for _, id in ipairs(maps) do
+        local fine, name = pcall(C_ChallengeMode.GetMapUIInfo, id)
+        if fine and type(name) == "string" and name ~= "" then
+            names[name] = true
+        end
+    end
+    if not next(names) then return nil end
+
+    seasonNames, seasonCount = names, #maps
+    return seasonNames
+end
+
+-- PURE, so the desk can ask it without standing anywhere. `season` is the
+-- set of names the game gave for this season, or nil when the client will
+-- not say.
+--
+-- A CLIENT THAT WILL NOT ANSWER KEEPS THE DUNGEON. Falling back to "record
+-- nothing" would empty the one column this feature is built around, and an
+-- empty list looks exactly like a broken feature - so the fallback is the
+-- older behaviour for dungeons, and the open world stays out either way.
+function Rules.Place(kind, name, season)
+    if kind == "raid" then return true end
+    if kind ~= "party" then return false end
+    if type(season) ~= "table" then return true end
+    return season[name or ""] == true
+end
+
+-- The same question, asked of the real client.
+function Casts.PlaceWanted()
+    if type(GetInstanceInfo) ~= "function" then return false end
+    local ok, name, kind = pcall(GetInstanceInfo)
+    if not ok then return false end
+    if not (ns.CanCompute(kind) and type(kind) == "string") then return false end
+    if not (ns.CanCompute(name) and type(name) == "string") then name = nil end
+    return Rules.Place(kind, name, SeasonDungeons())
+end
+
 function Casts.Seen()
     local cfg = Casts.Config()
     cfg.seen = cfg.seen or {}
@@ -565,6 +672,11 @@ end
 function Casts.Remember(mob, rank)
     if type(mob) ~= "string" or mob == "" then return false end
     if not ns.db then return false end
+    -- NOT EVERY MOB IN THE WORLD. The column is for the places you are
+    -- learning - this season's dungeons and the raids - and a list that also
+    -- collects every caster you rode past is a list nobody can find anything
+    -- in.
+    if not Casts.PlaceWanted() then return false end
 
     local seen = Casts.Seen()
     local place = Casts.Where()
@@ -660,9 +772,14 @@ Casts.DEFAULTS = {
     -- The bar itself. Placed like every other panel in this addon.
     bar = {
         enabled = true,
-        -- The stripe that says "this one is coming at you". Its width, not
-        -- its colour: the colour is the accent, like every other "look at
-        -- this" mark in the addon.
+        -- THE MARK THAT SAYS "this one is coming at you", and there are two
+        -- halves of it because the owner asked for the second one after a
+        -- key: "ggf noch ON YOU oder so dazu, oder man kann das
+        -- konfigurieren". A stripe is a texture the engine fades; the WORDS
+        -- are a fixed string of ours whose visibility the engine fades. Both
+        -- are the same certain answer, one of them is readable at a glance.
+        atMeMark = "both",
+        atMeText = "ON YOU",
         atMeWidth = 4,
         uninterruptibleColor = { 0.45, 0.45, 0.52 },
         width = 260, height = 26, scale = 1.0,
@@ -878,7 +995,25 @@ function Casts:Dump()
         ns.Print(string.format("  %s %s |cff888888-> %s|r",
             rank, entry.mob and ("(" .. entry.mob .. ")") or "", aim))
     end
-    ns.Print("|cff888888The spell itself cannot be named on this patch - "
-        .. "its id is a secret value. The icon and the bar are the game's "
-        .. "own.|r")
+    -- WHAT THE CLIENT ACTUALLY HANDED OVER, per cast. The owner reported
+    -- "es fehlen die cast icons und der name" out of a key, and from the
+    -- outside a withheld value and an absent one look identical - both draw
+    -- nothing. This is the line that tells them apart without a guess.
+    local entry = self.live[1]
+    if entry then
+        ns.Print(string.format(
+            "|cff888888this client, right now - name: %s, icon: %s, id: %s|r",
+            Casts.Tell(entry.name), Casts.Tell(entry.texture),
+            Casts.Tell(entry.spellID)))
+        local bar = ns.CastBar
+        if bar and (bar.refusedName or bar.refusedIcon) then
+            ns.Print("|cffff4040The client REFUSED a setter|r"
+                .. (bar.refusedName and " (name)" or "")
+                .. (bar.refusedIcon and " (icon)" or "")
+                .. " - that is a finding, please report it.")
+        end
+    end
+    ns.Print("|cff888888\"withheld\" means the value IS there and only the "
+        .. "game may look at it - it still draws. \"missing\" means the "
+        .. "client said nothing.|r")
 end

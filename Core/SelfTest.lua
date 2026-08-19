@@ -10949,6 +10949,81 @@ local function TestCasts()
         R.Rank(60) == nil and R.Rank(nil) == nil and R.Rank("90") == nil)
 
     ---------------------------------------------------------------------
+    -- THE "ON YOU" MARK HAS TWO HALVES
+    --
+    -- Owner, after a key: "ggf noch ON YOU oder so dazu, oder man kann das
+    -- konfigurieren". The stripe was certain and unreadable at a glance;
+    -- the words are the same certain answer in a form you can read. Both
+    -- are faded by the ENGINE - we may hand it the secret boolean and may
+    -- never test it - so what Lua decides is only which halves EXIST.
+    ---------------------------------------------------------------------
+    local stripe, words = R.Mark("both")
+    Check("Both halves by default", stripe and words)
+    stripe, words = R.Mark("stripe")
+    Check("A stripe on its own", stripe and not words)
+    stripe, words = R.Mark("word")
+    Check("The words on their own", words and not stripe)
+    stripe, words = R.Mark("off")
+    Check("Or neither", not stripe and not words)
+    stripe, words = R.Mark(nil)
+    Check("And an unset one is not silently off", stripe and words)
+
+    -- WIRED, not just written: every value the page offers has to be one
+    -- the rule answers, or a menu entry silently means "both".
+    local unanswered
+    for _, mark in ipairs(Casts.MARKS) do
+        local a, b = R.Mark(mark.value)
+        if mark.value ~= "both" and a and b then unanswered = mark.value end
+    end
+    Check("Every mark the page offers means something of its own",
+        unanswered == nil, unanswered)
+
+    ---------------------------------------------------------------------
+    -- WITHHELD IS NOT MISSING
+    --
+    -- The report was "es fehlen die cast icons und der name" out of a key,
+    -- and from the outside those two look identical - both draw nothing.
+    -- One means the client said nothing; the other means the value is
+    -- there, the game can draw it, and only our Lua may not read it. A
+    -- diagnostic that rounds them together sends the next person hunting a
+    -- drawing bug that is not there.
+    ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    -- ONLY THIS SEASON'S DUNGEONS, AND THE RAIDS
+    --
+    -- Owner: "bei den spells bauen wir nur alle dungons der season 2 und
+    -- die raids ein, nicht alles." The season's list is the GAME'S
+    -- (C_ChallengeMode.GetMapTable), never typed out - so what is checked
+    -- here is the rule that uses it, with a season handed in.
+    ---------------------------------------------------------------------
+    local SEASON = { ["Halls of Atonement"] = true, ["Tazavesh"] = true }
+
+    Check("A raid is in, and needs no list",
+        R.Place("raid", "Liberation of Undermine", SEASON)
+        and R.Place("raid", "somewhere nobody listed", nil))
+    Check("A dungeon this season is in",
+        R.Place("party", "Halls of Atonement", SEASON))
+    Check("A dungeon that is not is out",
+        not R.Place("party", "Some Old Dungeon", SEASON))
+    Check("The open world is out whatever the list says",
+        not R.Place("none", "Tazavesh", SEASON)
+        and not R.Place(nil, "Halls of Atonement", SEASON))
+    Check("A scenario is out too", not R.Place("scenario", "x", SEASON))
+
+    -- THE FALLBACK IS THE GENEROUS ONE, on purpose. A client that will not
+    -- name the season must not empty the column this feature is built
+    -- around - an empty list reads as a broken feature, and the open world
+    -- stays out either way.
+    Check("A client that will not name the season keeps its dungeons",
+        R.Place("party", "Anywhere At All", nil))
+
+    Check("A value we may read says so", Casts.Tell("Shadowclaw Slam")
+        == "readable" and Casts.Tell(136012) == "readable")
+    Check("Nothing at all is missing", Casts.Tell(nil) == "missing")
+    Check("And false is a value, not an absence",
+        Casts.Tell(false) == "readable")
+
+    ---------------------------------------------------------------------
     -- Identity and folding
     ---------------------------------------------------------------------
     Check("Role and class make one identity",
@@ -11064,6 +11139,21 @@ local function TestCasts()
     -- The ledger: the list the page's third column draws
     ---------------------------------------------------------------------
     OnStandInProfile(nil, function()
+        -- WHERE YOU ARE STANDING NOW DECIDES whether anything is collected
+        -- at all, so these have to say where they are. Swapped on our own
+        -- seam rather than on the client's GetInstanceInfo, because this
+        -- suite runs in the game too and the honest answer there is
+        -- "wherever he happens to be logged in".
+        local realPlace = Casts.PlaceWanted
+        local function Standing(wanted)
+            if wanted == nil then
+                Casts.PlaceWanted = realPlace
+                return
+            end
+            Casts.PlaceWanted = function() return wanted end
+        end
+
+        Standing(true)
         Casts.Forget()
         Check("A mob seen casting is remembered once",
             Casts.Remember("Arcane Sentry", "lieutenant") == true
@@ -11083,6 +11173,15 @@ local function TestCasts()
 
         Casts.Forget()
         Check("Forgetting empties it", #Casts.Ledger() == 0)
+
+        -- AND THE PLACE IS ASKED, NOT ASSUMED. Rules.Place was green above
+        -- before anything called it, which is the shape of bug this file
+        -- has shipped twice; this drives the real Remember from both sides.
+        Standing(false)
+        Check("Out in the world nothing is collected",
+            Casts.Remember("Arcane Sentry", "lieutenant") == false
+            and #Casts.Ledger() == 0)
+        Standing(nil)
     end)
 
     ---------------------------------------------------------------------

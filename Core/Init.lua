@@ -1970,10 +1970,21 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         local sub = (rest or ""):match("^(%S*)"):lower()
         if sub == "test" then
             ns.Casts:SetTestMode(not ns.Casts:Testing())
-            ns.Print(ns.Casts:Testing()
-                and "Three invented casts are on screen. "
-                    .. "|cffffd100/zs casts test|r again puts them away."
-                or "Test casts off.")
+            if not ns.Casts:Testing() then
+                ns.Print("Test casts off.")
+            elseif not ns.Modules:IsOn("casts") then
+                -- IT USED TO SAY THEY WERE ON SCREEN WHILE THE MODULE WAS
+                -- OFF, and the bar's very first line refuses to draw
+                -- anything then. A test mode that reports a screen nobody
+                -- can see is worse than no test mode: it sends you looking
+                -- for a drawing bug instead of at a switch.
+                ns.Print("Test casts armed - but |cffff4040nothing is on "
+                    .. "screen|r, the module is off. "
+                    .. "|cffffd100/zs modules casts|r switches it on.")
+            else
+                ns.Print("Three invented casts are on screen. "
+                    .. "|cffffd100/zs casts test|r again puts them away.")
+            end
         elseif sub == "forget" then
             ns.Casts.Forget()
             ns.Print("The list of mobs is empty again.")

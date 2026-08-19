@@ -59,10 +59,18 @@ function CastBar:Create()
     panel.track = panel.fill:CreateTexture(nil, "BACKGROUND")
     panel.track:SetAllPoints(panel.fill)
 
-    panel.icon = panel:CreateTexture(nil, "ARTWORK")
+    -- THE ICON LIVES IN ITS OWN LITTLE FRAME, and that is not tidiness.
+    -- ns.CreateBorder anchors its four edges to the frame it is MADE FROM,
+    -- and this border was made from the panel - so it drew a second edge
+    -- around the whole bar, on top of the chrome, and left the icon bare.
+    -- A texture cannot be given one directly (it has no CreateTexture), so
+    -- the icon gets a frame of its own and the border belongs to that.
+    panel.iconBox = CreateFrame("Frame", nil, panel)
+    panel.icon = panel.iconBox:CreateTexture(nil, "ARTWORK")
+    panel.icon:SetAllPoints(panel.iconBox)
     panel.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    panel.iconEdge = ns.CreateBorder(panel, 1, "OVERLAY")
+    panel.iconEdge = ns.CreateBorder(panel.iconBox, 1, "OVERLAY")
 
     -- IS IT AIMED AT YOU. The one question a tank actually asks, and the
     -- engine is the only thing that may answer it: PlayerIsSpellTarget gives
@@ -92,6 +100,21 @@ function CastBar:Create()
     ns.Media.ApplyFont(aim, nil, 12, "OUTLINE")
     aim:SetJustifyH("RIGHT")
     panel.aim = aim
+
+    -- THE WORDS, AND THEY ARE OURS. Not one character of this comes off the
+    -- cast: it is a fixed string this file owns, so it may be written into a
+    -- font string like any other label. What the ENGINE decides is whether
+    -- you can see it, through the same SetAlphaFromBoolean that fades the
+    -- stripe - which is the only way a certain answer becomes something you
+    -- can read. We may not test that boolean; we may hand it over.
+    --
+    -- Above the bar rather than on it, so it never has to share a line with
+    -- the spell name or crowd the aim word out of one.
+    local onYou = panel:CreateFontString(nil, "OVERLAY")
+    ns.Media.ApplyFont(onYou, nil, 14, "OUTLINE")
+    onYou:SetJustifyH("CENTER")
+    onYou:SetAlpha(0)
+    panel.onYou = onYou
 
     panel.chrome = ns.CreateChrome(panel)
 
@@ -133,10 +156,10 @@ function CastBar:ApplyLayout()
     panel.fill:SetStatusBarTexture(ns.Media.Statusbar(cfg.texture))
 
     local iconSize = math.max(8, tonumber(cfg.iconSize) or height)
-    panel.icon:ClearAllPoints()
-    panel.icon:SetSize(iconSize, iconSize)
-    panel.icon:SetPoint("RIGHT", panel, "LEFT", -4, 0)
-    panel.icon:SetShown(cfg.showIcon ~= false)
+    panel.iconBox:ClearAllPoints()
+    panel.iconBox:SetSize(iconSize, iconSize)
+    panel.iconBox:SetPoint("RIGHT", panel, "LEFT", -4, 0)
+    panel.iconBox:SetShown(cfg.showIcon ~= false)
     panel.iconEdge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
 
     panel.important:ClearAllPoints()
@@ -148,6 +171,25 @@ function CastBar:ApplyLayout()
     panel.atMe:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
     panel.atMe:SetWidth(math.max(2, tonumber(cfg.atMeWidth) or 4))
     panel.atMe:SetColorTexture(accent[1], accent[2], accent[3], 1)
+
+    -- THE WORDS. Its own size, because the whole point of it is to be read
+    -- without looking; the empty string falls back rather than drawing a
+    -- mark made of nothing.
+    local word = cfg.atMeText
+    if type(word) ~= "string" or word == "" then word = "ON YOU" end
+    ns.Media.ApplyFont(panel.onYou, cfg.font ~= "" and cfg.font or nil,
+        (tonumber(cfg.fontSize) or 12) + 2, cfg.outline or "OUTLINE")
+    panel.onYou:ClearAllPoints()
+    panel.onYou:SetPoint("BOTTOM", panel, "TOP", 0, 3)
+    panel.onYou:SetText(word)
+    panel.onYou:SetTextColor(accent[1], accent[2], accent[3])
+
+    -- WHICH HALVES EXIST AT ALL is decided here, once, off the setting.
+    -- Refresh only ever decides whether a half that exists is VISIBLE, and
+    -- it is the engine that decides that.
+    local stripe, words = ns.CastRules.Mark(cfg.atMeMark)
+    panel.atMe:SetShown(stripe)
+    panel.onYou:SetShown(words)
 
     ns.Media.ApplyFont(panel.name, cfg.font ~= "" and cfg.font or nil,
         cfg.fontSize or 12, cfg.outline or "OUTLINE")
@@ -198,6 +240,21 @@ local AIM_WORDS = {
     nobody  = "",
 }
 
+-- ONE MARK, FADED BY THE ENGINE. A file-local rather than a closure inside
+-- Refresh, because Refresh runs ten times a second and a closure per call is
+-- garbage that never stops - the owner's rule about the resting state.
+--
+-- The fallback is the readable half, not an always-on mark: where the client
+-- will not answer, a stripe that is always lit means nothing at all.
+local function DrawMark(region, atMe, readable)
+    if not region:IsShown() then return end
+    if atMe ~= nil and region.SetAlphaFromBoolean then
+        pcall(region.SetAlphaFromBoolean, region, atMe, 255, 0)
+    else
+        region:SetAlpha(readable and 1 or 0)
+    end
+end
+
 function CastBar:ShouldShow(entry)
     if not ns.Modules:IsOn("casts") then return false end
     local cfg = Cfg()
@@ -229,26 +286,57 @@ function CastBar:Refresh()
         panel.aim:SetText("")
         panel.icon:SetTexture(nil)
         panel.important:SetAlpha(0)
+        -- BOTH HALVES LIT while it is being placed: you are putting the mark
+        -- somewhere, so you have to be able to see where it lands.
         panel.atMe:SetAlpha(1)
+        panel.onYou:SetAlpha(1)
         panel:Show()
         return
     end
 
     -- THE NAME AND THE ICON, BOTH POSSIBLY SECRET, both only ever handed to
-    -- a setter. `type(x) ~= "nil"` is the one question allowed of them.
+    -- a setter that declares one. EllesmereUI's own Mythic+ cast bars say it
+    -- in as many words on this patch - "the live texture may be SECRET,
+    -- SetTexture accepts it" (EUI_MythicTimer_TargetedSpellBars.lua:376) -
+    -- and its draw is line for line this one.
+    --
+    -- THROUGH pcall ALL THE SAME, and not out of superstition. If a client
+    -- ever refuses one of these, an unguarded call takes the whole refresh
+    -- with it: everything below here - the timer, the kick colour, the mark
+    -- that says it is coming at you - stops being drawn, and the bar is left
+    -- wearing whatever the last cast put on it. Guarded, one blank field
+    -- costs one blank field, and CastBar.refused says which so /zs casts can
+    -- report it instead of leaving somebody to guess.
+    local wrote = false
     if cfg.showName ~= false and type(entry.name) ~= "nil" then
-        panel.name:SetText(entry.name)
-    elseif cfg.showMob ~= false and entry.mob then
-        panel.name:SetText(entry.mob)
-    else
-        panel.name:SetText("")
+        wrote = pcall(panel.name.SetText, panel.name, entry.name)
+        CastBar.refusedName = not wrote
+    end
+    if not wrote then
+        if cfg.showMob ~= false and entry.mob then
+            panel.name:SetText(entry.mob)
+        else
+            panel.name:SetText("")
+        end
     end
 
+    local drew = false
     if type(entry.texture) ~= "nil" then
-        panel.icon:SetTexture(entry.texture)
-    else
-        panel.icon:SetTexture(nil)
+        drew = pcall(panel.icon.SetTexture, panel.icon, entry.texture)
+        CastBar.refusedIcon = not drew
     end
+    -- WHERE THERE IS NO TEXTURE THE ID MAY STILL ANSWER. EllesmereUI's
+    -- fallback (same file, :380) and it costs nothing: in the world the id
+    -- is readable and this fills the icon in; in a key it is secret, the
+    -- pcall fails, and we are exactly where we were.
+    if not drew and type(entry.spellID) ~= "nil" and C_Spell
+        and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, entry.spellID)
+        if ok and type(info) == "table" and info.iconID then
+            drew = pcall(panel.icon.SetTexture, panel.icon, info.iconID)
+        end
+    end
+    if not drew then panel.icon:SetTexture(nil) end
 
     if cfg.showTarget ~= false then
         panel.aim:SetText(AIM_WORDS[entry.aim or "nobody"] or "")
@@ -299,16 +387,13 @@ function CastBar:Refresh()
         fill:SetStatusBarColor(colour[1], colour[2], colour[3])
     end
 
-    -- IS IT ON YOU. Secret in, alpha out, decision inside the client.
+    -- IS IT ON YOU. Secret in, alpha out, decision inside the client - and
+    -- now for both halves of the mark, the stripe and the words. Which of
+    -- them exist was decided in ApplyLayout; all that happens here is that
+    -- the engine fades whichever are there.
     local atMe = ns.Casts.AtMe(entry.unit)
-    if atMe ~= nil and panel.atMe.SetAlphaFromBoolean then
-        pcall(panel.atMe.SetAlphaFromBoolean, panel.atMe, atMe, 255, 0)
-    else
-        -- No engine answer: fall back to the readable half rather than to a
-        -- stripe that is always on. A mark that means nothing is worse than
-        -- no mark.
-        panel.atMe:SetAlpha(entry.aim == "me" and 1 or 0)
-    end
+    DrawMark(panel.atMe, atMe, entry.aim == "me")
+    DrawMark(panel.onYou, atMe, entry.aim == "me")
 
     -- IMPORTANT: the engine decides. A secret boolean into the one setter
     -- that takes one; where the setter is missing, no glow.

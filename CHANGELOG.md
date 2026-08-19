@@ -10,6 +10,52 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.85.1] - 2026-08-19
+
+*Casts on you is still marked coming soon — this is the first round of what a
+real key found.*
+
+### Fixed
+
+- **Test mode said three casts were on screen while the module was off.**
+  They were not, and could not be: the bar refuses to draw anything at all
+  when the module is off, which is its first line. A test mode that reports a
+  screen nobody can see is worse than none — it sends you looking for a
+  drawing bug instead of at a switch. It now says which it is.
+- **The cast icon had no border, and the bar had two.** The icon's border was
+  built from the bar rather than from the icon, so it drew a second edge
+  around the whole bar and left the icon bare.
+- **A refused value no longer takes the rest of the bar with it.** The
+  spell's name and icon are handed to the game's own setters — which accept
+  values addons may not read — but through a guard now: if a client ever
+  refuses one, the bar falls back to the caster's name instead of stopping
+  half-drawn and leaving the timer, the kick colour and the "on you" mark
+  wearing the previous cast. Where there is no icon but there is a spell id,
+  the id is asked instead.
+
+### Added
+
+- **"ON YOU" in words, and the game still decides when you see them.** The
+  stripe down the left of the bar was certain but not readable at a glance.
+  The words above the bar are the same certain answer — a fixed label this
+  addon owns, faded in and out by the client itself, because the answer to
+  "is this one aimed at me" is one no addon is allowed to read. Choose the
+  words, the stripe, both or neither under *The "on you" mark*, and type
+  whatever you want them to say.
+- **`/zs casts` now says what the client actually handed over** — for the
+  cast in front of you, whether its name, icon and id are *readable*,
+  *withheld* or *missing*. Those last two look identical on screen and mean
+  completely different things: withheld means the value is there and only the
+  game may look at it.
+
+### Changed
+
+- **The mob list only collects in this season's dungeons and in raids.** It
+  was filling with anything that cast at you anywhere, which is not a list
+  you can find something in. The season's dungeons are asked of the game
+  rather than written down here, so the list follows the season without an
+  update. *Forget the list* clears what the old behaviour collected.
+
 ## [4.85.0] - 2026-08-19
 
 ### Fixed

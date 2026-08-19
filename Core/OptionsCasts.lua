@@ -284,7 +284,7 @@ function Page:BuildPage(page, width)
         .. "is a secret value, which is why the boss mods went quiet about "
         .. "trash in Midnight too. Its |cffffd100icon|r, its bar and "
         .. "whether it can be kicked all come straight from the game, and "
-        .. "the mark down the left of the bar is the game's own answer to "
+        .. "the mark above the bar is the game's own answer to "
         .. "\"is this one on you\".")
 
     grid:Section("Who it is aimed at")
@@ -360,7 +360,34 @@ function Page:BuildPage(page, width)
     UI.Toggle(grid:FullRow("Who it is aimed at", { controlWidth = 124 }),
         BarGet("showTarget", true), BarSet("showTarget"))
 
-    UI.Slider(grid:FullRow("The \"on you\" mark", { controlWidth = 124 }), {
+    UI.Dropdown(grid:FullRow("The \"on you\" mark",
+        { sublabel = "The game itself decides when this shows - it is the "
+            .. "one answer on the bar that cannot be wrong",
+          controlWidth = 190 }),
+        ns.Casts.MARKS, BarGet("atMeMark", "both"), BarSet("atMeMark"),
+        { apply = Apply })
+
+    -- UI.Input takes a PARENT and a WIDTH, not a getter and a setter - the
+    -- shape every other input on this page uses. Written the other way here
+    -- first, and the desk stayed green through it: the harness's SetSize
+    -- takes whatever it is handed, so a function passed as a width sailed
+    -- past every check and would have thrown on the first page build in the
+    -- client. A stub that forgets agrees with every mistake.
+    local wordRow = grid:FullRow("What it says", { controlWidth = 190 })
+    local wordBox = UI.Input(wordRow.slot, 190, function(text)
+        local cfg = Bar()
+        cfg.atMeText = (text and text ~= "") and text or "ON YOU"
+        Apply()
+    end, false, "ON YOU")
+    wordBox:SetPoint("RIGHT", wordRow.slot, "RIGHT", 0, 0)
+    wordRow.Refresh = function()
+        if wordBox.SetText and not (wordBox.HasFocus and wordBox:HasFocus()) then
+            wordBox:SetText(Bar().atMeText or "ON YOU")
+        end
+    end
+    wordRow.Refresh()
+
+    UI.Slider(grid:FullRow("How wide the stripe is", { controlWidth = 124 }), {
         get = BarGet("atMeWidth", 4), set = BarSet("atMeWidth"),
         min = 0, max = 16, step = 1, apply = Apply,
         format = function(value) return string.format("%dpx", value) end })
