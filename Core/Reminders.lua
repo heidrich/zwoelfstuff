@@ -55,6 +55,13 @@ local _, ns = ...
 --   Fires(cfg, state) -> boolean   does that state put the message up
 --   WhyNot(cfg, state) -> string   the sentence for "state, but not firing"
 --   Text(cfg) -> string   optional: the words to draw (default cfg.text)
+--   Icon(cfg) -> texture  optional: what to draw beside the words when the
+--                         message has no spell of its own (the cast alerts
+--                         show the CAST's icon; a secret texture is fine,
+--                         SetTexture takes it and Lua never looks at it)
+--   OnShow(cfg)           optional: called once on the rising edge, after
+--                         the sound - the cast alerts speak their voice line
+--                         here. Never while placing or previewing.
 --   sound    optional: the Sounds event played on the rising edge
 --   watchCDM optional: refresh when the Cooldown Manager re-pools
 local Reminders = {}
@@ -371,12 +378,19 @@ function Reminders:Style(index)
     frame.text:SetText(self.spec.Text and self.spec.Text(cfg) or cfg.text or "")
 
     local side = cfg.iconSide or "left"
-    local hasIcon = (side == "left" or side == "right") and cfg.spellID
+    -- THE SPELL'S ICON, or whatever the spec offers instead. A cast alert
+    -- has no spell of its own - it draws the icon of the cast that put it
+    -- up, and nothing while nothing is casting. type() is the only question
+    -- Lua may ask a texture that came back secret.
+    local texture = cfg.spellID and ns.SpellTexture(cfg.spellID) or nil
+    if texture == nil and self.spec.Icon then texture = self.spec.Icon(cfg) end
+    local hasIcon = (side == "left" or side == "right")
+        and type(texture) ~= "nil"
     frame.icon:ClearAllPoints()
     frame.text:ClearAllPoints()
 
     if hasIcon then
-        frame.icon:SetTexture(ns.SpellTexture(cfg.spellID))
+        frame.icon:SetTexture(texture)
         frame.icon:SetSize(cfg.iconSize, cfg.iconSize)
         frame.icon:Show()
         if side == "left" then
@@ -480,9 +494,15 @@ function Reminders:Refresh()
                 -- noise: dragging a reminder around the screen would chime at
                 -- every refresh, and the preview button would chime whether
                 -- or not the buff it watches is actually missing.
-                if self.spec.sound and ns.Sounds
-                    and not (self.placing or self.previewing) then
-                    ns.Sounds.Play(self.spec.sound, cfg.spellID)
+                if not (self.placing or self.previewing) then
+                    if self.spec.sound and ns.Sounds then
+                        ns.Sounds.Play(self.spec.sound, cfg.spellID)
+                    end
+                    -- AND WHATEVER ELSE THE SPEC DOES ONCE. The cast alerts
+                    -- speak their line here, on the same edge and under the
+                    -- same two guards, so a voice can never chime while you
+                    -- are dragging the message around the screen.
+                    if self.spec.OnShow then self.spec.OnShow(cfg) end
                 end
             end
             frame:SetShown(show)

@@ -752,6 +752,23 @@ local PAGES = {
       },
       build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },
 
+    -- WHAT IS BEING CAST AT YOU. Its third column is the mobs you have met,
+    -- filed under the place you met them - the shape of EXBoss's Trash CD
+    -- page (owner, 2026-08-18, with two screenshots of it), on the one thing
+    -- this patch lets an addon match against: the caster's name. The spell
+    -- cannot be listed, and Core/Casts.lua's header says why.
+    { key = "casts", title = "Casts on you", glyph = "pulse",
+      module = "casts", casts = true,
+      subtitle = "The bar says what is being cast, and marks the one on you.",
+      actions = {
+          { text = "Forget the list",
+            onClick = function()
+                ns.Casts.Forget()
+                ns.Options:Refresh()
+            end },
+      },
+      build = function(page, width) return ns.OptionsCasts:BuildPage(page, width) end },
+
     -- THE RAID LEADER'S PAGE. Its third column is the list of buttons there
     -- are, which is the externals page's shape and deliberately so - the
     -- owner asked for "das bewaehrte layout wo ich mir die bar zusammen
@@ -892,6 +909,7 @@ local NAV = {
     { page = "reminders" },
     { page = "externals" },
     { page = "answers" },
+    { page = "casts" },
     { page = "deaths" },
     -- THE TWO NEWEST GO AT THE END, at the owner's word: "raid bar bitte
     -- unter death log stellen".
@@ -1023,7 +1041,7 @@ end
 function Options.HasThirdColumn(entry)
     return (entry.side or entry.explain or entry.tanks or entry.reminders
         or entry.deaths or entry.externals or entry.raidbar
-        or entry.cooldowns or entry.answers) and true or false
+        or entry.cooldowns or entry.answers or entry.casts) and true or false
 end
 
 -- WHICH PAGE THE WINDOW OPENS ON, as a pure function of the page list and
@@ -1559,6 +1577,7 @@ function Options:Create()
         deaths    = function() return ns.OptionsDeaths:BuildSide(sideHost, PAD) end,
         externals = function() return ns.OptionsExternals:BuildSide(sideHost, PAD) end,
         answers   = function() return ns.OptionsAnswers:BuildSide(sideHost, PAD) end,
+        casts     = function() return ns.OptionsCasts:BuildSide(sideHost, PAD) end,
         raidbar   = function() return ns.OptionsRaidBar:BuildSide(sideHost, PAD) end,
         cooldowns = function() return ns.OptionsCooldowns:BuildSide(sideHost, PAD) end,
     }
@@ -1733,6 +1752,7 @@ function Options:Create()
         local withExternals = entry.externals and moduleOn or false
         local withRaidBar = entry.raidbar and moduleOn or false
         local withAnswers = entry.answers and moduleOn or false
+        local withCasts = entry.casts and moduleOn or false
 
         -- The middle column narrows for any of them: the third column is
         -- there or it is not, and what is IN it is a separate question.
@@ -1743,6 +1763,7 @@ function Options:Create()
         -- something that is not running.
         local third = withExplain or withTanks or withReminders
             or withDeaths or withExternals or withRaidBar or withAnswers
+            or withCasts
         SetStageWidth(third)
         sideHost:SetShown(third)
         explain:SetShown(withExplain)
@@ -1752,12 +1773,14 @@ function Options:Create()
         ShowPane("externals", withExternals)
         ShowPane("raidbar", withRaidBar)
         ShowPane("answers", withAnswers)
+        ShowPane("casts", withCasts)
         if withTanks then ns.OptionsCoTanks:Refresh() end
         if withReminders then ns.OptionsReminders:Refresh() end
         if withDeaths then ns.OptionsDeaths:Refresh() end
         if withExternals then panes.externals.Refresh() end
         if withRaidBar then panes.raidbar.Refresh() end
         if withAnswers then panes.answers.Refresh() end
+        if withCasts then panes.casts.Refresh() end
 
         -- THROUGH L, and the fallback is what makes this free: a page whose
         -- title has no translation gets its own English word back, which is

@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwölf - EU Destromath
-## Version: 4.84.0
+## Version: 4.85.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -199,6 +199,15 @@ Core\Answers.lua
 # reminders' type. Below Answers (it is told by it) and Reminders (it borrows
 # Extent and FlashAlpha), above EditMode, which places it.
 Core\AnswerAlerts.lua
+# WHAT THE MOB IN FRONT OF YOU IS CASTING, and whether it is coming at you.
+# Three files, in this order: the engine that reads the nameplates, the bar
+# it draws, and a third book of reminders for the alerts. Below Reminders
+# (CastAlerts is an instance of that class) and Visibility (the bar carries
+# the same rules every other surface does), above EditMode, which places
+# both of them.
+Core\Casts.lua
+Core\CastBar.lua
+Core\CastAlerts.lua
 # The group fills itself. Below Chat, whose rules about which channel you are
 # actually in it shares, and it holds no frame at all - a chat event and four
 # plain calls. Everything it does is off until switched on; see the file.
@@ -265,6 +274,7 @@ Core\OptionsCoTanks.lua
 Core\OptionsReminders.lua
 Core\OptionsExternals.lua
 Core\OptionsAnswers.lua
+Core\OptionsCasts.lua
 Core\OptionsRaidBar.lua
 Core\OptionsInvites.lua
 Core\OptionsDeaths.lua

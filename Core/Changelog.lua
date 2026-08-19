@@ -31,6 +31,56 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.85.0",
+        date = "2026-08-19",
+        lines = {
+            {
+                icon = "Interface\\Icons\\Ability_Warrior_ShieldBash",
+                text = "|cffffd100Casts on you.|r A new module, and a bar "
+                    .. "where a tank is already looking: what the mob in "
+                    .. "front of you is casting, how far along it is, "
+                    .. "whether it can be kicked - and a mark down its left "
+                    .. "edge for the one thing that matters, "
+                    .. "|cffffd100is that one coming at me|r. That mark is "
+                    .. "the game's own answer, drawn by the client rather "
+                    .. "than worked out by us.",
+                link = { label = "Open Casts on you", page = "casts" },
+            },
+            {
+                icon = "Interface\\Icons\\Spell_Holy_Excorcism",
+                text = "|cffffd100And alerts about them, which are "
+                    .. "reminders.|r The third book on the reminders' own "
+                    .. "type, so nothing drifts: a line in your font and "
+                    .. "colour while a lieutenant or a boss is casting, "
+                    .. "placed in Edit mode like every other message. Narrow "
+                    .. "one to particular mobs by clicking them in the list "
+                    .. "on the right - it fills itself as you play.",
+                link = { label = "Open the cast alerts", page = "casts" },
+            },
+            {
+                icon = "Interface\\Icons\\Spell_Holy_Silence",
+                text = "|cffffd100A voice, and it can be somebody else's.|r "
+                    .. "Say a line when an alert appears - your own words, "
+                    .. "with the caster and who it is aimed at in them. Pick "
+                    .. "a recording from any voice pack your client has, or "
+                    .. "leave it empty and the client's own voice reads it. "
+                    .. "Off until you switch it on.",
+
+            },
+            {
+                icon = "Interface\\Icons\\INV_Misc_QuestionMark",
+                text = "|cffffd100What no addon can do on this patch, said "
+                    .. "plainly.|r The spell a mob is casting cannot be "
+                    .. "named: since 12.0 its id and name are withheld from "
+                    .. "addons, which is why the boss mods went quiet about "
+                    .. "dungeon trash too. Everything this module shows is "
+                    .. "either the game drawing it for us or something it "
+                    .. "still answers - and where it refuses to answer, the "
+                    .. "page says so instead of guessing.",
+            },
+        },
+    },
+    {
         version = "4.84.0",
         date = "2026-08-17",
         lines = {

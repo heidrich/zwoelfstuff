@@ -45,6 +45,10 @@ For questions and feature requests, join the Discord:
    timer, on a bar you build yourself.
 9. **Auto invite system** — somebody whispers "inv" and they are in the group;
    invite the guild, invite everyone back, disband, from the same page.
+10. **Casts on you** — a bar where you are already looking that says what the
+    mob in front of you is casting, whether it can be kicked, and marks the
+    one that is coming at *you*. With alerts, a voice, and a list of the mobs
+    you have met.
 
 Everything is set up in one window: `/zs`.
 
@@ -58,6 +62,30 @@ button on each row whispers *"%n, please taunt!"* (your own text) and can be
 limited to groups or to raids. *Create macro for action bar* writes a `ZS
 Taunt` macro so the same request is a keybind. The layout ships as the author
 runs it and every part of it is a setting.
+
+### Casts on you
+
+A bar in front of you rather than on a nameplate behind the boss: the icon of
+what is being cast, how far along it is, whether it can be interrupted, and a
+mark down its left edge while the cast is aimed at **you**. That mark is the
+client's own answer — the game draws it, so it is right even though addons
+are not allowed to read it.
+
+**Alerts** are reminders: the same page, the same look, the same flash, placed
+in Edit mode like every other message. One watches a *kind* of cast (ordinary
+mobs, lieutenants, bosses) and *who it is aimed at*, and can be narrowed to
+particular mobs by clicking them in the list on the right — that list writes
+itself out of what you meet, filed under the place you met it.
+
+**A voice** can speak the line: a recording out of any voice pack your client
+has, or the client's own text-to-speech when you have none.
+
+One thing this cannot do, and neither can anything else on this patch: **name
+the spell**. Since 12.0 the id and name of a hostile cast are withheld from
+addons — they may be handed back to the game to draw and never read. It is
+why the boss mods stopped naming dungeon-trash abilities in Midnight. What is
+still answerable is shown, and where the game refuses to answer, the page
+says so rather than guessing.
 
 ### Death log and live replay
 

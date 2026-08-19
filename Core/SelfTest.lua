@@ -491,6 +491,7 @@ local function TestCommandList()
         invites = true, loca = true, language = true,
         specs = true, spec = true,
         sounds = true, sound = true,
+        casts = true, cast = true,
         chat = true, news = true, whatsnew = true,
     }
 
@@ -10782,6 +10783,317 @@ local function TestAnswerAlerts()
     Check("The test put the book back", A:Count() == before)
 end
 
+---------------------------------------------------------------------------
+-- CASTS ON YOU
+--
+-- The rules first, because every one of them is a pure function and the desk
+-- can ask it what the client cannot be asked: what a level means, who a cast
+-- is aimed at when the game answers and when it refuses, which casts a
+-- config wants, and what the words come out as.
+--
+-- WHAT IS DELIBERATELY NOT CHECKED HERE is anything that reads a secret: the
+-- spell's name, its icon, whether it can be kicked and whether it is aimed at
+-- you are all values this patch withholds, and the addon only ever hands
+-- them to a setter. A test that asserted on one would be asserting on the
+-- harness's stub rather than on the client - the "a test must not assert the
+-- world" lesson, one level sharper.
+---------------------------------------------------------------------------
+local function TestCasts()
+    local Casts, R = ns.Casts, ns.CastRules
+    if not (Casts and R and ns.CastAlerts and ns.CastBar) then
+        Skip("Casts on you", "the files are not loaded")
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- Rank: the level bands the boss mods use too
+    ---------------------------------------------------------------------
+    Check("A level names a rank", R.Rank(90) == "standard"
+        and R.Rank(91) == "lieutenant" and R.Rank(92) == "boss")
+    Check("A skull is a boss, not an ordinary mob", R.Rank(-1) == "boss")
+    Check("A level this expansion does not use is not quietly ordinary",
+        R.Rank(60) == nil and R.Rank(nil) == nil and R.Rank("90") == nil)
+
+    ---------------------------------------------------------------------
+    -- Identity and folding
+    ---------------------------------------------------------------------
+    Check("Role and class make one identity",
+        R.Identity("TANK", "WARRIOR") == "TANK:WARRIOR"
+        and R.Identity("tank", "warrior") == "TANK:WARRIOR")
+    Check("Half an identity is none of one",
+        R.Identity(nil, "WARRIOR") == nil and R.Identity("TANK", "") == nil)
+
+    local roster = {
+        { unit = "player", role = "TANK",    class = "DEATHKNIGHT", isPlayer = true },
+        { unit = "party1", role = "TANK",    class = "WARRIOR" },
+        { unit = "party2", role = "HEALER",  class = "PRIEST" },
+        { unit = "party3", role = "DAMAGER", class = "MAGE" },
+        { unit = "party4", role = "DAMAGER", class = "MAGE" },
+    }
+    local unique, shared = R.Fold(roster)
+    Check("A pair only one person has names that person",
+        unique["TANK:DEATHKNIGHT"] ~= nil and unique["HEALER:PRIEST"] ~= nil)
+    Check("A pair two people share names neither",
+        unique["DAMAGER:MAGE"] == nil and shared["DAMAGER:MAGE"] == true)
+
+    ---------------------------------------------------------------------
+    -- Aim, and the one that must never be rounded
+    ---------------------------------------------------------------------
+    local me = "TANK:DEATHKNIGHT"
+    Check("A cast on your own pair is on you",
+        R.Aim(unique, "TANK", "DEATHKNIGHT", me, true) == "me")
+    Check("...on the other tank's is on the co-tank",
+        R.Aim(unique, "TANK", "WARRIOR", me, true) == "tank")
+    Check("...on the healer's is on the group",
+        R.Aim(unique, "HEALER", "PRIEST", me, true) == "group")
+    Check("A target the group cannot tell apart is UNKNOWN, never nobody",
+        R.Aim(unique, "DAMAGER", "MAGE", me, true) == "unknown")
+    Check("A withheld role or class with a target present is UNKNOWN",
+        R.Aim(unique, nil, nil, me, true) == "unknown")
+    Check("...and with no target at all it is nobody",
+        R.Aim(unique, nil, nil, me, false) == "nobody")
+
+    ---------------------------------------------------------------------
+    -- Which casts a config wants
+    ---------------------------------------------------------------------
+    local want = { ranks = { boss = true }, aims = { me = true } }
+    Check("A rank the config wants passes", R.Wanted(want, "boss", "me") == true)
+    Check("...one it does not, does not",
+        R.Wanted(want, "standard", "me") == false)
+    Check("...and neither does the wrong aim",
+        R.Wanted(want, "boss", "group") == false)
+    Check("A rank we could not work out never passes",
+        R.Wanted(want, nil, "me") == false)
+    Check("No sets at all means every cast",
+        R.Wanted({}, "standard", "nobody") == true)
+
+    Check("An empty mob list means every mob, not none",
+        R.MobWanted(nil, "Anything") == true
+        and R.MobWanted({}, "Anything") == true)
+    Check("A filled one means those and no others",
+        R.MobWanted({ ["Arcane Sentry"] = true }, "Arcane Sentry") == true
+        and R.MobWanted({ ["Arcane Sentry"] = true }, "Vile Lasher") == false)
+    Check("...and a mob whose name we never read is not one of them",
+        R.MobWanted({ ["Arcane Sentry"] = true }, nil) == false)
+
+    ---------------------------------------------------------------------
+    -- The words
+    ---------------------------------------------------------------------
+    Check("The words say the rank and who",
+        R.Words("%rank casting at %who", "lieutenant", "me")
+            == "A lieutenant casting at you",
+        R.Words("%rank casting at %who", "lieutenant", "me"))
+    Check("...the caster by name when we have it",
+        R.Words("%mob!", "boss", "me", "Vorasius") == "Vorasius!")
+    Check("...and a name we never read does not print as nil",
+        R.Words("%mob!", "boss", "me", nil) == "something!")
+    Check("Words with no token are left alone",
+        R.Words("Look up", "boss", "me", "Vorasius") == "Look up")
+
+    ---------------------------------------------------------------------
+    -- The foremost cast: the one on you, else the worst one
+    ---------------------------------------------------------------------
+    local live = {
+        { rank = "standard",   aim = "group" },
+        { rank = "boss",       aim = "nobody" },
+        { rank = "lieutenant", aim = "me" },
+    }
+    Check("The cast on YOU is the one the bar shows, whatever its rank",
+        Casts.Foremost(live) == live[3])
+    Check("...and with none on you, the most dangerous one",
+        Casts.Foremost({ live[1], live[2] }) == live[2])
+    Check("Nothing casting has no foremost", Casts.Foremost({}) == nil)
+
+    ---------------------------------------------------------------------
+    -- The voice gap
+    ---------------------------------------------------------------------
+    Check("The first line is always allowed",
+        Casts.MaySpeak(100, 0, 2) == true)
+    Check("...a second one inside the gap is not",
+        Casts.MaySpeak(101, 100, 2) == false)
+    Check("...and after the gap it is again",
+        Casts.MaySpeak(102, 100, 2) == true)
+
+    local voice = { enabled = true, onlyAtMe = true,
+        lines = { boss = "Tank hit", standard = "" } }
+    Check("A rank with a line gets one",
+        Casts.Line(voice, { rank = "boss", aim = "me" }) == "Tank hit")
+    Check("...a rank with an empty line stays quiet",
+        Casts.Line(voice, { rank = "standard", aim = "me" }) == nil)
+    Check("...and 'only at me' means only at me",
+        Casts.Line(voice, { rank = "boss", aim = "group" }) == nil)
+    Check("A silenced voice says nothing at all",
+        Casts.Speak("Tank hit", { enabled = false }) == false
+        and Casts.Speak("", { enabled = true }) == false)
+
+    ---------------------------------------------------------------------
+    -- The ledger: the list the page's third column draws
+    ---------------------------------------------------------------------
+    OnStandInProfile(nil, function()
+        Casts.Forget()
+        Check("A mob seen casting is remembered once",
+            Casts.Remember("Arcane Sentry", "lieutenant") == true
+            and Casts.Remember("Arcane Sentry", "lieutenant") == false)
+        Casts.Remember("Vile Lasher", "standard")
+        Check("A name we never read is not remembered",
+            Casts.Remember(nil, "boss") == false
+            and Casts.Remember("", "boss") == false)
+
+        local ledger = Casts.Ledger()
+        Check("The ledger files them under where you met them", #ledger == 1)
+        local mobs = ledger[1] and ledger[1].mobs or {}
+        Check("...dangerous first, then by name",
+            #mobs == 2 and mobs[1].mob == "Arcane Sentry"
+            and mobs[2].mob == "Vile Lasher")
+        Check("...and it counts how often", mobs[1].count == 2)
+
+        Casts.Forget()
+        Check("Forgetting empties it", #Casts.Ledger() == 0)
+    end)
+
+    ---------------------------------------------------------------------
+    -- The alerts: the third book of reminders
+    ---------------------------------------------------------------------
+    local A = ns.CastAlerts
+    Check("The cast alerts are a book of reminders - same class, third instance",
+        getmetatable(A) == getmetatable(ns.Reminders)
+        and A ~= ns.Reminders and A ~= ns.AnswerAlerts)
+    Check("...on the cast module's switch and in its own settings",
+        A.spec.module == "casts" and A:All() == ns.Casts.Config().alerts)
+
+    local d = A:Defaults()
+    Check("...with the reminders' fields plus its own two sets",
+        type(d.ranks) == "table" and type(d.aims) == "table"
+        and d.flash ~= nil and d.size ~= nil and d.iconSide ~= nil
+        and d.text:find("%%rank") ~= nil and d.text:find("%%who") ~= nil)
+    Check("A fresh alert watches the withheld case too, or it is silent in a dungeon",
+        d.aims.me == true and d.aims.unknown == true)
+    Check("It has no spell to watch, because no addon can have one",
+        d.spellID == nil and d.trigger == nil)
+
+    local matched = A.Rules.Match(
+        { ranks = { boss = true }, aims = { me = true } },
+        { { rank = "standard", aim = "me" }, { rank = "boss", aim = "me" } })
+    Check("An alert finds the cast it watches among several",
+        matched ~= nil and matched.rank == "boss")
+    Check("...and finds none when none is its own",
+        A.Rules.Match({ ranks = { boss = true }, aims = { me = true } },
+            { { rank = "standard", aim = "me" } }) == nil)
+
+    -- THE MOB FILTER, THROUGH THE MATCH rather than only through its own
+    -- rule: MobWanted was green while nothing called it, which is the
+    -- "a rule that is tested is not a rule that is wired" failure exactly.
+    local picky = { ranks = { boss = true }, aims = { me = true },
+        mobs = { ["Vorasius"] = true } }
+    Check("An alert narrowed to a mob ignores every other one",
+        A.Rules.Match(picky,
+            { { rank = "boss", aim = "me", mob = "Salhadaar" } }) == nil)
+    Check("...and still fires for the one it named",
+        A.Rules.Match(picky,
+            { { rank = "boss", aim = "me", mob = "Vorasius" } }) ~= nil)
+
+    local before = A:Count()
+    local index = A:Add()
+    if not index then
+        Skip("Cast alerts", "the book is full")
+        return
+    end
+    local alert = A:Get(index)
+    alert.enabled = true
+    alert.ranks = { boss = true }
+    alert.aims = { me = true }
+    A:Rebuild()
+
+    local held = Casts.live
+    Casts.live = {}
+    Check("With nothing casting, the alert is idle and off the screen",
+        A:State(alert) == "idle" and A:ShouldShow(alert) == false
+        and A:Explain(alert) ~= nil)
+
+    Casts.live = { { rank = "boss", aim = "me", mob = "Vorasius",
+                     texture = 136012 } }
+    Check("A cast it watches puts it in the casting state",
+        A:State(alert) == "casting")
+    Check("...the words carry that cast",
+        A.spec.Text(alert) == "The boss casting at you",
+        A.spec.Text(alert))
+    Check("...and the icon it draws is that cast's own",
+        A.spec.Icon(alert) == 136012)
+
+    Casts.live = { { rank = "standard", aim = "me" } }
+    Check("A cast it does not watch leaves it idle", A:State(alert) == "idle")
+    Check("...and its icon is nothing rather than the last one",
+        A.spec.Icon(alert) == nil)
+
+    -- NOTHING ABOUT THE CAST MAY LAND ON THE ALERT ITSELF, because an
+    -- alert's cfg IS the saved file and a cast's name, icon and id are all
+    -- secret values on this patch. A secret in SavedVariables is a saved
+    -- file that cannot be written - so this is not tidiness, it is the
+    -- difference between a profile that survives a logout and one that
+    -- does not.
+    Casts.live = { { rank = "boss", aim = "me", mob = "Vorasius",
+                     texture = 136012, name = "Shadowclaw Slam" } }
+    A:State(alert)
+    local leaked
+    for key, value in pairs(alert) do
+        if key == "dkEntry" or value == 136012 then leaked = key end
+    end
+    Check("The cast itself never lands on the saved alert",
+        leaked == nil, tostring(leaked))
+    Check("...and the words and icon still describe that cast",
+        A.spec.Icon(alert) == 136012
+        and A.spec.Text(alert) == "The boss casting at you")
+
+    -- The live rows are POOLED: the same table is refilled next walk. An
+    -- alert that held the row rather than a copy would silently start
+    -- describing somebody else's cast.
+    local row = Casts.live[1]
+    row.rank, row.mob, row.texture = "standard", "Vile Lasher", 1
+    Check("A pooled row refilled under it does not rewrite what was drawn",
+        A.spec.Icon(alert) == 136012
+        and A.spec.Text(alert) == "The boss casting at you")
+
+    A:SetPlacing(true)
+    Check("Placing puts it up to move", A:ShouldShow(alert) == true)
+    A:SetPlacing(false)
+    Check("...and leaving edit mode takes it down",
+        A:ShouldShow(alert) == false)
+
+    Casts.live = held
+    A:Remove(index)
+    Check("The test put the book back", A:Count() == before)
+
+    ---------------------------------------------------------------------
+    -- Test mode: three invented casts, so the bar can be placed
+    ---------------------------------------------------------------------
+    local wasTesting = Casts:Testing()
+    Casts:SetTestMode(true)
+    Check("Test mode invents casts to place the bar against",
+        Casts:Testing() == true and Casts.count > 0)
+    Check("...and one of them is on you", Casts:Current() ~= nil
+        and Casts:Current().aim == "me")
+    Casts:SetTestMode(false)
+    Check("...and switching it off empties the screen again",
+        Casts:Testing() == false and Casts.count == 0)
+    if wasTesting then Casts:SetTestMode(true) end
+
+    ---------------------------------------------------------------------
+    -- THE WIRING, not just the rule. Both surfaces have to be REACHED by
+    -- the things that place, switch and migrate them - the lesson that
+    -- says a green rule and a missing connection look identical.
+    ---------------------------------------------------------------------
+    Check("The module is registered", ns.Modules:Get("casts") ~= nil)
+    local page
+    for _, entry in ipairs(ns.Options.PAGES) do
+        if entry.key == "casts" then page = entry end
+    end
+    Check("The page exists, is gated by the module and has its third column",
+        page ~= nil and page.module == "casts" and page.casts == true
+        and ns.Options.HasThirdColumn(page) == true)
+    Check("Edit mode places the alerts as it places every other book",
+        type(ns.EditMode:ReminderMovers()) == "table")
+end
+
 local function TestHouseLook()
     local v = ns.SURFACE
 
@@ -11190,6 +11502,7 @@ function Test:Run()
         { "The house look", TestHouseLook },
         { "When to show it", TestWhenBlock },
         { "Answer alerts",  TestAnswerAlerts },
+        { "Casts on you",   TestCasts },
         { "Deferred tabs",  TestLazyTabs },
         { "The styling layer", TestCooldownStyling },
     }

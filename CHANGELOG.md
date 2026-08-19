@@ -10,6 +10,59 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.85.0] - 2026-08-19
+
+### Added
+
+- **Casts on you — a new module, and a bar where you are already looking.**
+  What the mob in front of you is casting, how far along it is, whether it
+  can be kicked, and a mark down the bar's left edge for the one question a
+  tank actually asks: *is that one coming at me*. The mark is not our guess —
+  the client answers it and draws it, so it is right even though no line of
+  the addon is allowed to look at it. Switch the module on under *Casts on
+  you* in the list on the left; **Test mode** puts three invented casts on
+  screen so you can place the bar without a dungeon.
+- **Alerts about them, and they are reminders.** A third book on the
+  reminders' own type — the list, the preview card, *What it says*, the look,
+  the flash, the rules and the edit-mode box are the ones you already know.
+  An alert watches a **kind** of cast (ordinary mobs, lieutenants, bosses)
+  and **who it is aimed at**, and its words carry both: `%rank casting at
+  %who` is the default, `%mob` names the caster. Each alert is placed in Edit
+  mode like every other message.
+- **Only these mobs.** The right-hand column lists every mob you have seen
+  cast something, filed under the place you met it, and it fills itself as
+  you play. Click one to narrow the selected alert to it; click it again to
+  drop it. This is the part that could not be a list of spells — see below.
+- **A voice, and it can be somebody else's.** A line spoken when an alert
+  appears, with your own words in it. It plays a **recording** if you pick
+  one — anything a voice pack registers with the shared media library shows
+  up in the list, so BigWigs +Voice, the DBM packs and their community ones
+  are all reachable — and falls back to the client's own text-to-speech when
+  you do not. Off until you switch it on, with a wait between lines so three
+  mobs starting the same cast is one sentence.
+
+### Changed
+
+- The options window is 30 pixels taller. The rail ran out of room at the
+  fourteenth page, exactly as the self test's margin check exists to catch.
+
+### Notes
+
+- **The spell being cast cannot be named, by this addon or any other.** Since
+  patch 12.0 the id and the name of a hostile unit's cast are withheld from
+  addons: they may be handed to the game to draw — which is why every
+  nameplate still shows the cast — and may not be read, compared or looked
+  up. It is why LittleWigs ships **zero** named trash warnings for Midnight
+  where it had 33–38 per War Within dungeon, and why the boss mods identify
+  boss abilities by the length of Blizzard's own timer instead. This module
+  shows everything that IS answerable and says so where the game refuses.
+- **"At you" has two halves and the module uses both.** The certain one is
+  the client's: it draws the mark on the bar and never tells us. The other is
+  a best-effort read of the target's role and class, which a dungeon can
+  withhold — so alerts have a fifth choice, *at somebody the game will not
+  name*, and it is **on** by default. A warning you never got because a value
+  was withheld is worse than a spare one.
+
 ## [4.84.0] - 2026-08-17
 
 ### Added

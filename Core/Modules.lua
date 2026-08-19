@@ -65,7 +65,7 @@ ns.Modules = Modules
 --    usual: it is the only module in the list that can COLLIDE with another
 --    addon, and the answer has to be given before either of us draws
 --    anything. See Cooldowns/Rivals.lua.
-Modules.GENERATION = 5
+Modules.GENERATION = 6
 
 local LIST = {
     {
@@ -166,6 +166,34 @@ local LIST = {
         Apply = function()
             ns.Answers.Refresh()
             ns.AnswerAlerts:Refresh()
+        end,
+    },
+    {
+        -- WHAT IS BEING CAST AT YOU. Three surfaces, one switch: the bar
+        -- (Core/CastBar.lua), the alerts (Core/CastAlerts.lua, a third book
+        -- of reminders) and the ledger of mobs the page lists.
+        --
+        -- Owner, 2026-08-18: "tank buster warnungen ... das man sieht wenn
+        -- auf dem tank unitframe ein tank buster gekastet wird". What this
+        -- patch allows is written down at the top of Core/Casts.lua: the
+        -- spell itself cannot be named by anybody on 12.x, but that a cast is
+        -- happening, how dangerous the caster is, whether it can be kicked
+        -- and whether it is aimed at YOU are all answerable - the last two by
+        -- the engine itself, drawn and never read.
+        key = "casts", title = "Casts on you", glyph = "pulse", since = 6,
+        blurb = "The bar in front of you says what is being cast, and marks "
+            .. "the one that is coming at you.",
+        detail = "Off, nothing watches the nameplates and no line goes up.",
+        Boot = function()
+            ns.CastBar:Create()
+            ns.CastAlerts:Rebuild()
+            ns.CastAlerts:Start()
+            ns.Casts:Start()
+        end,
+        Apply = function()
+            ns.Casts:Scan()
+            ns.CastBar:Refresh()
+            ns.CastAlerts:Refresh()
         end,
     },
     {

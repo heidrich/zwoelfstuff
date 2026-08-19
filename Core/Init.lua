@@ -474,6 +474,10 @@ ns.DEFAULTS = {
         deaths    = true,
         raidbar   = false,
         invites   = false,
+        -- OFF UNTIL ASKED FOR. It watches every nameplate ten times a second
+        -- and puts a bar on the screen; a feature that loud must be somebody's
+        -- decision, not a default they discover mid-pull.
+        casts     = false,
         cooldowns = false,
     },
 
@@ -1713,6 +1717,8 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- are reminders too (Core/AnswerAlerts.lua) and get the same.
         ns.Reminders:Migrate()
         ns.AnswerAlerts:Migrate()
+        -- And the cast alerts, the third book (Core/CastAlerts.lua).
+        ns.CastAlerts:Migrate()
 
         -- Auras deliberately has no seeding step, and calling one here used to
         -- throw on every login. Its recorder registers itself when the file
@@ -1828,6 +1834,11 @@ ns.COMMANDS = {
     { cmd = "/zs watch",
       text = "watch every placed cell for twelve seconds and print each "
         .. "change - build stacks or spend charges while it runs" },
+
+    { group = "Casts" },
+    { cmd = "/zs casts",
+      text = "what is being cast at you right now, and at whom "
+        .. "(|cffffd100/zs casts test|r invents three)" },
 
     { group = "Auras" },
     { cmd = "/zs auras",
@@ -1953,6 +1964,21 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         local text = ns.Cooldowns and ns.Cooldowns.Text
         if text and text.Watch then text.Watch(rest) else
             ns.Print("The cooldown text module is not loaded.")
+        end
+
+    elseif cmd == "casts" or cmd == "cast" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "test" then
+            ns.Casts:SetTestMode(not ns.Casts:Testing())
+            ns.Print(ns.Casts:Testing()
+                and "Three invented casts are on screen. "
+                    .. "|cffffd100/zs casts test|r again puts them away."
+                or "Test casts off.")
+        elseif sub == "forget" then
+            ns.Casts.Forget()
+            ns.Print("The list of mobs is empty again.")
+        else
+            ns.Casts:Dump()
         end
 
     elseif cmd == "look" then

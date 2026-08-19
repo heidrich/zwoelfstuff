@@ -203,7 +203,13 @@ UI.WINDOW_W    = 1460
 -- together, which is the one thing the headings exist to prevent. 820 at 100%
 -- still stands on a 1366x768 laptop through the scale slider, which is what
 -- that slider is for.
-UI.WINDOW_H    = 820
+--
+-- 850 AT THE FOURTEENTH, and the guard did its job a second time: "Casts on
+-- you" left 46 pixels spare where two more pages need 60, so the decision
+-- landed here rather than in a screenshot of a clipped rail - which is the
+-- whole reason that check is written the way it is. One row of margin buys
+-- back the one this page spent.
+UI.WINDOW_H    = 850
 UI.RAIL_W      = 190
 UI.INSPECTOR_W = 400
 UI.CONTENT_W   = UI.WINDOW_W - UI.RAIL_W - UI.INSPECTOR_W  -- 792

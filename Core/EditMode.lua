@@ -643,6 +643,22 @@ local function ApplyAnswerMove(x, y)
     ns.Answers.Rebuild()
 end
 
+-- THE CAST BAR. It is on screen only while something is casting, which is
+-- never while somebody is placing it - so SetPlacing below shows an empty
+-- one, and this getter finds it the same way the others find theirs.
+local function CastBarPanel()
+    local frame = ns.CastBar and ns.CastBar.Frame()
+    if frame and frame:IsShown() then return frame end
+    return nil
+end
+
+local function ApplyCastBarMove(x, y)
+    local cfg = ns.Casts.Config().bar
+    cfg.point, cfg.relPoint = "CENTER", "CENTER"
+    cfg.x, cfg.y = x, y
+    ns.CastBar:ApplyLayout()
+end
+
 
 ---------------------------------------------------------------------------
 -- EVERY PLACED PANEL, IN ONE LIST, DESCRIBED ONCE.
@@ -735,6 +751,15 @@ PANEL_MOVERS = {
           local cfg = ns.RaidBar.Config()
           return cfg.x or 0, cfg.y or 0
       end },
+
+    { key = "castbar", module = "casts",
+      panel = CastBarPanel, apply = ApplyCastBarMove,
+      label = "Cast bar", page = "casts",
+      config = function() return ns.Casts.Config().bar end,
+      origin = function()
+          local cfg = ns.Casts.Config().bar
+          return cfg.x or 0, cfg.y or 0
+      end },
 }
 
 -- The spec CreatePanelMover is handed, built FROM the row so the two cannot
@@ -793,6 +818,8 @@ local BOOKS = {
       module = "reminders", page = "reminders", movers = {} },
     { book = function() return ns.AnswerAlerts end,
       module = "answers", page = "answers", movers = {} },
+    { book = function() return ns.CastAlerts end,
+      module = "casts", page = "casts", movers = {} },
 }
 
 local function ApplyReminderMove(entry, index, x, y)
@@ -1739,6 +1766,13 @@ function EditMode:SetUnlocked(state)
     if ns.Reminders then ns.Reminders:SetPlacing(state) end
     -- And the answer alerts, which are up only while somebody is asking.
     if ns.AnswerAlerts then ns.AnswerAlerts:SetPlacing(state) end
+
+    -- AND THE CAST SURFACES, for the sharpest version of that reason yet:
+    -- both of them are on screen only while a mob is mid-cast, so waiting
+    -- for one in order to place the bar that warns about it is not a
+    -- workflow. Placing shows an empty bar and every alert.
+    if ns.CastBar then ns.CastBar:SetPlacing(state) end
+    if ns.CastAlerts then ns.CastAlerts:SetPlacing(state) end
 
     if state then
         -- The window would sit behind the overlay, catching clicks that were
