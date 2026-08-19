@@ -667,6 +667,15 @@ end
 -- was the first entry until the bars went. The comment stayed behind and read
 -- as if it were about Settings - "its two actions carry their marks" over a
 -- page that has no actions.)
+-- IS THIS PAGE FINISHED? Pure, and kept out of the paint for the reason
+-- every guard in this addon is kept out of one: a flag that is only ever
+-- read inside a repaint is a flag no test can ask a question about. It also
+-- pins WHERE the answer comes from - the entry, not the page index - so
+-- retiring the mark is deleting one word from the table below.
+function Options.ComingSoon(entry)
+    return type(entry) == "table" and entry.soon == true
+end
+
 local PAGES = {
     -- Through the namespace like the pages below it: the builder lives in
     -- Core/OptionsSettings.lua. What this page holds is the split its own
@@ -758,7 +767,7 @@ local PAGES = {
     -- this patch lets an addon match against: the caster's name. The spell
     -- cannot be listed, and Core/Casts.lua's header says why.
     { key = "casts", title = "Casts on you", glyph = "pulse",
-      module = "casts", casts = true,
+      module = "casts", casts = true, soon = true,
       subtitle = "The bar says what is being cast, and marks the one on you.",
       actions = {
           { text = "Forget the list",
@@ -1448,6 +1457,15 @@ function Options:Create()
     local pageTitle = UI.Label(stageHost, "", UI.FS.title, C.text)
     pageTitle:SetPoint("TOPLEFT", stageHost, "TOPLEFT", PAD, -16)
 
+    -- NOT FINISHED YET, SAID WHERE IT CANNOT BE MISSED. A page carrying
+    -- `soon` is one whose module is built, switched off by default and not
+    -- yet through a real week of play. The badge rides the title rather than
+    -- the page body so it is there on every tab of that page, including the
+    -- ones somebody lands on from a changelog link.
+    local pageSoon = UI.Badge(stageHost, ns.L["COMING SOON"], "current")
+    pageSoon:SetPoint("LEFT", pageTitle, "RIGHT", 10, 0)
+    pageSoon:Hide()
+
     -- Width, not a second anchor: a font string given both TOPLEFT and RIGHT
     -- is told two different vertical positions and lands somewhere else.
     local pageSubtitle = UI.Label(stageHost, "", UI.FS.meta, C.textFaint)
@@ -1787,6 +1805,10 @@ function Options:Create()
         -- the string that was there before this line existed.
         pageTitle:SetText(ns.L[entry.title])
         pageSubtitle:SetText(entry.subtitle and ns.L[entry.subtitle] or nil)
+        -- READ OFF THE ENTRY, never off the page index: the badge belongs to
+        -- whichever page declared it, so retiring the mark is deleting one
+        -- word in the table above and nothing else.
+        pageSoon:SetShown(ns.Options.ComingSoon(entry))
 
         -- WHATEVER THE LAST PAGE PUT IN THE BAND COMES OUT OF IT. Every
         -- page's pair is walked, not only this one's: the band is one strip

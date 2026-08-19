@@ -35,15 +35,30 @@ ns.CHANGELOG = {
         date = "2026-08-19",
         lines = {
             {
+                icon = "Interface\\Icons\\INV_Misc_Wrench_01",
+                text = "|cffffd100Fixed: the inspect window keeps its gear.|r "
+                    .. "Thanks to |cffffd100b9ty|r on CurseForge for the "
+                    .. "report. Opening Blizzard's inspect window on somebody "
+                    .. "in your group could show every equipment slot empty "
+                    .. "while the model still wore it. The client tracks one "
+                    .. "inspect at a time and the spec cache was taking it "
+                    .. "out from under you; it now waits while you are "
+                    .. "looking, and carries on the moment you close it.",
+            },
+            {
                 icon = "Interface\\Icons\\Ability_Warrior_ShieldBash",
-                text = "|cffffd100Casts on you.|r A new module, and a bar "
-                    .. "where a tank is already looking: what the mob in "
-                    .. "front of you is casting, how far along it is, "
-                    .. "whether it can be kicked - and a mark down its left "
-                    .. "edge for the one thing that matters, "
-                    .. "|cffffd100is that one coming at me|r. That mark is "
-                    .. "the game's own answer, drawn by the client rather "
-                    .. "than worked out by us.",
+                text = "|cffffd100Casts on you - coming soon, and switched "
+                    .. "off.|r A new module that is in this update rather "
+                    .. "than in one of its own, because the fix above should "
+                    .. "not wait for it. It has not been tested properly "
+                    .. "yet, its page says so, and nothing in it runs until "
+                    .. "you switch it on. What it is: a bar where a tank is "
+                    .. "already looking - what the mob in front of you is "
+                    .. "casting, how far along it is, whether it can be "
+                    .. "kicked, and a mark down its left edge for the one "
+                    .. "thing that matters, |cffffd100is that one coming at "
+                    .. "me|r. That mark is the game's own answer, drawn by "
+                    .. "the client rather than worked out by us.",
                 link = { label = "Open Casts on you", page = "casts" },
             },
             {
@@ -77,17 +92,6 @@ ns.CHANGELOG = {
                     .. "either the game drawing it for us or something it "
                     .. "still answers - and where it refuses to answer, the "
                     .. "page says so instead of guessing.",
-            },
-            {
-                icon = "Interface\\Icons\\INV_Misc_Wrench_01",
-                text = "|cffffd100Fixed: the inspect window keeps its gear.|r "
-                    .. "Thanks to |cffffd100b9ty|r on CurseForge for the "
-                    .. "report. Opening Blizzard's inspect window on somebody "
-                    .. "in your group could show every equipment slot empty "
-                    .. "while the model still wore it. The client tracks one "
-                    .. "inspect at a time and the spec cache was taking it "
-                    .. "out from under you; it now waits while you are "
-                    .. "looking, and carries on the moment you close it.",
             },
             {
                 icon = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo",

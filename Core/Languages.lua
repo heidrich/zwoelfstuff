@@ -105,6 +105,7 @@ Register("enUS", {
     ["Let's go"] = true,
     ["Show the welcome screen"] = true,
     ["NEW"] = true,
+    ["COMING SOON"] = true,
     ["HIDDEN"] = true,
     ["Not on screen"] = true,
 
@@ -594,6 +595,7 @@ Register("deDE", {
     ["Let's go"] = "Los geht's",
     ["Show the welcome screen"] = "Willkommensfenster zeigen",
     ["NEW"] = "NEU",
+    ["COMING SOON"] = "BALD",
     ["HIDDEN"] = "VERSTECKT",
     ["Not on screen"] = "Nicht auf dem Bildschirm",
 
@@ -1128,6 +1130,7 @@ Register("frFR", {
     ["Let's go"] = "C'est parti",
     ["Show the welcome screen"] = "Afficher l'accueil",
     ["NEW"] = "NOUVEAU",
+    ["COMING SOON"] = "BIENTÔT",
     ["HIDDEN"] = "MASQUÉ",
     ["Not on screen"] = "Pas à l'écran",
 
@@ -1292,6 +1295,7 @@ Register("esES", {
     ["Let's go"] = "Adelante",
     ["Show the welcome screen"] = "Mostrar la bienvenida",
     ["NEW"] = "NUEVO",
+    ["COMING SOON"] = "PRÓXIMAMENTE",
     ["HIDDEN"] = "OCULTO",
     ["Not on screen"] = "No está en pantalla",
 
@@ -1459,6 +1463,7 @@ Register("esMX", {
     ["Let's go"] = "Vamos",
     ["Show the welcome screen"] = "Mostrar la bienvenida",
     ["NEW"] = "NUEVO",
+    ["COMING SOON"] = "PRÓXIMAMENTE",
     ["HIDDEN"] = "OCULTO",
     ["Not on screen"] = "No está en pantalla",
 
@@ -1605,6 +1610,7 @@ Register("itIT", {
     ["Let's go"] = "Andiamo",
     ["Show the welcome screen"] = "Mostra il benvenuto",
     ["NEW"] = "NUOVO",
+    ["COMING SOON"] = "IN ARRIVO",
     ["HIDDEN"] = "NASCOSTO",
     ["Not on screen"] = "Non è sullo schermo",
 
@@ -1751,6 +1757,7 @@ Register("ptBR", {
     ["Let's go"] = "Vamos",
     ["Show the welcome screen"] = "Mostrar as boas-vindas",
     ["NEW"] = "NOVO",
+    ["COMING SOON"] = "EM BREVE",
     ["HIDDEN"] = "OCULTO",
     ["Not on screen"] = "Não está na tela",
 
@@ -1880,6 +1887,7 @@ Register("ruRU", {
 
     ["Let's go"] = "Поехали",
     ["NEW"] = "НОВОЕ",
+    ["COMING SOON"] = "СКОРО",
     ["HIDDEN"] = "СКРЫТО",
     ["Not on screen"] = "Нет на экране",
 

@@ -12,16 +12,42 @@ oldest versions move over.
 
 ## [4.85.0] - 2026-08-19
 
+### Fixed
+
+- **Thanks to b9ty on CurseForge for the report.** Opening Blizzard's inspect
+  window on somebody in your group could show **every equipment slot empty**
+  while the 3D model still wore their gear — no error message, and it came
+  and went often enough to look like Blizzard's own bug. It was ours.
+
+  The client keeps exactly **one** inspect target. The spec cache — the part
+  that knows a priest is Discipline rather than Holy, so the external cooldown
+  panel offers the spell they can actually cast — has to ask the server about
+  people, and asking moves that one target. It was asking every two seconds
+  while you had the window open, and it was also releasing each answer when it
+  arrived, including the answers it never asked for. Yours was one of those,
+  and releasing it is what emptied the slots.
+
+  It now waits: while the inspect window is open, and for a moment after the
+  click that opens it, the queue holds still. Learning resumes the second you
+  close the window — nothing is forgotten in the meantime — and an answer this
+  addon did not ask for is left where it lies.
+
 ### Added
 
-- **Casts on you — a new module, and a bar where you are already looking.**
-  What the mob in front of you is casting, how far along it is, whether it
-  can be kicked, and a mark down the bar's left edge for the one question a
-  tank actually asks: *is that one coming at me*. The mark is not our guess —
-  the client answers it and draws it, so it is right even though no line of
-  the addon is allowed to look at it. Switch the module on under *Casts on
-  you* in the list on the left; **Test mode** puts three invented casts on
-  screen so you can place the bar without a dungeon.
+- **Casts on you — a new module, marked *coming soon* and switched off.**
+  It ships in this file rather than waiting for a release of its own, because
+  the fix above should not wait for it. Everything below works; none of it
+  has been through a real week of dungeons yet, the page says so at the top,
+  and nothing in it runs until you switch it on. If you would like to help
+  find what is wrong with it, turn it on and say so on the Discord.
+
+  What it does: a bar where you are already looking, showing what the mob in
+  front of you is casting, how far along it is, whether it can be kicked, and
+  a mark down its left edge for the one question a tank actually asks — *is
+  that one coming at me*. That mark is not our guess: the client answers it
+  and draws it, so it is right even though no line of the addon is allowed to
+  look at it. **Test mode** puts three invented casts on screen so you can
+  place the bar without a dungeon.
 - **Alerts about them, and they are reminders.** A third book on the
   reminders' own type — the list, the preview card, *What it says*, the look,
   the flash, the rules and the edit-mode box are the ones you already know.
@@ -49,26 +75,6 @@ oldest versions move over.
   the readme all point at the current server. There is one address written
   down in this addon and everything else reads it, so all three moved
   together.
-
-### Fixed
-
-- **Thanks to b9ty on CurseForge for the report.** Opening Blizzard's inspect
-  window on somebody in your group could show **every equipment slot empty**
-  while the 3D model still wore their gear — no error message, and it came
-  and went often enough to look like Blizzard's own bug. It was ours.
-
-  The client keeps exactly **one** inspect target. The spec cache — the part
-  that knows a priest is Discipline rather than Holy, so the external cooldown
-  panel offers the spell they can actually cast — has to ask the server about
-  people, and asking moves that one target. It was asking every two seconds
-  while you had the window open, and it was also releasing each answer when it
-  arrived, including the answers it never asked for. Yours was one of those,
-  and releasing it is what emptied the slots.
-
-  It now waits: while the inspect window is open, and for a moment after the
-  click that opens it, the queue holds still. Learning resumes the second you
-  close the window — nothing is forgotten in the meantime — and an answer this
-  addon did not ask for is left where it lies.
 
 ### Notes
 

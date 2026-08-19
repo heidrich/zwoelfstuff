@@ -525,6 +525,37 @@ local function TestCommandList()
     -- cut, and a single entry cannot be split at all.
     Check("An empty list answers without throwing",
         ns.Options.SplitCommands({}) == 0)
+
+    ---------------------------------------------------------------------
+    -- THE UNFINISHED PAGE SAYS SO
+    --
+    -- A module can be built, shipped and switched off by default and still
+    -- be a promise nobody meant to make - the changelog names it, somebody
+    -- turns it on, and there is nothing on the page admitting it has not
+    -- been through a real week of play. The mark is one word on the page's
+    -- entry; these check that the word is READ off the entry rather than
+    -- decided somewhere by page number, and that exactly the page we mean
+    -- is wearing it.
+    ---------------------------------------------------------------------
+    Check("A page with no mark is not coming soon",
+        not ns.Options.ComingSoon({ key = "settings" }))
+    Check("A page carrying the mark is",
+        ns.Options.ComingSoon({ key = "x", soon = true }))
+    Check("And nothing that is not a page entry is",
+        not ns.Options.ComingSoon(nil) and not ns.Options.ComingSoon("casts"))
+
+    -- WHICH pages, out of the real table. One today; the check is written to
+    -- name whatever it finds, so the day a second one is marked - or the day
+    -- Casts is finished and the word comes out - this says what changed
+    -- rather than quietly agreeing.
+    local marked = {}
+    for _, entry in ipairs(ns.Options.PAGES or {}) do
+        if ns.Options.ComingSoon(entry) then marked[#marked + 1] = entry.key end
+    end
+    Check("Casts on you is the page that is not finished yet",
+        #marked == 1 and marked[1] == "casts",
+        "marked: " .. (table.concat(marked, ", ") ~= ""
+            and table.concat(marked, ", ") or "none"))
     Check("One entry stays in one column",
         ns.Options.SplitCommands({ { cmd = "/zs", text = "open" } }) == 1)
 
