@@ -78,6 +78,26 @@ ns.CHANGELOG = {
                     .. "still answers - and where it refuses to answer, the "
                     .. "page says so instead of guessing.",
             },
+            {
+                icon = "Interface\\Icons\\INV_Misc_Wrench_01",
+                text = "|cffffd100Fixed: the inspect window keeps its gear.|r "
+                    .. "Thanks to |cffffd100b9ty|r on CurseForge for the "
+                    .. "report. Opening Blizzard's inspect window on somebody "
+                    .. "in your group could show every equipment slot empty "
+                    .. "while the model still wore it. The client tracks one "
+                    .. "inspect at a time and the spec cache was taking it "
+                    .. "out from under you; it now waits while you are "
+                    .. "looking, and carries on the moment you close it.",
+            },
+            {
+                icon = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo",
+                text = "|cffffd100New Discord.|r The old invite is dead. The "
+                    .. "current one is under |cffffd100About|r and at the "
+                    .. "foot of the list on the left - no addon may open a "
+                    .. "browser for you, so both put the address in a box "
+                    .. "you can copy from.",
+                link = { label = "Open About", page = "about" },
+            },
         },
     },
     {

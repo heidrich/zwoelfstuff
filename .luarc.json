@@ -105,6 +105,8 @@
     "HideUIPanel",
     "hooksecurefunc",
     "InCombatLockdown",
+    "InspectFrame",
+    "InspectUnit",
     "InviteUnit",
     "IsAltKeyDown",
     "IsControlKeyDown",

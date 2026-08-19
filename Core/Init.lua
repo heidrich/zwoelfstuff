@@ -45,7 +45,7 @@ ns.ICON_TEXTURE = "Interface\\AddOns\\ZwoelfStuff\\Media\\logo"
 ns.CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/zwoelfstuff"
 ns.WAGO_URL = "https://addons.wago.io/addons/zwoelfstuff"
 ns.GITHUB_URL = "https://github.com/heidrich/zwoelfstuff"
-ns.DISCORD_URL = "https://discord.gg/d2EnXGNbGu"
+ns.DISCORD_URL = "https://discord.gg/mBWHSNNXZS"
 
 -- Both stores get the same build from the same tag - the packager uploads to
 -- whichever it has a token and a project id for. They are listed in the order

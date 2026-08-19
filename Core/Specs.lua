@@ -159,6 +159,70 @@ local function Now()
     return (GetTime and GetTime()) or 0
 end
 
+---------------------------------------------------------------------------
+-- WHOSE CHANNEL IS IT
+--
+-- b9ty, on CurseForge: opening Blizzard's inspect window on somebody in the
+-- group showed EVERY equipment slot blank while the 3D model still wore the
+-- gear. No Lua error, and it looked intermittent. It was us.
+--
+-- THE CLIENT KEEPS ONE INSPECT TARGET. NotifyInspect moves it and
+-- ClearInspectPlayer throws away the answer sitting in it, so either call,
+-- made while the player has that window open, takes the window's data out
+-- from under it. The two-second ticker below turned that into a coin flip:
+-- land between his click and the window's read and the slots come back
+-- empty. Nothing in here was ever worth that - the spec cache is a
+-- convenience, his inspect window is what he actually asked for, and when
+-- the two want the same wire he wins.
+--
+-- TWO SIGNALS, because neither one covers it alone:
+--
+--   * the window being SHOWN, which covers the whole time it is open.
+--   * the player having just ASKED, which covers the moment before it shows.
+--     The request goes out first, and out of range the window never shows at
+--     all. hooksecurefunc on InspectUnit is that signal and it EXPIRES, so
+--     nothing here can get stuck holding the queue shut.
+--
+-- InspectFrame.unit was the other candidate and it is deliberately not used.
+-- It would answer both questions - but only for as long as Blizzard keeps
+-- clearing it when the window hides, and a guard that never lets go is worse
+-- than the bug it fixes: it would silently stop every spec being learned for
+-- the rest of the session, and this file's whole promise is that not knowing
+-- is temporary. IsShown cannot get stuck, and neither can a clock.
+---------------------------------------------------------------------------
+local USER_GRACE = 3
+
+local userAskedAt
+
+if type(hooksecurefunc) == "function" and type(InspectUnit) == "function" then
+    hooksecurefunc("InspectUnit", function()
+        userAskedAt = Now()
+    end)
+end
+
+-- PURE, and kept apart from Busy for the same reason MayAsk is kept apart
+-- from Sweep: a rule with a clock inside it is a rule nobody can test.
+function Specs.ChannelBusy(now, askedAt, shown)
+    if shown then return true end
+    if askedAt and now - askedAt < USER_GRACE then return true end
+    return false
+end
+
+-- The same question, asked of the real client. InspectFrame does not exist
+-- until Blizzard_InspectUI loads, which is why every reach at it is guarded.
+function Specs.Busy()
+    local frame = InspectFrame
+    local shown = false
+    if frame and type(frame.IsShown) == "function" then
+        shown = ns.Truth(frame:IsShown(), false)
+    end
+    return Specs.ChannelBusy(Now(), userAskedAt, shown)
+end
+
+-- Only for the self test, which has to be able to run both sides of a guard
+-- whose other side is a clock.
+function Specs.ForgetUserAsk() userAskedAt = nil end
+
 -- The player never travels over the wire. His own spec is a plain call and
 -- it is always available, which also makes him the one member of the group
 -- the panel can filter correctly from the first second of a fight.
@@ -225,7 +289,24 @@ end
 -- ONE PASS OVER THE QUEUE. Public because the ticker is not the only thing
 -- that should be able to run it: the harness has no clock, and a rule nobody
 -- can drive from outside is a rule nobody can test.
+--
+-- IT SAYS WHAT IT DID - "busy", "asked", "waiting", "swept" or "idle" - and
+-- that is not decoration. The guard below is the whole of b9ty's bug, and a
+-- guard whose only proof is that somebody read the file is the shape this
+-- project has shipped broken before. The word comes back so the self test
+-- can drive the real sweep and be told.
 function Specs.Sweep()
+    -- BLIZZARD'S WINDOW OWNS THE CHANNEL WHILE IT IS OPEN. The queue is left
+    -- exactly as it is - the ticker keeps running and simply asks again once
+    -- the player closes it, so the only cost is that spec learning pauses
+    -- while he is looking at somebody.
+    --
+    -- `next(pending)` is part of the CONDITION rather than of the guard so an
+    -- empty queue still falls through to the cancel at the bottom. Otherwise
+    -- a window open at the wrong second would leave a ticker running for the
+    -- rest of the session with nothing to do.
+    if next(pending) and Specs.Busy() then return "busy" end
+
     local can = CanInspect
     local ask = NotifyInspect
     local now = Now()
@@ -242,19 +323,23 @@ function Specs.Sweep()
                 tried[guid] = now
                 lastAsk = now
                 ask(unit)
-            else
-                -- Out of range or not inspectable. Not an error and not
-                -- worth a message: it resolves itself when he walks over.
-                tried[guid] = now
+                return "asked"
             end
-            return
+            -- Out of range or not inspectable. Not an error and not worth a
+            -- message: it resolves itself when he walks over.
+            tried[guid] = now
+            return "waiting"
         end
     end
 
-    if not next(pending) and ticker then
-        ticker:Cancel()
-        ticker = nil
+    if not next(pending) then
+        if ticker then
+            ticker:Cancel()
+            ticker = nil
+        end
+        return "idle"
     end
+    return "swept"
 end
 
 local function StartTicker()
@@ -357,11 +442,27 @@ local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("INSPECT_READY")
 watcher:RegisterEvent("GROUP_ROSTER_UPDATE")
 watcher:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+-- AN ANSWER LANDED. Kept out of the handler for the same reason Absorb is:
+-- an event nobody can fire is a branch nobody can check, and the second half
+-- of b9ty's bug lives in here. Says which of the three things it did.
+function Specs.Answered(guid)
+    local unit = pending[guid]
+    if unit then Specs.Absorb(unit) end
+
+    -- CLEARING IS HANDING THE CHANNEL BACK, so only whoever took it may do
+    -- it. `unit` is nil for every answer we never asked for - the player's
+    -- own inspect window included - and the clear used to happen anyway,
+    -- outside this guard, throwing away the payload its owner was about to
+    -- read. That is the blank equipment slots.
+    if not unit then return "not ours" end
+    if Specs.Busy() then return "kept" end
+    if ClearInspectPlayer then ClearInspectPlayer() end
+    return "cleared"
+end
+
 watcher:SetScript("OnEvent", function(_, event, arg1)
     if event == "INSPECT_READY" then
-        local unit = pending[arg1]
-        if unit then Specs.Absorb(unit) end
-        if ClearInspectPlayer then ClearInspectPlayer() end
+        Specs.Answered(arg1)
 
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
         -- The arg is a unit, and it is the ONLY signal that somebody

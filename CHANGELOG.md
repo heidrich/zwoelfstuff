@@ -45,6 +45,30 @@ oldest versions move over.
 
 - The options window is 30 pixels taller. The rail ran out of room at the
   fourteenth page, exactly as the self test's margin check exists to catch.
+- **New Discord.** The invite under *About*, at the foot of the rail and in
+  the readme all point at the current server. There is one address written
+  down in this addon and everything else reads it, so all three moved
+  together.
+
+### Fixed
+
+- **Thanks to b9ty on CurseForge for the report.** Opening Blizzard's inspect
+  window on somebody in your group could show **every equipment slot empty**
+  while the 3D model still wore their gear — no error message, and it came
+  and went often enough to look like Blizzard's own bug. It was ours.
+
+  The client keeps exactly **one** inspect target. The spec cache — the part
+  that knows a priest is Discipline rather than Holy, so the external cooldown
+  panel offers the spell they can actually cast — has to ask the server about
+  people, and asking moves that one target. It was asking every two seconds
+  while you had the window open, and it was also releasing each answer when it
+  arrived, including the answers it never asked for. Yours was one of those,
+  and releasing it is what emptied the slots.
+
+  It now waits: while the inspect window is open, and for a moment after the
+  click that opens it, the queue holds still. Learning resumes the second you
+  close the window — nothing is forgotten in the meantime — and an answer this
+  addon did not ask for is left where it lies.
 
 ### Notes
 

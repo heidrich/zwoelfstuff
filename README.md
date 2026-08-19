@@ -17,7 +17,7 @@ and use them for my own UI. This is a collection of the features I like, done
 my way. And of course — feature requests and feedback are welcome!
 
 For questions and feature requests, join the Discord:
-**<https://discord.gg/d2EnXGNbGu>**
+**<https://discord.gg/mBWHSNNXZS>**
 
 | | |
 | --- | --- |

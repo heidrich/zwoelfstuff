@@ -5581,6 +5581,109 @@ local function TestExternals()
         S and S.MayAsk(200, nil, 100))
 
     ---------------------------------------------------------------------
+    -- THE INSPECT CHANNEL, which is b9ty's bug (CurseForge, 18 Aug 2026)
+    --
+    -- Opening Blizzard's inspect window on a group mate showed EVERY
+    -- equipment slot blank while the 3D model still wore the gear, with no
+    -- Lua error. The client keeps ONE inspect target, and this file's queue
+    -- was moving it with NotifyInspect and handing it back with
+    -- ClearInspectPlayer while his window was reading it.
+    --
+    -- THE RULE FIRST, THEN THE TWO PLACES THAT HAVE TO ASK IT, and that
+    -- order is the whole point: a guard written, green and never called is
+    -- exactly what shipped here before. Both callers are driven for real.
+    ---------------------------------------------------------------------
+    Check("A free channel is free", S and not S.ChannelBusy(100, nil, false))
+    Check("An open inspect window owns it",
+        S and S.ChannelBusy(100, nil, true))
+    Check("So does a click that has not opened a window yet",
+        S and S.ChannelBusy(100, 99, false))
+    Check("And the click stops counting after a moment",
+        S and S.ChannelBusy(100, 90, false) == false)
+    Check("Asking the live client answers yes or no, never nil",
+        S and type(S.Busy()) == "boolean")
+
+    if S then
+        -- ONE PLACE THAT WRITES Specs.Busy, so the guard can be driven from
+        -- both sides without three copies of the same assignment - which is
+        -- also what keeps the checker quiet about redefining a field.
+        local realBusy = S.Busy
+        local function Pretend(answer)
+            if answer == nil then S.Busy = realBusy return end
+            S.Busy = function() return answer end
+        end
+
+        -- THE HOOK, which is the half no rule can cover: InspectUnit is the
+        -- player's own click, and it has to reach userAskedAt. Only from a
+        -- desk - calling it on a client would open the window on somebody.
+        if __FAKE_SPECS then
+            InspectUnit("party1")
+            Check("His own click closes the channel for us", S.Busy())
+            S.ForgetUserAsk()
+            Check("And letting go opens it again", not S.Busy())
+        else
+            Skip("His own click closes the channel for us",
+                "calling InspectUnit on a client would open his window")
+        end
+
+        -- NOT WHILE HE IS ACTUALLY LOOKING. The sweep below is the real one
+        -- and it really does ask the server, so a test run with the inspect
+        -- window open would cause the very bug it is here to prevent.
+        if realBusy() then
+            Skip("A sweep asks nothing while the player is inspecting",
+                "an inspect window is open right now - come back after")
+            Skip("An answer that lands while his window is open is kept",
+                "an inspect window is open right now - come back after")
+        else
+            -- WIRING, HALF ONE: the sweep. Needs one name in the queue, so
+            -- it needs somebody standing next to you. Solo there is nothing
+            -- to sweep and it says so rather than passing on an empty walk.
+            S.Want("party1")
+            Pretend(true)
+            local verdict = S.Sweep()
+            Pretend(false)
+            local after = S.Sweep()
+            Pretend(nil)
+
+            if verdict == "idle" then
+                Skip("A sweep asks nothing while the player is inspecting",
+                    "nobody in the queue - this one needs a group")
+            else
+                Check("A sweep asks nothing while the player is inspecting",
+                    verdict == "busy", tostring(verdict))
+                Check("And it sweeps again the moment he closes the window",
+                    after ~= "busy", tostring(after))
+            end
+
+            -- WIRING, HALF TWO: the answer. The clear used to happen for
+            -- every INSPECT_READY, including the ones his own window asked
+            -- for. That is what emptied the slots.
+            local guid = UnitGUID and UnitGUID("party1")
+            if guid then
+                S.Want("party1")
+                Pretend(true)
+                local said = S.Answered(guid)
+                Pretend(nil)
+                if said == "not ours" then
+                    Skip("An answer that lands while his window is open is kept",
+                        "nothing was queued for party1 - his spec is known")
+                else
+                    Check("An answer that lands while his window is open is kept",
+                        said == "kept", tostring(said))
+                end
+            else
+                Skip("An answer that lands while his window is open is kept",
+                    "no party1 - this one needs a group")
+            end
+        end
+
+        -- AND THE ONE THAT NEEDS NOBODY AT ALL: an answer this addon never
+        -- asked for is not ours to throw away, whoever is looking.
+        Check("An answer nobody here asked for is left alone",
+            S.Answered("Player-0000-NOBODYATALL") == "not ours")
+    end
+
+    ---------------------------------------------------------------------
     -- AGAINST THE REAL TABLE. In game this is the check that matters: every
     -- index the catalogue claims has to point at a spec of the role it says,
     -- on THIS client. It cannot catch two specs of one class with the same
