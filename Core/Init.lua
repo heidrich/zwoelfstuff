@@ -1985,9 +1985,6 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
                 ns.Print("Three invented casts are on screen. "
                     .. "|cffffd100/zs casts test|r again puts them away.")
             end
-        elseif sub == "forget" then
-            ns.Casts.Forget()
-            ns.Print("The list of mobs is empty again.")
         else
             ns.Casts:Dump()
         end

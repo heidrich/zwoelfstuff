@@ -11061,19 +11061,16 @@ local function TestCasts()
         end
         Check(("%d mobs can draw an icon"):format(withSpells), withSpells > 0)
 
-        -- AND THE LIST THE PAGE ACTUALLY DRAWS. MobList is what BuildSide
-        -- calls; Catalog alone being right proved nothing about it - the
-        -- "test the wiring, not just the rule" lesson.
-        local list = Casts.MobList()
-        Check("The page's list is the season list plus what you met",
-            #list >= #catalog)
+        -- THE PAGE DRAWS CATALOG ITSELF since the walked ledger went in
+        -- 4.86, so the shape the page needs is checked on the one table it
+        -- actually reads.
         local shapeOK = true
-        for _, place in ipairs(list) do
+        for _, place in ipairs(catalog) do
             if type(place.place) ~= "string" or type(place.mobs) ~= "table" then
                 shapeOK = false
             end
         end
-        Check("Every place in it has a name and its mobs", shapeOK)
+        Check("Every place has a name and its mobs", shapeOK)
 
         ---------------------------------------------------------------
         -- BOSS -> LIEUTENANT -> MOB, INSIDE EACH DUNGEON
@@ -11408,55 +11405,6 @@ local function TestCasts()
     Check("A silenced voice says nothing at all",
         Casts.Speak("Tank hit", { enabled = false }) == false
         and Casts.Speak("", { enabled = true }) == false)
-
-    ---------------------------------------------------------------------
-    -- The ledger: the list the page's third column draws
-    ---------------------------------------------------------------------
-    OnStandInProfile(nil, function()
-        -- WHERE YOU ARE STANDING NOW DECIDES whether anything is collected
-        -- at all, so these have to say where they are. Swapped on our own
-        -- seam rather than on the client's GetInstanceInfo, because this
-        -- suite runs in the game too and the honest answer there is
-        -- "wherever he happens to be logged in".
-        local realPlace = Casts.PlaceWanted
-        local function Standing(wanted)
-            if wanted == nil then
-                Casts.PlaceWanted = realPlace
-                return
-            end
-            Casts.PlaceWanted = function() return wanted end
-        end
-
-        Standing(true)
-        Casts.Forget()
-        Check("A mob seen casting is remembered once",
-            Casts.Remember("Arcane Sentry", "lieutenant") == true
-            and Casts.Remember("Arcane Sentry", "lieutenant") == false)
-        Casts.Remember("Vile Lasher", "standard")
-        Check("A name we never read is not remembered",
-            Casts.Remember(nil, "boss") == false
-            and Casts.Remember("", "boss") == false)
-
-        local ledger = Casts.Ledger()
-        Check("The ledger files them under where you met them", #ledger == 1)
-        local mobs = ledger[1] and ledger[1].mobs or {}
-        Check("...dangerous first, then by name",
-            #mobs == 2 and mobs[1].mob == "Arcane Sentry"
-            and mobs[2].mob == "Vile Lasher")
-        Check("...and it counts how often", mobs[1].count == 2)
-
-        Casts.Forget()
-        Check("Forgetting empties it", #Casts.Ledger() == 0)
-
-        -- AND THE PLACE IS ASKED, NOT ASSUMED. Rules.Place was green above
-        -- before anything called it, which is the shape of bug this file
-        -- has shipped twice; this drives the real Remember from both sides.
-        Standing(false)
-        Check("Out in the world nothing is collected",
-            Casts.Remember("Arcane Sentry", "lieutenant") == false
-            and #Casts.Ledger() == 0)
-        Standing(nil)
-    end)
 
     ---------------------------------------------------------------------
     -- The alerts: the third book of reminders

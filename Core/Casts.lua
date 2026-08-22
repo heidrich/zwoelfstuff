@@ -608,12 +608,6 @@ function Casts:Scan()
                     if ns.CanCompute(guid) then npc = Rules.NpcID(guid) end
                 end
 
-                -- Every mob we see casting goes in the ledger, whether or not
-                -- this config wants a line about it: the list you pick from
-                -- has to fill itself while you play, not only while an alert
-                -- happens to be watching.
-                Casts.Remember(mob, rank, npc)
-
                 if Rules.Wanted(cfg, rank, aim) then
                     found = found + 1
                     local row = Row(found)
@@ -636,22 +630,19 @@ function Casts:Scan()
 end
 
 ---------------------------------------------------------------------------
--- THE LEDGER - which mobs cast things, where.
+-- WHERE YOU ARE STANDING.
 --
--- Owner, 2026-08-18, with two screenshots of EXBoss's Trash CD page: "rechte
--- leiste alle mobs und buster nach dungon / raids sortiert. schoen mit
--- icons, namen etc." That page is a hand-kept table of spell ids, and this
--- addon cannot have one - the id of a cast is secret, so a list of ids could
--- never be matched against what is happening in front of you.
+-- These three used to gate a self-collected ledger of mobs seen casting.
+-- The ledger went in 4.86 (owner: "schmeiss die alte liste raus!") - the
+-- season list in Core/MobData.lua knows every mob before you have met one,
+-- and a second copy that fills itself in play answers the same question
+-- later and worse.
 --
--- WHAT CAN BE MATCHED IS THE CASTER. UnitName reads mobs fine, so the list
--- writes itself out of what you actually meet: every mob seen casting, filed
--- under the instance you were in. Clicking one on the page adds it to the
--- alert you are editing, and THAT filter works live - which is the whole
--- point of a list, and the part a table of ids could not do on this patch.
---
--- Stored per profile, and only strings and numbers go in: a secret value in
--- SavedVariables is a saved file that cannot be written.
+-- They stay because they answer the one thing the shipped list cannot:
+-- WHICH dungeon you are standing in. The page uses that to put the dungeon
+-- you are in at the top, open. Where() names the place, Rules.Place decides
+-- whether a place belongs to the list at all, PlaceWanted asks the real
+-- client both questions at once.
 ---------------------------------------------------------------------------
 local UNKNOWN_PLACE = "Out in the world"
 
@@ -740,69 +731,6 @@ function Casts.PlaceWanted()
     return Rules.Place(kind, name, SeasonDungeons())
 end
 
-function Casts.Seen()
-    local cfg = Casts.Config()
-    cfg.seen = cfg.seen or {}
-    return cfg.seen
-end
-
--- One mob, once. Returns true when it was new here.
-function Casts.Remember(mob, rank, npc)
-    if type(mob) ~= "string" or mob == "" then return false end
-    if not ns.db then return false end
-    -- NOT EVERY MOB IN THE WORLD. The column is for the places you are
-    -- learning - this season's dungeons and the raids - and a list that also
-    -- collects every caster you rode past is a list nobody can find anything
-    -- in.
-    if not Casts.PlaceWanted() then return false end
-
-    local seen = Casts.Seen()
-    local place = Casts.Where()
-    local list = seen[place]
-    if not list then
-        list = {}
-        seen[place] = list
-    end
-
-    local entry = list[mob]
-    if entry then
-        entry.count = (tonumber(entry.count) or 0) + 1
-        if rank then entry.rank = rank end
-        if npc then entry.npc = npc end
-        return false
-    end
-
-    list[mob] = { rank = rank, count = 1, npc = npc }
-    return true
-end
-
--- The ledger as a sorted list of places, each with its sorted mobs, which is
--- the shape the page draws. Rebuilt on demand: it is read when a page is
--- open and never in combat.
-function Casts.Ledger()
-    local out = {}
-    for place, mobs in pairs(Casts.Seen()) do
-        local rows = {}
-        for mob, entry in pairs(mobs) do
-            rows[#rows + 1] = {
-                mob = mob,
-                npc = tonumber(entry.npc),
-                rank = entry.rank,
-                count = tonumber(entry.count) or 0,
-            }
-        end
-        table.sort(rows, function(a, b)
-            local aw = RANK_ORDER[a.rank or ""] or 0
-            local bw = RANK_ORDER[b.rank or ""] or 0
-            if aw ~= bw then return aw > bw end
-            return a.mob < b.mob
-        end)
-        out[#out + 1] = { place = place, mobs = rows }
-    end
-    table.sort(out, function(a, b) return a.place < b.place end)
-    return out
-end
-
 ---------------------------------------------------------------------------
 -- THE SEASON LIST - every mob of every dungeon, before you have met one.
 --
@@ -864,53 +792,11 @@ function Casts.Catalog()
                 place = dungeon.name,
                 short = dungeon.short,
                 mobs  = rows,
-                known = true,
             }
         end
     end
     table.sort(out, function(a, b) return a.place < b.place end)
     return out
-end
-
--- WHAT THE PAGE DRAWS: the season first, then anything you met that the
--- season list does not know - a raid, a mob outside a dungeon. The two are
--- kept apart rather than merged, because "this is the season" and "this is
--- what you walked past" answer different questions.
-function Casts.MobList()
-    local out = Casts.Catalog()
-
-    -- Which ids the season already covers, so the walked ledger does not
-    -- print a second copy of a mob that is listed above it.
-    local covered = {}
-    for _, place in ipairs(out) do
-        for _, entry in ipairs(place.mobs) do
-            if entry.npc then covered[entry.npc] = true end
-            if entry.mob then covered[entry.mob] = true end
-        end
-    end
-
-    for _, place in ipairs(Casts.Ledger()) do
-        local rows = {}
-        for _, entry in ipairs(place.mobs) do
-            if not (covered[entry.npc or false] or covered[entry.mob or false]) then
-                rows[#rows + 1] = entry
-            end
-        end
-        if #rows > 0 then
-            out[#out + 1] = { place = place.place, mobs = rows, known = false }
-        end
-    end
-
-    return out
-end
-
-function Casts.Forget(place)
-    local seen = Casts.Seen()
-    if place then
-        seen[place] = nil
-    else
-        for key in pairs(seen) do seen[key] = nil end
-    end
 end
 
 -- THE ONE THAT MATTERS, for surfaces that show a single line: the cast aimed
@@ -1011,6 +897,10 @@ function Casts.Config()
     ns.db.casts = ns.db.casts or {}
     local cfg = ns.db.casts
     if seeded == cfg then return cfg end
+
+    -- The walked ledger went in 4.86; profiles from before carry it as dead
+    -- weight. Dropped here because this block already runs once per profile.
+    cfg.seen = nil
     for key, value in pairs(Casts.DEFAULTS) do
         if cfg[key] == nil then
             if type(value) == "table" then

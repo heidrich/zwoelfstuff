@@ -761,21 +761,13 @@ local PAGES = {
       },
       build = function(page, width) return ns.OptionsAnswers:BuildPage(page, width) end },
 
-    -- WHAT IS BEING CAST AT YOU. Its third column is the mobs you have met,
-    -- filed under the place you met them - the shape of EXBoss's Trash CD
-    -- page (owner, 2026-08-18, with two screenshots of it), on the one thing
-    -- this patch lets an addon match against: the caster's name. The spell
-    -- cannot be listed, and Core/Casts.lua's header says why.
+    -- WHAT IS BEING CAST AT YOU. Its third column is the season's mob list
+    -- out of Core/MobData.lua - the shape of EXBoss's Trash CD page (owner,
+    -- 2026-08-18, with two screenshots of it). Alerts filter on the NPC id,
+    -- because the spell id of a live cast is secret on this patch.
     { key = "casts", title = "Casts on you", glyph = "pulse",
       module = "casts", casts = true, soon = true,
       subtitle = "The bar says what is being cast, and marks the one on you.",
-      actions = {
-          { text = "Forget the list",
-            onClick = function()
-                ns.Casts.Forget()
-                ns.Options:Refresh()
-            end },
-      },
       build = function(page, width) return ns.OptionsCasts:BuildPage(page, width) end },
 
     -- THE RAID LEADER'S PAGE. Its third column is the list of buttons there

@@ -1009,10 +1009,10 @@ function Page:BuildSide(sideHost, pad)
     side.Refresh = function()
         local editor = ns.OptionsCastAlerts
         local _, cfg = editor:Current()
-        local ledger = ns.Casts.MobList()
+        local catalog = ns.Casts.Catalog()
         local y, usedRows, usedHeads = 0, 0, 0
 
-        for _, place in ipairs(ledger) do
+        for _, place in ipairs(catalog) do
             usedHeads = usedHeads + 1
             local heading = headings[usedHeads]
             if not heading then
@@ -1091,10 +1091,7 @@ function Page:BuildSide(sideHost, pad)
                 local picked = cfg and type(cfg.mobs) == "table"
                     and row.dkMob ~= nil and cfg.mobs[row.dkMob] == true
                 row:SetUsed(picked and "watched" or nil, true)
-                -- A mob out of the season list says what it is; one only ever
-                -- walked past says so, because the two are not the same claim.
-                local badge = RANK_BADGE[entry.rank or ""]
-                if not badge then badge = place.known and "mob" or "seen" end
+                local badge = RANK_BADGE[entry.rank or ""] or "mob"
                 row:SetTrailing(picked and "Watched" or badge,
                     picked and "cell" or nil,
                     RANK_COLOUR[entry.rank or ""])
