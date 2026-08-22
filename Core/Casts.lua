@@ -838,9 +838,28 @@ function Casts.Catalog()
                 rank   = mob.boss and "boss" or Rules.Rank(mob.level),
                 spells = mob.spells,
                 boss   = mob.boss,
+                -- The three the enemy card needs. `display` is the one that
+                -- matters: with it the flat portrait can be painted on the
+                -- first pass instead of after a model has loaded and been
+                -- read back.
+                display = mob.display,
+                kind    = mob.kind,
+                health  = mob.health,
+                level   = mob.level,
             }
         end
         if #rows > 0 then
+            -- BOSS -> LIEUTENANT -> MOB, then by name. RANK_ORDER already
+            -- exists for exactly this and the ledger already sorts by it;
+            -- doing it here rather than in the generated file keeps ONE copy
+            -- of the rule.
+            table.sort(rows, function(a, b)
+                local aw = RANK_ORDER[a.rank or ""] or 0
+                local bw = RANK_ORDER[b.rank or ""] or 0
+                if aw ~= bw then return aw > bw end
+                if a.mob ~= b.mob then return (a.mob or "") < (b.mob or "") end
+                return (a.npc or 0) < (b.npc or 0)
+            end)
             out[#out + 1] = {
                 place = dungeon.name,
                 short = dungeon.short,

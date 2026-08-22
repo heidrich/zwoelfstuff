@@ -4,6 +4,7 @@
   "workspace.library": [],
   "diagnostics.globals": [
     "__FAKE_SPECS",
+    "__PORTRAITS",
     "__SECRET",
     "_G",
     "AbbreviateNumbers",
@@ -154,6 +155,7 @@
     "strlenutf8",
     "strsplit",
     "UIParent",
+    "ZwoelfStuffMobCard",
     "UISpecialFrames",
     "UninviteUnit",
     "UnitAffectingCombat",

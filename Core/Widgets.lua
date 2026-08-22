@@ -6139,7 +6139,11 @@ function UI.SpellRow(parent, width, height)
     row.name:SetPoint("RIGHT", row.trail, "LEFT", -8, 0)
 
     -- kind: "cell" puts it on a green bed, anything else is plain small type.
-    row.SetTrailing = function(self, text, kind)
+    -- colour is optional and only reaches the plain trailing text: a badge
+    -- carries its own bed and recolouring it would fight that. Passing none
+    -- restores the default, so a list that sets it on one row and not the
+    -- next does not leave the previous row's colour behind on a pooled frame.
+    row.SetTrailing = function(self, text, kind, colour)
         if kind == "cell" and text then
             self.cellBadge:SetLabel(text)
             self.cellBadge:Show()
@@ -6148,6 +6152,8 @@ function UI.SpellRow(parent, width, height)
         else
             self.cellBadge:Hide()
             self.trail:SetText(text or "")
+            local c = colour or C.textFaint
+            self.trail:SetTextColor(c[1], c[2], c[3])
             self.name:SetPoint("RIGHT", self.trail, "LEFT", -8, 0)
         end
     end
@@ -6184,6 +6190,11 @@ function UI.SpellRow(parent, width, height)
     -- screen, where a tooltip growing rightwards would run off it.
     row.dkLines = {}
 
+    -- THE NAME GOES HOT UNDER THE CURSOR. Owner's rule, 2026-08-14: "alles
+    -- was man hovern bzw. anklicken kann" is that orange. Opt-in per row via
+    -- dkHot, so the lists written before this keep the colour they had.
+    row.dkRestName = nil
+
     row:SetScript("OnEnter", function(self)
         self.bg:SetColorTexture(
             self.dkUsedIn and C.inUseSoft[1] or C.surface[1],
@@ -6191,14 +6202,29 @@ function UI.SpellRow(parent, width, height)
             self.dkUsedIn and C.inUseSoft[3] or C.surface[3], 1)
         self.bg:Show()
 
-        if not (GameTooltip and self.dkSpellID) then return end
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        if self.dkHot then
+            self.dkRestName = { self.name:GetTextColor() }
+            self.name:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+        end
 
-        -- An ID the client does not know throws rather than returning empty.
-        if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.dkSpellID) then
+        if not GameTooltip then return end
+
+        -- A ROW IS NOT ALWAYS A SPELL. It used to leave here whenever
+        -- dkSpellID was nil, which is every row of the mob list - so the
+        -- whole column had no tooltip and nothing said why.
+        if self.dkSpellID then
             GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-            GameTooltip:AddLine(self.name:GetText() or "")
-            GameTooltip:AddLine(tostring(self.dkSpellID), 0.5, 0.5, 0.5)
+            -- An ID the client does not know throws rather than returning empty.
+            if not pcall(GameTooltip.SetSpellByID, GameTooltip, self.dkSpellID) then
+                GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+                GameTooltip:AddLine(self.name:GetText() or "")
+                GameTooltip:AddLine(tostring(self.dkSpellID), 0.5, 0.5, 0.5)
+            end
+        elseif self.dkTipTitle or #self.dkLines > 0 then
+            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+            GameTooltip:AddLine(self.dkTipTitle or self.name:GetText() or "")
+        else
+            return
         end
 
         for _, line in ipairs(self.dkLines) do
@@ -6210,6 +6236,10 @@ function UI.SpellRow(parent, width, height)
 
     row:SetScript("OnLeave", function(self)
         self.bg:Hide()
+        if self.dkRestName then
+            self.name:SetTextColor(unpack(self.dkRestName))
+            self.dkRestName = nil
+        end
         if GameTooltip then GameTooltip:Hide() end
     end)
 

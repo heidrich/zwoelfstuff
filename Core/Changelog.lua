@@ -37,10 +37,18 @@ ns.CHANGELOG = {
             {
                 icon = "Interface\\Icons\\INV_Misc_Map_01",
                 text = "|cffffd100The season's mobs are in the addon.|r All "
-                    .. "16 dungeons, 462 mobs and 79 bosses, listed with "
-                    .. "icons under the dungeon they belong to. Click one to "
-                    .. "narrow an alert to it.",
+                    .. "16 dungeons, 462 mobs and 79 bosses, each with its "
+                    .. "own portrait, under the dungeon it belongs to. "
+                    .. "Sorted boss, lieutenant, then mob.",
                 link = { label = "Open the mob list", page = "casts" },
+            },
+            {
+                icon = "Interface\\Icons\\INV_Misc_Head_Dragon_01",
+                text = "|cffffd100Click a mob for its card.|r The 3D model, "
+                    .. "its NPC id, level, type and health, and every "
+                    .. "ability it casts with the game's own tooltip on "
+                    .. "each. Right-click a mob to watch it without opening "
+                    .. "the card.",
             },
             {
                 icon = "Interface\\Icons\\INV_Misc_Wrench_01",

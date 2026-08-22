@@ -15,12 +15,17 @@ oldest versions move over.
 ### Added
 
 - **The season's mobs are in the addon.** All 16 dungeons, 462 mobs and 79
-  bosses, listed with icons under the dungeon they belong to. Click one to
-  narrow an alert to it.
+  bosses, each with its own portrait, under the dungeon it belongs to.
+- **Click a mob for its card** — 3D model, NPC id, level, creature type,
+  health, and every ability it casts with the game's own tooltip on each.
 - **`/zs tanks auras`** says why the co-tank aura strips are empty.
 
 ### Changed
 
+- **The mob list is sorted boss, lieutenant, then mob** within each dungeon,
+  and each rank has its own colour.
+- **Mob rows answer the cursor** — rank, type and ability count on hover.
+  Right-click watches a mob without opening its card.
 - **Mob filters are keyed by NPC id** instead of by name, so a picked mob
   matches whatever language the client is in. Filters picked before this keep
   working.

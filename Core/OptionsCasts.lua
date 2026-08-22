@@ -643,6 +643,290 @@ function Page:BuildVoice(grid, width)
 end
 
 ---------------------------------------------------------------------------
+-- THE ENEMY CARD - one mob, its model and everything it casts
+--
+-- Owner, with a screenshot of MDT's enemy page: "bei klick muss ein modal
+-- aufgehen mit 3d avatar und der spell liste und allen faehigkeiten."
+--
+-- The abilities are the reason this is worth building. Nothing in this addon
+-- may read the spell of a cast happening in front of you - but these ids came
+-- out of a table, so every one of them can be named, drawn and given the
+-- game's own tooltip. It is the one place in the whole feature where a spell
+-- has a name.
+--
+-- ONE CARD, REUSED. Built on first open, refilled after that: a window per
+-- mob is 462 frames that can never be freed.
+---------------------------------------------------------------------------
+local mobCard
+
+local CARD_W, CARD_H = 580, 430
+local MODEL_W = 190
+
+local function BuildMobCard()
+    if mobCard then return mobCard end
+
+    local card = CreateFrame("Frame", "ZwoelfStuffMobCard", UIParent)
+    card:SetSize(CARD_W, CARD_H)
+    card:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    -- ABOVE THE OPTIONS WINDOW IT IS OPENED FROM, and above its inspector.
+    card:SetFrameStrata("DIALOG")
+    card:EnableMouse(true)
+    card:SetMovable(true)
+    card:RegisterForDrag("LeftButton")
+    card:SetScript("OnDragStart", card.StartMoving)
+    card:SetScript("OnDragStop", card.StopMovingOrSizing)
+    card:Hide()
+
+    local bg = card:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(card)
+    bg:SetColorTexture(C.windowBg[1], C.windowBg[2], C.windowBg[3], 1)
+
+    local edge = ns.CreateBorder(card, 1, "BORDER")
+    edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    ---------------------------------------------------------------------
+    -- Header
+    ---------------------------------------------------------------------
+    card.title = UI.Label(card, "", UI.FS.card, C.text)
+    card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 16, -14)
+    card.title:SetJustifyH("LEFT")
+
+    card.rank = UI.Label(card, "", UI.FS.meta, C.textFaint)
+    card.rank:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -3)
+    card.rank:SetJustifyH("LEFT")
+
+    local close = UI.GhostButton(card, "Close", function()
+        card:Hide()
+    end)
+    close:SetPoint("TOPRIGHT", card, "TOPRIGHT", -14, -14)
+
+    local rule = card:CreateTexture(nil, "ARTWORK")
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", card, "TOPLEFT", 14, -54)
+    rule:SetPoint("TOPRIGHT", card, "TOPRIGHT", -14, -54)
+    rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    ---------------------------------------------------------------------
+    -- The model, in a well of its own
+    ---------------------------------------------------------------------
+    local well = CreateFrame("Frame", nil, card)
+    well:SetPoint("TOPLEFT", card, "TOPLEFT", 14, -64)
+    well:SetSize(MODEL_W, 220)
+    local wellBg = well:CreateTexture(nil, "BACKGROUND")
+    wellBg:SetAllPoints(well)
+    wellBg:SetColorTexture(C.well[1], C.well[2], C.well[3], 1)
+    local wellEdge = ns.CreateBorder(well, 1, "BORDER")
+    wellEdge:SetColor(C.separator[1], C.separator[2], C.separator[3], 1)
+
+    card.model = CreateFrame("PlayerModel", nil, well)
+    card.model:SetPoint("TOPLEFT", well, "TOPLEFT", 1, -1)
+    card.model:SetPoint("BOTTOMRIGHT", well, "BOTTOMRIGHT", -1, 1)
+    card.model:Hide()
+
+    -- WHEN THERE IS NO MODEL TO SHOW. An empty sunken box reads as a broken
+    -- window; a line saying so reads as an answer.
+    card.noModel = UI.Hint(well, "No model for this one.")
+    card.noModel:SetPoint("CENTER", well, "CENTER", 0, 0)
+    card.noModel:Hide()
+
+    ---------------------------------------------------------------------
+    -- The readings, beside the model
+    ---------------------------------------------------------------------
+    local statW = CARD_W - MODEL_W - 14 - 14 - 12
+    card.stats = {}
+    for index, caption in ipairs({ "NPC Id", "Level", "Creature type", "Health" }) do
+        local stat = UI.Stat(card, caption)
+        -- Two per row: four tiles down the side of a 220-pixel model would
+        -- each be shorter than their own caption.
+        local col = (index - 1) % 2
+        local row = math.floor((index - 1) / 2)
+        stat:SetWidth((statW - 8) / 2)
+        stat:ClearAllPoints()
+        stat:SetPoint("TOPLEFT", well, "TOPRIGHT",
+            12 + col * ((statW - 8) / 2 + 8),
+            -row * (UI.STAT_H + 8))
+        card.stats[index] = stat
+    end
+
+    ---------------------------------------------------------------------
+    -- Everything it casts
+    ---------------------------------------------------------------------
+    card.spellTitle = UI.Label(card, "Abilities", UI.FS.card, C.text)
+    card.spellTitle:SetPoint("TOPLEFT", well, "TOPRIGHT", 12,
+        -(UI.STAT_H * 2 + 8 + 14))
+    card.spellTitle:SetJustifyH("LEFT")
+
+    local listHost = CreateFrame("Frame", nil, card)
+    listHost:SetPoint("TOPLEFT", card.spellTitle, "BOTTOMLEFT", 0, -8)
+    listHost:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -14, 52)
+
+    local listWidth = statW
+    local _, content = UI.ScrollArea(listHost, listWidth, 8)
+    card.content = content
+    card.listWidth = listWidth
+    card.spellRows = {}
+
+    card.noSpells = UI.Hint(content, "Nothing recorded for this one.")
+    card.noSpells:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -4)
+    card.noSpells:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -4)
+    card.noSpells:Hide()
+
+    ---------------------------------------------------------------------
+    -- The one action this card offers
+    ---------------------------------------------------------------------
+    card.watch = UI.Button(card, "Watch this mob", 160, function()
+        if card.OnWatch then card.OnWatch() end
+    end)
+    card.watch:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 14, 14)
+
+    card.watchNote = UI.Label(card, "", UI.FS.meta, C.textFaint)
+    card.watchNote:SetPoint("LEFT", card.watch, "RIGHT", 10, 0)
+    card.watchNote:SetPoint("RIGHT", card, "RIGHT", -14, 0)
+    card.watchNote:SetJustifyH("LEFT")
+    card.watchNote:SetWordWrap(false)
+
+    -- ESCAPE CLOSES IT, through the game's own list rather than a key handler
+    -- of ours competing for the keyboard - the same road Keys.lua takes.
+    if UISpecialFrames then
+        table.insert(UISpecialFrames, "ZwoelfStuffMobCard")
+    end
+
+    mobCard = card
+    return card
+end
+
+-- A number a person reads at a glance. 24,290,000 is four digits of noise.
+local function ShortHealth(value)
+    if type(value) ~= "number" or value <= 0 then return nil end
+    if value >= 1e6 then return ("%.2fm"):format(value / 1e6) end
+    if value >= 1e3 then return ("%.0fk"):format(value / 1e3) end
+    return tostring(value)
+end
+
+---------------------------------------------------------------------------
+-- Open the card on one mob. `onWatch` is called when the button is pressed,
+-- and `watched` decides what the button says.
+---------------------------------------------------------------------------
+function ns.ShowMobCard(entry, spec)
+    if type(entry) ~= "table" then return end
+    spec = spec or {}
+
+    local card = BuildMobCard()
+    card.entry = entry
+
+    card.title:SetText(entry.mob or "Unknown")
+
+    local RANK_WORD = {
+        boss = "Boss", lieutenant = "Lieutenant", standard = "Ordinary mob",
+    }
+    local RANK_COLOUR = {
+        boss = C.harm, lieutenant = C.warning, standard = C.textFaint,
+    }
+    local word = RANK_WORD[entry.rank or ""]
+    local colour = RANK_COLOUR[entry.rank or ""] or C.textFaint
+    card.rank:SetText(spec.place and word and (word .. "  ·  " .. spec.place)
+        or word or spec.place or "")
+    card.rank:SetTextColor(colour[1], colour[2], colour[3])
+
+    ---------------------------------------------------------------------
+    -- The model. Two doors, the same pair Death.PaintArt uses - a creature
+    -- id first because MDT's own enemy tooltip points at raw npc ids, then
+    -- the display id. NOT portrait-zoomed: the list is where the head shots
+    -- are, and this is the whole figure the owner asked for.
+    ---------------------------------------------------------------------
+    local shown = false
+    if entry.npc and card.model.SetCreature then
+        shown = pcall(card.model.SetCreature, card.model, entry.npc)
+    end
+    if not shown and entry.display and card.model.SetDisplayInfo then
+        shown = pcall(card.model.SetDisplayInfo, card.model, entry.display)
+    end
+    if shown then
+        pcall(card.model.SetPosition, card.model, 0, 0, -0.35)
+        pcall(card.model.SetFacing, card.model, 0.5)
+        pcall(card.model.SetCamDistanceScale, card.model, 1.15)
+        card.model:Show()
+        card.noModel:Hide()
+    else
+        card.model:Hide()
+        card.noModel:Show()
+    end
+
+    ---------------------------------------------------------------------
+    -- The readings
+    ---------------------------------------------------------------------
+    card.stats[1]:Set(entry.npc and tostring(entry.npc) or "—")
+    card.stats[2]:Set(entry.level and tostring(entry.level) or "—")
+    card.stats[3]:Set(entry.kind or "—")
+    card.stats[4]:Set(ShortHealth(entry.health) or "—")
+
+    ---------------------------------------------------------------------
+    -- Every ability, with the game's own tooltip on each
+    ---------------------------------------------------------------------
+    local spells = type(entry.spells) == "table" and entry.spells or {}
+    card.spellTitle:SetText(#spells == 1 and "1 ability"
+        or (#spells .. " abilities"))
+
+    local y, used = 0, 0
+    for _, spellID in ipairs(spells) do
+        used = used + 1
+        local row = card.spellRows[used]
+        if not row then
+            row = UI.SpellRow(card.content, card.listWidth, 30)
+            -- Nothing here is dragged onto a bar: this list is a reference,
+            -- and a row that lifts off under the cursor promises otherwise.
+            row:RegisterForDrag()
+            row:SetScript("OnDragStart", nil)
+            row:SetScript("OnDragStop", nil)
+            card.spellRows[used] = row
+        end
+
+        row.dkSpellID = spellID
+        row.dkPayload = nil
+        row.dkHot = true
+        wipe(row.dkLines)
+
+        local name = spellID
+        if C_Spell and C_Spell.GetSpellName then
+            local ok, got = pcall(C_Spell.GetSpellName, spellID)
+            if ok and type(got) == "string" and got ~= "" then name = got end
+        end
+        row.name:SetText(name)
+        row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        row.icon:SetTexture((ns.SpellTexture and ns.SpellTexture(spellID))
+            or ns.WHITE)
+        row:SetUsed(nil, true)
+        row:SetTrailing(tostring(spellID), nil, C.textGhost)
+
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", card.content, "TOPLEFT", 0, -y)
+        row:Show()
+        y = y + 31
+    end
+
+    for index = used + 1, #card.spellRows do card.spellRows[index]:Hide() end
+    card.noSpells:SetShown(used == 0)
+    card.content:SetHeight(math.max(1, y))
+
+    ---------------------------------------------------------------------
+    -- The action
+    ---------------------------------------------------------------------
+    card.OnWatch = spec.onWatch
+    card.watch:SetShown(spec.onWatch ~= nil)
+    if spec.onWatch then
+        card.watch.label:SetText(spec.watched and "Stop watching" or "Watch this mob")
+        card.watchNote:SetText(spec.watched
+            and "The selected alert only fires for this mob."
+            or "Narrows the selected alert to this mob.")
+    else
+        card.watchNote:SetText("")
+    end
+
+    card:Show()
+    card:Raise()
+end
+
+---------------------------------------------------------------------------
 -- THE THIRD COLUMN - the mobs you have met, by instance
 ---------------------------------------------------------------------------
 function Page:BuildSide(sideHost, pad)
@@ -681,6 +965,47 @@ function Page:BuildSide(sideHost, pad)
         standard = "mob", lieutenant = "lieutenant", boss = "boss",
     }
 
+    -- WHAT EACH RANK IS WORTH, in colour. Owner: "das sollten die
+    -- entsprechenden farben haben". A traffic light off the existing tokens
+    -- rather than three new ones - the boss is the harm colour the death
+    -- window uses, the lieutenant is the warning amber, and rank and file
+    -- stay quiet so the other two can be picked out at a glance.
+    local RANK_COLOUR = {
+        boss       = C.harm,
+        lieutenant = C.warning,
+        standard   = C.textFaint,
+    }
+
+    -- A MOB'S OWN FACE, not the icon of one of its spells.
+    --
+    -- Owner: "bei der liste muss der 2d avatar drin sein". This can be done
+    -- on the first pass now and could not be before: the flat portrait call
+    -- wants a DISPLAY id, the addon never had one for a creature it had not
+    -- already loaded a model of - which is why its own self test has always
+    -- reported "0 flat portraits" - and MobData carries one for all 462.
+    local function PaintMobFace(icon, entry)
+        if entry.display and type(SetPortraitTextureFromCreatureDisplayID) == "function" then
+            -- Portraits are drawn whole. The 0.08 inset every spell icon in
+            -- this window wears would crop the face.
+            icon:SetTexCoord(0, 1, 0, 1)
+            if pcall(SetPortraitTextureFromCreatureDisplayID, icon, entry.display) then
+                return true
+            end
+        end
+        -- No display id: the mob's first spell still says more than nothing.
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        local spells = entry.spells
+        if type(spells) == "table" and spells[1] and ns.SpellTexture then
+            local texture = ns.SpellTexture(spells[1])
+            if texture then
+                icon:SetTexture(texture)
+                return true
+            end
+        end
+        icon:SetTexture(ns.WHITE)
+        return false
+    end
+
     side.Refresh = function()
         local editor = ns.OptionsCastAlerts
         local _, cfg = editor:Current()
@@ -705,42 +1030,62 @@ function Page:BuildSide(sideHost, pad)
                 local row = rows[usedRows]
                 if not row then
                     row = UI.SpellRow(content, rowWidth, 30)
-                    row:SetScript("OnClick", function(self)
+
+                    -- WATCHING IS ONE FUNCTION, CALLED FROM TWO PLACES - the
+                    -- right-click here and the card's own button. Two copies
+                    -- of "toggle this key, drop the table when it empties"
+                    -- is how the two quietly stop agreeing.
+                    local function ToggleWatch(key)
                         local _, current = editor:Current()
                         if not current then
                             ns.Print("Make an alert first - the New alert "
                                 .. "button on the Alerts tab.")
                             return
                         end
-                        if self.dkMob == nil then return end
+                        if key == nil then return end
                         current.mobs = current.mobs or {}
-                        if current.mobs[self.dkMob] then
-                            current.mobs[self.dkMob] = nil
+                        if current.mobs[key] then
+                            current.mobs[key] = nil
                             if next(current.mobs) == nil then
                                 current.mobs = nil
                             end
                         else
-                            current.mobs[self.dkMob] = true
+                            current.mobs[key] = true
                         end
                         editor:Apply()
                         ns.OptionsCasts:Refresh()
                         side.Refresh()
+                    end
+
+                    -- Owner: "bei klick muss ein modal aufgehen". So the
+                    -- left button opens the card, and watching moves to the
+                    -- right button and to the card's own button - it stays
+                    -- one press either way.
+                    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                    row:SetScript("OnClick", function(self, button)
+                        if button == "RightButton" then
+                            ToggleWatch(self.dkMob)
+                            return
+                        end
+                        local _, current = editor:Current()
+                        local watched = current and type(current.mobs) == "table"
+                            and self.dkMob ~= nil
+                            and current.mobs[self.dkMob] == true
+                        ns.ShowMobCard(self.dkEntry, {
+                            place = self.dkPlace,
+                            watched = watched,
+                            onWatch = function() ToggleWatch(self.dkMob) end,
+                        })
                     end)
                     rows[usedRows] = row
                 end
 
                 row.dkMob = ns.CastRules.MobKey(entry.mob, entry.npc)
+                row.dkEntry = entry
+                row.dkPlace = place.place
+                row.dkHot = true
 
-                -- THE ICON IS THE MOB'S FIRST SPELL, and it is readable
-                -- precisely because it is OURS: a spell id out of the season
-                -- table is an ordinary number, unlike the id of a cast
-                -- happening in front of you, which the client withholds.
-                local texture
-                local spells = entry.spells
-                if type(spells) == "table" and spells[1] and ns.SpellTexture then
-                    texture = ns.SpellTexture(spells[1])
-                end
-                row.icon:SetTexture(texture or ns.WHITE)
+                PaintMobFace(row.icon, entry)
                 row.name:SetText(entry.mob)
 
                 local picked = cfg and type(cfg.mobs) == "table"
@@ -751,7 +1096,35 @@ function Page:BuildSide(sideHost, pad)
                 local badge = RANK_BADGE[entry.rank or ""]
                 if not badge then badge = place.known and "mob" or "seen" end
                 row:SetTrailing(picked and "Watched" or badge,
-                    picked and "cell" or nil)
+                    picked and "cell" or nil,
+                    RANK_COLOUR[entry.rank or ""])
+
+                -- WHAT THE CURSOR IS TOLD. The row had none of this: the
+                -- tooltip is a spell tooltip and left immediately when there
+                -- was no spell id, so the whole column was silent.
+                row.dkSpellID = nil
+                row.dkTipTitle = entry.mob
+                wipe(row.dkLines)
+                local said = RANK_BADGE[entry.rank or ""]
+                if said then
+                    local rc = RANK_COLOUR[entry.rank or ""] or C.textDim
+                    row.dkLines[#row.dkLines + 1] = {
+                        text = said:gsub("^%l", string.upper),
+                        r = rc[1], g = rc[2], b = rc[3],
+                    }
+                end
+                if entry.kind then
+                    row.dkLines[#row.dkLines + 1] = { text = entry.kind }
+                end
+                local count = type(entry.spells) == "table" and #entry.spells or 0
+                row.dkLines[#row.dkLines + 1] = {
+                    text = count == 1 and "1 ability" or (count .. " abilities"),
+                }
+                row.dkLines[#row.dkLines + 1] = {
+                    text = picked and "Click to open. Right-click stops watching it."
+                        or "Click to open. Right-click watches it.",
+                    r = C.hot[1], g = C.hot[2], b = C.hot[3],
+                }
 
                 row:ClearAllPoints()
                 row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)

@@ -11074,6 +11074,113 @@ local function TestCasts()
             end
         end
         Check("Every place in it has a name and its mobs", shapeOK)
+
+        ---------------------------------------------------------------
+        -- BOSS -> LIEUTENANT -> MOB, INSIDE EACH DUNGEON
+        --
+        -- Owner: "sortieren boss->leutnannt>mob" and "nach dungon, im
+        -- moment ist alles durcheinander". The dungeons were grouped
+        -- already; what was jumbled was inside one, because the generated
+        -- file sorted on the boss flag alone and left the other two mixed.
+        ---------------------------------------------------------------
+        local ORDER = { standard = 1, lieutenant = 2, boss = 3 }
+        local outOfOrder, worstPlace
+        for _, place in ipairs(catalog) do
+            local previous
+            for _, entry in ipairs(place.mobs) do
+                local weight = ORDER[entry.rank or ""] or 0
+                if previous and weight > previous then
+                    outOfOrder = (outOfOrder or 0) + 1
+                    worstPlace = worstPlace or place.place
+                end
+                previous = weight
+            end
+        end
+        Check("Each dungeon runs boss, then lieutenant, then mob",
+            outOfOrder == nil,
+            outOfOrder and ("%d out of order, first in %s")
+                :format(outOfOrder, tostring(worstPlace)))
+
+        -- THE FACE NEEDS A DISPLAY ID and nothing else can supply one at
+        -- draw time - without it the row falls back to a spell icon, which
+        -- is what the list looked like before. Counted, not assumed.
+        local withFace = 0
+        for _, place in ipairs(catalog) do
+            for _, entry in ipairs(place.mobs) do
+                if entry.display then withFace = withFace + 1 end
+            end
+        end
+        Check(("%d of %d mobs can draw their own face")
+            :format(withFace, ranked + unranked), withFace > 0)
+
+        ---------------------------------------------------------------
+        -- THE ENEMY CARD, opened on a real entry rather than an invented
+        -- one: a card that works on a hand-made table and not on the data
+        -- it ships with has been tested against nothing.
+        ---------------------------------------------------------------
+        if type(ns.ShowMobCard) == "function" then
+            local sample
+            for _, place in ipairs(catalog) do
+                for _, entry in ipairs(place.mobs) do
+                    if not sample and type(entry.spells) == "table"
+                        and #entry.spells > 1 then
+                        sample = entry
+                    end
+                end
+            end
+            Check("The season list has a mob with abilities to open",
+                sample ~= nil)
+
+            if sample then
+                local before = #(__PORTRAITS or {})
+                local watched = false
+                local ok, err = pcall(ns.ShowMobCard, sample, {
+                    place = "Desk",
+                    watched = false,
+                    onWatch = function() watched = true end,
+                })
+                Check("The enemy card opens", ok, err)
+
+                local card = ZwoelfStuffMobCard
+                Check("And it is a frame Escape can close", card ~= nil
+                    and (function()
+                        for _, name in ipairs(UISpecialFrames or {}) do
+                            if name == "ZwoelfStuffMobCard" then return true end
+                        end
+                        return false
+                    end)())
+
+                if card then
+                    Check("It is titled with the mob",
+                        card.title:GetText() == sample.mob,
+                        tostring(card.title:GetText()))
+                    -- EVERY ability, not the first handful: this card is the
+                    -- one place in the feature where a spell has a name.
+                    local drawn = 0
+                    for _, row in ipairs(card.spellRows or {}) do
+                        if row:IsShown() then drawn = drawn + 1 end
+                    end
+                    Check(("It lists all %d abilities"):format(#sample.spells),
+                        drawn == #sample.spells,
+                        ("drew %d"):format(drawn))
+                    Check("Each ability row carries its spell id for the tooltip",
+                        (card.spellRows[1] or {}).dkSpellID == sample.spells[1])
+                    -- The button is the second door to watching, and a card
+                    -- whose button does nothing looks identical to one whose
+                    -- button works.
+                    if card.OnWatch then card.OnWatch() end
+                    Check("Its watch button reaches the alert", watched)
+                end
+
+                Check(("The card asked for %d portrait%s")
+                    :format(#(__PORTRAITS or {}) - before,
+                        (#(__PORTRAITS or {}) - before) == 1 and "" or "s"),
+                    true)
+                if card then card:Hide() end
+            end
+        else
+            Skip("The enemy card", "ns.ShowMobCard is not loaded")
+        end
     end
 
     ---------------------------------------------------------------------
