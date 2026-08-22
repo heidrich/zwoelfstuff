@@ -250,11 +250,9 @@ function Page:BuildPage(page, width)
 
     -- WHY THERE IS NO "ALSO TELL BIGWIGS" SWITCH, said on the page because
     -- the absence is the surprising part.
-    grid:Note(L["The countdown is the game's own - the one Blizzard added "
-        .. "for exactly this - so a boss mod picks it up by itself and "
-        .. "everybody without one still sees the numbers. Right-click the "
-        .. "Pull button on the bar to cancel it. The game refuses to start "
-        .. "one in combat."])
+    grid:Note(L["The countdown is the game's own, so boss mods pick it up "
+        .. "and everybody sees the numbers. Right-click the Pull button to "
+        .. "cancel it. Not available in combat."])
 
     ---------------------------------------------------------------------
     -- NO KEYS SECTION. The first ns.RaidBar.KEYS places carry a key, set in

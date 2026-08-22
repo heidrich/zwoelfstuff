@@ -864,8 +864,7 @@ end
 local function Applied()
     Answers.Rebuild()
     if InCombatLockdown and InCombatLockdown() then
-        ns.Print("|cffffd100The bar is rebuilt when you leave combat.|r The "
-            .. "game does not allow a cell to be re-aimed during a fight.")
+        ns.Print("|cffffd100The bar is rebuilt when you leave combat.|r")
     end
 end
 

@@ -105,8 +105,7 @@ function Keys.Bind(binding, key)
     if not (key and binding) then return false end
 
     if InCombatLockdown and InCombatLockdown() then
-        ns.Print("|cffff8040Not in combat|r - the game does not allow a key "
-            .. "to be re-bound during a fight.")
+        ns.Print("|cffff8040Not in combat|r - keys are set after the fight.")
         return false
     end
 
@@ -334,8 +333,7 @@ end
 -- to be. A second copy of the rule in that caller is a rule that drifts.
 function Keys:Blocked()
     if InCombatLockdown and InCombatLockdown() then
-        return "|cffff8040Not in combat.|r Keys are set out of combat - the "
-            .. "game does not allow one to be re-bound during a fight."
+        return "|cffff8040Not in combat.|r Keys are set after the fight."
     end
     return nil
 end

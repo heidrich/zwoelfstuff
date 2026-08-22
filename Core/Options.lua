@@ -488,9 +488,8 @@ local function BuildAboutPage(page, width)
         local button = UI.Button(row.slot, "Copy the address",
             UI.ButtonWidth("Copy the address"), function()
                 UI.CopyBox(store.name, store.url,
-                    "Ctrl+C copies it, then paste it into your browser. Esc "
-                    .. "closes. An addon cannot open a browser itself - the "
-                    .. "client has no call for it, by design.")
+                    "Ctrl+C copies it, then paste it into your browser. "
+                    .. "Esc closes.")
             end)
         button:SetPoint("RIGHT", row.slot, "RIGHT", 0, 0)
     end
@@ -842,7 +841,7 @@ local PAGES = {
       build = function(page, width) return ns.OptionsProfiles:BuildPage(page, width) end },
 
     { key = "diagnostics", title = "Diagnostics", glyph = "pulse",
-      subtitle = "What the Cooldown Manager holds, and what the client refuses to show.",
+      subtitle = "What the Cooldown Manager holds.",
       build = BuildDiagnosticsPage },
 
     -- ONE ACTION, AND THE STORES ARE NOT IT.
@@ -860,9 +859,8 @@ local PAGES = {
       actions = {
           { text = "Discord", icon = "brand-discord", onClick = function()
               UI.CopyBox("Discord", ns.DISCORD_URL,
-                  "Ctrl+C copies it, then paste it into your browser. Esc "
-                  .. "closes. An addon cannot open a browser itself - the "
-                  .. "client has no call for it, by design.")
+                  "Ctrl+C copies it, then paste it into your browser. "
+                  .. "Esc closes.")
           end },
       },
       build = BuildAboutPage },
@@ -1318,8 +1316,7 @@ function Options:Create()
         link:SetScript("OnClick", function()
             UI.CopyBox(entry.text, entry.url,
                 "Ctrl+C copies it, then paste it into your browser. Esc "
-                .. "closes. An addon cannot open a browser itself - the "
-                .. "client has no call for it, by design.")
+                .. "closes.")
         end)
     end
 

@@ -1829,8 +1829,7 @@ ns.COMMANDS = {
 
     { group = "The Cooldown Manager" },
     { cmd = "/zs cdm",
-      text = "what Blizzard's Cooldown Manager currently holds - the "
-        .. "catalogue the death log and the reminders read" },
+      text = "what Blizzard's Cooldown Manager currently holds" },
     { cmd = "/zs watch",
       text = "watch every placed cell for twelve seconds and print each "
         .. "change - build stacks or spend charges while it runs" },

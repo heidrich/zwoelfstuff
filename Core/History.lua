@@ -371,9 +371,9 @@ function History:Dump()
                     or ""))
         end
         if watched == 0 then
-            ns.Print("  |cffff8040Both buff viewers are empty.|r Blizzard's "
-                .. "Cooldown Manager has a buff section - switch it on in "
-                .. "Edit Mode, or no defensive window can ever be measured.")
+            ns.Print("  |cffff8040Both buff viewers are empty.|r Switch the "
+                .. "buff section on in Edit Mode, or no defensive window can "
+                .. "be measured.")
         end
     end
 

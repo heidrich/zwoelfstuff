@@ -374,9 +374,8 @@ local function WarnIfInvisible(drawn)
     warned = true
     ns.Print("|cffff4040These Cooldown Manager viewers are switched off:|r "
         .. hidden)
-    ns.Print("Your icons ARE on the bar - they are Blizzard's frames, and a "
-        .. "switched-off viewer hides its own children. Turn it back on in "
-        .. "Blizzard's Edit Mode (Escape, Edit Mode, Cooldown Manager).")
+    ns.Print("Their icons come back when the viewer is switched on again: "
+        .. "Escape, Edit Mode, Cooldown Manager.")
 end
 
 function Render.Refresh()

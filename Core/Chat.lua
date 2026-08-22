@@ -202,9 +202,9 @@ function Chat.BlockedLine(attempt)
     end
     local where = attempt.channel or "?"
     if attempt.to then where = where .. " to " .. attempt.to end
-    return string.format("The game REFUSED to send that message (%s). "
+    return string.format("The game refused to send that message (%s). "
         .. "Nothing was sent. Run |cffffd100/zs chat probe|r and paste what "
-        .. "it prints - that says which door this client keeps shut.", where)
+        .. "it prints.", where)
 end
 
 local watcher = CreateFrame("Frame")
@@ -264,7 +264,7 @@ function Chat.Probe()
     ---@diagnostic disable-next-line: deprecated
     local plain = SendChatMessage
     local spaced = C_ChatInfo and C_ChatInfo.SendChatMessage
-    ns.Print(string.format("  the two doors: global %s, C_ChatInfo %s",
+    ns.Print(string.format("  send paths: global %s, C_ChatInfo %s",
         type(plain) == "function" and "|cff40ff40there|r" or "|cffff4040gone|r",
         type(spaced) == "function" and "|cff40ff40there|r" or "|cffff4040gone|r"))
     ns.Print("  we take: " .. (spaced and "C_ChatInfo.SendChatMessage"

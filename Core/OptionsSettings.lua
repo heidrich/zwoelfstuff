@@ -140,16 +140,11 @@ function Page:BuildPage(page, width)
             end
             ns.Options:Refresh()
         end)
-    grid:Note(L["Blizzard's own viewers keep showing everything they know. "
-        .. "This makes the ones you have not put on a bar invisible rather "
-        .. "than hiding them - they are Blizzard's frames and hiding one is "
-        .. "the thing that breaks them for the rest of the session."])
+    grid:Note(L["Cooldowns you have not put on a bar are not shown."])
 
-    grid:Note(L["Everything here comes from Blizzard's Cooldown Manager - it "
-        .. "already knows the spells, binds the auras and has the timing, "
-        .. "none of which an addon can do for itself on this patch. The "
-        .. "reminders, the death log and the spell pickers all read it, and "
-        .. "they go on doing so whether this module is on or off."])
+    grid:Note(L["The data comes from Blizzard's Cooldown Manager. The "
+        .. "reminders, the death log and the spell pickers read it whether "
+        .. "this module is on or off."])
 
     ---------------------------------------------------------------------
     -- Who else is doing this
@@ -172,12 +167,9 @@ function Page:BuildPage(page, width)
         for index, entry in ipairs(others) do names[index] = entry.label end
         grid:Note(L("Also managing cooldowns on this account: %s.",
             table.concat(names, ", ")))
-        grid:Note(L["Blizzard owns these frames and only one addon can hold "
-            .. "them. Whichever loads second finds them already taken, and "
-            .. "what you get on screen depends on the order they happened to "
-            .. "load in - which is why this is a choice rather than something "
-            .. "either addon can work around. Leave Cooldowns switched off to "
-            .. "keep theirs, or switch theirs off and switch this on."])
+        grid:Note(L["Only one addon can hold these frames. Leave Cooldowns "
+            .. "off to keep the other addon's display, or switch that addon "
+            .. "off and this one on."])
 
         -----------------------------------------------------------------
         -- ONE BUTTON PER ADDON, AND IT ASKS TWICE

@@ -102,7 +102,7 @@ Register("enUS", {
 
     -- Welcome
     ["Not now"] = true,
-    ["Let's go"] = true,
+    ["Open settings"] = true,
     ["Show the welcome screen"] = true,
     ["NEW"] = true,
     ["COMING SOON"] = true,
@@ -259,7 +259,7 @@ Register("enUS", {
     -- than one that is honestly unfinished.
     ["Out in the world there is nothing to mark. Off, the bar is there whenever you are in a group."] = 
         true,
-    ["The countdown is the game's own - the one Blizzard added for exactly this - so a boss mod picks it up by itself and everybody without one still sees the numbers. Right-click the Pull button on the bar to cancel it. The game refuses to start one in combat."] = 
+    ["The countdown is the game's own, so boss mods pick it up and everybody sees the numbers. Right-click the Pull button to cancel it. Not available in combat."] =
         true,
     ["Every icon on your bars, and how they look."] = true,
     ["Every piece of text on every bar, unless a bar has its own font."] = 
@@ -297,7 +297,7 @@ Register("enUS", {
     ["%d other addons"] = true,
     ["Blizzard's Cooldown Manager"] = true,
     ["What it holds"] = true,
-    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off and switch this on."] =
+    ["Only one addon can hold these frames. Leave Cooldowns off to keep the other addon's display, or switch that addon off and this one on."] =
         true,
     ["Switch off %s"] = true,
     ["Do it and reload?"] = true,
@@ -306,7 +306,7 @@ Register("enUS", {
     ["Careful: %s would stop loading as well, because it needs that addon."] = true,
     ["Read from what each addon says about itself in its own description, so an addon that manages cooldowns without ever saying so is not found. Addons switched off for this character are not counted."] =
         true,
-    ["Everything here comes from Blizzard's Cooldown Manager - it already knows the spells, binds the auras and has the timing, none of which an addon can do for itself on this patch. The reminders, the death log and the spell pickers all read it, and they go on doing so whether this module is on or off."] =
+    ["The data comes from Blizzard's Cooldown Manager. The reminders, the death log and the spell pickers read it whether this module is on or off."] =
         true,
     ["%s is already managing your cooldowns. Two addons cannot hold the same cooldown frames - one of them loses, and which one depends on the order they loaded. Cooldowns is switched off below; turn it on to use ours instead, and switch theirs off in your addon list."] =
         true,
@@ -346,7 +346,7 @@ Register("enUS", {
     ["At the right"] = true,
     ["Not shown"] = true,
     ["Hide the ones you did not place"] = true,
-    ["Blizzard's own viewers keep showing everything they know. This makes the ones you have not put on a bar invisible rather than hiding them - they are Blizzard's frames and hiding one is the thing that breaks them for the rest of the session."] =
+    ["Cooldowns you have not put on a bar are not shown."] =
         true,
     ["Shown in the preview above"] = true,
     -- The bar editor: the look, the text, the effects and the fill
@@ -371,7 +371,7 @@ Register("enUS", {
     ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design. Below %d pixels a number is there and cannot be read, so the rail goes straight from nought to %d."] =
         true,
     ["Show this place"] = true,
-    ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither. A place the client will not answer for stays on screen: one that vanished because something could not be read is indistinguishable from a bug."] =
+    ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither."] =
         true,
     ["When"] = true,
     ["When to show it"] = true,
@@ -403,7 +403,7 @@ Register("enUS", {
     ["A pulse the moment the cooldown ends"] = true,
     ["A spell that has been ready this long IN COMBAT starts pulsing. For the defensive you keep forgetting."] =
         true,
-    ["These reach the ICON. The fill has its own opacity under Fill, the plate has one under Behind the icon, and a whole place going faint is a show rule rather than a look. A tracked buff BAR stays on screen while its aura is down, so 'while inactive' has something to dim; a buff ICON does not - Blizzard takes the frame away entirely."] =
+    ["These reach the ICON. The fill and the plate each have their own opacity setting. 'While inactive' only has something to dim on a tracked buff bar."] =
         true,
     ["Add a band"] = true,
     ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
@@ -411,7 +411,7 @@ Register("enUS", {
     ["Behind the icon"] = true,
     ["Belongs to the staggered pattern and is ignored by the others. As a share of one cell, so it stays right when you change the icon size."] =
         true,
-    ["Blizzard's Cooldown Manager is asked whether the spell is on a real cooldown, so the global cooldown never sets any of this off. A cooldown the client will not talk about is left alone."] =
+    ["The global cooldown never sets any of this off."] =
         true,
     ["Blizzard's icon art has a border baked into the file. Cropping cuts it off; at 0 you see the whole thing, frame and all. Above a fifth it starts eating the picture instead."] =
         true,
@@ -459,7 +459,7 @@ Register("enUS", {
         true,
     ["Left"] = true,
     ["Mark colour"] = true,
-    ["No band is drawn yet: nothing in this version can read a stack count off a frame Blizzard owns. What you set here is kept and starts painting when it can."] =
+    ["Not drawn in this version. What you set here is kept."] =
         true,
     ["None is a crisp one-pixel line drawn from colour textures, and it stays sharper than any edge file at small sizes. The rest come from whatever your other addons registered."] =
         true,
@@ -510,7 +510,7 @@ Register("enUS", {
     ["The icon"] = true,
     ["The nag"] = true,
     ["The refresh window"] = true,
-    ["The tail of an aura where recasting it wastes nothing. Blizzard works the window out and we ask for the answer, so this only lights for auras you have switched pandemic alerts on for in the game's own settings."] =
+    ["The tail of an aura where recasting wastes nothing. Lights only for auras with pandemic alerts switched on in the game's settings."] =
         true,
     ["These reach a place Blizzard draws as a tracked buff BAR. An icon has no fill of its own, whichever shape this bar's places are set to."] =
         true,
@@ -592,7 +592,7 @@ Register("deDE", {
     ["Right-click cancels it."] = "Rechtsklick bricht ab.",
 
     ["Not now"] = "Später",
-    ["Let's go"] = "Los geht's",
+    ["Open settings"] = "Einstellungen",
     ["Show the welcome screen"] = "Willkommensfenster zeigen",
     ["NEW"] = "NEU",
     ["COMING SOON"] = "BALD",
@@ -763,8 +763,8 @@ Register("deDE", {
     -- than one that is honestly unfinished.
     ["Out in the world there is nothing to mark. Off, the bar is there whenever you are in a group."] = 
         "Draußen in der Welt gibt es nichts zu markieren. Aus, ist die Leiste da, sobald du in einer Gruppe bist.",
-    ["The countdown is the game's own - the one Blizzard added for exactly this - so a boss mod picks it up by itself and everybody without one still sees the numbers. Right-click the Pull button on the bar to cancel it. The game refuses to start one in combat."] = 
-        "Der Countdown ist der des Spiels - der, den Blizzard genau dafür eingebaut hat - also greift ihn ein Boss-Mod von selbst auf, und wer keinen hat, sieht die Zahlen trotzdem. Rechtsklick auf den Pull-Knopf bricht ihn ab. Im Kampf startet das Spiel keinen.",
+    ["The countdown is the game's own, so boss mods pick it up and everybody sees the numbers. Right-click the Pull button to cancel it. Not available in combat."] =
+        "Der Countdown ist der des Spiels - Boss-Mods greifen ihn auf, und jeder sieht die Zahlen. Rechtsklick auf den Pull-Knopf bricht ab. Im Kampf nicht verfügbar.",
     ["Every icon on your bars, and how they look."] = 
         "Jedes Symbol auf deinen Leisten und wie sie aussehen.",
     ["Every piece of text on every bar, unless a bar has its own font."] = 
@@ -817,8 +817,8 @@ Register("deDE", {
     ["%d other addons"] = "%d andere Addons",
     ["Blizzard's Cooldown Manager"] = "Blizzards Cooldown-Manager",
     ["What it holds"] = "Was er hält",
-    ["Blizzard owns these frames and only one addon can hold them. Whichever loads second finds them already taken, and what you get on screen depends on the order they happened to load in - which is why this is a choice rather than something either addon can work around. Leave Cooldowns switched off to keep theirs, or switch theirs off and switch this on."] =
-        "Diese Frames gehören Blizzard, und nur ein Addon kann sie halten. Wer als Zweiter lädt, findet sie besetzt vor, und was auf dem Bildschirm landet, hängt an der Reihenfolge, in der zufällig geladen wurde - deshalb ist das eine Entscheidung und nichts, was eines der beiden Addons umgehen könnte. Lass Cooldowns aus, um bei deren Lösung zu bleiben, oder schalte deren Addon ab und das hier an.",
+    ["Only one addon can hold these frames. Leave Cooldowns off to keep the other addon's display, or switch that addon off and this one on."] =
+        "Nur ein Addon kann diese Frames halten. Lass Cooldowns aus, um die Anzeige des anderen Addons zu behalten - oder schalte das andere ab und dieses an.",
     ["Switch off %s"] = "%s abschalten",
     ["Do it and reload?"] = "Wirklich, mit Neuladen?",
     ["Switches that addon off, switches Cooldowns on here, and reloads. Nothing is deleted - it is the same tick as in the game's own addon list, and putting it back there puts everything back with it."] =
@@ -827,8 +827,8 @@ Register("deDE", {
         "Achtung: %s würde ebenfalls nicht mehr laden, weil es dieses Addon braucht.",
     ["Read from what each addon says about itself in its own description, so an addon that manages cooldowns without ever saying so is not found. Addons switched off for this character are not counted."] =
         "Gelesen aus dem, was jedes Addon in seiner eigenen Beschreibung über sich sagt - ein Addon, das Cooldowns verwaltet, ohne das je zu erwähnen, wird also nicht gefunden. Für diesen Charakter abgeschaltete Addons zählen nicht mit.",
-    ["Everything here comes from Blizzard's Cooldown Manager - it already knows the spells, binds the auras and has the timing, none of which an addon can do for itself on this patch. The reminders, the death log and the spell pickers all read it, and they go on doing so whether this module is on or off."] =
-        "Alles hier kommt aus Blizzards Cooldown-Manager - er kennt die Zauber bereits, bindet die Auren und hat das Timing, und nichts davon kann ein Addon auf diesem Patch selbst leisten. Die Erinnerungen, das Todesprotokoll und die Zauberlisten lesen ihn alle, und sie tun das weiter, ob dieses Modul an ist oder aus.",
+    ["The data comes from Blizzard's Cooldown Manager. The reminders, the death log and the spell pickers read it whether this module is on or off."] =
+        "Die Daten kommen aus Blizzards Cooldown-Manager. Die Erinnerungen, das Todesprotokoll und die Zauberlisten lesen ihn, egal ob dieses Modul an oder aus ist.",
     ["%s is already managing your cooldowns. Two addons cannot hold the same cooldown frames - one of them loses, and which one depends on the order they loaded. Cooldowns is switched off below; turn it on to use ours instead, and switch theirs off in your addon list."] =
         "%s verwaltet deine Cooldowns bereits. Zwei Addons können dieselben Cooldown-Frames nicht gemeinsam halten - eines verliert, und welches, hängt an der Ladereihenfolge. Cooldowns ist unten ausgeschaltet; schalte es an, um stattdessen unseres zu nutzen, und deren Addon in deiner Addon-Liste ab.",
 
@@ -869,8 +869,8 @@ Register("deDE", {
     ["Not shown"] = "Nicht gezeigt",
     ["Hide the ones you did not place"] =
         "Die verstecken, die du nicht platziert hast",
-    ["Blizzard's own viewers keep showing everything they know. This makes the ones you have not put on a bar invisible rather than hiding them - they are Blizzard's frames and hiding one is the thing that breaks them for the rest of the session."] =
-        "Blizzards eigene Anzeigen zeigen weiter alles, was sie kennen. Das hier macht die, die du auf keine Leiste gelegt hast, unsichtbar statt sie zu verstecken - es sind Blizzards Frames, und einen davon zu verstecken ist genau das, was ihn für den Rest der Sitzung beschädigt.",
+    ["Cooldowns you have not put on a bar are not shown."] =
+        "Cooldowns, die du auf keine Leiste gelegt hast, werden nicht angezeigt.",
     ["Shown in the preview above"] = "Oben in der Vorschau",
     -- Der Leisten-Editor: Aussehen, Text, Effekte und Füllung
     ["Nothing to set up yet. Press + at the top of the list to make your first bar."] =
@@ -897,8 +897,8 @@ Register("deDE", {
     ["Nought works the size out from the place it sits in, which is what keeps a 24 pixel bar and a 64 pixel icon looking like one design. Below %d pixels a number is there and cannot be read, so the rail goes straight from nought to %d."] =
         "Null rechnet die Größe aus dem Platz aus, in dem sie sitzt - das hält eine 24-Pixel-Leiste und ein 64-Pixel-Symbol wie ein Design aussehend. Unter %d Pixeln ist eine Zahl da und nicht lesbar, deshalb springt der Regler von null direkt auf %d.",
     ["Show this place"] = "Diesen Platz zeigen",
-    ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither. A place the client will not answer for stays on screen: one that vanished because something could not be read is indistinguishable from a bug."] =
-        "Bereit heißt, du kannst ihn drücken. Wirkt heißt, der Buff, den er dir gegeben hat, läuft noch - Antimagische Hülle, Blutschild. Lädt nach ist keins von beidem. Ein Platz, für den der Client nicht antwortet, bleibt sichtbar: einer, der verschwindet, weil etwas nicht gelesen werden konnte, ist von einem Fehler nicht zu unterscheiden.",
+    ["Ready means you can press it. Working means the buff it put on you is still running - Anti-Magic Shell, Blood Shield. Recharging is neither."] =
+        "Bereit heißt, du kannst ihn drücken. Wirkt heißt, der Buff, den er dir gegeben hat, läuft noch - Antimagische Hülle, Blutschild. Lädt nach ist keins von beidem.",
     ["When"] = "Wann",
     ["When to show it"] = "Wann sie zu sehen ist",
     ["Combat"] = "Kampf",
@@ -932,16 +932,16 @@ Register("deDE", {
         "Ein Puls in dem Moment, in dem der Cooldown endet",
     ["A spell that has been ready this long IN COMBAT starts pulsing. For the defensive you keep forgetting."] =
         "Ein Zauber, der IM KAMPF so lange bereit war, beginnt zu pulsieren. Für den Defensiven, den du immer vergisst.",
-    ["These reach the ICON. The fill has its own opacity under Fill, the plate has one under Behind the icon, and a whole place going faint is a show rule rather than a look. A tracked buff BAR stays on screen while its aura is down, so 'while inactive' has something to dim; a buff ICON does not - Blizzard takes the frame away entirely."] =
-        "Diese erreichen das SYMBOL. Die Füllung hat ihre eigene Deckkraft unter Füllung, die Platte eine unter Hinter dem Symbol, und dass ein ganzer Platz blasser wird, ist eine Anzeigeregel und kein Aussehen. Eine verfolgte Buff-LEISTE bleibt auf dem Bildschirm, während ihre Aura aus ist - \"während inaktiv\" hat dort also etwas zum Dimmen; ein Buff-SYMBOL nicht: Blizzard nimmt das Frame ganz weg.",
+    ["These reach the ICON. The fill and the plate each have their own opacity setting. 'While inactive' only has something to dim on a tracked buff bar."] =
+        "Diese erreichen das SYMBOL. Füllung und Platte haben je eine eigene Deckkraft. 'Während inaktiv' hat nur bei einer verfolgten Buff-Leiste etwas zu dimmen.",
     ["Add a band"] = "Band hinzufügen",
     ["An icon place is square and uses the first of these; a bar place is the other two. Which one a bar's places are is up under Arrangement."] =
         "Ein Symbolplatz ist quadratisch und nutzt den ersten Wert; ein Leistenplatz die anderen beiden. Welche Art die Plätze einer Leiste sind, steht oben unter Anordnung.",
     ["Behind the icon"] = "Hinter dem Symbol",
     ["Belongs to the staggered pattern and is ignored by the others. As a share of one cell, so it stays right when you change the icon size."] =
         "Gehört zum versetzten Muster und wird von den anderen ignoriert. Als Anteil einer Zelle, damit es stimmt, wenn du die Symbolgröße änderst.",
-    ["Blizzard's Cooldown Manager is asked whether the spell is on a real cooldown, so the global cooldown never sets any of this off. A cooldown the client will not talk about is left alone."] =
-        "Blizzards Cooldown-Manager wird gefragt, ob der Zauber wirklich auf Cooldown ist - der globale Cooldown löst hier also nichts aus. Ein Cooldown, über den der Client nichts sagt, bleibt unangetastet.",
+    ["The global cooldown never sets any of this off."] =
+        "Der globale Cooldown löst hier nichts aus.",
     ["Blizzard's icon art has a border baked into the file. Cropping cuts it off; at 0 you see the whole thing, frame and all. Above a fifth it starts eating the picture instead."] =
         "Blizzards Symbolgrafik hat einen Rand fest in der Datei. Der Zuschnitt schneidet ihn ab; bei 0 siehst du alles, Rahmen inklusive. Über einem Fünftel frisst er stattdessen das Bild an.",
     ["Bottom"] = "Unten",
@@ -988,8 +988,8 @@ Register("deDE", {
         "Leer lassen hält alles dort, wo du es gelernt hast. In der REIHE aufrücken behält die Form des Rasters, die zweite Reihe bleibt also die zweite Reihe.",
     ["Left"] = "Links",
     ["Mark colour"] = "Markenfarbe",
-    ["No band is drawn yet: nothing in this version can read a stack count off a frame Blizzard owns. What you set here is kept and starts painting when it can."] =
-        "Noch wird kein Band gezeichnet: nichts in dieser Version kann eine Stapelzahl von einem Frame ablesen, das Blizzard gehört. Was du hier einstellst, bleibt erhalten und beginnt zu zeichnen, sobald es geht.",
+    ["Not drawn in this version. What you set here is kept."] =
+        "Wird in dieser Version noch nicht gezeichnet. Was du einstellst, bleibt erhalten.",
     ["None is a crisp one-pixel line drawn from colour textures, and it stays sharper than any edge file at small sizes. The rest come from whatever your other addons registered."] =
         "Keine ist eine scharfe Ein-Pixel-Linie aus Farbtexturen und bleibt bei kleinen Größen schärfer als jede Kantendatei. Der Rest kommt aus dem, was deine anderen Addons registriert haben.",
     ["Nothing"] = "Nichts",
@@ -1044,8 +1044,8 @@ Register("deDE", {
     ["The icon"] = "Das Symbol",
     ["The nag"] = "Das Nörgeln",
     ["The refresh window"] = "Das Auffrischfenster",
-    ["The tail of an aura where recasting it wastes nothing. Blizzard works the window out and we ask for the answer, so this only lights for auras you have switched pandemic alerts on for in the game's own settings."] =
-        "Das Ende einer Aura, in dem ein Neuwirken nichts verschenkt. Blizzard rechnet das Fenster aus und wir fragen nur nach der Antwort - das leuchtet also nur für Auren, für die du in den Einstellungen des Spiels selbst Pandemie-Hinweise eingeschaltet hast.",
+    ["The tail of an aura where recasting wastes nothing. Lights only for auras with pandemic alerts switched on in the game's settings."] =
+        "Das Ende einer Aura, in dem ein Neuwirken nichts verschenkt. Leuchtet nur für Auren, für die Pandemie-Hinweise in den Einstellungen des Spiels an sind.",
     ["These reach a place Blizzard draws as a tracked buff BAR. An icon has no fill of its own, whichever shape this bar's places are set to."] =
         "Diese erreichen einen Platz, den Blizzard als verfolgte Buff-LEISTE zeichnet. Ein Symbol hat keine eigene Füllung, egal welche Form für die Plätze dieser Leiste eingestellt ist.",
     ["Top"] = "Oben",
@@ -1127,7 +1127,7 @@ Register("frFR", {
     ["Right-click cancels it."] = "Le clic droit annule.",
 
     ["Not now"] = "Plus tard",
-    ["Let's go"] = "C'est parti",
+    ["Open settings"] = "Réglages",
     ["Show the welcome screen"] = "Afficher l'accueil",
     ["NEW"] = "NOUVEAU",
     ["COMING SOON"] = "BIENTÔT",
@@ -1292,7 +1292,7 @@ Register("esES", {
     ["Right-click cancels it."] = "El clic derecho lo cancela.",
 
     ["Not now"] = "Ahora no",
-    ["Let's go"] = "Adelante",
+    ["Open settings"] = "Ajustes",
     ["Show the welcome screen"] = "Mostrar la bienvenida",
     ["NEW"] = "NUEVO",
     ["COMING SOON"] = "PRÓXIMAMENTE",
@@ -1460,7 +1460,7 @@ Register("esMX", {
     ["Right-click cancels it."] = "El clic derecho lo cancela.",
 
     ["Not now"] = "Ahora no",
-    ["Let's go"] = "Vamos",
+    ["Open settings"] = "Ajustes",
     ["Show the welcome screen"] = "Mostrar la bienvenida",
     ["NEW"] = "NUEVO",
     ["COMING SOON"] = "PRÓXIMAMENTE",
@@ -1607,7 +1607,7 @@ Register("itIT", {
     ["Right-click cancels it."] = "Il tasto destro annulla.",
 
     ["Not now"] = "Non ora",
-    ["Let's go"] = "Andiamo",
+    ["Open settings"] = "Impostazioni",
     ["Show the welcome screen"] = "Mostra il benvenuto",
     ["NEW"] = "NUOVO",
     ["COMING SOON"] = "IN ARRIVO",
@@ -1754,7 +1754,7 @@ Register("ptBR", {
     ["Right-click cancels it."] = "O clique direito cancela.",
 
     ["Not now"] = "Agora não",
-    ["Let's go"] = "Vamos",
+    ["Open settings"] = "Ajustes",
     ["Show the welcome screen"] = "Mostrar as boas-vindas",
     ["NEW"] = "NOVO",
     ["COMING SOON"] = "EM BREVE",
@@ -1885,7 +1885,7 @@ Register("ruRU", {
     ["Right-click takes this one away."] = "Правая кнопка убирает эту метку.",
     ["Right-click cancels it."] = "Правая кнопка отменяет.",
 
-    ["Let's go"] = "Поехали",
+    ["Open settings"] = "Настройки",
     ["NEW"] = "НОВОЕ",
     ["COMING SOON"] = "СКОРО",
     ["HIDDEN"] = "СКРЫТО",

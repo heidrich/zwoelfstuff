@@ -6756,7 +6756,7 @@ local function TestAnswers()
     -- can only pass out of combat says so instead of failing.
     if ns.Keys and InCombatLockdown and InCombatLockdown() then
         Skip("Binding a key to a place",
-            "in combat - the game does not allow a key to move during a fight")
+            "in combat - keys are set after the fight")
     elseif ns.Keys then
         local binding = ns.Externals.BindingName(1)
         local kept = ns.Keys.Current(binding)

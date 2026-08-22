@@ -623,12 +623,9 @@ function Panel.BuildLook(grid, bar)
     -- heisst ja icon", and then where the other half belongs: "dann brauchen
     -- wir die option wohl nochmal unter fill fuer die bar". It was already
     -- there; what was missing was these two meaning what they say.
-    grid:Note(L["These reach the ICON. The fill has its own opacity under "
-        .. "Fill, the plate has one under Behind the icon, and a whole place "
-        .. "going faint is a show rule rather than a look. A tracked buff BAR "
-        .. "stays on screen while its aura is down, so 'while inactive' has "
-        .. "something to dim; a buff ICON does not - Blizzard takes the frame "
-        .. "away entirely."])
+    grid:Note(L["These reach the ICON. The fill and the plate each have "
+        .. "their own opacity setting. 'While inactive' only has something "
+        .. "to dim on a tracked buff bar."])
 
     grid:Section(L["Border"], "cd-look-border", true)
 
@@ -1097,9 +1094,7 @@ function Panel.BuildEffects(grid, bar)
 
     local glowOn = FxGet(bar, "readyGlow")
     FxSwitch(grid, bar, L["Keep an edge"], "readyGlow", { icon = "effect-edge" })
-    grid:Note(L["Blizzard's Cooldown Manager is asked whether the spell is on "
-        .. "a real cooldown, so the global cooldown never sets any of this "
-        .. "off. A cooldown the client will not talk about is left alone."])
+    grid:Note(L["The global cooldown never sets any of this off."])
 
     local glow = {}
     Keep(glow, FxSwitch(grid, bar, L["Only in combat"], "readyGlowCombatOnly"))
@@ -1180,10 +1175,9 @@ function Panel.BuildEffects(grid, bar)
     -- the window is Blizzard's arithmetic and we only ask for the answer, so
     -- an aura whose pandemic alert is off in the game's own settings never
     -- lights however this row is set.
-    grid:Note(L["The tail of an aura where recasting it wastes nothing. "
-        .. "Blizzard works the window out and we ask for the answer, so this "
-        .. "only lights for auras you have switched pandemic alerts on for in "
-        .. "the game's own settings."])
+    grid:Note(L["The tail of an aura where recasting wastes nothing. Lights "
+        .. "only for auras with pandemic alerts switched on in the game's "
+        .. "settings."])
 
     local pandemicOn = FxGet(bar, "pandemicGlow")
     FxSwitch(grid, bar, L["Glow in the window"], "pandemicGlow",
@@ -1235,11 +1229,9 @@ function Panel.BuildEffects(grid, bar)
                 return effects.ShowWhen(current and current.effects)
             end,
             FxPut(bar, "showWhen"), { apply = Refresh })
-        grid:Note(L["Ready means you can press it. Working means the buff it "
-            .. "put on you is still running - Anti-Magic Shell, Blood Shield. "
-            .. "Recharging is neither. A place the client will not answer for "
-            .. "stays on screen: one that vanished because something could "
-            .. "not be read is indistinguishable from a bug."])
+        grid:Note(L["Ready means you can press it. Working means the buff "
+            .. "it put on you is still running - Anti-Magic Shell, Blood "
+            .. "Shield. Recharging is neither."])
     end
 
     -- STAYS EVEN WHEN NOTHING IS BEING HIDDEN, and says so on itself. It is a
@@ -1582,9 +1574,8 @@ function Panel.BuildFill(grid, bar)
     -- reader and has not come back, so Fill.Overlays is handed an empty list
     -- whatever is stored. The day the reader lands this sentence goes by
     -- itself, which is why it is a question and not a paragraph.
-    local dry = grid:Note(L["No band is drawn yet: nothing in this version "
-        .. "can read a stack count off a frame Blizzard owns. What you set "
-        .. "here is kept and starts painting when it can."])
+    local dry = grid:Note(L["Not drawn in this version. What you set here "
+        .. "is kept."])
     OnRefresh(grid, function()
         local fill = Fills()
         local shown = not (fill and fill.CanFeed and fill.CanFeed())

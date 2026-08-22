@@ -1078,13 +1078,12 @@ function Casts:Dump()
             Casts.Tell(entry.spellID)))
         local bar = ns.CastBar
         if bar and (bar.refusedName or bar.refusedIcon) then
-            ns.Print("|cffff4040The client REFUSED a setter|r"
+            ns.Print("|cffff4040The client refused a setter|r"
                 .. (bar.refusedName and " (name)" or "")
                 .. (bar.refusedIcon and " (icon)" or "")
-                .. " - that is a finding, please report it.")
+                .. " - report it.")
         end
     end
-    ns.Print("|cff888888\"withheld\" means the value IS there and only the "
-        .. "game may look at it - it still draws. \"missing\" means the "
-        .. "client said nothing.|r")
+    ns.Print("|cff888888withheld = only the game may read it, and it still "
+        .. "draws. missing = the client said nothing.|r")
 end

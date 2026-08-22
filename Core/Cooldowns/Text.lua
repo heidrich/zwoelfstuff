@@ -904,8 +904,7 @@ end
 local function ReportCounter(item, key, what, text, mine)
     local widget = ns.CDM:Counter(item, key)
     if not widget then
-        ns.Print(string.format("   %-9s |cff888888this frame carries no %s - "
-            .. "Blizzard puts one on a cooldown and the other on a buff|r",
+        ns.Print(string.format("   %-9s |cff888888this frame carries no %s|r",
             what, key))
         return
     end
@@ -997,12 +996,8 @@ function Text.Dump()
         return
     end
 
-    ns.Print("|cff888888Three of the four are Blizzard's own font strings and "
-        .. "we only set a face, a colour and a point on them - so a line that "
-        .. "reads SECRET is the count doing exactly what it should. A count "
-        .. "marked SECRET may not be compared to anything, which is why "
-        .. "'blizzard shows it' is the only honest answer to 'should this "
-        .. "number be here'.|r")
+    ns.Print("|cff888888SECRET on a count is normal: the number draws, it "
+        .. "just cannot be read or compared.|r")
 end
 
 ---------------------------------------------------------------------------

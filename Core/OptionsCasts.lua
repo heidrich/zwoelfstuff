@@ -95,13 +95,10 @@ local ALERT_SPEC = {
                 end))
         end
 
-        grid:Note("\"At you\" is the game's own answer and it is not always "
-            .. "given: inside a dungeon the target's name and class can be "
-            .. "withheld, and then the honest answer is |cffffd100At "
-            .. "somebody the game will not name|r. Leave that one on unless "
-            .. "you would rather miss a warning than see a spare one. The "
-            .. "bar's own stripe never has this problem - the client draws "
-            .. "it without telling us.")
+        grid:Note("Inside a dungeon the target is sometimes not named; "
+            .. "those casts count as |cffffd100At somebody the game will "
+            .. "not name|r. Leave that one on unless you would rather miss "
+            .. "a warning than see a spare one.")
 
         grid:Section("Only these mobs", "ca-mobs", false)
 
@@ -280,12 +277,9 @@ function Page:BuildPage(page, width)
             end)
     end
 
-    grid:Note("The spell being cast cannot be named on this patch - its id "
-        .. "is a secret value, which is why the boss mods went quiet about "
-        .. "trash in Midnight too. Its |cffffd100icon|r, its bar and "
-        .. "whether it can be kicked all come straight from the game, and "
-        .. "the mark above the bar is the game's own answer to "
-        .. "\"is this one on you\".")
+    grid:Note("The bar shows the cast's |cffffd100icon|r, its length and "
+        .. "whether it can be kicked - all straight from the game. The mark "
+        .. "above the bar means it is aimed at you.")
 
     grid:Section("Who it is aimed at")
 
@@ -342,10 +336,7 @@ function Page:BuildPage(page, width)
         end,
         function(r, g, b) Bar().uninterruptibleColor = { r, g, b } end, Apply)
 
-    grid:Note("Which of the two you are looking at is decided inside the "
-        .. "client: whether a cast can be interrupted is withheld from "
-        .. "addons on this patch, so the colour is chosen by the engine and "
-        .. "never by a line of ours.")
+    grid:Note("Which of the two you are looking at is decided by the game.")
 
     UI.Toggle(grid:FullRow("Icon", { controlWidth = 124 }),
         BarGet("showIcon", true), BarSet("showIcon"))
@@ -572,8 +563,7 @@ function Page:BuildVoice(grid, width)
 
     grid:Note("|cffffd100%who|r becomes you, your co-tank, the group or "
         .. "somebody; |cffffd100%mob|r is the caster's name; "
-        .. "|cffffd100%rank|r is what kind of mob it is. The spell cannot "
-        .. "be a token - on this patch its name is withheld from addons.")
+        .. "|cffffd100%rank|r is what kind of mob it is.")
 
     grid:Section("Whose voice", "ca-voice-who")
 

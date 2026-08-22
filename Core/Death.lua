@@ -760,7 +760,7 @@ function Death.OwnRecapID()
 
     local me = UnitName("player")
     if not ns.CanCompute(me) then
-        return nil, "the client withheld your own name"
+        return nil, "your name could not be read"
     end
 
     -- Newest wins: iterate to the end, keep the last match. Dying twice in
@@ -2001,10 +2001,10 @@ function Death.BuildEventRow(parent, width)
         -- THE GAME'S OWN VERDICT, and only when the game gave one. A
         -- withheld flag says nothing here rather than saying "clean".
         if ev.avoidable == true then
-            GameTooltip:AddLine("The game calls this avoidable damage.",
+            GameTooltip:AddLine("Avoidable damage.",
                 0.88, 0.42, 0.36, true)
         elseif ev.avoidable == false then
-            GameTooltip:AddLine("The game does not call this avoidable.",
+            GameTooltip:AddLine("Not avoidable.",
                 0.61, 0.64, 0.69, true)
         end
         GameTooltip:Show()

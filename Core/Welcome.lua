@@ -250,7 +250,7 @@ local function BuildFrame()
     --
     -- Escape still just closes, which is the difference between the two ways
     -- out: one is "yes, show me" and the other is "not now".
-    local go = UI.Button(frame, ns.L["Let's go"], 130, function()
+    local go = UI.Button(frame, ns.L["Open settings"], 130, function()
         Welcome:Close()
         if ns.Options then ns.Options:Open() end
     end, "primary")
@@ -288,8 +288,7 @@ local function BuildFrame()
         local link = UI.GhostButton(frame, entry.name, function()
             UI.CopyBox(entry.name, entry.url,
                 "Ctrl+C copies it, then paste it into your browser. Esc "
-                .. "closes. An addon cannot open a browser itself - the "
-                .. "client has no call for it, by design.")
+                .. "closes.")
         end)
         if entry.icon then link:SetIcon(entry.icon) end
         if previousLink then

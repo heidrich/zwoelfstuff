@@ -1073,14 +1073,9 @@ function OptionsCoTanks:BuildAuras(grid)
         local why = ns.CoTanks:AuraReason()
         reason.dkSkip = not why
         if why then
-            reason:SetText("|cffffd100Live auras need patch 12.1.|r An aura on "
-                .. "another player is a protected value on this client - no "
-                .. "addon may read its icon, its stacks or its time left, and "
-                .. "there is no way round that. Blizzard's own aura engine can, "
-                .. "and it arrives with 12.1; this addon already speaks to it "
-                .. "and will simply start working. Until then the strips draw "
-                .. "in |cffffd100test mode|r, so everything below can be set up "
-                .. "now and will be right the moment the patch lands.\n\n"
+            reason:SetText("|cffffd100Live auras need patch 12.1.|r Until "
+                .. "then the strips draw in |cffffd100test mode|r - set "
+                .. "everything up now and it goes live with the patch.\n\n"
                 .. "|cff888888" .. why .. "|r")
         else
             reason:SetText("")

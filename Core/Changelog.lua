@@ -371,7 +371,7 @@ ns.CHANGELOG = {
         version = "4.79.0",
         date = "2026-08-13",
         lines = {
-            "|cffffd100A proc's buff now identifies itself.|r Patch 12.1 lets the game show the real buff - its own icon, its own timer, extensions and all - instead of our stopwatch, but only if the addon knows which buff belongs to which proc, and nothing in the game will tell it. So it watches: the glow comes up when the buff lands and goes down when it is spent, and whatever came and went with it three times running is the buff. Nothing to press and nothing to set. It needs to happen |cffffd100out in the world|r - in a dungeon the game hides your buffs from addons - so one proc on a target dummy is enough, for you and for everybody else who plays that spec.",
+            "|cffffd100A proc's buff now identifies itself.|r The real buff - its own icon, its own timer, extensions and all - instead of our stopwatch. One proc |cffffd100out in the world|r (a target dummy works) sets it up for that spec. Nothing to press.",
             "|cffffd100The aura icons on the co-tank panel have a sweep now,|r the round one you know from every cooldown. The game draws it from the buff's own timer, so a buff that gets extended sweeps to the new end instead of finishing early. |cffffd100Co-tanks - Auras - Sweep|r if you would rather not have it.",
             "|cffffd100Fixed:|r the Auras page still talked as though patch 12.1 were coming, on a client that already has it. It also said your buffs are hidden from addons everywhere - where you are standing decides that, and out in the world they usually are not.",
         },
@@ -411,7 +411,7 @@ ns.CHANGELOG = {
             "|cffffd100About says where to get it, and how to reach us.|r Both stores under |cffffd100Where to get it|r, and |cffffd100Discord|r in the page header. None of them can open your browser, because no addon is allowed to hand a URL to one; each puts the address in a box you can copy from instead.",
             "|cffffd100A bar you switched off says so in the list.|r It looked exactly like a running one, and the only way to find out was to open its options again. The badge names the settled reasons only - switched off, or set to never show - because \"waiting for combat\" would be wrong a minute later and the list does not redraw when you pull.",
             "|cffffd100Edit mode's Move bars and Build say which one you are in.|r The current one is lit the way everything else in this window marks what is current. It was a dimmed label before, which is also how a button says it cannot be pressed.",
-            "|cffffd100The welcome window has a second way out, and you can see it.|r Escape always closed it; a key nobody is told about is not an exit. |cffffd100Not now|r sits beside |cffffd100Let's go|r.",
+            "|cffffd100New:|r a |cffffd100Not now|r button on the welcome window.",
             "|cffffd100Fixed:|r the welcome window and the Settings page both said \"Four features in one addon\" over six switches. The count comes from the list now.",
         },
     },
@@ -683,7 +683,7 @@ ns.CHANGELOG = {
             "|cffffd100EXTERNAL COOLDOWNS - a new module, under Tank stuff.|r The cooldowns somebody ELSE presses on you: Blessing of Sacrifice, Pain Suppression, Ironbark, Life Cocoon and ten more. Pick the ones you care about, arrange them into a panel, place it where you want it.",
             "|cffffd100One click asks for one.|r In a five-man it whispers the healer of that class - the only person who has it. In a raid you can name somebody per spell.",
             "A slot nobody in the group can fill is not drawn at all, so the panel is only ever as wide as the help that actually exists.",
-            "|cffffd100It does not count anybody's cooldown down, and it never will on this patch.|r Another player's instant cast is not announced to addons since 12.0.5, so \"ready in 1:12\" would be a guess - in the one moment you would believe it.",
+            "|cffffd100It does not count anybody's cooldown down.|r A number there would be a guess - in the one moment you would believe it.",
             "|cffffd100/zs externals|r says who each slot would whisper.",
         },
     },
@@ -832,7 +832,7 @@ ns.CHANGELOG = {
         date = "2026-08-09",
         lines = {
             "THE REPLAY HAS THREE LANES NOW. |cffffd100Damage on you|r above the axis, |cffffd100what you pressed|r below it, and |cffffd100healing on you|r under that - with the amount, the spell's icon and |cffffd100the name of whoever cast it|r, in their class colour. Healing used to be a green column in among the red ones; \"was anybody healing me\" is its own question and now it has its own row.",
-            "The killer's portrait sits in the corner of the replay, and the hover says what HE did to you: how many hits, the total, the biggest, and which of his abilities landed. What else a mob can do is not something the client will tell an addon on this patch, and the tooltip says so rather than leaving a gap.",
+            "The killer's portrait sits in the corner of the replay, and the hover says what HE did to you: how many hits, the total, the biggest, and which of his abilities landed.",
             "The health bar says |cffffd100Your health|r over it. It is the only bar in the window and it was being read as the mob's.",
             "Speed is a slider from a quarter to triple, and the death window's size is a slider too - both were buttons walking a fixed list, and dragging to the one you want beats clicking past three you do not.",
             "The death window's buttons drew straight through the replay standing in front of it. Two windows in one layer: whichever you click comes forward now.",
@@ -859,7 +859,7 @@ ns.CHANGELOG = {
         date = "2026-08-09",
         lines = {
             "REPLAY. A window of its own with a time axis down the middle: what came in above it, |cffffd100what you pressed below it|r. Play, pause, stop and a speed from a quarter to double. Icons, numbers and the client's own tooltips on every mark, a health bar that drains as the playhead crosses them, and a defensive of yours drawn in the accent colour so it can be found at a glance. Anybody looking at an empty lower half can see that no defensive was pressed - which is the whole point of it.",
-            "The presses are your own casts, recorded as you make them. The combat log is closed to addons on this patch; this is a live event about your own character that survived, so the addon knows what YOU did even where it cannot see what anybody else did.",
+            "The presses are your own casts, recorded as you make them.",
             "The verdict says it too, in one line: \"You pressed nothing in those seconds\", \"No defensive was pressed - you cast Death Strike, Heart Strike\", or which defensives you did use.",
             "YOUR DEATHS SURVIVE A RELOAD NOW. They were kept for the session only, so reloading - which happens after every settings change and every addon update - took the list and the skull with it. The last ten are kept for this character and read back when you log in. |cffffd100Clear list|r is still how they go.",
             "The event table has a head that says what its columns are, and every hit now shows |cffffd100what share of your health it took|r and |cffffd100the health you had left|r - as a number and as a percentage, in the row itself rather than only in the hover. On the killing blow that last column says how far past zero it went.",
@@ -874,7 +874,7 @@ ns.CHANGELOG = {
         lines = {
             "THE DEATHS OF THE SESSION NOW STAND IN A LIST down the right side of the window - time, where it happened, who did it. Click one and it opens; the wheel steps through them. The arrows beside the close cross are gone, because a list you can see beats a counter you have to walk. |cffffd100Clear list|r under it throws them away, and asks once first.",
             "WHERE IT HAPPENED is recorded with every death and says which kind of evening this was: |cffffd100M+12 - Ara-Kara - Avanoxx|r, |cffffd100Raid - Nerub-ar Palace (Heroic)|r, |cffffd100Open world - Duskwood|r. The boss's name comes from the pull itself, so a wipe on a boss says the boss and a death on the trash before it does not. It travels with the share.",
-            "THE KILLER'S PORTRAIT sits beside the title when the client hands one over - the same 3D model Blizzard's own recap draws. Where it does not, the header simply starts at the margin: no empty box.",
+            "THE KILLER'S PORTRAIT sits beside the title when the client hands one over - the same 3D model Blizzard's own recap draws. Where it does not, the header starts at the margin: no empty box.",
             "Every hit in the list answers a hover with the client's own spell tooltip, plus what it did to you - the damage, the overkill, the health you had left after it. A melee swing has no spell to ask about and says what it knows itself.",
             "Where the share goes is yours to choose on the Deaths page: the group you are in, or party, raid, instance, guild, say, yell outright. A channel you picked that is not there - Raid while you stand in a party of three - prints in your own chat frame and says why, rather than posting nowhere in silence.",
             "|cffffd100/zs death clear|r empties the list from the command line.",
@@ -905,7 +905,7 @@ ns.CHANGELOG = {
         lines = {
             "DEATHS. When you die, a window opens with what actually happened: the last ten seconds hit by hit - icon, damage, the health you had left after each - and a verdict on top. Whether one hit did most of it or it was a thousand cuts, when the last heal landed, which of your defensives were |cffffd100still ready|r, and whether a healthstone or a potion sat unused in the bags. |cffffd100Share in chat|r posts the short version to your group. The auto-open can be switched off on the Deaths page; |cffffd100/zs death|r opens it any time.",
             "TIMELINE. A panel with whatever the fight has scheduled next - the feed the boss mods run on - and your defensives under it, coloured by whether they are back. Pick them on the Timeline page; the death window judges the same list. Shows in combat, placed in Edit Mode. The client keeps an event's severity secret, so \"tank busters only\" is a filter no addon can build - it shows the next thing, whatever it is.",
-            "Readiness is our own estimate - your last cast plus the spell's base cooldown - because live cooldowns are closed to addons on this patch. Charges and resets are not in it, so it says about, and means it.",
+            "Readiness is an estimate - your last cast plus the spell's base cooldown. Charges and resets are not in it, so it says about, and means it.",
             "This window can be scaled: Settings, under This window, 60 to 125 percent, live while you drag it.",
         },
     },
@@ -963,8 +963,8 @@ ns.CHANGELOG = {
             "CO-TANK PANEL. One row per tank, you first, so rows never reorder mid-pull - health, absorbs, target ring, raid marker and indicators. The aura strips draw in test mode; live aura data for another player needs patch 12.1.",
             "A LOOK DOES NOT HAVE TO BE SET TWICE. |cffffd100Copy from|r takes another bar's style in one click, |cffffd100Save as|r stores it as a preset. Only sizes, spacing and colours travel - the spells and the grid stay with their own bar.",
             "Fonts and bar textures come from the shared media registry, so everything your other addons ship is in the pickers under the names you already know.",
-            "HOW IT WORKS: every icon on your bars IS one of Blizzard's Cooldown Manager frames, moved onto your cell. It keeps the right icon, sweep, charges and timing, because on this patch an addon may not read aura data at all. Blizzard would leave a hole where an icon went, so cooldowns you have not placed are hidden too - |cffffd100Settings|r, |cffffd100Take the display over|r gives that row back.",
-            "IF A SPELL IS MISSING FROM THE LIST: Blizzard's Cooldown Manager hides most spells by default, and one it is not displaying has no frame for this addon to adopt. Those appear under |cffffd100Not shown by Blizzard|r - move them into a viewer in Blizzard's own Cooldown Manager settings and they become usable here.",
+            "Every icon on your bars is one of Blizzard's Cooldown Manager frames, moved onto your cell - icon, sweep, charges and timing stay right. Cooldowns you have not placed are hidden; |cffffd100Settings|r, |cffffd100Take the display over|r gives them back.",
+            "IF A SPELL IS MISSING FROM THE LIST: it appears under |cffffd100Not shown by Blizzard|r - move it into a viewer in Blizzard's Cooldown Manager settings and it becomes usable here.",
         },
     },
 }
