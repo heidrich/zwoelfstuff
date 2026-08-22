@@ -557,7 +557,9 @@ function Page:BuildVoice(grid, width)
 
     grid:Note("|cffffd100%who|r becomes you, your co-tank, the group or "
         .. "somebody; |cffffd100%mob|r is the caster's name; "
-        .. "|cffffd100%rank|r is what kind of mob it is.")
+        .. "|cffffd100%rank|r is what kind of mob it is. "
+        .. "|cffffd100%spell|r names the cast when the mob has exactly one "
+        .. "known ability - otherwise it says \"something\".")
 
     grid:Section("Whose voice", "ca-voice-who")
 
@@ -644,6 +646,18 @@ end
 local mobCard
 
 local CARD_W, CARD_H = 580, 430
+
+-- WHAT A MARK MEANS FOR THE PERSON READING IT, one clause each. The words
+-- come from Rules.SpellMarks (Core/Casts.lua), which decodes MDT's letters.
+local MARK_LINES = {
+    kickable = { text = "Can be kicked." },
+    magic    = { text = "Magic - dispel or steal it." },
+    enrage   = { text = "Enrage - soothe it." },
+    poison   = { text = "Applies a poison." },
+    bleed    = { text = "Applies a bleed." },
+    curse    = { text = "Applies a curse." },
+    disease  = { text = "Applies a disease." },
+}
 local MODEL_W = 190
 
 local function BuildMobCard()
@@ -886,7 +900,28 @@ function ns.ShowMobCard(entry, spec)
         row.icon:SetTexture((ns.SpellTexture and ns.SpellTexture(spellID))
             or ns.WHITE)
         row:SetUsed(nil, true)
-        row:SetTrailing(tostring(spellID), nil, C.textGhost)
+
+        -- WHAT MDT KNOWS ABOUT IT, on the row and in the tip. The trailing
+        -- slot shows the marks when there are any, the id when there are
+        -- none - the id then still stands in the tip, so two spells sharing
+        -- a name stay tellable apart either way.
+        local marks = ns.CastRules.SpellMarks(spellID)
+        if marks then
+            local kick = false
+            for _, word in ipairs(marks) do
+                if word == "kickable" then kick = true end
+                row.dkLines[#row.dkLines + 1] = MARK_LINES[word]
+                    or { text = word }
+            end
+            row.dkLines[#row.dkLines + 1] = {
+                text = "Id " .. spellID,
+                r = C.textGhost[1], g = C.textGhost[2], b = C.textGhost[3],
+            }
+            row:SetTrailing(table.concat(marks, " · "),
+                nil, kick and C.hot or C.textDim)
+        else
+            row:SetTrailing(tostring(spellID), nil, C.textGhost)
+        end
 
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", card.content, "TOPLEFT", 0, -y)
@@ -1045,6 +1080,12 @@ function Page:BuildSide(sideHost, pad)
                 if type(name) == "string" then
                     parts[#parts + 1] = name:lower()
                 end
+                local marks = ns.CastRules.SpellMarks(id)
+                if marks then
+                    for _, word in ipairs(marks) do
+                        parts[#parts + 1] = word
+                    end
+                end
             end
             text = table.concat(parts, " ")
             hay[entry] = text
@@ -1079,6 +1120,38 @@ function Page:BuildSide(sideHost, pad)
         return state
     end
 
+    -- WHICH CATALOG PLACE THE GROUND YOU STAND ON IS. The catalog names
+    -- dungeons in English; GetInstanceInfo answers in the client's own
+    -- language - so the match runs over the Challenge Mode map id, whose
+    -- UI name the same client localizes. English stays as the fallback,
+    -- and no match means no group floats.
+    local herePlace
+    local localName
+    local function PlaceOfHere()
+        local here = ns.Casts.Where and ns.Casts.Where() or nil
+        if not here or not catalog then return nil end
+        if not localName then
+            localName = {}
+            if C_ChallengeMode and C_ChallengeMode.GetMapUIInfo then
+                for _, place in ipairs(catalog) do
+                    if place.map then
+                        local ok, name = pcall(C_ChallengeMode.GetMapUIInfo,
+                            place.map)
+                        if ok and type(name) == "string" and name ~= "" then
+                            localName[place.place] = name
+                        end
+                    end
+                end
+            end
+        end
+        for _, place in ipairs(catalog) do
+            if place.place == here or localName[place.place] == here then
+                return place.place
+            end
+        end
+        return nil
+    end
+
     side.SetQuery = function(text)
         query = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
         side.Refresh()
@@ -1104,7 +1177,8 @@ function Page:BuildSide(sideHost, pad)
         -- keep their alphabetical order, folded until asked. A search
         -- overrules the folding - a hit behind a closed group is a hit
         -- nobody finds.
-        local here = ns.Casts.Where and ns.Casts.Where() or nil
+        herePlace = PlaceOfHere()
+        local here = herePlace
         local groups = {}
 
         -- WATCHED FIRST, as its own group: what the selected alert filters
@@ -1178,8 +1252,7 @@ function Page:BuildSide(sideHost, pad)
                 heading:EnableMouse(true)
                 heading:SetScript("OnMouseDown", function(self)
                     if not self.dkPlace then return end
-                    local now = ns.Casts.Where and ns.Casts.Where() or nil
-                    open[self.dkPlace] = not IsOpen(self.dkPlace, now)
+                    open[self.dkPlace] = not IsOpen(self.dkPlace, herePlace)
                     side.Refresh()
                 end)
                 heading:SetScript("OnEnter", function(self)
@@ -1303,6 +1376,11 @@ function Page:BuildSide(sideHost, pad)
                 if type(entry.npcs) == "table" and #entry.npcs > 1 then
                     row.dkLines[#row.dkLines + 1] = {
                         text = #entry.npcs .. " variants",
+                    }
+                end
+                if entry.forces then
+                    row.dkLines[#row.dkLines + 1] = {
+                        text = entry.forces .. " forces",
                     }
                 end
                 local count = type(entry.spells) == "table" and #entry.spells or 0

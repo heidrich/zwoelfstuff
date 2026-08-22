@@ -296,13 +296,42 @@ function Rules.MobKey(mob, npc)
     return nil
 end
 
--- THE WORDS. Three tokens, and every one of them is something we may read:
+-- WHAT MDT KNOWS ABOUT A SPELL, decoded once per id from the letters in
+-- Core/MobData.lua (its header names them). Answers a WORD LIST because
+-- both readers want words: the card prints them, the search matches them.
+-- No letters means MDT said nothing - which is not the claim "none of
+-- these", so the answer is nil, not an empty list.
+local MARK_WORDS = {
+    i = "kickable", m = "magic", e = "enrage",
+    p = "poison", b = "bleed", c = "curse", d = "disease",
+}
+local marksOf = {}
+function Rules.SpellMarks(spellID)
+    local cached = marksOf[spellID]
+    if cached ~= nil then return cached or nil end
+    local letters = ns.MobSpells and ns.MobSpells[spellID]
+    if type(letters) ~= "string" or letters == "" then
+        marksOf[spellID] = false
+        return nil
+    end
+    local marks = {}
+    for letter in letters:gmatch("%a") do
+        marks[#marks + 1] = MARK_WORDS[letter] or letter
+    end
+    marksOf[spellID] = marks
+    return marks
+end
+
+-- THE WORDS. Four tokens, and every one of them is something we may read:
 --   %rank   ordinary mob / lieutenant / boss
 --   %who    you / a tank / the group / nobody
 --   %mob    the caster's name (UnitName is readable for mobs on 12.x -
 --           measured, see Core/Taunts.lua)
--- The spell's NAME is deliberately not a token: it is secret, and a token
--- that silently prints nothing is worse than no token.
+--   %spell  the one ability the season list knows for this caster - said
+--           only when there is exactly one, because a live cast's own id
+--           is secret and naming one of several would be a guess. Any
+--           other case says "something", never nothing: a token that
+--           silently prints an empty hole is worse than no token.
 local RANK_WORDS = {
     standard   = "A mob",
     lieutenant = "A lieutenant",
@@ -317,10 +346,12 @@ local AIM_WORDS = {
     nobody  = "nobody in particular",
 }
 
-function Rules.Words(text, rank, aim, mob)
+function Rules.Words(text, rank, aim, mob, spell)
     local out = type(text) == "string" and text or ""
     out = out:gsub("%%rank", RANK_WORDS[rank or ""] or "Something")
     out = out:gsub("%%who", AIM_WORDS[aim or "nobody"] or "somebody")
+    out = out:gsub("%%spell", (type(spell) == "string" and spell ~= ""
+        and spell) or "something")
     out = out:gsub("%%mob", (type(mob) == "string" and mob ~= "" and mob)
         or "something")
     return out
@@ -550,6 +581,9 @@ function Casts:Scan()
                 entry.mob, entry.name, entry.texture
             row.spellID, row.notInterruptible = nil, nil
             row.isChannel, row.duration = false, nil
+            -- Set, not left over: the pooled row may still carry the last
+            -- real scan's answer.
+            row.likelySpell = nil
             live[found] = row
         end
         for index = found + 1, #live do live[index] = nil end
@@ -615,6 +649,7 @@ function Casts:Scan()
                 local row = Row(found)
                 row.unit, row.rank, row.aim = unit, rank, aim
                 row.npc = npc
+                row.likelySpell = npc and Casts.OnlySpell(npc) or nil
                 row.mob, row.name, row.texture = mob, cast.name, cast.texture
                 row.spellID = cast.spellID
                 row.notInterruptible = cast.notInterruptible
@@ -776,6 +811,7 @@ function Casts.Catalog()
                 kind    = mob.kind,
                 health  = mob.health,
                 level   = mob.level,
+                forces  = mob.forces,
             }
         end
 
@@ -835,6 +871,8 @@ function Casts.Catalog()
             out[#out + 1] = {
                 place = dungeon.name,
                 short = dungeon.short,
+                map   = dungeon.map,
+                total = dungeon.total,
                 mobs  = rows,
             }
         end
@@ -867,6 +905,71 @@ function Casts.PickedCount(mobs)
         if not claimed[key] then count = count + 1 end
     end
     return count
+end
+
+-- THE SEASON LIST BY NPC ID, built once on first ask. The death window
+-- hands over an id parsed off a GUID and wants the row it belongs to; the
+-- scan asks the same question for %spell. One walk, then table lookups.
+local byNpc
+function Casts.ByNpc(npc)
+    if type(npc) ~= "number" then return nil end
+    if not byNpc then
+        byNpc = {}
+        for _, place in ipairs(Casts.Catalog()) do
+            for _, entry in ipairs(place.mobs) do
+                for _, id in ipairs(entry.npcs or {}) do
+                    if byNpc[id] == nil then
+                        byNpc[id] = { entry = entry, place = place.place }
+                    end
+                end
+            end
+        end
+    end
+    local hit = byNpc[npc]
+    if hit then return hit.entry, hit.place end
+    return nil
+end
+
+-- THE ONE CAST THAT CAN BE NAMED. A live cast's id is secret; the season
+-- list is ours to read. When a caster has exactly ONE known ability, that
+-- name is worth saying - with two or more, picking one would be a guess,
+-- and a warning that guesses gets switched off.
+function Casts.OnlySpell(npc)
+    local entry = Casts.ByNpc(npc)
+    local spells = entry and entry.spells
+    if type(spells) == "table" and #spells == 1 then return spells[1] end
+    return nil
+end
+
+-- SAYS SO WHEN THE SEASON TURNS. The list ships with the addon; the game
+-- knows the current season's dungeons by Challenge Mode map id, and the
+-- generated file carries the same id per dungeon. Counted, not assumed -
+-- and a client that does not answer counts as "cannot tell" (nil), never
+-- as stale: a quiet check beats a wrong one. `maps` is injectable so the
+-- desk can drive the rule without a season.
+function Casts.SeasonCheck(maps)
+    if maps == nil then
+        if not (C_ChallengeMode and C_ChallengeMode.GetMapTable) then
+            return nil
+        end
+        local ok, got = pcall(C_ChallengeMode.GetMapTable)
+        if not ok then return nil end
+        maps = got
+    end
+    if type(maps) ~= "table" or #maps == 0 then return nil end
+    if type(ns.MobData) ~= "table" then return nil end
+    local ours = {}
+    for _, dungeon in pairs(ns.MobData) do
+        if type(dungeon) == "table" and type(dungeon.map) == "number" then
+            ours[dungeon.map] = true
+        end
+    end
+    if not next(ours) then return nil end
+    local missing = 0
+    for _, id in ipairs(maps) do
+        if not ours[id] then missing = missing + 1 end
+    end
+    return missing
 end
 
 -- THE ONE THAT MATTERS, for surfaces that show a single line: the cast aimed
@@ -1113,7 +1216,9 @@ function Casts.Line(cfg, entry)
     local lines = cfg.lines
     local line = type(lines) == "table" and lines[entry.rank or ""] or nil
     if type(line) ~= "string" or line == "" then return nil end
-    return Rules.Words(line, entry.rank, entry.aim, entry.mob)
+    return Rules.Words(line, entry.rank, entry.aim, entry.mob,
+        entry.likelySpell and ns.SpellName and ns.SpellName(entry.likelySpell)
+        or nil)
 end
 
 ---------------------------------------------------------------------------

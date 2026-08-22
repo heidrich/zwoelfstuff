@@ -1755,6 +1755,20 @@ boot:SetScript("OnEvent", function(_, event, arg1)
             ns.CDM:OnChanged(function() ns.Options:OnCatalogChanged() end)
         end)
 
+        -- THE SEASON LIST IS HELD AGAINST THE GAME, once: a stale list
+        -- looks identical to a correct one, and nobody rereads a data
+        -- file. A client that does not answer at login says nothing -
+        -- a quiet check beats a wrong one.
+        Boot("Season check", function()
+            local stale = ns.Casts and ns.Casts.SeasonCheck
+                and ns.Casts.SeasonCheck()
+            if stale and stale > 0 then
+                ns.Print(("The mob list is missing %d of this season's "
+                    .. "dungeons - an addon update brings the current "
+                    .. "list."):format(stale))
+            end
+        end)
+
         -- WHERE YOU ARE AND WHO YOU ARE PLAYING, and it is machinery for the
         -- same reason the Cooldown Manager is: a reminder's "only in combat"
         -- reads this evaluator, not the bars'.

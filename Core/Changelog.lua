@@ -31,6 +31,44 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.88.0",
+        date = "2026-08-22",
+        lines = {
+            {
+                icon = "Interface\\Icons\\Ability_Kick",
+                text = "|cffffd100Every ability says what you can do about "
+                    .. "it.|r The mob card marks what can be kicked, "
+                    .. "dispelled or soothed, and what leaves a poison, "
+                    .. "bleed, curse or disease. Searching |cffffd100kick"
+                    .. "|r lists every mob with a kickable cast.",
+                link = { label = "Open a mob card", page = "casts" },
+            },
+            {
+                icon = "Interface\\Icons\\Ability_Rogue_FeignDeath",
+                text = "|cffffd100The death log knows the season's mobs.|r "
+                    .. "Click your killer's portrait for its card - "
+                    .. "everything it can do, not just what it did to you. "
+                    .. "Portraits of season mobs draw immediately.",
+            },
+            {
+                text = "The mob card shows the M+ forces a mob is worth.",
+            },
+            {
+                text = "New alert and voice token |cffffd100%spell|r: names "
+                    .. "the cast when the mob has exactly one known "
+                    .. "ability, else it says \"something\".",
+            },
+            {
+                text = "The list opens on the dungeon you are standing in "
+                    .. "on every client language now.",
+            },
+            {
+                text = "When a new season starts, the addon says once that "
+                    .. "its mob list needs an update.",
+            },
+        },
+    },
+    {
         version = "4.87.0",
         date = "2026-08-22",
         lines = {

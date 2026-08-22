@@ -10,6 +10,26 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.88.0] - 2026-08-22
+
+### Added
+
+- **Every ability says what you can do about it** — the mob card marks what
+  can be kicked, dispelled or soothed, and what leaves a poison, bleed,
+  curse or disease. Searching `kick` lists every mob with a kickable cast.
+- **The death log knows the season's mobs** — click your killer's portrait
+  for its card. Portraits of season mobs draw immediately.
+- The mob card shows the M+ forces a mob is worth.
+- New alert and voice token `%spell`: names the cast when the mob has
+  exactly one known ability, else it says "something".
+- When a new season starts, the addon says once that its mob list needs an
+  update.
+
+### Fixed
+
+- The list opens on the dungeon you are standing in on every client
+  language, not only English.
+
 ## [4.87.0] - 2026-08-22
 
 ### Added

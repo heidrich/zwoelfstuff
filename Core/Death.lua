@@ -2442,9 +2442,15 @@ local function BuildWindow()
             who = snapshot.killer,
             art = snapshot.killerArt,
             summary = Death.SourceSummary(snapshot.events, snapshot.killer),
+            note = (ns.Casts and ns.Casts.ByNpc and snapshot.killerArt
+                and ns.Casts.ByNpc(snapshot.killerArt.creatureID))
+                and "Click the portrait for its card." or nil,
         })
     end)
     frame.portrait:SetScript("OnLeave", Death.HideEnemyTip)
+    frame.portrait:SetScript("OnMouseDown", function()
+        Death.OpenKillerCard(Death.Showing())
+    end)
 
     local portraitEdge = ns.CreateBorder(frame.portrait, 1, "OVERLAY")
     portraitEdge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
@@ -2823,11 +2829,19 @@ local function PortraitCall()
     return SetPortraitTextureFromCreatureDisplayID
 end
 
--- The display id for a creature, if it is already known. Pure lookup.
+-- The display id for a creature, if it is already known. Pure lookup,
+-- plus one door that opened with 4.86: the season list carries a display
+-- id for every mob it knows, so those paint flat on the FIRST pass - no
+-- model round-trip, which is what "0 flat portraits" always was.
 function Death.DisplayFor(art)
     if type(art) ~= "table" then return nil end
     if art.displayID then return art.displayID end
-    return art.creatureID and displayOf[art.creatureID] or nil
+    if not art.creatureID then return nil end
+    local known = displayOf[art.creatureID]
+    if known then return known end
+    local entry = ns.Casts and ns.Casts.ByNpc
+        and ns.Casts.ByNpc(art.creatureID)
+    return entry and entry.display or nil
 end
 
 -- Remembered so the next row showing the same mob takes the fast door. Its
@@ -2943,6 +2957,23 @@ local function PaintPortrait(art)
     return Death.PaintFace(frame.portrait, art)
 end
 
+-- THE KILLER'S CARD. The season list knows a dungeon mob's whole kit, and
+-- the card (Core/OptionsCasts.lua) already draws it standalone - so the
+-- portrait's click opens it. A killer the list does not know ignores the
+-- click; the hover tip offers it only when it works.
+function Death.OpenKillerCard(snapshot)
+    local art = snapshot and snapshot.killerArt
+    local npc = art and art.creatureID
+    if not (npc and ns.Casts and ns.Casts.ByNpc and ns.ShowMobCard) then
+        return false
+    end
+    local entry, place = ns.Casts.ByNpc(npc)
+    if not entry then return false end
+    Death.HideEnemyTip()
+    ns.ShowMobCard(entry, { place = place })
+    return true
+end
+
 ---------------------------------------------------------------------------
 -- THE ENEMY TIP - one big tooltip, everywhere a mob's face is drawn
 --
@@ -2954,7 +2985,9 @@ end
 -- assumed now: there is NO client call that lists an arbitrary NPC's
 -- abilities, and inside a dungeon a mob withholds its name, its health and
 -- its creature type outright. The Encounter Journal knows bosses and nothing
--- about trash. So this cannot be a wiki page.
+-- about trash. So this cannot be a wiki page - but the season list can:
+-- Core/MobData.lua knows a dungeon mob's whole kit, and clicking the
+-- killer's portrait opens its card. The tip stays about what happened HERE.
 --
 -- What it is instead is better for the question being asked: what this thing
 -- did HERE, in these seconds, with which abilities - summed from the recap

@@ -11329,6 +11329,115 @@ local function TestCasts()
             Skip("The list's own controls",
                 "the side column could not be built here")
         end
+
+        ---------------------------------------------------------------
+        -- WHAT 4.88 ADDED TO THE DATA: the map id, the forces, the spell
+        -- marks, and the lookups the death window and %spell stand on.
+        ---------------------------------------------------------------
+        local mapped, withTotal, withForces = 0, 0, 0
+        for _, place in ipairs(catalog) do
+            if type(place.map) == "number" then mapped = mapped + 1 end
+            if type(place.total) == "number" then
+                withTotal = withTotal + 1
+            end
+            for _, entry in ipairs(place.mobs) do
+                if type(entry.forces) == "number" then
+                    withForces = withForces + 1
+                end
+            end
+        end
+        Check(("Every dungeon carries its map id (%d)"):format(mapped),
+            mapped == #catalog)
+        Check(("...and its forces total (%d)"):format(withTotal),
+            withTotal == #catalog)
+        Check(("%d mobs carry a forces count"):format(withForces),
+            withForces > 0)
+
+        Check("The spell marks shipped",
+            type(ns.MobSpells) == "table" and next(ns.MobSpells) ~= nil)
+        local flaggedID
+        for id in pairs(ns.MobSpells or {}) do
+            flaggedID = flaggedID or id
+        end
+        if flaggedID then
+            local marks = ns.CastRules.SpellMarks(flaggedID)
+            Check("A flagged spell decodes to words",
+                type(marks) == "table" and #marks > 0
+                and type(marks[1]) == "string")
+            Check("...and the decode is kept, not redone",
+                ns.CastRules.SpellMarks(flaggedID) == marks)
+        end
+        Check("An unflagged spell answers nil, not an empty list",
+            ns.CastRules.SpellMarks(999999902) == nil)
+
+        -- The reverse lookup: any variant id finds its row and its place.
+        local probeEntry = folded or catalog[1].mobs[1]
+        local probeID = probeEntry.npcs[#probeEntry.npcs]
+        local foundEntry, foundPlace = ns.Casts.ByNpc(probeID)
+        Check("ByNpc finds the row for any variant id",
+            foundEntry ~= nil and foundEntry.mob == probeEntry.mob
+            and type(foundPlace) == "string")
+        Check("...and an id no season holds finds nothing",
+            ns.Casts.ByNpc(999999903) == nil)
+
+        -- %spell's rule: exactly one known ability, or nothing at all.
+        local lonely
+        for _, place in ipairs(catalog) do
+            for _, entry in ipairs(place.mobs) do
+                if type(entry.spells) == "table" and #entry.spells == 1 then
+                    lonely = lonely or entry
+                end
+            end
+        end
+        if lonely then
+            Check("A mob with one known ability names it",
+                ns.Casts.OnlySpell(lonely.npc) == lonely.spells[1])
+        end
+        if folded and #(folded.spells or {}) > 1 then
+            Check("...and one with several names none",
+                ns.Casts.OnlySpell(folded.npc) == nil)
+        end
+
+        -- The season check, driven without a season: our own maps are
+        -- current, a stranger map counts as missing, no answer is no
+        -- verdict.
+        local ourMaps = {}
+        for _, place in ipairs(catalog) do
+            if place.map then ourMaps[#ourMaps + 1] = place.map end
+        end
+        Check("A season we ship is not called stale",
+            ns.Casts.SeasonCheck(ourMaps) == 0)
+        ourMaps[#ourMaps + 1] = 999999904
+        Check("...a dungeon we lack is counted",
+            ns.Casts.SeasonCheck(ourMaps) == 1)
+        Check("...and no answer is no verdict",
+            ns.Casts.SeasonCheck({}) == nil)
+
+        -- The death window's doors: the season list answers a display id
+        -- on the FIRST paint now, and an explicit one still wins.
+        if ns.Death and ns.Death.DisplayFor then
+            local display = ns.Death.DisplayFor({ creatureID = probeID })
+            Check("The season list answers the death window's display id",
+                type(display) == "number" and display > 0)
+            Check("...an explicit display id still wins",
+                ns.Death.DisplayFor({ creatureID = probeID,
+                    displayID = 424242 }) == 424242)
+        end
+
+        -- The killer's card, driven without a mouse.
+        if ns.Death and ns.Death.OpenKillerCard then
+            Check("A killer the list knows opens his card",
+                ns.Death.OpenKillerCard(
+                    { killerArt = { creatureID = probeID } }) == true)
+            local card = ZwoelfStuffMobCard
+            Check("...and the card is the one on screen",
+                card ~= nil and card:IsShown()
+                and card.entry and card.entry.mob == probeEntry.mob)
+            if card then card:Hide() end
+            Check("...and a killer it does not know is not a click",
+                ns.Death.OpenKillerCard(
+                    { killerArt = { creatureID = 999999905 } }) == false)
+        end
     end
 
     ---------------------------------------------------------------------
@@ -11520,6 +11629,12 @@ local function TestCasts()
         R.Words("%mob!", "boss", "me", nil) == "something!")
     Check("Words with no token are left alone",
         R.Words("Look up", "boss", "me", "Vorasius") == "Look up")
+    Check("%spell says the name when there is exactly one to say",
+        R.Words("Kick %spell!", "boss", "me", "Vorasius", "Sunder")
+            == "Kick Sunder!")
+    Check("...and 'something', never a hole, when there is not",
+        R.Words("Kick %spell!", "boss", "me", "Vorasius")
+            == "Kick something!")
 
     ---------------------------------------------------------------------
     -- The foremost cast: the one on you, else the worst one

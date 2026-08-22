@@ -54,10 +54,14 @@ end
 
 -- The words, through the cast module's one token door.
 function Rules.Words(text, entry)
+    local spell
+    if type(entry) == "table" and entry.likelySpell and ns.SpellName then
+        spell = ns.SpellName(entry.likelySpell)
+    end
     if type(entry) ~= "table" then
         return ns.CastRules.Words(text, nil, nil, nil)
     end
-    return ns.CastRules.Words(text, entry.rank, entry.aim, entry.mob)
+    return ns.CastRules.Words(text, entry.rank, entry.aim, entry.mob, spell)
 end
 
 ---------------------------------------------------------------------------
@@ -141,12 +145,14 @@ local SPEC = {
         local row = About(cfg)
         if entry then
             row.rank, row.aim, row.mob = entry.rank, entry.aim, entry.mob
+            row.likelySpell = entry.likelySpell
             -- The texture may be secret. It is carried and handed to
             -- SetTexture, and it never goes near the saved file.
             row.texture = entry.texture
             return "casting"
         end
         row.rank, row.aim, row.mob, row.texture = nil, nil, nil, nil
+        row.likelySpell = nil
         return "idle"
     end,
 
