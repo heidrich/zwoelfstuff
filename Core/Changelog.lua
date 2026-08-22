@@ -41,6 +41,10 @@ ns.CHANGELOG = {
                     .. "and the alerts fire. With the module off, the band "
                     .. "says so instead of showing nothing.",
             },
+            {
+                text = "Casts on you is marked |cffffd100Beta|r - in the "
+                    .. "menu and on its page.",
+            },
         },
     },
     {
@@ -169,8 +173,7 @@ ns.CHANGELOG = {
                     .. "the icon showed because it hangs outside, which is "
                     .. "what gave it away. Test mode claimed three casts "
                     .. "were on screen "
-                    .. "while the module was off, when the bar refuses to "
-                    .. "draw at all then; the cast icon had no border and "
+                    .. "while the module was off; the cast icon had no border and "
                     .. "the bar had two; and a value the client refuses can "
                     .. "no longer take the rest of the bar down with it.",
                 link = { label = "Open the cast bar", page = "casts" },
@@ -179,11 +182,9 @@ ns.CHANGELOG = {
                 icon = "Interface\\Icons\\Ability_Warrior_ShieldBash",
                 text = "|cffffd100\"ON YOU\", in words.|r The stripe was "
                     .. "certain and not readable at a glance. The words "
-                    .. "above the bar are the same certain answer - a label "
-                    .. "this addon owns, faded in and out by the game "
-                    .. "itself, because whether a cast is aimed at you is "
-                    .. "something no addon may read. Words, stripe, both or "
-                    .. "neither, and you choose what they say.",
+                    .. "above the bar are the same certain answer. Words, "
+                    .. "stripe, both or neither, and you choose what they "
+                    .. "say.",
             },
             {
                 icon = "Interface\\Icons\\INV_Misc_QuestionMark",

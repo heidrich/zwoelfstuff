@@ -1451,7 +1451,7 @@ function Options:Create()
     -- yet through a real week of play. The badge rides the title rather than
     -- the page body so it is there on every tab of that page, including the
     -- ones somebody lands on from a changelog link.
-    local pageSoon = UI.Badge(stageHost, ns.L["COMING SOON"], "current")
+    local pageSoon = UI.Badge(stageHost, ns.L["BETA"], "current")
     pageSoon:SetPoint("LEFT", pageTitle, "RIGHT", 10, 0)
     pageSoon:Hide()
 
@@ -1714,6 +1714,16 @@ function Options:Create()
                 ns.L[entry.title or (pageEntry and pageEntry.title) or ""],
                 entry.glyph or (pageEntry and pageEntry.glyph),
                 entry.onClick or function() ShowPage(index) end)
+            -- NOT FINISHED IS SAID IN THE MENU TOO (owner, 2026-08-22,
+            -- with a circle on the rail): a Beta mark beside the label, in
+            -- the accent, so the state shows before the click. Placed off
+            -- the label's own text width - the label is a full-width
+            -- string, so its RIGHT edge is the row's, not the word's.
+            if pageEntry and Options.ComingSoon(pageEntry) then
+                local beta = UI.Eyebrow(item, ns.L["BETA"], C.hot)
+                beta:SetPoint("LEFT", item.label, "LEFT",
+                    (item.label:GetStringWidth() or 0) + 6, 0)
+            end
             -- FLUSH WITH BOTH EDGES of the rail, not inset.
             --
             -- Inset by 8, the active row's fill is a floating box with a gap

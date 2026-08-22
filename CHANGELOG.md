@@ -12,6 +12,10 @@ oldest versions move over.
 
 ## [4.88.1] - 2026-08-22
 
+### Changed
+
+- Casts on you is marked **Beta** — in the menu and on its page.
+
 ### Fixed
 
 - The preview above the tabs was empty until something real was casting.
@@ -93,56 +97,23 @@ oldest versions move over.
 
 ## [4.85.1] - 2026-08-19
 
-*Casts on you is still marked coming soon — this is the first round of what a
-real key found.*
+*Casts on you — the first round of what a real key found.*
 
 ### Fixed
 
-- **Test mode said three casts were on screen while the module was off.**
-  They were not, and could not be: the bar refuses to draw anything at all
-  when the module is off, which is its first line. A test mode that reports a
-  screen nobody can see is worse than none — it sends you looking for a
-  drawing bug instead of at a switch. It now says which it is.
-- **The spell's name was painted underneath the bar.** It was there the
-  whole time and you could never see it: the fill is a frame of its own, a
-  frame draws above every layer of the one it sits in, and the name, the aim
-  word, the "on you" stripe and the glow were all underneath it. The icon
-  showed because it hangs outside the bar, where the fill cannot reach - and
-  that pair, name gone and icon fine, is what gave it away. Everything that
-  has to be read now sits on its own face above the fill.
-- **The cast icon had no border, and the bar had two.** The icon's border was
-  built from the bar rather than from the icon, so it drew a second edge
-  around the whole bar and left the icon bare.
-- **A refused value no longer takes the rest of the bar with it.** The
-  spell's name and icon are handed to the game's own setters — which accept
-  values addons may not read — but through a guard now: if a client ever
-  refuses one, the bar falls back to the caster's name instead of stopping
-  half-drawn and leaving the timer, the kick colour and the "on you" mark
-  wearing the previous cast. Where there is no icon but there is a spell id,
-  the id is asked instead.
+- **The spell's name was painted underneath the bar** and had never been
+  visible. Everything readable now sits above the fill.
+- **Test mode claimed three casts were on screen while the module was off.**
+  It now says the module is off.
+- **The cast icon had no border, and the bar had two.** The icon has its own
+  now.
+- **A refused value no longer takes the rest of the bar with it** — the bar
+  falls back to the caster's name instead of stopping half-drawn.
 
 ### Added
 
-- **"ON YOU" in words, and the game still decides when you see them.** The
-  stripe down the left of the bar was certain but not readable at a glance.
-  The words above the bar are the same certain answer — a fixed label this
-  addon owns, faded in and out by the client itself, because the answer to
-  "is this one aimed at me" is one no addon is allowed to read. Choose the
-  words, the stripe, both or neither under *The "on you" mark*, and type
-  whatever you want them to say.
-- **`/zs casts` now says what the client actually handed over** — for the
-  cast in front of you, whether its name, icon and id are *readable*,
-  *withheld* or *missing*. Those last two look identical on screen and mean
-  completely different things: withheld means the value is there and only the
-  game may look at it.
-
-### Changed
-
-- **The mob list only collects in this season's dungeons and in raids.** It
-  was filling with anything that cast at you anywhere, which is not a list
-  you can find something in. The season's dungeons are asked of the game
-  rather than written down here, so the list follows the season without an
-  update. *Forget the list* clears what the old behaviour collected.
+- **"ON YOU" in words** above the cast bar. Words, stripe, both or neither —
+  and you choose what they say.
 
 ## [4.85.0] - 2026-08-19
 

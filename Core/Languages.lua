@@ -105,7 +105,7 @@ Register("enUS", {
     ["Open settings"] = true,
     ["Show the welcome screen"] = true,
     ["NEW"] = true,
-    ["COMING SOON"] = true,
+    ["BETA"] = true,
     ["HIDDEN"] = true,
     ["Not on screen"] = true,
 
@@ -595,7 +595,7 @@ Register("deDE", {
     ["Open settings"] = "Einstellungen",
     ["Show the welcome screen"] = "Willkommensfenster zeigen",
     ["NEW"] = "NEU",
-    ["COMING SOON"] = "BALD",
+    ["BETA"] = "BETA",
     ["HIDDEN"] = "VERSTECKT",
     ["Not on screen"] = "Nicht auf dem Bildschirm",
 
@@ -1130,7 +1130,7 @@ Register("frFR", {
     ["Open settings"] = "Réglages",
     ["Show the welcome screen"] = "Afficher l'accueil",
     ["NEW"] = "NOUVEAU",
-    ["COMING SOON"] = "BIENTÔT",
+    ["BETA"] = "BÊTA",
     ["HIDDEN"] = "MASQUÉ",
     ["Not on screen"] = "Pas à l'écran",
 
@@ -1295,7 +1295,7 @@ Register("esES", {
     ["Open settings"] = "Ajustes",
     ["Show the welcome screen"] = "Mostrar la bienvenida",
     ["NEW"] = "NUEVO",
-    ["COMING SOON"] = "PRÓXIMAMENTE",
+    ["BETA"] = "BETA",
     ["HIDDEN"] = "OCULTO",
     ["Not on screen"] = "No está en pantalla",
 
@@ -1463,7 +1463,7 @@ Register("esMX", {
     ["Open settings"] = "Ajustes",
     ["Show the welcome screen"] = "Mostrar la bienvenida",
     ["NEW"] = "NUEVO",
-    ["COMING SOON"] = "PRÓXIMAMENTE",
+    ["BETA"] = "BETA",
     ["HIDDEN"] = "OCULTO",
     ["Not on screen"] = "No está en pantalla",
 
@@ -1610,7 +1610,7 @@ Register("itIT", {
     ["Open settings"] = "Impostazioni",
     ["Show the welcome screen"] = "Mostra il benvenuto",
     ["NEW"] = "NUOVO",
-    ["COMING SOON"] = "IN ARRIVO",
+    ["BETA"] = "BETA",
     ["HIDDEN"] = "NASCOSTO",
     ["Not on screen"] = "Non è sullo schermo",
 
@@ -1757,7 +1757,7 @@ Register("ptBR", {
     ["Open settings"] = "Ajustes",
     ["Show the welcome screen"] = "Mostrar as boas-vindas",
     ["NEW"] = "NOVO",
-    ["COMING SOON"] = "EM BREVE",
+    ["BETA"] = "BETA",
     ["HIDDEN"] = "OCULTO",
     ["Not on screen"] = "Não está na tela",
 
@@ -1887,7 +1887,7 @@ Register("ruRU", {
 
     ["Open settings"] = "Настройки",
     ["NEW"] = "НОВОЕ",
-    ["COMING SOON"] = "СКОРО",
+    ["BETA"] = "БЕТА",
     ["HIDDEN"] = "СКРЫТО",
     ["Not on screen"] = "Нет на экране",
 

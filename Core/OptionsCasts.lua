@@ -249,12 +249,10 @@ function Page:BuildPage(page, width)
     -- carries it on every tab; this is the sentence that says what "coming
     -- soon" actually means for somebody standing here with the switch in
     -- their hand.
-    grid:Note("|cffffd100Coming soon - this one has not been tested "
-        .. "properly yet.|r Every part of it works and none of it has been "
-        .. "through a real week of dungeons. It stays switched off until "
-        .. "you switch it on, and nothing here runs while it is off. Turn "
-        .. "it on if you would like to help find what is wrong with it, and "
-        .. "say so on the Discord.")
+    grid:Note("|cffffd100Beta.|r Every part of it works and none of it "
+        .. "has been through a real week of dungeons. It stays switched off "
+        .. "until you switch it on, and nothing here runs while it is off. "
+        .. "If something is wrong with it, say so on the Discord.")
 
     grid:Note("What the mob in front of you is casting, on a bar where you "
         .. "are already looking. To put it somewhere, open |cffffd100Edit "
