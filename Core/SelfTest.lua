@@ -11178,6 +11178,157 @@ local function TestCasts()
         else
             Skip("The enemy card", "ns.ShowMobCard is not loaded")
         end
+
+        ---------------------------------------------------------------
+        -- ONE ROW PER NAME. MDT lists a name once per VARIANT (23 doubled
+        -- rows this season); the catalog folds them and must lose nothing:
+        -- every raw id survives in some row's `npcs`, no dungeon lists a
+        -- name twice, and a folded row's spell table is its own copy - a
+        -- union written into ns.MobData would edit the generated data.
+        ---------------------------------------------------------------
+        local rawRows, rawDupes = 0, false
+        for _, dungeon in pairs(ns.MobData) do
+            local names = {}
+            for _, mob in ipairs(dungeon.mobs or {}) do
+                rawRows = rawRows + 1
+                if names[mob.name] then rawDupes = true end
+                names[mob.name] = true
+            end
+        end
+        local mergedRows, ids, twice = 0, 0, nil
+        for _, place in ipairs(catalog) do
+            local names = {}
+            for _, entry in ipairs(place.mobs) do
+                mergedRows = mergedRows + 1
+                ids = ids + (type(entry.npcs) == "table" and #entry.npcs or 0)
+                if names[entry.mob] then
+                    twice = twice or (entry.mob .. " in " .. place.place)
+                end
+                names[entry.mob] = true
+            end
+        end
+        Check("No dungeon lists one name twice", twice == nil, twice)
+        Check(("Every raw id survives the fold - %d ids over %d rows")
+            :format(ids, mergedRows),
+            ids == rawRows and (rawDupes == (mergedRows < rawRows)))
+
+        local folded
+        for _, place in ipairs(catalog) do
+            for _, entry in ipairs(place.mobs) do
+                if type(entry.npcs) == "table" and #entry.npcs > 1 then
+                    folded = folded or entry
+                end
+            end
+        end
+        if folded then
+            local shared = false
+            for _, dungeon in pairs(ns.MobData) do
+                for _, mob in ipairs(dungeon.mobs or {}) do
+                    if mob.spells == folded.spells then shared = true end
+                end
+            end
+            Check("A folded row's united spells are its own copy", not shared)
+
+            local mobsCfg = {}
+            for _, id in ipairs(folded.npcs) do mobsCfg[id] = true end
+            Check("Picking a folded row counts as ONE mob",
+                ns.Casts.PickedCount(mobsCfg) == 1)
+            mobsCfg[999999917] = true
+            Check("...a stray key still counts as itself",
+                ns.Casts.PickedCount(mobsCfg) == 2)
+            mobsCfg[999999917] = nil
+            Check("...and the live filter answers to every variant id",
+                ns.CastRules.MobWanted(mobsCfg, folded.mob, folded.npcs[1])
+                and ns.CastRules.MobWanted(mobsCfg, folded.mob,
+                    folded.npcs[#folded.npcs]))
+        elseif rawDupes then
+            Check("A doubled name folded into one row", false,
+                "MDT lists doubles and the catalog kept them apart")
+        end
+
+        ---------------------------------------------------------------
+        -- THE LIST'S OWN CONTROLS, driven like a hand would: a search
+        -- finds through closed folds, an empty search folds back, a
+        -- heading click turns its fold, a chip drops a rank from view.
+        ---------------------------------------------------------------
+        local sideOK, side = pcall(function()
+            if ns.OptionsCasts.side then return ns.OptionsCasts.side end
+            local host = CreateFrame("Frame", nil, UIParent)
+            host:SetSize(320, 600)
+            return ns.OptionsCasts:BuildSide(host, 14)
+        end)
+        if sideOK and type(side) == "table" and side.SetQuery then
+            side.SetQuery("")
+            local foldedRows = side.drawnRows
+            local allHeads = side.drawnHeads
+            Check(("The list folds to %d group lines"):format(allHeads),
+                allHeads >= #catalog)
+
+            local target = folded or catalog[1].mobs[1]
+            side.SetQuery(target.mob)
+            Check("A search finds a mob behind a closed fold",
+                side.drawnRows >= 1)
+            if folded then
+                local probe
+                for index = 1, side.drawnRows do
+                    local r = side.rows and side.rows[index]
+                    if r and r.dkEntry and r.dkEntry.mob == folded.mob
+                        and type(r.dkKeys) == "table"
+                        and #r.dkKeys == #folded.npcs then
+                        probe = r
+                    end
+                end
+                Check("The drawn row carries every variant key",
+                    probe ~= nil)
+            end
+
+            side.SetQuery("qqqxyzzy")
+            Check("A search with no hit draws nothing",
+                side.drawnRows == 0 and side.drawnHeads == 0)
+
+            side.SetQuery("")
+            Check("An empty search folds the list back",
+                side.drawnRows == foldedRows
+                and side.drawnHeads == allHeads)
+
+            local handle
+            for index = 1, side.drawnHeads do
+                local h = side.headings[index]
+                if h and h.dkPlace then handle = handle or h end
+            end
+            if handle then
+                local before = side.drawnRows
+                local press = handle:GetScript("OnMouseDown")
+                press(handle)
+                Check("A heading click turns its fold",
+                    side.drawnRows ~= before)
+                press(handle)
+                Check("...and turns it back", side.drawnRows == before)
+            else
+                Check("A heading offers its fold handle", false)
+            end
+
+            local standardEntry
+            for _, place in ipairs(catalog) do
+                for _, entry in ipairs(place.mobs) do
+                    if entry.rank == "standard" then
+                        standardEntry = standardEntry or entry
+                    end
+                end
+            end
+            if standardEntry then
+                side.SetQuery(standardEntry.mob)
+                local with = side.drawnRows
+                side.SetRank("standard", false)
+                Check("A chip drops its rank from view",
+                    side.drawnRows < with)
+                side.SetRank("standard", true)
+                side.SetQuery("")
+            end
+        else
+            Skip("The list's own controls",
+                "the side column could not be built here")
+        end
     end
 
     ---------------------------------------------------------------------
@@ -11383,6 +11534,21 @@ local function TestCasts()
     Check("...and with none on you, the most dangerous one",
         Casts.Foremost({ live[1], live[2] }) == live[2])
     Check("Nothing casting has no foremost", Casts.Foremost({}) == nil)
+
+    -- THE BAR'S FILTER LIVES IN THE READ since the scan stopped gating:
+    -- the same rows answer differently to the bar's config, and alerts -
+    -- which pass none - keep seeing everything. This is the fix for an
+    -- alert watching a rank the bar ignored: it could never fire, and
+    -- nothing said so.
+    local strictCfg = { ranks = { boss = true },
+        aims = { me = true, tank = true, unknown = true,
+            group = true, nobody = true } }
+    Check("The bar's config filters at read time",
+        Casts.Foremost({ { rank = "standard", aim = "me" },
+            { rank = "boss", aim = "unknown" } }, strictCfg).rank == "boss")
+    Check("...and a config that wants none of it picks nothing",
+        Casts.Foremost({ { rank = "standard", aim = "me" } }, strictCfg)
+        == nil)
 
     ---------------------------------------------------------------------
     -- The voice gap

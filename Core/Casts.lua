@@ -542,18 +542,15 @@ function Casts:Scan()
     local found = 0
 
     if self.testing then
-        local cfg = Casts.Config()
         for _, entry in ipairs(TEST_CASTS) do
-            if Rules.Wanted(cfg, entry.rank, entry.aim) then
-                found = found + 1
-                local row = Row(found)
-                row.unit, row.rank, row.aim = entry.unit, entry.rank, entry.aim
-                row.mob, row.name, row.texture =
-                    entry.mob, entry.name, entry.texture
-                row.spellID, row.notInterruptible = nil, nil
-                row.isChannel, row.duration = false, nil
-                live[found] = row
-            end
+            found = found + 1
+            local row = Row(found)
+            row.unit, row.rank, row.aim = entry.unit, entry.rank, entry.aim
+            row.mob, row.name, row.texture =
+                entry.mob, entry.name, entry.texture
+            row.spellID, row.notInterruptible = nil, nil
+            row.isChannel, row.duration = false, nil
+            live[found] = row
         end
         for index = found + 1, #live do live[index] = nil end
         self.count = found
@@ -566,7 +563,6 @@ function Casts:Scan()
         return 0
     end
 
-    local cfg = Casts.Config()
     local unique, playerIdentity
 
     for index = 1, MAX_PLATES do
@@ -608,18 +604,23 @@ function Casts:Scan()
                     if ns.CanCompute(guid) then npc = Rules.NpcID(guid) end
                 end
 
-                if Rules.Wanted(cfg, rank, aim) then
-                    found = found + 1
-                    local row = Row(found)
-                    row.unit, row.rank, row.aim = unit, rank, aim
-                    row.npc = npc
-                    row.mob, row.name, row.texture = mob, cast.name, cast.texture
-                    row.spellID = cast.spellID
-                    row.notInterruptible = cast.notInterruptible
-                    row.isChannel = cast.isChannel
-                    row.duration = DurationOn(unit, cast.isChannel)
-                    live[found] = row
-                end
+                -- EVERY HOSTILE CAST GOES IN. "Which casts count" used to
+                -- gate the scan itself, which quietly gated the alerts too:
+                -- an alert watching ordinary mobs could never fire while
+                -- the bar ignored them, and nothing said so. The bar
+                -- filters when it READS (Foremost gets the config), each
+                -- alert filters with its own rules - one control per
+                -- question, and neither can starve the other.
+                found = found + 1
+                local row = Row(found)
+                row.unit, row.rank, row.aim = unit, rank, aim
+                row.npc = npc
+                row.mob, row.name, row.texture = mob, cast.name, cast.texture
+                row.spellID = cast.spellID
+                row.notInterruptible = cast.notInterruptible
+                row.isChannel = cast.isChannel
+                row.duration = DurationOn(unit, cast.isChannel)
+                live[found] = row
             end
         end
     end
@@ -758,6 +759,7 @@ function Casts.Catalog()
             rows[#rows + 1] = {
                 mob    = mob.name,
                 npc    = mob.id,
+                npcs   = { mob.id },
                 -- THE BOSS FLAG OUTRANKS THE LEVEL, because a handful of
                 -- them do not agree: Avatar of Sethraliss is level 120 and a
                 -- boss, and a level this expansion does not use reads as no
@@ -776,6 +778,48 @@ function Casts.Catalog()
                 level   = mob.level,
             }
         end
+
+        -- ONE ROW PER NAME. MDT keeps "Uncoiled Writhe" twice because its
+        -- map places each variant; a list you PICK from must not - two
+        -- identical lines cannot be told apart (owner's screenshot,
+        -- 2026-08-22: 23 doubled rows across 11 dungeons). Every variant id
+        -- lands in `npcs`, so a watch covers all of them; the spells are
+        -- united so the card and the search miss nothing; the strongest
+        -- rank wins so a boss variant does not hide behind its trash twin.
+        local byName, merged = {}, {}
+        for _, entry in ipairs(rows) do
+            local twin = byName[entry.mob]
+            if not twin then
+                byName[entry.mob] = entry
+                merged[#merged + 1] = entry
+            else
+                twin.npcs[#twin.npcs + 1] = entry.npc
+                if (RANK_ORDER[entry.rank or ""] or 0)
+                    > (RANK_ORDER[twin.rank or ""] or 0) then
+                    twin.rank = entry.rank
+                end
+                twin.boss = twin.boss or entry.boss
+                if not twin.ownSpells then
+                    -- Until here the row still points at ns.MobData's own
+                    -- spell table; a union written into that would edit
+                    -- the generated data in place.
+                    local copy = {}
+                    for i, id in ipairs(twin.spells or {}) do copy[i] = id end
+                    twin.spells, twin.ownSpells = copy, true
+                end
+                local have = {}
+                for _, id in ipairs(twin.spells) do have[id] = true end
+                for _, id in ipairs(entry.spells or {}) do
+                    if not have[id] then
+                        have[id] = true
+                        twin.spells[#twin.spells + 1] = id
+                    end
+                end
+                table.sort(twin.spells)
+            end
+        end
+        rows = merged
+
         if #rows > 0 then
             -- BOSS -> LIEUTENANT -> MOB, then by name. RANK_ORDER already
             -- exists for exactly this and the ledger already sorts by it;
@@ -799,25 +843,56 @@ function Casts.Catalog()
     return out
 end
 
+-- HOW MANY LIST ROWS a picked-mobs table covers. A merged row writes one
+-- key per variant, so counting keys would call one picked mob two; a key
+-- from an old profile that no season row claims still counts as itself.
+function Casts.PickedCount(mobs)
+    if type(mobs) ~= "table" then return 0 end
+    local claimed, count = {}, 0
+    for _, place in ipairs(Casts.Catalog()) do
+        for _, entry in ipairs(place.mobs) do
+            local mine = false
+            for _, id in ipairs(entry.npcs or {}) do
+                if mobs[id] then
+                    mine, claimed[id] = true, true
+                end
+            end
+            if entry.mob and mobs[entry.mob] then
+                mine, claimed[entry.mob] = true, true
+            end
+            if mine then count = count + 1 end
+        end
+    end
+    for key in pairs(mobs) do
+        if not claimed[key] then count = count + 1 end
+    end
+    return count
+end
+
 -- THE ONE THAT MATTERS, for surfaces that show a single line: the cast aimed
 -- at you if there is one, else the most dangerous rank on screen. Ties go to
 -- the one found first, which is the plate the client listed first.
-function Casts.Foremost(live)
+-- `cfg` is the BAR's filter, applied here because the scan no longer
+-- filters at all: with it, "which casts count" means "which the bar shows"
+-- and nothing else. Callers without a config see everything.
+function Casts.Foremost(live, cfg)
     local best
     for _, entry in ipairs(live or {}) do
-        if entry.aim == "me" then
-            if not (best and best.aim == "me") then best = entry end
-        elseif not best or best.aim ~= "me" then
-            local mine = RANK_ORDER[entry.rank or ""] or 0
-            local theirs = best and (RANK_ORDER[best.rank or ""] or 0) or -1
-            if mine > theirs then best = entry end
+        if not cfg or Rules.Wanted(cfg, entry.rank, entry.aim) then
+            if entry.aim == "me" then
+                if not (best and best.aim == "me") then best = entry end
+            elseif not best or best.aim ~= "me" then
+                local mine = RANK_ORDER[entry.rank or ""] or 0
+                local theirs = best and (RANK_ORDER[best.rank or ""] or 0) or -1
+                if mine > theirs then best = entry end
+            end
         end
     end
     return best
 end
 
 function Casts:Current()
-    return Casts.Foremost(self.live)
+    return Casts.Foremost(self.live, Casts.Config())
 end
 
 ---------------------------------------------------------------------------

@@ -10,6 +10,30 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.87.0] - 2026-08-22
+
+### Added
+
+- **The mob list is searchable** — type a mob or an ability name. Chips
+  narrow the list to bosses, lieutenants or mobs.
+- **Dungeons fold to one line each**; the dungeon you are standing in starts
+  open, on top. Watched mobs sit in their own group above everything.
+
+### Changed
+
+- A mob the season lists twice under one name is one row now. Watching it
+  covers both variants.
+
+### Fixed
+
+- An alert watching a rank the bar ignored could never fire. The bar's
+  filters now apply to the bar alone.
+
+### Removed
+
+- The self-learned mob list and its Forget button — the season list
+  replaced them.
+
 ## [4.86.0] - 2026-08-22
 
 ### Added

@@ -31,6 +31,40 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.87.0",
+        date = "2026-08-22",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Spyglass_02",
+                text = "|cffffd100The mob list is searchable.|r Type a mob "
+                    .. "or an ability name. The chips under the search "
+                    .. "narrow the list to bosses, lieutenants or mobs.",
+                link = { label = "Try the search", page = "casts" },
+            },
+            {
+                icon = "Interface\\Icons\\INV_Misc_Map_01",
+                text = "Dungeons fold to one line each - click a heading to "
+                    .. "open it. The dungeon you are standing in starts "
+                    .. "open, on top. Watched mobs sit in their own group "
+                    .. "above everything.",
+            },
+            {
+                text = "A mob the season lists twice under one name is one "
+                    .. "row now. Watching it covers both, and its card "
+                    .. "shows the abilities of both.",
+            },
+            {
+                text = "Fixed: an alert watching a rank the bar ignored "
+                    .. "could never fire. The bar's filters now apply to "
+                    .. "the bar alone.",
+            },
+            {
+                text = "The self-learned mob list and its Forget button "
+                    .. "are gone - the season list replaced them.",
+            },
+        },
+    },
+    {
         version = "4.86.0",
         date = "2026-08-22",
         lines = {

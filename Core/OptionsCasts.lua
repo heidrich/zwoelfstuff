@@ -37,10 +37,8 @@ ns.OptionsCasts = Page
 local ALERT_SPEC = {
     prefix    = "ca",
     intro     = "A line on your screen while a mob is casting - \"A "
-        .. "lieutenant casting at you\". It cannot name the spell: on this "
-        .. "patch nobody can, not this addon and not the boss mods (see "
-        .. "the note under Which casts count). What it can say is who is "
-        .. "casting, how dangerous they are, and whether it is coming at you.",
+        .. "lieutenant casting at you\". It says who is casting, how "
+        .. "dangerous they are, and whether it is coming at you.",
     newLabel  = "New alert",
     full      = "Twelve alerts is the lot",
     emptyHint = "Nothing selected. Press New alert.",
@@ -105,11 +103,7 @@ local ALERT_SPEC = {
         local mobNote = grid:Note("")
         mobNote.Refresh = function()
             local cfg = select(2, ns.OptionsCastAlerts:Current())
-            local mobs = cfg and cfg.mobs
-            local count = 0
-            if type(mobs) == "table" then
-                for _ in pairs(mobs) do count = count + 1 end
-            end
+            local count = ns.Casts.PickedCount(cfg and cfg.mobs)
             if count == 0 then
                 mobNote:SetText("Every mob. Click one in the list on the "
                     .. "right to narrow this alert to it.")
@@ -845,7 +839,13 @@ function ns.ShowMobCard(entry, spec)
     ---------------------------------------------------------------------
     -- The readings
     ---------------------------------------------------------------------
-    card.stats[1]:Set(entry.npc and tostring(entry.npc) or "—")
+    -- A folded row stands for more than one id; the card says so instead
+    -- of quietly showing half the truth.
+    local idText = entry.npc and tostring(entry.npc) or "—"
+    if type(entry.npcs) == "table" and #entry.npcs > 1 then
+        idText = idText .. " +" .. (#entry.npcs - 1)
+    end
+    card.stats[1]:Set(idText)
     card.stats[2]:Set(entry.level and tostring(entry.level) or "—")
     card.stats[3]:Set(entry.kind or "—")
     card.stats[4]:Set(ShortHealth(entry.health) or "—")
@@ -928,25 +928,52 @@ function Page:BuildSide(sideHost, pad)
     title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -18)
 
     local hint = UI.Label(side,
-        "Click one to narrow the selected alert to it.",
+        "Click one to open it. Right-click watches it.",
         UI.FS.meta, C.textFaint)
     hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
     hint:SetPoint("RIGHT", side, "RIGHT", -pad, 0)
     hint:SetJustifyH("LEFT")
     hint:SetWordWrap(false)
 
-    local listHost = CreateFrame("Frame", nil, side)
-    listHost:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -(UI.HEADER_H + 16))
-    listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
-
     local rowWidth = UI.INSPECTOR_W - pad * 2 - 8
+
+    -- FINDING ONE OF 462 IS TYPING, NOT SCROLLING. The search covers mob
+    -- names AND ability names - "who casts Barkbreaker" is the question a
+    -- tank actually stands there with. The chips under it are a VIEW
+    -- filter for this list alone; the bar's "which casts count" on the Bar
+    -- tab is a setting, and the two answer different questions.
+    local search = UI.Input(side, rowWidth, function() end, false,
+        "Search mobs and abilities")
+    search:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -10)
+    search:SetPoint("RIGHT", side, "RIGHT", -pad, 0)
+    search:SetHeight(24)
+    search:SetIcon("ui-search")
+
+    local ranksOn = { boss = true, lieutenant = true, standard = true }
+    local chips
+    chips = UI.ChipRow(side, rowWidth, {
+        chips = {
+            { key = "boss",       text = "Bosses" },
+            { key = "lieutenant", text = "Lieutenants" },
+            { key = "standard",   text = "Mobs" },
+        },
+        isOn = function(key) return ranksOn[key] end,
+        onSelect = function(key)
+            ranksOn[key] = not ranksOn[key]
+            chips.Refresh()
+            side.Refresh()
+        end,
+    })
+    chips:SetPoint("TOPLEFT", search, "BOTTOMLEFT", 0, -8)
+
+    local listHost = CreateFrame("Frame", nil, side)
+    listHost:SetPoint("TOPLEFT", chips, "BOTTOMLEFT", 0, -10)
+    listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMRIGHT", -pad, pad)
     local _, content = UI.ScrollArea(listHost, rowWidth, 8)
 
     local rows, headings = {}, {}
 
-    local none = UI.Hint(content,
-        "The season list is missing. Anything you meet still turns up here, "
-        .. "under the place you met it.")
+    local none = UI.Hint(content, "")
     none:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -8)
     none:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -8)
     none:Hide()
@@ -996,26 +1023,183 @@ function Page:BuildSide(sideHost, pad)
         return false
     end
 
+    ---------------------------------------------------------------------
+    -- VIEW STATE, not settings: which groups are folded, which ranks the
+    -- chips let through, what the search box holds. Gone on reload, on
+    -- purpose - this belongs to the view, not to the profile.
+    ---------------------------------------------------------------------
+    local query = ""
+    local open = {}
+    local catalog, hay
+    local NONE = {}
+
+    -- The words a row can be found by: its name and every ability name,
+    -- lowered once and kept. Lazy - 462 rows resolve ~1700 spell names,
+    -- and nobody pays that before the first keystroke.
+    local function Haystack(entry)
+        local text = hay[entry]
+        if not text then
+            local parts = { (entry.mob or ""):lower() }
+            for _, id in ipairs(entry.spells or NONE) do
+                local name = ns.SpellName and ns.SpellName(id)
+                if type(name) == "string" then
+                    parts[#parts + 1] = name:lower()
+                end
+            end
+            text = table.concat(parts, " ")
+            hay[entry] = text
+        end
+        return text
+    end
+
+    local function RowWanted(entry, ranksToo)
+        if ranksToo and ranksOn[entry.rank or "standard"] == false then
+            return false
+        end
+        if query ~= "" then
+            return Haystack(entry):find(query, 1, true) ~= nil
+        end
+        return true
+    end
+
+    -- Which keys a row writes into an alert's picked-mobs table: one per
+    -- variant, so a watch covers every id that wears this name.
+    local function KeysOf(entry)
+        if type(entry.npcs) == "table" and entry.npcs[1] ~= nil then
+            return entry.npcs
+        end
+        local key = ns.CastRules.MobKey(entry.mob, entry.npc)
+        if key ~= nil then return { key } end
+        return nil
+    end
+
+    local function IsOpen(place, here)
+        local state = open[place]
+        if state == nil then return place == here end
+        return state
+    end
+
+    side.SetQuery = function(text)
+        query = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+        side.Refresh()
+    end
+    side.SetRank = function(key, on)
+        ranksOn[key] = on and true or false
+        chips.Refresh()
+        side.Refresh()
+    end
+    search.input:SetScript("OnTextChanged", function()
+        search.UpdateGhost()
+        side.SetQuery(search.input:GetText())
+    end)
+
     side.Refresh = function()
         local editor = ns.OptionsCastAlerts
         local _, cfg = editor:Current()
-        local catalog = ns.Casts.Catalog()
+        catalog = catalog or ns.Casts.Catalog()
+        hay = hay or {}
         local y, usedRows, usedHeads = 0, 0, 0
 
+        -- The dungeon you are STANDING in leads and starts open; the rest
+        -- keep their alphabetical order, folded until asked. A search
+        -- overrules the folding - a hit behind a closed group is a hit
+        -- nobody finds.
+        local here = ns.Casts.Where and ns.Casts.Where() or nil
+        local groups = {}
+
+        -- WATCHED FIRST, as its own group: what the selected alert filters
+        -- on is the one set of rows worth finding without a search. Keys an
+        -- old profile picked that no season row claims still get a line -
+        -- a filter you cannot see is a filter you cannot take off.
+        local pickedMobs = cfg and type(cfg.mobs) == "table"
+            and next(cfg.mobs) and cfg.mobs or nil
+        if pickedMobs then
+            local mine, claimed = {}, {}
+            for _, place in ipairs(catalog) do
+                for _, entry in ipairs(place.mobs) do
+                    local hit = false
+                    for _, id in ipairs(entry.npcs or NONE) do
+                        if pickedMobs[id] then
+                            hit, claimed[id] = true, true
+                        end
+                    end
+                    if entry.mob and pickedMobs[entry.mob] then
+                        hit, claimed[entry.mob] = true, true
+                    end
+                    if hit then mine[#mine + 1] = entry end
+                end
+            end
+            for key in pairs(pickedMobs) do
+                if not claimed[key] then
+                    mine[#mine + 1] = {
+                        mob = type(key) == "string" and key
+                            or ("NPC " .. tostring(key)),
+                        npc = tonumber(key),
+                        npcs = { key },
+                    }
+                end
+            end
+            if #mine > 0 then
+                groups[#groups + 1] =
+                    { place = "Watched", mobs = mine, pinned = true }
+            end
+        end
+
+        local lead = #groups + 1
         for _, place in ipairs(catalog) do
+            if place.place == here then
+                table.insert(groups, lead, place)
+            else
+                groups[#groups + 1] = place
+            end
+        end
+
+        local filtered = query ~= "" or not (ranksOn.boss
+            and ranksOn.lieutenant and ranksOn.standard)
+
+        for _, group in ipairs(groups) do
+            local shown = {}
+            for _, entry in ipairs(group.mobs) do
+                if RowWanted(entry, not group.pinned) then
+                    shown[#shown + 1] = entry
+                end
+            end
+
+            if #shown > 0 or not filtered then
+            local isOpen = group.pinned or query ~= ""
+                or IsOpen(group.place, here)
+
             usedHeads = usedHeads + 1
             local heading = headings[usedHeads]
             if not heading then
                 heading = UI.ListHeading(content, rowWidth, 22)
+                -- The heading is the fold's handle: "+ NAME" closed, plain
+                -- open - the same mark the window's own sections wear.
+                heading:EnableMouse(true)
+                heading:SetScript("OnMouseDown", function(self)
+                    if not self.dkPlace then return end
+                    local now = ns.Casts.Where and ns.Casts.Where() or nil
+                    open[self.dkPlace] = not IsOpen(self.dkPlace, now)
+                    side.Refresh()
+                end)
+                heading:SetScript("OnEnter", function(self)
+                    if not self.dkPlace then return end
+                    self.label:SetTextColor(C.text[1], C.text[2], C.text[3])
+                end)
+                heading:SetScript("OnLeave", function(self)
+                    self.label:SetTextColor(C.textDim[1], C.textDim[2],
+                        C.textDim[3])
+                end)
                 headings[usedHeads] = heading
             end
-            heading:SetText(place.place, #place.mobs)
+            heading.dkPlace = not group.pinned and group.place or nil
+            heading:SetText((isOpen and "" or "+ ") .. group.place, #shown)
             heading:ClearAllPoints()
             heading:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
             heading:Show()
             y = y + 26
 
-            for _, entry in ipairs(place.mobs) do
+            for _, entry in ipairs(isOpen and shown or NONE) do
                 usedRows = usedRows + 1
                 local row = rows[usedRows]
                 if not row then
@@ -1025,22 +1209,28 @@ function Page:BuildSide(sideHost, pad)
                     -- right-click here and the card's own button. Two copies
                     -- of "toggle this key, drop the table when it empties"
                     -- is how the two quietly stop agreeing.
-                    local function ToggleWatch(key)
+                    local function ToggleWatch(keys)
                         local _, current = editor:Current()
                         if not current then
                             ns.Print("Make an alert first - the New alert "
                                 .. "button on the Alerts tab.")
                             return
                         end
-                        if key == nil then return end
+                        if type(keys) ~= "table" or keys[1] == nil then
+                            return
+                        end
                         current.mobs = current.mobs or {}
-                        if current.mobs[key] then
-                            current.mobs[key] = nil
-                            if next(current.mobs) == nil then
-                                current.mobs = nil
-                            end
-                        else
-                            current.mobs[key] = true
+                        -- One press covers every variant id the row stands
+                        -- for: on if none was, off as one.
+                        local on = false
+                        for _, key in ipairs(keys) do
+                            if current.mobs[key] then on = true end
+                        end
+                        for _, key in ipairs(keys) do
+                            current.mobs[key] = not on and true or nil
+                        end
+                        if next(current.mobs) == nil then
+                            current.mobs = nil
                         end
                         editor:Apply()
                         ns.OptionsCasts:Refresh()
@@ -1054,32 +1244,39 @@ function Page:BuildSide(sideHost, pad)
                     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
                     row:SetScript("OnClick", function(self, button)
                         if button == "RightButton" then
-                            ToggleWatch(self.dkMob)
+                            ToggleWatch(self.dkKeys)
                             return
                         end
                         local _, current = editor:Current()
-                        local watched = current and type(current.mobs) == "table"
-                            and self.dkMob ~= nil
-                            and current.mobs[self.dkMob] == true
+                        local watched = false
+                        if current and type(current.mobs) == "table" then
+                            for _, key in ipairs(self.dkKeys or NONE) do
+                                if current.mobs[key] then watched = true end
+                            end
+                        end
                         ns.ShowMobCard(self.dkEntry, {
                             place = self.dkPlace,
                             watched = watched,
-                            onWatch = function() ToggleWatch(self.dkMob) end,
+                            onWatch = function() ToggleWatch(self.dkKeys) end,
                         })
                     end)
                     rows[usedRows] = row
                 end
 
-                row.dkMob = ns.CastRules.MobKey(entry.mob, entry.npc)
+                row.dkKeys = KeysOf(entry)
                 row.dkEntry = entry
-                row.dkPlace = place.place
+                row.dkPlace = group.place
                 row.dkHot = true
 
                 PaintMobFace(row.icon, entry)
                 row.name:SetText(entry.mob)
 
-                local picked = cfg and type(cfg.mobs) == "table"
-                    and row.dkMob ~= nil and cfg.mobs[row.dkMob] == true
+                local picked = false
+                if cfg and type(cfg.mobs) == "table" then
+                    for _, key in ipairs(row.dkKeys or NONE) do
+                        if cfg.mobs[key] then picked = true end
+                    end
+                end
                 row:SetUsed(picked and "watched" or nil, true)
                 local badge = RANK_BADGE[entry.rank or ""] or "mob"
                 row:SetTrailing(picked and "Watched" or badge,
@@ -1103,6 +1300,11 @@ function Page:BuildSide(sideHost, pad)
                 if entry.kind then
                     row.dkLines[#row.dkLines + 1] = { text = entry.kind }
                 end
+                if type(entry.npcs) == "table" and #entry.npcs > 1 then
+                    row.dkLines[#row.dkLines + 1] = {
+                        text = #entry.npcs .. " variants",
+                    }
+                end
                 local count = type(entry.spells) == "table" and #entry.spells or 0
                 row.dkLines[#row.dkLines + 1] = {
                     text = count == 1 and "1 ability" or (count .. " abilities"),
@@ -1118,13 +1320,21 @@ function Page:BuildSide(sideHost, pad)
                 row:Show()
                 y = y + 31
             end
+            end
         end
 
         for index = usedRows + 1, #rows do rows[index]:Hide() end
         for index = usedHeads + 1, #headings do headings[index]:Hide() end
-        none:SetShown(usedRows == 0)
+        none:SetText(filtered and "Nothing matches."
+            or "The season list is missing.")
+        none:SetShown(usedHeads == 0)
+        side.drawnRows, side.drawnHeads = usedRows, usedHeads
         content:SetHeight(math.max(1, y))
     end
 
+    -- The pools are visible so the self test can read what a drawn row
+    -- knows, instead of trusting that drawing happened.
+    side.rows, side.headings = rows, headings
+    Page.side = side
     return side
 end
