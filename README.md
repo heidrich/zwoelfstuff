@@ -248,17 +248,27 @@ tell whose fault it was.
 > own header. Copying the file that happens to sit next to a library is how a
 > project ends up claiming the wrong terms.
 
-Their licences stay with them. Our own code is **All Rights Reserved** — see
+Their licences stay with them. Our own code is **GPL v2** — see
 [LICENSE](LICENSE).
+
+### Season data
+
+`Core/MobData.lua` is generated. The season's mobs and bosses — NPC ids, names,
+levels and the spells they cast — come from
+[Mythic Dungeon Tools](https://github.com/Nnoggie/MythicDungeonTools) by
+**Nnoggie**, which is GPL v2 and is why this addon is too. Regenerate it when
+the season rotates; the extractor lives outside this repo.
 
 ## Credits
 
 Addon Author: **Zwölf** — EU Destromath
 
-License: **All Rights Reserved**, © 2026 Christian McCain. Play with it, back
-it up, take it apart to see how it works. Republishing it, selling it or
-distributing a changed copy needs written permission first. The libraries under
-`Libs/` keep their own terms.
+License: **GPL v2**, © 2026 Christian McCain. Play with it, back it up, take it
+apart, and pass on changed copies — under the same licence, with the source.
+The libraries under `Libs/` keep their own terms.
 
-Releases up to and including 4.82.0 were published under the MIT License. That
-grant stands for those versions; these terms begin at 4.83.0.
+Season mob data comes from **Mythic Dungeon Tools** (Nnoggie), GPL v2.
+
+Licence history: releases up to and including 4.82.0 were MIT; 4.83.0 to 4.85.1
+were All Rights Reserved. Both grants stand for the versions they were made
+under. GPL v2 begins at 4.86.0.

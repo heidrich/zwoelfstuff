@@ -46,7 +46,7 @@ function Rules.Match(cfg, live)
         -- draft, which is the shape of the bug the "test the wiring, not
         -- just the rule" lesson is about: MobWanted was written, tested and
         -- green, the page wrote cfg.mobs, and nothing ever asked.
-        local mobOK = ns.CastRules.MobWanted(cfg.mobs, entry.mob)
+        local mobOK = ns.CastRules.MobWanted(cfg.mobs, entry.mob, entry.npc)
         if rankOK and aimOK and mobOK then return entry end
     end
     return nil

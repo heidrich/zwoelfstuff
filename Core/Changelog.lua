@@ -31,6 +31,40 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.86.0",
+        date = "2026-08-22",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Map_01",
+                text = "|cffffd100The season's mobs are in the addon.|r All "
+                    .. "16 dungeons, 462 mobs and 79 bosses, listed with "
+                    .. "icons under the dungeon they belong to. Click one to "
+                    .. "narrow an alert to it.",
+                link = { label = "Open the mob list", page = "casts" },
+            },
+            {
+                icon = "Interface\\Icons\\INV_Misc_Wrench_01",
+                text = "|cffffd100Casts on you counted players.|r Any player "
+                    .. "casting anything got a bar and a line in the mob "
+                    .. "list. Only enemy mobs now.",
+            },
+            {
+                icon = "Interface\\Icons\\Spell_Holy_WordFortitude",
+                text = "|cffffd100Mob filters are keyed by NPC id|r instead "
+                    .. "of by name, so a picked mob matches whatever "
+                    .. "language your client is in. Filters you picked "
+                    .. "before this keep working.",
+            },
+            {
+                icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
+                text = "|cffffd100Co-tank aura strips could fail without "
+                    .. "saying so.|r |cffffd100/zs tanks auras|r now says "
+                    .. "which part is missing.",
+                link = { label = "Open tank unitframes", page = "cotanks" },
+            },
+        },
+    },
+    {
         version = "4.85.1",
         date = "2026-08-19",
         lines = {

@@ -10949,6 +10949,134 @@ local function TestCasts()
         R.Rank(60) == nil and R.Rank(nil) == nil and R.Rank("90") == nil)
 
     ---------------------------------------------------------------------
+    -- A PLAYER IS NOT AN ORDINARY MOB, and the rank alone cannot tell.
+    --
+    -- Owner out of a key: "bei cast on you, zaehlt das addon JEDEN, auch
+    -- spieler die was auf dich casten." The two lines above are why: a
+    -- player at max level reads as level 90, and 90 IS "standard". So the
+    -- rank agreed with every party member who cast anything, and the scan
+    -- had nothing else to ask. Rules.Hostile is that something else, and it
+    -- runs BEFORE the rank rather than after it.
+    ---------------------------------------------------------------------
+    Check("A hostile mob passes", R.Hostile(false, false, true))
+    Check("A player does not, however attackable",
+        not R.Hostile(false, true, true) and not R.Hostile(false, true, false))
+    Check("Nor do you", not R.Hostile(true, false, true))
+    Check("Nor anything you cannot attack", not R.Hostile(false, false, false))
+    -- A CLIENT THAT DOES NOT ANSWER MUST NOT EMPTY THE FEATURE. nil is "not
+    -- told", and only an explicit false rejects - the same three-state rule
+    -- the aim uses, for the same reason.
+    Check("An unanswered client still shows mobs",
+        R.Hostile(nil, nil, nil) and R.Hostile(false, false, nil))
+
+    ---------------------------------------------------------------------
+    -- THE NPC ID, which is the only name that survives a language change
+    ---------------------------------------------------------------------
+    Check("A creature GUID names its NPC",
+        R.NpcID("Creature-0-3299-1-128-236085-000136DF91") == 236085)
+    Check("So does a vehicle",
+        R.NpcID("Vehicle-0-3299-2444-0-234649-00001B2C3D") == 234649)
+    Check("A player has none, and neither does a pet",
+        R.NpcID("Player-1084-0A1B2C3D") == nil
+        and R.NpcID("Pet-0-3299-1-128-165189-0102030405") == nil)
+    Check("And nothing is not an id",
+        R.NpcID(nil) == nil and R.NpcID(42) == nil and R.NpcID("nonsense") == nil)
+
+    -- The key a picked mob is filed under: the id where there is one.
+    Check("An id is the key where there is one", R.MobKey("Felwyrm", 236085) == 236085)
+    Check("A name is the key where there is not", R.MobKey("Felwyrm", nil) == "Felwyrm")
+    Check("And nothing keys nothing", R.MobKey(nil, nil) == nil)
+
+    -- A filter written before the season list keeps working, and one written
+    -- from it matches whatever language the client speaks.
+    Check("A picked id matches", R.MobWanted({ [236085] = true }, "Felwyrm", 236085))
+    Check("A picked id does not match another mob",
+        not R.MobWanted({ [236085] = true }, "Row Hooligan", 234649))
+    Check("An old name-keyed filter still matches",
+        R.MobWanted({ ["Felwyrm"] = true }, "Felwyrm", 236085))
+
+    ---------------------------------------------------------------------
+    -- THE SEASON LIST ITSELF
+    --
+    -- Generated from MDT, so nothing here asserts a particular mob: the
+    -- season rotates and a check naming Felwyrm would go red on the day the
+    -- data is regenerated, which is the "a test that asserts the world"
+    -- lesson. What is checked is the SHAPE, and the counts are PRINTED so a
+    -- regeneration says what changed instead of quietly agreeing.
+    ---------------------------------------------------------------------
+    local data = ns.MobData
+    Check("The season list is loaded", type(data) == "table" and next(data) ~= nil)
+
+    if type(data) == "table" then
+        local dungeons, mobs, bosses, spells = 0, 0, 0, 0
+        local noID, noName, dupID = 0, 0, 0
+        local seenID = {}
+        for _, dungeon in pairs(data) do
+            dungeons = dungeons + 1
+            for _, mob in ipairs(dungeon.mobs or {}) do
+                mobs = mobs + 1
+                if mob.boss then bosses = bosses + 1 end
+                if type(mob.id) ~= "number" then noID = noID + 1 end
+                if type(mob.name) ~= "string" or mob.name == "" then
+                    noName = noName + 1
+                end
+                if mob.id then
+                    if seenID[mob.id] then dupID = dupID + 1 end
+                    seenID[mob.id] = true
+                end
+                spells = spells + #(mob.spells or {})
+            end
+        end
+        Check(("%d dungeons, %d mobs, %d bosses, %d spells")
+            :format(dungeons, mobs, bosses, spells), mobs > 0)
+        Check("Every mob has an id and a name", noID == 0 and noName == 0,
+            ("%d without an id, %d without a name"):format(noID, noName))
+        -- A duplicate id across dungeons is real (shared trash), so this
+        -- counts rather than fails - it exists to say when that changes.
+        Check(("%d mobs appear in more than one dungeon"):format(dupID), true)
+
+        -- THE RANK IS WHAT THE PAGE SORTS AND BADGES BY, so a mob without one
+        -- is a row that cannot say what it is. A few are expected - MDT
+        -- carries objects at level 334 and a "??" at -1 - so the count is
+        -- printed and only an explosion fails.
+        local catalog = Casts.Catalog()
+        local ranked, unranked = 0, 0
+        for _, place in ipairs(catalog) do
+            for _, entry in ipairs(place.mobs) do
+                if entry.rank then ranked = ranked + 1 else unranked = unranked + 1 end
+            end
+        end
+        Check(("%d of %d mobs carry a rank"):format(ranked, ranked + unranked),
+            unranked < mobs * 0.05,
+            ("%d have none - more than one in twenty"):format(unranked))
+
+        -- THE ICONS, which are the whole reason the list is worth shipping.
+        local withSpells = 0
+        for _, place in ipairs(catalog) do
+            for _, entry in ipairs(place.mobs) do
+                if type(entry.spells) == "table" and entry.spells[1] then
+                    withSpells = withSpells + 1
+                end
+            end
+        end
+        Check(("%d mobs can draw an icon"):format(withSpells), withSpells > 0)
+
+        -- AND THE LIST THE PAGE ACTUALLY DRAWS. MobList is what BuildSide
+        -- calls; Catalog alone being right proved nothing about it - the
+        -- "test the wiring, not just the rule" lesson.
+        local list = Casts.MobList()
+        Check("The page's list is the season list plus what you met",
+            #list >= #catalog)
+        local shapeOK = true
+        for _, place in ipairs(list) do
+            if type(place.place) ~= "string" or type(place.mobs) ~= "table" then
+                shapeOK = false
+            end
+        end
+        Check("Every place in it has a name and its mobs", shapeOK)
+    end
+
+    ---------------------------------------------------------------------
     -- THE "ON YOU" MARK HAS TWO HALVES
     --
     -- Owner, after a key: "ggf noch ON YOU oder so dazu, oder man kann das

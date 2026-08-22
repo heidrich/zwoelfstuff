@@ -1358,10 +1358,22 @@ local function BuildEngineStrip(strip, cfg, filter)
         anchorPoint = corner,
         growthH     = cfg.growth == "left" and "LEFT" or "RIGHT",
         growthV     = corner:find("BOTTOM") and "UP" or "DOWN",
+        -- WHERE TO WRAP, and it belongs HERE rather than on the group: it is
+        -- SetFlowLayoutMaximumLineSize, a container setting, and Groups.lua
+        -- passes it the same way. Without it the engine has no reason to
+        -- start a second line and draws every icon in one long row, so a
+        -- strip set to four per row would look right in test mode and come
+        -- out as a single line live. The +0.4 is slack against the engine's
+        -- own rounding, the same as Groups.lua uses.
+        maxLineSize = math.max(1, cfg.perRow or 1) * (size + (cfg.spacing or 0))
+            - (cfg.spacing or 0) + 0.4,
     })
     if not container then return nil end
 
-    ns.Engine:AddGroup(container, {
+    -- THE GROUP IS THE POINT: a container with none draws nothing, for ever,
+    -- and used to do it silently. If it is refused the container is retired
+    -- rather than handed back looking healthy - /zs cotanks prints why.
+    local added = ns.Engine:AddGroup(container, {
         key    = "zscotank",
         filter = ns.Engine:Filter(filter),
         max    = wanted,
@@ -1373,14 +1385,10 @@ local function BuildEngineStrip(strip, cfg, filter)
             elementHeight  = size,
             elementSpacing = cfg.spacing or 0,
             lineSpacing    = cfg.spacing or 0,
-            -- WHERE TO WRAP. Without it the engine has no reason to start a
-            -- second line and draws every icon in one long row - so a strip
-            -- set to four per row would have looked right in test mode and
-            -- come out as a single line the moment 12.1 landed, which is the
-            -- one promise a preview must not break. The +0.4 is slack against
-            -- the engine's own rounding, the same as Groups.lua uses.
-            maxLineSize    = math.max(1, cfg.perRow or 1) * (size + (cfg.spacing or 0))
-                - (cfg.spacing or 0) + 0.4,
+            -- WHERE TO WRAP IS NOT SET HERE. It is a CONTAINER setting and
+            -- is passed to CreateContainer above; EllesmereUI's group layouts
+            -- carry the four element sizes and nothing else
+            -- (EUI_RaidFrames_AuraContainers.lua:784).
         },
         initialize = function(button)
             ns.Engine:MakeDisplayOnly(button)
@@ -1457,6 +1465,11 @@ local function BuildEngineStrip(strip, cfg, filter)
         end,
     })
 
+    if not added then
+        ns.Engine:Retire(container)
+        return nil
+    end
+
     return container
 end
 
@@ -1512,6 +1525,69 @@ function CoTanks:BuildAuraContainers()
         end
     end
     self:WireAuras()
+end
+
+---------------------------------------------------------------------------
+-- WHICH LINK OF THE CHAIN IS BROKEN
+--
+-- The report was "beim co tank panel werden keine debuffs angezeigt, keine
+-- fehlermeldung", and from the outside every link fails the same way: an
+-- empty strip. The engine is not there / the strip is switched off / the
+-- container was refused / the group was refused / no tank is bound - five
+-- different answers behind one blank rectangle.
+--
+-- So this walks the chain and says where it stops. The same reason /zs casts
+-- exists: measuring beats a second evening of guessing.
+---------------------------------------------------------------------------
+function CoTanks:DumpAuras()
+    local why = self:AuraReason()
+    if why then
+        ns.Print("Co-tank auras: |cffff4040the engine is not available|r - " .. why)
+        return
+    end
+    ns.Print("Co-tank auras: |cff40ff40engine is available|r"
+        .. (ns.Engine:IsLocked() and " |cffffd100(in combat - builds are queued)|r" or ""))
+
+    if self.containersPending or self.wirePending then
+        ns.Print(("  waiting for combat to end: %s%s"):format(
+            self.containersPending and "rebuild " or "",
+            self.wirePending and "rebind" or ""))
+    end
+
+    local db = ns.db.coTanks
+    ns.Print(("  module %s, test mode %s, %d tank%s found"):format(
+        db.enabled and "|cff40ff40on|r" or "|cffff4040off|r",
+        self:Testing() and "|cffffd100on|r" or "off",
+        #(self.tanks or {}), #(self.tanks or {}) == 1 and "" or "s"))
+
+    for index, row in ipairs(self.rows or {}) do
+        for _, key in ipairs({ "debuffs", "buffs" }) do
+            local cfg, strip = db[key], row[key]
+            local wanted = cfg.show and math.max(0, math.min(40, cfg.max or 0)) or 0
+            -- Only rows that should be showing something are printed; eight
+            -- rows times two strips of "off" is a wall nobody reads.
+            if wanted > 0 and (index <= #(self.tanks or {}) or self:Testing()) then
+                local state
+                if not strip then
+                    state = "|cffff4040no strip|r"
+                elseif not strip.container then
+                    state = "|cffff4040no container|r - the group was refused"
+                elseif not strip.boundUnit then
+                    state = "|cffffd100container built, no unit bound|r"
+                else
+                    state = ("|cff40ff40bound to %s|r"):format(tostring(strip.boundUnit))
+                end
+                ns.Print(("  row %d %s (max %d): %s"):format(index, key, wanted, state))
+            end
+        end
+    end
+
+    local err = ns.Engine:LastError()
+    if err then
+        ns.Print("  |cffff4040last engine error:|r " .. err)
+    else
+        ns.Print("  |cff888888no engine error recorded|r")
+    end
 end
 
 -- Re-points each row's containers at its tank. Refused in combat, so the

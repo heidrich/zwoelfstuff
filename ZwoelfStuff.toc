@@ -3,11 +3,11 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwölf - EU Destromath
-## Version: 4.85.1
+## Version: 4.86.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
-## X-License: All Rights Reserved
+## X-License: GPL v2
 ## X-Category: Buffs & Debuffs
 # Which CurseForge project a tag uploads to. The BigWigs packager reads this
 # line and nothing else to find the project - without it a tagged build runs,
@@ -205,6 +205,10 @@ Core\AnswerAlerts.lua
 # (CastAlerts is an instance of that class) and Visibility (the bar carries
 # the same rules every other surface does), above EditMode, which places
 # both of them.
+# THE SEASON'S MOBS AND BOSSES - names, NPC ids, levels and the spells they
+# cast, taken from Mythic Dungeon Tools. Data only, no frame and no event, so
+# it loads wherever it is needed first: above Casts.lua, which reads it.
+Core\MobData.lua
 Core\Casts.lua
 Core\CastBar.lua
 Core\CastAlerts.lua

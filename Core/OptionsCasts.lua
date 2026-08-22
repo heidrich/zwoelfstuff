@@ -650,7 +650,7 @@ function Page:BuildSide(sideHost, pad)
     side:SetAllPoints(sideHost)
     side:Hide()
 
-    local title = UI.Label(side, "Mobs you have met", UI.FS.card, C.text)
+    local title = UI.Label(side, "Mobs of the season", UI.FS.card, C.text)
     title:SetPoint("TOPLEFT", side, "TOPLEFT", pad, -18)
 
     local hint = UI.Label(side,
@@ -671,9 +671,8 @@ function Page:BuildSide(sideHost, pad)
     local rows, headings = {}, {}
 
     local none = UI.Hint(content,
-        "Nothing yet. Walk into a dungeon with this switched on and every "
-        .. "mob that casts something turns up here, under the place you "
-        .. "met it.")
+        "The season list is missing. Anything you meet still turns up here, "
+        .. "under the place you met it.")
     none:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -8)
     none:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -8)
     none:Hide()
@@ -685,7 +684,7 @@ function Page:BuildSide(sideHost, pad)
     side.Refresh = function()
         local editor = ns.OptionsCastAlerts
         local _, cfg = editor:Current()
-        local ledger = ns.Casts.Ledger()
+        local ledger = ns.Casts.MobList()
         local y, usedRows, usedHeads = 0, 0, 0
 
         for _, place in ipairs(ledger) do
@@ -713,6 +712,7 @@ function Page:BuildSide(sideHost, pad)
                                 .. "button on the Alerts tab.")
                             return
                         end
+                        if self.dkMob == nil then return end
                         current.mobs = current.mobs or {}
                         if current.mobs[self.dkMob] then
                             current.mobs[self.dkMob] = nil
@@ -729,17 +729,28 @@ function Page:BuildSide(sideHost, pad)
                     rows[usedRows] = row
                 end
 
-                row.dkMob = entry.mob
-                -- No spell icon to show: the cast's icon belongs to a cast
-                -- that is over. The rank is the drawing here.
-                row.icon:SetTexture(ns.WHITE)
+                row.dkMob = ns.CastRules.MobKey(entry.mob, entry.npc)
+
+                -- THE ICON IS THE MOB'S FIRST SPELL, and it is readable
+                -- precisely because it is OURS: a spell id out of the season
+                -- table is an ordinary number, unlike the id of a cast
+                -- happening in front of you, which the client withholds.
+                local texture
+                local spells = entry.spells
+                if type(spells) == "table" and spells[1] and ns.SpellTexture then
+                    texture = ns.SpellTexture(spells[1])
+                end
+                row.icon:SetTexture(texture or ns.WHITE)
                 row.name:SetText(entry.mob)
 
                 local picked = cfg and type(cfg.mobs) == "table"
-                    and cfg.mobs[entry.mob] == true
+                    and row.dkMob ~= nil and cfg.mobs[row.dkMob] == true
                 row:SetUsed(picked and "watched" or nil, true)
-                row:SetTrailing(picked and "Watched"
-                    or (RANK_BADGE[entry.rank or ""] or "seen"),
+                -- A mob out of the season list says what it is; one only ever
+                -- walked past says so, because the two are not the same claim.
+                local badge = RANK_BADGE[entry.rank or ""]
+                if not badge then badge = place.known and "mob" or "seen" end
+                row:SetTrailing(picked and "Watched" or badge,
                     picked and "cell" or nil)
 
                 row:ClearAllPoints()

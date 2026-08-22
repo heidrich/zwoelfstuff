@@ -300,9 +300,23 @@ end
 function Engine:CreateContainer(parent, layout)
     if not self:IsAvailable() then return nil end
 
+    -- LOAD THE ENGINE'S OWN ADDON FIRST. An earlier version of this file
+    -- says in a comment that there is no Blizzard_AuraContainer to load;
+    -- EllesmereUI's aura kit loads it before every container it builds
+    -- (EllesmereUI_AuraKit.lua:1197), and it is a working 12.1 addon. Asked
+    -- for and ignored: a client that does not have it is exactly the client
+    -- the CreateFrame below fails on, which is already handled.
+    if C_AddOns and C_AddOns.LoadAddOn and C_AddOns.IsAddOnLoaded
+        and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
+    end
+
     local ok, container = pcall(CreateFrame, "AuraContainer", nil, parent,
         "CustomAuraContainerTemplate")
-    if not ok or not container then return nil end
+    if not ok or not container then
+        self:Fail("CreateFrame(AuraContainer)", container)
+        return nil
+    end
 
     -- The engine drains its parse and layout phases from an OnUpdate armed in
     -- run-when-visible mode, so the container needs a renderable rect from the
@@ -331,8 +345,25 @@ end
 --   layout = { elementWidth, elementHeight, elementSpacing, lineSpacing },
 --   initialize = function(button) ... end,
 -- }
+-- A PCALL WHOSE ERROR NOBODY READS AGREES WITH EVERY MISTAKE.
+--
+-- This was the shape of the co-tank aura bug: AddGroup returned a bare
+-- boolean out of a pcall, BuildEngineStrip handed back its container either
+-- way, and a container with no group draws nothing and says nothing. Two
+-- hours of "the strips are empty and there is no error" is what a discarded
+-- error message costs. So the text is kept, and Engine:LastError() hands it
+-- to whoever asks - which is /zs cotanks.
+function Engine:Fail(where, err)
+    self.lastError = where .. ": " .. tostring(err)
+    return false
+end
+
+function Engine:LastError()
+    return self.lastError
+end
+
 function Engine:AddGroup(container, spec)
-    if not container then return false end
+    if not container then return self:Fail("AddGroup", "no container") end
 
     local options = {
         maxFrameCount   = spec.max,
@@ -344,8 +375,10 @@ function Engine:AddGroup(container, spec)
         options.candidateFilters = { includeSpellIDs = spec.includeSpellIDs }
     end
 
-    return (pcall(container.AddAuraGroup, container, spec.key or "dk",
-        spec.filter, options))
+    local ok, err = pcall(container.AddAuraGroup, container, spec.key or "dk",
+        spec.filter, options)
+    if not ok then return self:Fail("AddAuraGroup(" .. tostring(spec.key) .. ")", err) end
+    return true
 end
 
 -- Unit LAST - see contract rule 1. UpdateAllAuras forces the first parse
@@ -354,13 +387,12 @@ end
 -- Shows the container as well, so a container that was parked by Retire and
 -- is later rebound comes back rather than staying invisibly bound.
 function Engine:Bind(container, unit)
-    if not container then return false end
-    local ok = pcall(container.SetUnit, container, unit)
-    if ok then
-        pcall(container.UpdateAllAuras, container)
-        container:Show()
-    end
-    return ok
+    if not container then return self:Fail("Bind", "no container") end
+    local ok, err = pcall(container.SetUnit, container, unit)
+    if not ok then return self:Fail("SetUnit(" .. tostring(unit) .. ")", err) end
+    pcall(container.UpdateAllAuras, container)
+    container:Show()
+    return true
 end
 
 -- Parks a container that is being retired. Frames cannot be freed, so unbind

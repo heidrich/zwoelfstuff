@@ -140,6 +140,44 @@ function Rules.Rank(level)
     return RANK_BY_LEVEL[level]
 end
 
+-- IS THIS PLATE AN ENEMY NPC, and it has to be asked BEFORE the rank.
+--
+-- Nameplates are handed out for PLAYERS too - your own group inside a key,
+-- anybody standing in a city - and a player at max level reads as level 90,
+-- which RANK_BY_LEVEL calls "standard". So every party member who cast
+-- anything got a bar and a line in the ledger, which is exactly what the
+-- owner saw. EXBoss asks the same question of its own plates in two places
+-- (Modules/Tools/MythicCast.lua:508 and :553).
+--
+-- Booleans in, boolean out, so the desk can ask it without a client:
+--   isSelf     UnitIsUnit(unit, "player")
+--   isPlayer   UnitIsPlayer(unit)            - any player, friend or foe
+--   canAttack  UnitCanAttack("player", unit) - nil when the client has no
+--              such call, and an ABSENT answer must not empty the feature.
+--              Only an explicit false rejects.
+function Rules.Hostile(isSelf, isPlayer, canAttack)
+    if isSelf or isPlayer then return false end
+    if canAttack == false then return false end
+    return true
+end
+
+-- THE NPC ID OFF A GUID, and it is the one name that does not change.
+--
+-- UnitName reads mobs fine, but it reads them in the CLIENT'S language, so a
+-- filter saved on a German client matched nothing on an English one and the
+-- season list could never be shipped with it. The GUID is the same everywhere:
+-- "Creature-0-3299-1-128-236085-000136DF91", and the sixth field is the id
+-- MobData is keyed by.
+--
+-- Pets and player-made things are deliberately not creatures here: only what
+-- the game calls a Creature or a Vehicle has an NPC id worth filtering on.
+function Rules.NpcID(guid)
+    if type(guid) ~= "string" then return nil end
+    local kind = guid:match("^([^-]+)")
+    if kind ~= "Creature" and kind ~= "Vehicle" then return nil end
+    return tonumber(guid:match("^[^-]+%-[^-]*%-[^-]*%-[^-]*%-[^-]*%-(%d+)"))
+end
+
 -- ROLE + CLASS -> the identity string a party member is matched on. Both
 -- halves are readable on this patch; either missing means "cannot tell",
 -- which must never be rounded into a match.
@@ -238,11 +276,24 @@ end
 --
 -- An empty or absent set means every mob, never none: a list nobody has
 -- filled in yet must not silence the alert it belongs to.
-function Rules.MobWanted(mobs, mob)
+-- A PICKED MOB IS KEYED BY NPC ID WHERE THERE IS ONE, and by name where
+-- there is not. Ids come from the season list and are the same in every
+-- language; names are what a mob met outside it can be called. Both are
+-- accepted so a filter saved before the season list existed keeps working.
+function Rules.MobWanted(mobs, mob, npc)
     if type(mobs) ~= "table" then return true end
     if next(mobs) == nil then return true end
+    if npc and mobs[npc] == true then return true end
     if type(mob) ~= "string" or mob == "" then return false end
     return mobs[mob] == true
+end
+
+-- WHAT A PICKED ENTRY IS FILED UNDER. One place decides it, so the page and
+-- the scan can never disagree about whether a mob is watched.
+function Rules.MobKey(mob, npc)
+    if npc then return npc end
+    if type(mob) == "string" and mob ~= "" then return mob end
+    return nil
 end
 
 -- THE WORDS. Three tokens, and every one of them is something we may read:
@@ -453,6 +504,23 @@ end
 -- `self.count`, never with `#live` - see Fill below.
 local pool = {}
 
+-- Rules.Hostile's three questions, asked of the client. Each call is guarded
+-- on its own: a missing one leaves its answer nil, which the rule reads as
+-- "not told" rather than as "no".
+local function HostileNPC(unit)
+    local isSelf, isPlayer, canAttack
+    if type(UnitIsUnit) == "function" then
+        isSelf = UnitIsUnit(unit, "player") and true or false
+    end
+    if type(UnitIsPlayer) == "function" then
+        isPlayer = UnitIsPlayer(unit) and true or false
+    end
+    if type(UnitCanAttack) == "function" then
+        canAttack = UnitCanAttack("player", unit) and true or false
+    end
+    return Rules.Hostile(isSelf, isPlayer, canAttack)
+end
+
 local function Row(index)
     local row = pool[index]
     if not row then
@@ -503,7 +571,7 @@ function Casts:Scan()
 
     for index = 1, MAX_PLATES do
         local unit = PLATE_UNITS[index]
-        if UnitExists(unit) then
+        if UnitExists(unit) and HostileNPC(unit) then
             local cast = CastOn(unit)
             if cast then
                 -- THE GROUP IS ASKED FOR ONCE, AND ONLY ONCE SOMETHING IS
@@ -531,16 +599,26 @@ function Casts:Scan()
                     mob = raw
                 end
 
+                -- AND THE ID, which the name cannot replace: UnitName answers
+                -- in the client's language, so a filter picked off the season
+                -- list would match on an English client and on no other.
+                local npc
+                if type(UnitGUID) == "function" then
+                    local guid = UnitGUID(unit)
+                    if ns.CanCompute(guid) then npc = Rules.NpcID(guid) end
+                end
+
                 -- Every mob we see casting goes in the ledger, whether or not
                 -- this config wants a line about it: the list you pick from
                 -- has to fill itself while you play, not only while an alert
                 -- happens to be watching.
-                Casts.Remember(mob, rank)
+                Casts.Remember(mob, rank, npc)
 
                 if Rules.Wanted(cfg, rank, aim) then
                     found = found + 1
                     local row = Row(found)
                     row.unit, row.rank, row.aim = unit, rank, aim
+                    row.npc = npc
                     row.mob, row.name, row.texture = mob, cast.name, cast.texture
                     row.spellID = cast.spellID
                     row.notInterruptible = cast.notInterruptible
@@ -669,7 +747,7 @@ function Casts.Seen()
 end
 
 -- One mob, once. Returns true when it was new here.
-function Casts.Remember(mob, rank)
+function Casts.Remember(mob, rank, npc)
     if type(mob) ~= "string" or mob == "" then return false end
     if not ns.db then return false end
     -- NOT EVERY MOB IN THE WORLD. The column is for the places you are
@@ -690,10 +768,11 @@ function Casts.Remember(mob, rank)
     if entry then
         entry.count = (tonumber(entry.count) or 0) + 1
         if rank then entry.rank = rank end
+        if npc then entry.npc = npc end
         return false
     end
 
-    list[mob] = { rank = rank, count = 1 }
+    list[mob] = { rank = rank, count = 1, npc = npc }
     return true
 end
 
@@ -707,6 +786,7 @@ function Casts.Ledger()
         for mob, entry in pairs(mobs) do
             rows[#rows + 1] = {
                 mob = mob,
+                npc = tonumber(entry.npc),
                 rank = entry.rank,
                 count = tonumber(entry.count) or 0,
             }
@@ -720,6 +800,88 @@ function Casts.Ledger()
         out[#out + 1] = { place = place, mobs = rows }
     end
     table.sort(out, function(a, b) return a.place < b.place end)
+    return out
+end
+
+---------------------------------------------------------------------------
+-- THE SEASON LIST - every mob of every dungeon, before you have met one.
+--
+-- Owner, with two screenshots of MDT's enemy pages: "bei exboss ist jeder mob
+-- und die faehigkeiten drin, jeder. und in MDT auch! das ist sogar besser" -
+-- and then "ja, das brauchen wir im addon".
+--
+-- Core/MobData.lua is that list, generated from Mythic Dungeon Tools. Three
+-- things it carries that the walked ledger never could:
+--
+--   * the NPC ID, so a picked mob matches on every client's language
+--   * the LEVEL, which is the rank without having to meet the mob
+--   * the SPELL IDS, which is where the icons come from - and those are ours
+--     out of a table, not the secret id of a cast happening in front of you,
+--     so they may be looked up like any other spell
+---------------------------------------------------------------------------
+function Casts.Catalog()
+    local data = ns.MobData
+    if type(data) ~= "table" then return {} end
+
+    local out = {}
+    for _, dungeon in pairs(data) do
+        local rows = {}
+        for _, mob in ipairs(dungeon.mobs or {}) do
+            rows[#rows + 1] = {
+                mob    = mob.name,
+                npc    = mob.id,
+                -- THE BOSS FLAG OUTRANKS THE LEVEL, because a handful of
+                -- them do not agree: Avatar of Sethraliss is level 120 and a
+                -- boss, and a level this expansion does not use reads as no
+                -- rank at all. MDT marks its bosses by hand, so that mark is
+                -- the better answer where there is one.
+                rank   = mob.boss and "boss" or Rules.Rank(mob.level),
+                spells = mob.spells,
+                boss   = mob.boss,
+            }
+        end
+        if #rows > 0 then
+            out[#out + 1] = {
+                place = dungeon.name,
+                short = dungeon.short,
+                mobs  = rows,
+                known = true,
+            }
+        end
+    end
+    table.sort(out, function(a, b) return a.place < b.place end)
+    return out
+end
+
+-- WHAT THE PAGE DRAWS: the season first, then anything you met that the
+-- season list does not know - a raid, a mob outside a dungeon. The two are
+-- kept apart rather than merged, because "this is the season" and "this is
+-- what you walked past" answer different questions.
+function Casts.MobList()
+    local out = Casts.Catalog()
+
+    -- Which ids the season already covers, so the walked ledger does not
+    -- print a second copy of a mob that is listed above it.
+    local covered = {}
+    for _, place in ipairs(out) do
+        for _, entry in ipairs(place.mobs) do
+            if entry.npc then covered[entry.npc] = true end
+            if entry.mob then covered[entry.mob] = true end
+        end
+    end
+
+    for _, place in ipairs(Casts.Ledger()) do
+        local rows = {}
+        for _, entry in ipairs(place.mobs) do
+            if not (covered[entry.npc or false] or covered[entry.mob or false]) then
+                rows[#rows + 1] = entry
+            end
+        end
+        if #rows > 0 then
+            out[#out + 1] = { place = place.place, mobs = rows, known = false }
+        end
+    end
+
     return out
 end
 

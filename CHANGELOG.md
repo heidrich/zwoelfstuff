@@ -10,6 +10,30 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.86.0] - 2026-08-22
+
+### Added
+
+- **The season's mobs are in the addon.** All 16 dungeons, 462 mobs and 79
+  bosses, listed with icons under the dungeon they belong to. Click one to
+  narrow an alert to it.
+- **`/zs tanks auras`** says why the co-tank aura strips are empty.
+
+### Changed
+
+- **Mob filters are keyed by NPC id** instead of by name, so a picked mob
+  matches whatever language the client is in. Filters picked before this keep
+  working.
+- **The addon is now GPL v2.** The season mob data comes from Mythic Dungeon
+  Tools by Nnoggie, which is GPL v2.
+
+### Fixed
+
+- **Casts on you counted players.** Any player casting anything got a bar and
+  a line in the mob list. Only enemy NPCs now.
+- **Co-tank aura strips could fail without saying so.** A refused aura group
+  left an empty container in place and printed nothing.
+
 ## [4.85.1] - 2026-08-19
 
 *Casts on you is still marked coming soon — this is the first round of what a

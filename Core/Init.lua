@@ -2016,6 +2016,8 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
         -- Both of these now go through EDIT MODE, because that is where
         -- everything this addon draws is placed. Two ways to move one thing,
         -- with two different sets of rules, is one way too many.
+        elseif sub == "auras" or sub == "debuffs" then
+            ns.CoTanks:DumpAuras()
         elseif sub == "unlock" or sub == "move" then
             ns.EditMode:SetUnlocked(true)
         elseif sub == "lock" then
