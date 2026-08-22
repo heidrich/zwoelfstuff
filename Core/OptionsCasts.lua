@@ -219,6 +219,14 @@ function Page:BuildPage(page, width)
     host:SetHeight(STAGE_H - 34)
     self.stage = host
 
+    -- AN EMPTY BAND READS AS BROKEN. With the module off the bar refuses
+    -- to draw, so the band says why instead of showing a void.
+    local stageHint = UI.Hint(host, "The module is off - switch it on to "
+        .. "see the bar.")
+    stageHint:SetPoint("CENTER", host, "CENTER", 0, 0)
+    stageHint:Hide()
+    self.stageHint = stageHint
+
     local strip
     strip = UI.TabStrip(band, { "Bar", "Alerts", "Voice" }, function(name)
         grid:ShowTab(name)
@@ -428,6 +436,7 @@ function Page:BuildPage(page, width)
     page.Refresh = function()
         band.Fit()
         self:BorrowBar()
+        self.stageHint:SetShown(not ns.Modules:IsOn("casts"))
         local editor = ns.OptionsCastAlerts
         if editor and editor.Paint then editor.Paint() end
         grid:Refresh()
@@ -442,6 +451,10 @@ end
 -- The preview: the real bar, borrowed
 ---------------------------------------------------------------------------
 function Page:BorrowBar()
+    -- The band is a demonstration, not a mirror of an empty world: while
+    -- this page is up, the invented casts run whenever nothing real is
+    -- casting - the bar draws and the alerts fire, which is the point.
+    if ns.Casts then ns.Casts:SetPreview(true) end
     local panel = ns.CastBar.Frame()
     if not (panel and self.stage) then return end
     if ns.CastBar.hosted then
@@ -475,6 +488,7 @@ function Page:FitBar()
 end
 
 function Page:ReleaseBar()
+    if ns.Casts then ns.Casts:SetPreview(false) end
     local panel = ns.CastBar.Frame()
     if not (panel and ns.CastBar.hosted) then return end
     ns.CastBar.hosted = nil

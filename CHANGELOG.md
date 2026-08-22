@@ -10,6 +10,14 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.88.1] - 2026-08-22
+
+### Fixed
+
+- The preview above the tabs was empty until something real was casting.
+  While the page is open, the three invented casts stand in — the bar draws
+  and the alerts fire. With the module off, the band says so.
+
 ## [4.88.0] - 2026-08-22
 
 ### Added

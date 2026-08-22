@@ -31,6 +31,19 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.88.1",
+        date = "2026-08-22",
+        lines = {
+            {
+                text = "Fixed: the preview above the tabs was empty until "
+                    .. "something real was casting. While the page is open, "
+                    .. "the three invented casts stand in - the bar draws "
+                    .. "and the alerts fire. With the module off, the band "
+                    .. "says so instead of showing nothing.",
+            },
+        },
+    },
+    {
         version = "4.88.0",
         date = "2026-08-22",
         lines = {

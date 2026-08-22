@@ -529,6 +529,18 @@ function Casts:SetTestMode(on)
     if ns.CastAlerts then ns.CastAlerts:Refresh() end
 end
 
+-- THE PAGE ARMS THIS while it is on screen and puts it down when it goes
+-- (Page:BorrowBar / Page:ReleaseBar). Not a saved setting on purpose:
+-- the preview belongs to the open window, not to the profile.
+function Casts:SetPreview(on)
+    on = on and true or false
+    if (self.preview or false) == on then return end
+    self.preview = on
+    self:Scan()
+    if ns.CastBar then ns.CastBar:Refresh() end
+    if ns.CastAlerts then ns.CastAlerts:Refresh() end
+end
+
 -- ONE ROW OF THE LIVE LIST, REUSED. The rows are kept past the end of the
 -- list rather than dropped, so a pull that never has more than four casts at
 -- once allocates four tables in its whole life. `live` is trimmed with
@@ -568,28 +580,34 @@ end
 -- the unit tokens are built once at load, the rows are pooled, and the config
 -- is seeded once per profile. A tick that finds an empty screen touches no
 -- memory at all.
+-- The invented casts, filled into the live list: same rows, same trim, so
+-- everything downstream sees one kind of thing.
+local function FillInvented(self)
+    local live = self.live
+    local found = 0
+    for _, entry in ipairs(TEST_CASTS) do
+        found = found + 1
+        local row = Row(found)
+        row.unit, row.rank, row.aim = entry.unit, entry.rank, entry.aim
+        row.mob, row.name, row.texture =
+            entry.mob, entry.name, entry.texture
+        row.spellID, row.notInterruptible = nil, nil
+        row.isChannel, row.duration = false, nil
+        -- Set, not left over: the pooled row may still carry the last
+        -- real scan's answer.
+        row.likelySpell = nil
+        live[found] = row
+    end
+    for index = found + 1, #live do live[index] = nil end
+    self.count = found
+    return found
+end
+
 function Casts:Scan()
     local live = self.live
     local found = 0
 
-    if self.testing then
-        for _, entry in ipairs(TEST_CASTS) do
-            found = found + 1
-            local row = Row(found)
-            row.unit, row.rank, row.aim = entry.unit, entry.rank, entry.aim
-            row.mob, row.name, row.texture =
-                entry.mob, entry.name, entry.texture
-            row.spellID, row.notInterruptible = nil, nil
-            row.isChannel, row.duration = false, nil
-            -- Set, not left over: the pooled row may still carry the last
-            -- real scan's answer.
-            row.likelySpell = nil
-            live[found] = row
-        end
-        for index = found + 1, #live do live[index] = nil end
-        self.count = found
-        return found
-    end
+    if self.testing then return FillInvented(self) end
 
     if type(UnitExists) ~= "function" then
         for index = 1, #live do live[index] = nil end
@@ -658,6 +676,17 @@ function Casts:Scan()
                 live[found] = row
             end
         end
+    end
+
+    -- THE PAGE'S PREVIEW. While the casts page is open and the world is
+    -- quiet, the invented casts stand in: the band above the tabs promises
+    -- you can SEE what you are setting up, and an empty band reads as
+    -- broken (owner, 2026-08-22, with a screenshot of exactly that). Real
+    -- casts always win - found > 0 skips this - and a switched-off module
+    -- stays silent; the band says so itself.
+    if found == 0 and self.preview
+        and ns.Modules and ns.Modules:IsOn("casts") then
+        return FillInvented(self)
     end
 
     for index = found + 1, #live do live[index] = nil end

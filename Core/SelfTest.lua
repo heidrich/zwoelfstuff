@@ -11803,6 +11803,8 @@ local function TestCasts()
     -- Test mode: three invented casts, so the bar can be placed
     ---------------------------------------------------------------------
     local wasTesting = Casts:Testing()
+    local wasPreview = Casts.preview and true or false
+    Casts:SetPreview(false)
     Casts:SetTestMode(true)
     Check("Test mode invents casts to place the bar against",
         Casts:Testing() == true and Casts.count > 0)
@@ -11812,6 +11814,27 @@ local function TestCasts()
     Check("...and switching it off empties the screen again",
         Casts:Testing() == false and Casts.count == 0)
     if wasTesting then Casts:SetTestMode(true) end
+
+    ---------------------------------------------------------------------
+    -- The page's preview: while the page is open and the world is quiet,
+    -- the invented casts stand in. A real cast winning over the preview
+    -- is one found-count in Scan and needs a client to drive.
+    ---------------------------------------------------------------------
+    local hadModule = ns.Modules:IsOn("casts")
+    if not hadModule then ns.Modules:Set("casts", true) end
+    Casts:SetPreview(true)
+    Check("An open page previews the bar against invented casts",
+        Casts.count > 0 and Casts:Current() ~= nil)
+    Casts:SetPreview(false)
+    Check("...and closing the page puts them away", Casts.count == 0)
+    if not ns.CastBar.hosted and ns.OptionsCasts and ns.OptionsCasts.stage then
+        ns.OptionsCasts:BorrowBar()
+        Check("Opening the page arms the preview", Casts.preview == true)
+        ns.OptionsCasts:ReleaseBar()
+        Check("...and leaving it puts it down", Casts.preview ~= true)
+    end
+    if not hadModule then ns.Modules:Set("casts", false) end
+    if wasPreview then Casts:SetPreview(true) end
 
     ---------------------------------------------------------------------
     -- THE WIRING, not just the rule. Both surfaces have to be REACHED by
