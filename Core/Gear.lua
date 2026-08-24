@@ -192,38 +192,88 @@ local function ReadAverage(unit, own)
     return nil
 end
 
--- The hero tree's name, off the trait tree the answer carries. A walk over
--- every node, because the game offers no shorter question; once per inspect
--- and guarded throughout - a client without C_Traits answers "not read".
-local function ReadHeroName(configID)
-    if type(configID) ~= "number" then return nil end
-    if not (C_Traits and C_Traits.GetConfigInfo and C_Traits.GetTreeNodes
-        and C_Traits.GetNodeInfo and C_Traits.GetSubTreeInfo) then
+-- Which spell a chosen node stands for. The chain is the one MRT walks:
+-- the node's active entry, its definition, the definition's spell.
+local function NodeSpell(configID, node)
+    if not (C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo) then
         return nil
     end
-    local okConfig, config = pcall(C_Traits.GetConfigInfo, configID)
-    local treeID = okConfig and type(config) == "table"
-        and type(config.treeIDs) == "table" and config.treeIDs[1] or nil
-    if not treeID then return nil end
-    local okNodes, nodes = pcall(C_Traits.GetTreeNodes, treeID)
-    if not (okNodes and type(nodes) == "table") then return nil end
-    for _, nodeID in ipairs(nodes) do
-        local okNode, node = pcall(C_Traits.GetNodeInfo, configID, nodeID)
-        if okNode and type(node) == "table"
-            and node.subTreeID and node.subTreeActive then
-            local okSub, sub =
-                pcall(C_Traits.GetSubTreeInfo, configID, node.subTreeID)
-            if okSub and type(sub) == "table"
-                and type(sub.name) == "string" and sub.name ~= "" then
-                return sub.name
-            end
-        end
+    local entryID = type(node.activeEntry) == "table"
+        and node.activeEntry.entryID
+        or (type(node.entryIDs) == "table" and node.entryIDs[1])
+    if not entryID then return nil end
+    local okEntry, entry = pcall(C_Traits.GetEntryInfo, configID, entryID)
+    local definitionID = okEntry and type(entry) == "table"
+        and entry.definitionID or nil
+    if not definitionID then return nil end
+    local okDef, def = pcall(C_Traits.GetDefinitionInfo, definitionID)
+    if okDef and type(def) == "table"
+        and type(def.spellID) == "number" then
+        return def.spellID
     end
     return nil
 end
 
+-- THE BUILD, off the trait tree the answer carries: every CHOSEN node with
+-- its place on the board, and the hero tree's name. One walk answers both -
+-- the game offers no shorter question than all nodes - and it is guarded
+-- throughout: a client without C_Traits answers "not read". Owner,
+-- 2026-08-24: "damit man direkt die skillung sieht ... nicht nur den
+-- string" - the card draws these picks as a board.
+local function ReadBuild(configID)
+    if type(configID) ~= "number" then return nil, nil end
+    if not (C_Traits and C_Traits.GetConfigInfo and C_Traits.GetTreeNodes
+        and C_Traits.GetNodeInfo) then
+        return nil, nil
+    end
+    local okConfig, config = pcall(C_Traits.GetConfigInfo, configID)
+    local treeID = okConfig and type(config) == "table"
+        and type(config.treeIDs) == "table" and config.treeIDs[1] or nil
+    if not treeID then return nil, nil end
+    local okNodes, nodes = pcall(C_Traits.GetTreeNodes, treeID)
+    if not (okNodes and type(nodes) == "table") then return nil, nil end
+
+    local picks, hero = {}, nil
+    for _, nodeID in ipairs(nodes) do
+        local okNode, node = pcall(C_Traits.GetNodeInfo, configID, nodeID)
+        if okNode and type(node) == "table" then
+            local inHero = node.subTreeID ~= nil
+            if inHero and node.subTreeActive and not hero
+                and C_Traits.GetSubTreeInfo then
+                local okSub, sub = pcall(C_Traits.GetSubTreeInfo,
+                    configID, node.subTreeID)
+                if okSub and type(sub) == "table"
+                    and type(sub.name) == "string" and sub.name ~= "" then
+                    hero = sub.name
+                end
+            end
+            -- Chosen, and on an ACTIVE board: the other hero tree's nodes
+            -- keep their ranks and would draw a build nobody is playing.
+            if (not inHero or node.subTreeActive)
+                and type(node.currentRank) == "number"
+                and node.currentRank > 0
+                and type(node.posX) == "number"
+                and type(node.posY) == "number" then
+                local spell = NodeSpell(configID, node)
+                if spell then
+                    picks[#picks + 1] = {
+                        x = node.posX,
+                        y = node.posY,
+                        hero = inHero or false,
+                        spell = spell,
+                        rank = node.currentRank,
+                        most = node.maxRanks,
+                    }
+                end
+            end
+        end
+    end
+    if #picks == 0 then picks = nil end
+    return picks, hero
+end
+
 local function ReadTalents(unit, own)
-    local loadout, hero
+    local loadout, hero, picks
 
     if own then
         local getConfig = C_ClassTalents and C_ClassTalents.GetActiveConfigID
@@ -237,7 +287,7 @@ local function ReadTalents(unit, own)
                         loadout = text
                     end
                 end
-                hero = ReadHeroName(configID)
+                picks, hero = ReadBuild(configID)
             end
         end
     else
@@ -250,10 +300,10 @@ local function ReadTalents(unit, own)
         end
         local inspectConfig = Constants and Constants.TraitConsts
             and Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
-        hero = ReadHeroName(inspectConfig)
+        picks, hero = ReadBuild(inspectConfig)
     end
 
-    return loadout, hero
+    return loadout, hero, picks
 end
 
 function Gear.Harvest(unit, guid, secondPass)
@@ -282,7 +332,7 @@ function Gear.Harvest(unit, guid, secondPass)
         if has < had then return before end
     end
 
-    local loadout, hero = ReadTalents(unit, own)
+    local loadout, hero, picks = ReadTalents(unit, own)
     local carry = secondPass and before or nil
 
     local data = {
@@ -298,6 +348,7 @@ function Gear.Harvest(unit, guid, secondPass)
             and Gear.MissingEnchants(slots) or nil,
         loadout = loadout or (carry and carry.loadout) or nil,
         hero = hero or (carry and carry.hero) or nil,
+        build = picks or (carry and carry.build) or nil,
     }
     known[guid] = data
 

@@ -787,6 +787,16 @@ function RaidDeaths.Settled(entry)
     return (entry.tries or 0) >= RETRIES
 end
 
+-- The key of the fight the meter is holding RIGHT NOW, kept by nobody.
+-- What Clear writes down and Capture then refuses.
+function RaidDeaths.HoldingKey()
+    local rows = RaidDeaths.Read()
+    if not rows or #rows == 0 then return nil end
+    local entries, timed = RaidDeaths.Timeline(rows)
+    if not timed then return nil end
+    return RaidDeaths.FightKey(entries)
+end
+
 -- Read what the client is holding and keep it if it is worth keeping. Only a
 -- TIMED list is captured: an untimed one is Overall, which is not a fight and
 -- would overwrite a good capture with a worse one.
@@ -798,6 +808,17 @@ function RaidDeaths.Capture()
     if not timed then return nil end
 
     local key = RaidDeaths.FightKey(entries)
+
+    -- THE FIGHT A CLEAR DISMISSED STAYS DISMISSED for as long as the meter
+    -- holds it. The meter cannot be emptied by an addon, so without this
+    -- mark the very next capture - the window opening, the combat tick,
+    -- the end of a fight - put the cleared pull straight back (owner,
+    -- 2026-08-24: "todays list ... kann man nicht clearen"). A DIFFERENT
+    -- fight lifts the mark: recap ids are reused within a session, and a
+    -- mark that outlived its fight would eat a later pull.
+    if key and key == RaidDeaths.dismissed then return nil end
+    RaidDeaths.dismissed = nil
+
     local last = RaidDeaths.log[#RaidDeaths.log]
     local previous = Asked(last and last.key == key and last or nil)
 
@@ -839,6 +860,23 @@ function RaidDeaths.Capture()
     -- of a fight, which is when he types it.
     RaidDeaths.Save()
     return fight
+end
+
+-- EMPTYING WHICHEVER LIST IS BEING READ - and refusing its resurrection.
+-- One method rather than button-body code, so the desk can press it.
+function RaidDeaths:Clear()
+    if RaidDeaths.overview then
+        RaidDeaths.session = { day = RaidDeaths.Today(), fights = {} }
+    else
+        RaidDeaths.log = {}
+        RaidDeaths.showing = nil
+        RaidDeaths.sideOffset = 0
+    end
+    RaidDeaths.reading = nil
+    RaidDeaths.dismissed = RaidDeaths.HoldingKey()
+    RaidDeaths.Save()
+    RaidDeaths:Refresh()
+    RaidDeaths.RefreshIcon()
 end
 
 function RaidDeaths.Newest()
@@ -2006,17 +2044,7 @@ function RaidDeaths:Create()
     -- like it had done nothing, and one that emptied both would throw away
     -- the tally somebody was reading.
     local clear = UI.Button(frame, "Clear list", 110, function()
-        if RaidDeaths.overview then
-            RaidDeaths.session = { day = RaidDeaths.Today(), fights = {} }
-        else
-            RaidDeaths.log = {}
-            RaidDeaths.showing = nil
-            RaidDeaths.sideOffset = 0
-        end
-        RaidDeaths.reading = nil
-        RaidDeaths.Save()
-        RaidDeaths:Refresh()
-        RaidDeaths.RefreshIcon()
+        RaidDeaths:Clear()
     end)
     clear:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -UI.PAD, 14)
     frame.clear = clear

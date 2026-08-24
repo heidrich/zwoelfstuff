@@ -21,6 +21,8 @@ oldest versions move over.
 - **A magnifier beside every name** opens a player card: every worn item
   with its level, missing enchants marked, the spec and a talent string
   ready to copy.
+- **The talents dock beside the card, drawn** — every chosen one at its
+  place on the board, the hero tree below.
 
 ### Fixed
 
@@ -28,6 +30,8 @@ oldest versions move over.
   Not read shows the waiting mark now, per column.
 - Two players with the same name on different realms no longer swallow each
   other's addon messages.
+- Clearing the group death log holds now — the last pull used to come
+  straight back on its own.
 
 ## [4.88.1] - 2026-08-22
 

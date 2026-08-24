@@ -24,6 +24,8 @@ local C = UI.C
 
 local CARD_W = 470
 local ROW_H = 24
+local PANEL_W = 240
+local PICK = 20
 
 local TICK_READY = "Interface\\RaidFrame\\ReadyCheck-Ready"
 local TICK_NOT = "Interface\\RaidFrame\\ReadyCheck-NotReady"
@@ -219,6 +221,29 @@ function PlayerCard.Create()
     card.copyHint = UI.Label(card, "", UI.FS.meta, C.textFaint)
     card.copyHint:SetPoint("TOPLEFT", card.loadout, "BOTTOMLEFT", 0, -6)
 
+    -- THE SKILLUNG, DOCKED. Owner, 2026-08-24: "rechts neben dem gear
+    -- fenster direkt das skill fenster andocken, damit man direkt die
+    -- skillung sieht" - "nicht nur den string". Drawn from the same answer
+    -- the string comes from: every chosen talent at its place on the
+    -- board, the shared class-and-spec tree on top, the hero tree under
+    -- its name. Only what is CHOSEN is drawn - the shape of the build is
+    -- what a glance needs, not the game's whole window. A child of the
+    -- card, so it moves, hides and closes with it.
+    local skills = CreateFrame("Frame", nil, card)
+    skills:SetPoint("TOPLEFT", card, "TOPRIGHT", 2, 0)
+    skills:SetSize(PANEL_W, 596)
+    UI.Fill(skills, "BACKGROUND", C.windowBg)
+    local skillsEdge = ns.CreateBorder(skills, 1, "BORDER")
+    skillsEdge:SetColor(C.overlayEdge[1], C.overlayEdge[2],
+        C.overlayEdge[3], 1)
+    skills.title = UI.Label(skills, "", UI.FS.card, C.text)
+    skills.title:SetPoint("TOPLEFT", skills, "TOPLEFT", 12, -12)
+    skills.hero = UI.Label(skills, "", UI.FS.meta, C.textDim)
+    skills.hero:SetPoint("TOPLEFT", skills, "TOPLEFT", 12, -424)
+    skills.icons = {}
+    skills:Hide()
+    card.skills = skills
+
     local refresh = UI.Button(card, ns.L["Refresh"], nil, function()
         -- Through the guid, not the remembered token: after a roster
         -- shuffle the token is somebody else, and forgetting THAT
@@ -240,6 +265,90 @@ end
 ---------------------------------------------------------------------------
 -- Drawing
 ---------------------------------------------------------------------------
+local function BuildPick(parent)
+    local pick = CreateFrame("Frame", nil, parent)
+    pick:SetSize(PICK, PICK)
+    local tex = pick:CreateTexture(nil, "ARTWORK")
+    tex:SetAllPoints(pick)
+    tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    pick.tex = tex
+    pick.rank = UI.Label(pick, "", 10, C.text)
+    pick.rank:SetPoint("BOTTOMRIGHT", pick, "BOTTOMRIGHT", 2, -2)
+    pick:EnableMouse(true)
+    pick:SetScript("OnEnter", function(self)
+        if not self.spell then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local ok = pcall(GameTooltip.SetSpellByID, GameTooltip, self.spell)
+        if ok then GameTooltip:Show() else GameTooltip:Hide() end
+    end)
+    pick:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return pick
+end
+
+-- One board, scaled into its rectangle. The picks keep their RELATIVE
+-- places - the trait tree's own coordinates, normalized over what is
+-- chosen - so the class half, the spec half and the middle gap appear by
+-- themselves without this code knowing which node is which.
+local function PlaceBoard(skills, picks, hero, top, height, used)
+    local subset = {}
+    for _, pick in ipairs(picks) do
+        if (pick.hero == true) == hero then subset[#subset + 1] = pick end
+    end
+    if #subset == 0 then return used end
+
+    local minX, maxX, minY, maxY
+    for _, pick in ipairs(subset) do
+        if minX == nil or pick.x < minX then minX = pick.x end
+        if maxX == nil or pick.x > maxX then maxX = pick.x end
+        if minY == nil or pick.y < minY then minY = pick.y end
+        if maxY == nil or pick.y > maxY then maxY = pick.y end
+    end
+
+    local width = PANEL_W - 16 - PICK
+    local room = height - PICK
+    for _, pick in ipairs(subset) do
+        used = used + 1
+        local icon = skills.icons[used]
+        if not icon then
+            icon = BuildPick(skills)
+            skills.icons[used] = icon
+        end
+        local fx = (maxX > minX) and (pick.x - minX) / (maxX - minX) or 0.5
+        local fy = (maxY > minY) and (pick.y - minY) / (maxY - minY) or 0.5
+        icon:ClearAllPoints()
+        icon:SetPoint("TOPLEFT", skills, "TOPLEFT",
+            8 + fx * width, -(top + fy * room))
+        icon.spell = pick.spell
+        local texture
+        if C_Spell and C_Spell.GetSpellTexture then
+            local ok, art = pcall(C_Spell.GetSpellTexture, pick.spell)
+            if ok then texture = art end
+        end
+        icon.tex:SetTexture(texture)
+        icon.rank:SetText((pick.most or 1) > 1
+            and tostring(pick.rank or 1) or "")
+        icon:Show()
+    end
+    return used
+end
+
+local function PaintBuild(data)
+    local skills = card.skills
+    if not skills then return end
+    local picks = data and data.build
+    if not picks then
+        skills:Hide()
+        return
+    end
+    skills:Show()
+    skills.title:SetText(ns.L["Talents"])
+    skills.hero:SetText(data.hero or "")
+    local used = 0
+    used = PlaceBoard(skills, picks, false, 40, 350, used)
+    used = PlaceBoard(skills, picks, true, 448, 120, used)
+    for index = used + 1, #skills.icons do skills.icons[index]:Hide() end
+end
+
 function PlayerCard.Redraw()
     if not (card and card:IsShown()) then return end
 
@@ -298,6 +407,8 @@ function PlayerCard.Redraw()
         card.state:SetText(L["Reading. If nothing arrives, they are out of range."])
         card.state:Show()
     end
+
+    PaintBuild(data)
 end
 
 ---------------------------------------------------------------------------

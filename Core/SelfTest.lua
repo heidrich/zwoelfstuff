@@ -2151,6 +2151,41 @@ local function TestRaidDeaths()
         return
     end
 
+    -- CLEARING MUST STICK. The meter keeps holding the last pull after a
+    -- clear, and the next capture used to put it straight back into both
+    -- lists - pressing clear looked broken because it was being undone.
+    do
+        local keptLog, keptSession = R.log, R.session
+        local keptDismissed, keptOverview = R.dismissed, R.overview
+        local keptShowing = R.showing
+        R.log, R.session = {}, { fights = {} }
+        R.dismissed = nil
+
+        Check("A capture keeps the meter's fight", R.Capture() ~= nil
+            and #R.log == 1 and #R.session.fights == 1)
+
+        R.overview = true
+        R:Clear()
+        Check("Clearing tonight empties tonight", #R.session.fights == 0)
+        Check("...and the capture that follows cannot refill it",
+            R.Capture() == nil and #R.session.fights == 0)
+
+        R.overview = false
+        R:Clear()
+        Check("Clearing the pulls empties the pulls", #R.log == 0)
+        Check("...and they stay empty past a capture",
+            R.Capture() == nil and #R.log == 0)
+
+        R.dismissed = 999999906
+        Check("A different fight lifts the dismissal",
+            R.Capture() ~= nil and R.dismissed == nil)
+
+        R.log, R.session = keptLog, keptSession
+        R.dismissed, R.overview = keptDismissed, keptOverview
+        R.showing = keptShowing
+        R.Save()
+    end
+
     -- Newest first, which is the order the client hands them over.
     local function Recorded()
         return {
@@ -7907,6 +7942,16 @@ local function TestGear()
         },
     }
     __ITEM_LEVELS[210001] = 636
+    __INSPECT_BUILD = {
+        [1] = { posX = 100, posY = 100, currentRank = 1, maxRanks = 1,
+                entryIDs = { 11 } },
+        [2] = { posX = 600, posY = 400, currentRank = 2, maxRanks = 2,
+                entryIDs = { 12 } },
+        [3] = { posX = 200, posY = 120, currentRank = 1, maxRanks = 1,
+                subTreeID = 5, subTreeActive = true, entryIDs = { 13 } },
+        [4] = { posX = 300, posY = 120, currentRank = 1, maxRanks = 1,
+                subTreeID = 6, subTreeActive = false, entryIDs = { 14 } },
+    }
 
     ns.Specs.WantGear("party2")
     local word = ns.Specs.Answered(guid)
@@ -7920,6 +7965,15 @@ local function TestGear()
         data ~= nil and data.slots[1] ~= nil and data.slots[1].ilvl == 636)
     Check("...and the talent string came along",
         data ~= nil and data.loadout ~= nil and #data.loadout > 10)
+    Check("...the build came as picks on the board",
+        data ~= nil and data.build ~= nil and #data.build == 3)
+    local heroPicks = 0
+    for _, pick in ipairs((data and data.build) or {}) do
+        if pick.hero then heroPicks = heroPicks + 1 end
+    end
+    Check("...with the inactive hero tree left out", heroPicks == 1)
+    Check("...and the hero tree is named",
+        data ~= nil and data.hero == "Harness Hero 5")
     Check("...asked again, the answer is not ours",
         ns.Specs.Answered(guid) == "not ours")
 
@@ -7927,11 +7981,19 @@ local function TestGear()
         Check("The landed answer fills the open card",
             card.state:IsShown() == false)
         Check("...with the level on it", card.level:GetText() == "641")
+        Check("...and the skillung docks beside it",
+            card.skills ~= nil and card.skills:IsShown() == true)
+        local drawn = 0
+        for _, icon in ipairs(card.skills.icons) do
+            if icon:IsShown() then drawn = drawn + 1 end
+        end
+        Check("...drawing every chosen talent once", drawn == 3)
         ns.PlayerCard.Hide()
     end
 
     __INSPECT_GEAR.party2 = nil
     __ITEM_LEVELS[210001] = nil
+    __INSPECT_BUILD = nil
     Gear.Forget(guid)
 
     -- A BLIND SECOND PASS MUST NOT EAT THE FIRST: by the time the 1.3s

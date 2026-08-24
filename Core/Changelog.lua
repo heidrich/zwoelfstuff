@@ -53,6 +53,11 @@ ns.CHANGELOG = {
                     .. "to copy.",
             },
             {
+                text = "The talents dock beside the card, drawn: every "
+                    .. "chosen one at its place on the board, the hero tree "
+                    .. "below.",
+            },
+            {
                 text = "Fixed: an answer that said nothing about food or "
                     .. "flask was drawn as a red cross. Not read shows the "
                     .. "waiting mark now, per column.",
@@ -61,6 +66,10 @@ ns.CHANGELOG = {
                 text = "Fixed: two players with the same name on different "
                     .. "realms no longer swallow each other's addon "
                     .. "messages.",
+            },
+            {
+                text = "Fixed: clearing the group death log holds now. The "
+                    .. "last pull used to come straight back on its own.",
             },
         },
     },
