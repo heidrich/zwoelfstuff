@@ -5552,16 +5552,31 @@ local function TestExternals()
             X.Skilled(member, 424242) == nil)
 
         local sac = X.Get(6940)
-        Check("A slot their talents cannot serve drops them",
-            sac ~= nil and #X.Candidates(sac, { member }) == 0)
-        Check("...and the refusal says who has not skilled it",
-            sac ~= nil and X.NobodyLine(sac, { member })
-                == "Wonda has not skilled it")
-        Check("...while a stranger to the tree stays a candidate", (function()
-            local other = { name = "Fremd", class = "PALADIN",
-                unit = "party3" }
-            return sac ~= nil and #X.Candidates(sac, { other }) == 1
+        Check("Doubt orders the pick - it never drops a candidate",
+            sac ~= nil and #X.Candidates(sac, { member }) == 1)
+        Check("...and alone, the doubted paladin is still asked", (function()
+            local picked = X.Whom(sac, { member }, nil)
+            return sac ~= nil and picked ~= nil and picked.name == "Wonda"
         end)())
+        Check("...but a confirmed one is asked before them", (function()
+            if not sac then return false end
+            __INSPECT_BUILD = {
+                [2] = { posX = 1, posY = 1, currentRank = 1, maxRanks = 1,
+                        entryIDs = { 6940 } },
+            }
+            local guidSure = UnitGUID("party1")
+            ns.Gear.Forget(guidSure)
+            ns.Gear.Harvest("party1", guidSure)
+            local sure = { name = "Sicher", class = "PALADIN",
+                unit = "party1" }
+            local picked, why = X.Whom(sac, { member, sure }, nil)
+            ns.Gear.Forget(guidSure)
+            return picked ~= nil and picked.name == "Sicher"
+                and why == "has it skilled"
+        end)())
+        Check("...and the refusal never claims the doubt as fact",
+            sac ~= nil and X.NobodyLine(sac, { member })
+                == "nobody in the group can cast it")
 
         __INSPECT_GEAR.party2 = nil
         __INSPECT_BUILD = nil

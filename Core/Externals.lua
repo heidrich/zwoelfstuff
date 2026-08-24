@@ -545,11 +545,7 @@ function Externals.Candidates(spell, roster)
     local wanted = Externals.SpecID(spell)
     for _, member in ipairs(roster or {}) do
         if classes[member.class] and not member.isPlayer
-            and Externals.SpecFits(member, wanted)
-            -- Certain knowledge only: dropped when their own tree offers
-            -- the spell and they did not take it. Anything less certain
-            -- keeps them in - hiding the right helper costs a wipe.
-            and Externals.Skilled(member, spell.spellID) ~= false then
+            and Externals.SpecFits(member, wanted) then
             out[#out + 1] = member
         end
     end
@@ -598,18 +594,35 @@ function Externals.Whom(spell, roster, assignedName)
         -- whispers somebody else is worse than one that says it did.
     end
 
+    -- WHAT THEIR TALENTS SAY orders the pick and never excludes (see
+    -- Skilled): confirmed first, unknown second, doubted last - and the
+    -- healer preference decides inside each of those bands, exactly as it
+    -- decided everything before talents could be read at all.
+    local ORDER = { [true] = 1, [false] = 3 }
+    local best, bestRank, bestWhy
     for _, member in ipairs(candidates) do
-        if member.role == "HEALER" then return member, "healer" end
+        local says = Externals.Skilled(member, spell and spell.spellID)
+        local rank = (ORDER[says] or 2) * 2
+        if member.role ~= "HEALER" then rank = rank + 1 end
+        if not best or rank < bestRank then
+            best, bestRank = member, rank
+            bestWhy = says == true and "has it skilled"
+                or (member.role == "HEALER" and "healer" or "only one")
+        end
     end
-
-    return candidates[1], "only one"
+    return best, bestWhy
 end
 
 -- WHAT THEIR TALENTS SAY, when they say anything: true = chosen, false =
--- their tree offers it and they did not take it, nil = no claim (baseline
--- spells, unread players, another faction's variant all land here and
--- fail OPEN). Read off the gear harvester's walk over their trait tree -
--- the same answer the player card draws.
+-- their tree shows it unchosen, nil = no claim (baseline spells, unread
+-- players, another faction's variant). Read off the gear harvester's walk
+-- over their trait tree - the same answer the player card draws.
+--
+-- FALSE IS A DOUBT, NOT A VERDICT. A tree node can GRANT a spell or merely
+-- IMPROVE one every member of the class already has, and the walk cannot
+-- tell the two apart - the owner caught the claim within the hour ("JEDER
+-- PALADIN KANN DAS"). So false may only ever ORDER a choice; nothing may
+-- exclude or refuse on it, because a hidden right helper costs a wipe.
 function Externals.Skilled(member, spellID)
     if not (spellID and member and member.unit and ns.Gear) then
         return nil
@@ -646,11 +659,6 @@ function Externals.NobodyLine(spell, roster)
     local wanted = Externals.SpecID(spell)
     for _, member in ipairs(roster or {}) do
         if classes[member.class] and not member.isPlayer then
-            -- The most specific truth first: their own tree said no.
-            if Externals.Skilled(member, spell and spell.spellID)
-                == false then
-                return string.format("%s has not skilled it", member.name)
-            end
             if wanted and member.spec and member.spec ~= wanted then
                 local specName = Externals.SpecNameFor(wanted)
                 if specName then

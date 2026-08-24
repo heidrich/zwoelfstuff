@@ -72,8 +72,10 @@ ns.CHANGELOG = {
                     .. "last pull used to come straight back on its own.",
             },
             {
-                text = "An external a group-mate has not skilled is not "
-                    .. "asked of them - and a refusal names who and why.",
+                text = "An external is asked of the group-mate whose "
+                    .. "talents are seen to carry it. Doubt only orders the "
+                    .. "pick - it never hides a helper. A refusal names "
+                    .. "who and why.",
             },
         },
     },
