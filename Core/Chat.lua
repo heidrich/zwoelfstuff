@@ -190,8 +190,10 @@ end
 -- `/zs chat probe` is what settles it, and it asks HIS client rather than me.
 ---------------------------------------------------------------------------
 local lastSend
+local lastBlocked
 
 function Chat.LastSend() return lastSend end
+function Chat.LastBlocked() return lastBlocked end
 
 -- Pure: the sentence said when the client refuses a send it has already been
 -- handed. Its own function so the wording can be read back in a check.
@@ -216,6 +218,12 @@ watcher:SetScript("OnEvent", function(_, _, addon)
     -- would send the next person looking in the wrong file.
     local attempt = lastSend
     if not (attempt and GetTime and (GetTime() - attempt.at) < 1) then return end
+    -- KEPT, not just reported: the probe used to eat its own evidence -
+    -- wiping the attempt here meant the very probe the refusal asks for
+    -- could no longer print what was refused (owner's 2026-08-24 paste
+    -- showed a healthy client and no attempt line, which reads as "nothing
+    -- happened" about a send that was refused seconds earlier).
+    lastBlocked = attempt
     lastSend = nil
     ns.Print("|cffff8040" .. Chat.BlockedLine(attempt) .. "|r")
 end)
@@ -311,5 +319,11 @@ function Chat.Probe()
     if last then
         ns.Print(string.format("  last attempt: %s%s", last.channel or "?",
             last.to and (" to " .. last.to) or ""))
+    end
+    local blocked = Chat.LastBlocked()
+    if blocked then
+        ns.Print(string.format("  |cffff8040last refused:|r %s%s",
+            blocked.channel or "?",
+            blocked.to and (" to " .. blocked.to) or ""))
     end
 end

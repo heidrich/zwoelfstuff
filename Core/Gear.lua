@@ -192,15 +192,9 @@ local function ReadAverage(unit, own)
     return nil
 end
 
--- Which spell a chosen node stands for. The chain is the one MRT walks:
--- the node's active entry, its definition, the definition's spell.
-local function NodeSpell(configID, node)
-    if not (C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo) then
-        return nil
-    end
-    local entryID = type(node.activeEntry) == "table"
-        and node.activeEntry.entryID
-        or (type(node.entryIDs) == "table" and node.entryIDs[1])
+-- Which spell one tree entry stands for. The chain is the one MRT walks:
+-- entry, its definition, the definition's spell.
+local function EntrySpell(configID, entryID)
     if not entryID then return nil end
     local okEntry, entry = pcall(C_Traits.GetEntryInfo, configID, entryID)
     local definitionID = okEntry and type(entry) == "table"
@@ -212,6 +206,17 @@ local function NodeSpell(configID, node)
         return def.spellID
     end
     return nil
+end
+
+-- Which spell a chosen node stands for: its active entry's.
+local function NodeSpell(configID, node)
+    if not (C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo) then
+        return nil
+    end
+    local entryID = type(node.activeEntry) == "table"
+        and node.activeEntry.entryID
+        or (type(node.entryIDs) == "table" and node.entryIDs[1])
+    return EntrySpell(configID, entryID)
 end
 
 -- THE BUILD, off the trait tree the answer carries: every CHOSEN node with
@@ -234,10 +239,24 @@ local function ReadBuild(configID)
     if not (okNodes and type(nodes) == "table") then return nil, nil end
 
     local picks, hero = {}, nil
+    local offered, knows = {}, {}
     for _, nodeID in ipairs(nodes) do
         local okNode, node = pcall(C_Traits.GetNodeInfo, configID, nodeID)
         if okNode and type(node) == "table" then
             local inHero = node.subTreeID ~= nil
+
+            -- EVERYTHING THE TREE OFFERS, chosen or not, both hero trees
+            -- included. "Offered and not taken" is the one certain "cannot
+            -- cast it" an inspect can give (owner, 2026-08-24: "wir
+            -- muessen das nur richtig erkennen" - his paladin had the
+            -- wrong talent). A spell a tree never offers stays unjudged.
+            if C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo
+                and type(node.entryIDs) == "table" then
+                for _, entryID in ipairs(node.entryIDs) do
+                    local option = EntrySpell(configID, entryID)
+                    if option then offered[option] = true end
+                end
+            end
             if inHero and node.subTreeActive and not hero
                 and C_Traits.GetSubTreeInfo then
                 local okSub, sub = pcall(C_Traits.GetSubTreeInfo,
@@ -256,6 +275,7 @@ local function ReadBuild(configID)
                 and type(node.posY) == "number" then
                 local spell = NodeSpell(configID, node)
                 if spell then
+                    knows[spell] = true
                     picks[#picks + 1] = {
                         x = node.posX,
                         y = node.posY,
@@ -269,11 +289,13 @@ local function ReadBuild(configID)
         end
     end
     if #picks == 0 then picks = nil end
-    return picks, hero
+    if next(offered) == nil then offered = nil end
+    if next(knows) == nil then knows = nil end
+    return picks, hero, offered, knows
 end
 
 local function ReadTalents(unit, own)
-    local loadout, hero, picks
+    local loadout, hero, picks, offered, knows
 
     if own then
         local getConfig = C_ClassTalents and C_ClassTalents.GetActiveConfigID
@@ -287,7 +309,7 @@ local function ReadTalents(unit, own)
                         loadout = text
                     end
                 end
-                picks, hero = ReadBuild(configID)
+                picks, hero, offered, knows = ReadBuild(configID)
             end
         end
     else
@@ -300,10 +322,10 @@ local function ReadTalents(unit, own)
         end
         local inspectConfig = Constants and Constants.TraitConsts
             and Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
-        picks, hero = ReadBuild(inspectConfig)
+        picks, hero, offered, knows = ReadBuild(inspectConfig)
     end
 
-    return loadout, hero, picks
+    return loadout, hero, picks, offered, knows
 end
 
 function Gear.Harvest(unit, guid, secondPass)
@@ -332,7 +354,7 @@ function Gear.Harvest(unit, guid, secondPass)
         if has < had then return before end
     end
 
-    local loadout, hero, picks = ReadTalents(unit, own)
+    local loadout, hero, picks, offered, knows = ReadTalents(unit, own)
     local carry = secondPass and before or nil
 
     local data = {
@@ -349,6 +371,8 @@ function Gear.Harvest(unit, guid, secondPass)
         loadout = loadout or (carry and carry.loadout) or nil,
         hero = hero or (carry and carry.hero) or nil,
         build = picks or (carry and carry.build) or nil,
+        offered = offered or (carry and carry.offered) or nil,
+        knows = knows or (carry and carry.knows) or nil,
     }
     known[guid] = data
 

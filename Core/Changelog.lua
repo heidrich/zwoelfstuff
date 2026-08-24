@@ -71,6 +71,10 @@ ns.CHANGELOG = {
                 text = "Fixed: clearing the group death log holds now. The "
                     .. "last pull used to come straight back on its own.",
             },
+            {
+                text = "An external a group-mate has not skilled is not "
+                    .. "asked of them - and a refusal names who and why.",
+            },
         },
     },
     {

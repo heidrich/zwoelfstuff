@@ -545,7 +545,11 @@ function Externals.Candidates(spell, roster)
     local wanted = Externals.SpecID(spell)
     for _, member in ipairs(roster or {}) do
         if classes[member.class] and not member.isPlayer
-            and Externals.SpecFits(member, wanted) then
+            and Externals.SpecFits(member, wanted)
+            -- Certain knowledge only: dropped when their own tree offers
+            -- the spell and they did not take it. Anything less certain
+            -- keeps them in - hiding the right helper costs a wipe.
+            and Externals.Skilled(member, spell.spellID) ~= false then
             out[#out + 1] = member
         end
     end
@@ -599,6 +603,67 @@ function Externals.Whom(spell, roster, assignedName)
     end
 
     return candidates[1], "only one"
+end
+
+-- WHAT THEIR TALENTS SAY, when they say anything: true = chosen, false =
+-- their tree offers it and they did not take it, nil = no claim (baseline
+-- spells, unread players, another faction's variant all land here and
+-- fail OPEN). Read off the gear harvester's walk over their trait tree -
+-- the same answer the player card draws.
+function Externals.Skilled(member, spellID)
+    if not (spellID and member and member.unit and ns.Gear) then
+        return nil
+    end
+    local guid = UnitGUID and UnitGUID(member.unit)
+    if not ns.CanCompute(guid) then return nil end
+    local data = ns.Gear.Of(guid)
+    if not (data and data.offered and data.offered[spellID]) then
+        return nil
+    end
+    return (data.knows and data.knows[spellID]) and true or false
+end
+
+-- A spec's NAME, for a sentence. The ids come from the game (Specs), so
+-- the names do too.
+function Externals.SpecNameFor(specID)
+    local list = ns.Specs and ns.Specs.Table() or {}
+    for _, specs in pairs(list) do
+        for _, spec in pairs(specs) do
+            if spec.id == specID then return spec.name end
+        end
+    end
+    return nil
+end
+
+-- WHY nobody. Since the gear harvester began inspecting everybody (4.89),
+-- specs are usually READ - and a spec gate that used to fail open for
+-- strangers now bites. "Nobody in the group can cast it" with a paladin
+-- standing right there reads as a bug (owner, 2026-08-24, chat probe in
+-- hand) - the sentence has to name the gate it closed on. It only claims
+-- what is KNOWN: an unread spec still fails open and never lands here.
+function Externals.NobodyLine(spell, roster)
+    local classes = Externals.ClassesFor(spell)
+    local wanted = Externals.SpecID(spell)
+    for _, member in ipairs(roster or {}) do
+        if classes[member.class] and not member.isPlayer then
+            -- The most specific truth first: their own tree said no.
+            if Externals.Skilled(member, spell and spell.spellID)
+                == false then
+                return string.format("%s has not skilled it", member.name)
+            end
+            if wanted and member.spec and member.spec ~= wanted then
+                local specName = Externals.SpecNameFor(wanted)
+                if specName then
+                    local class = member.class:sub(1, 1)
+                        .. member.class:sub(2):lower()
+                    return string.format(
+                        "it needs a %s %s - %s's spec cannot cast it",
+                        specName, class, member.name)
+                end
+            end
+        end
+    end
+    return "nobody in the group can cast it"
 end
 
 -- WHO IS IN THE GROUP lives in Init.lua now: the taunt announce needs the
@@ -693,7 +758,7 @@ function Externals.Ask(spellID)
             if value ~= "WHISPER" then others = true end
         end
         if not others then
-            return false, "nobody in the group can cast it"
+            return false, Externals.NobodyLine(spell, Externals.Roster())
         end
     end
 

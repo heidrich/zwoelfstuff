@@ -4,6 +4,7 @@
   "workspace.library": [],
   "diagnostics.globals": [
     "__FAKE_SPECS",
+    "__FIRE",
     "__INSPECT_BUILD",
     "__INSPECT_GEAR",
     "__UNSEEN",

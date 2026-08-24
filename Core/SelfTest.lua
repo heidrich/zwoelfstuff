@@ -5503,6 +5503,84 @@ local function TestExternals()
         return target ~= nil and target.name == "Schatten"
     end)())
 
+    -- THE REFUSAL NAMES ITS GATE. Since 4.89 inspects everybody, specs are
+    -- read and the spec gate bites where it used to fail open - and
+    -- "nobody can cast it" beside a readable paladin reads as a bug.
+    Check("A refusal names the spec gate it closed on", (function()
+        local pain = X.Get(33206)
+        local wanted = X.SpecID(pain)
+        if not wanted then return true end
+        local line = X.NobodyLine(pain, {
+            { name = "Schatten", class = "PRIEST", role = "DAMAGER",
+              spec = wanted + 1 },
+        })
+        return line ~= "nobody in the group can cast it"
+            and line:find("Schatten", 1, true) ~= nil
+    end)())
+    Check("...stays plain when the class is missing entirely",
+        X.NobodyLine(X.Get(33206),
+            { { name = "Baum", class = "DRUID", role = "HEALER" } })
+            == "nobody in the group can cast it")
+    Check("...and never blames a spec it has not read",
+        X.NobodyLine(X.Get(33206),
+            { { name = "Priester", class = "PRIEST", role = "HEALER" } })
+            == "nobody in the group can cast it")
+
+    -- THE TALENT GATE: certain only when their own tree convicts them.
+    -- (Owner's paladin had the wrong talent skilled, and the panel kept
+    -- offering them - "wir muessen das nur richtig erkennen".)
+    do
+        local Gear = ns.Gear
+        local guid = UnitGUID("party2")
+        Gear.Forget(guid)
+        __INSPECT_GEAR.party2 = { ilvl = 300 }
+        __INSPECT_BUILD = {
+            [1] = { posX = 100, posY = 100, currentRank = 1, maxRanks = 1,
+                    entryIDs = { 11 } },
+            -- Offered and NOT taken - and it is a real external's id.
+            [2] = { posX = 200, posY = 100, currentRank = 0, maxRanks = 1,
+                    entryIDs = { 6940 } },
+        }
+        Gear.Harvest("party2", guid)
+        local member = { name = "Wonda", class = "PALADIN", unit = "party2" }
+
+        Check("A chosen talent is known to be castable",
+            X.Skilled(member, 100011) == true)
+        Check("...an offered, untaken one is known NOT to be",
+            X.Skilled(member, 6940) == false)
+        Check("...and a spell their tree never offers is no claim",
+            X.Skilled(member, 424242) == nil)
+
+        local sac = X.Get(6940)
+        Check("A slot their talents cannot serve drops them",
+            sac ~= nil and #X.Candidates(sac, { member }) == 0)
+        Check("...and the refusal says who has not skilled it",
+            sac ~= nil and X.NobodyLine(sac, { member })
+                == "Wonda has not skilled it")
+        Check("...while a stranger to the tree stays a candidate", (function()
+            local other = { name = "Fremd", class = "PALADIN",
+                unit = "party3" }
+            return sac ~= nil and #X.Candidates(sac, { other }) == 1
+        end)())
+
+        __INSPECT_GEAR.party2 = nil
+        __INSPECT_BUILD = nil
+        Gear.Forget(guid)
+    end
+
+    -- The probe must not eat its own evidence: a blocked attempt survives
+    -- for the probe to print after the refusal line has already fired.
+    if __FIRE then
+        ns.Chat.Post("probe evidence", { { channel = "PARTY" } }, nil)
+        __FIRE("ADDON_ACTION_BLOCKED", "ZwoelfStuff")
+        Check("A blocked attempt stays readable for the probe",
+            ns.Chat.LastBlocked() ~= nil
+            and ns.Chat.LastBlocked().channel == "PARTY")
+    else
+        Skip("A blocked attempt stays readable for the probe",
+            "only the desk can fire a block")
+    end
+
     -- THE ROUND TRIP. The asker's panel holds the slot; the mage answers with
     -- his own spell; the ACK coming back has to land on the slot again, or
     -- the asker's cell never goes quiet.

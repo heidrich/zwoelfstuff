@@ -32,6 +32,8 @@ oldest versions move over.
   other's addon messages.
 - Clearing the group death log holds now — the last pull used to come
   straight back on its own.
+- An external a group-mate has not skilled is not asked of them — and a
+  refusal names who and why.
 
 ## [4.88.1] - 2026-08-22
 
