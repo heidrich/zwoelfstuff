@@ -10,6 +10,25 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.89.0] - 2026-08-23
+
+### Added
+
+- **The raid check reads players without the addon** — buffs where the game
+  allows it, gear over the inspect, durability over the channel MRT and
+  BigWigs use. Grey means not read — never a no.
+- **Enchants column** — how many enchants are missing.
+- **A magnifier beside every name** opens a player card: every worn item
+  with its level, missing enchants marked, the spec and a talent string
+  ready to copy.
+
+### Fixed
+
+- An answer that said nothing about food or flask was drawn as a red cross.
+  Not read shows the waiting mark now, per column.
+- Two players with the same name on different realms no longer swallow each
+  other's addon messages.
+
 ## [4.88.1] - 2026-08-22
 
 ### Changed

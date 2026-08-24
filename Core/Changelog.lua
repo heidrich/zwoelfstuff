@@ -31,6 +31,40 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.89.0",
+        date = "2026-08-23",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Spyglass_03",
+                text = "|cffffd100The raid check reads players without the "
+                    .. "addon.|r Buffs are read where the game allows it, "
+                    .. "gear comes over the inspect, durability over the "
+                    .. "channel MRT and BigWigs use. Grey means not read - "
+                    .. "never a no.",
+            },
+            {
+                text = "New |cffffd100Enchants|r column: how many are "
+                    .. "missing.",
+            },
+            {
+                text = "|cffffd100A magnifier beside every name|r opens a "
+                    .. "player card: every worn item with its level, missing "
+                    .. "enchants marked, the spec and a talent string ready "
+                    .. "to copy.",
+            },
+            {
+                text = "Fixed: an answer that said nothing about food or "
+                    .. "flask was drawn as a red cross. Not read shows the "
+                    .. "waiting mark now, per column.",
+            },
+            {
+                text = "Fixed: two players with the same name on different "
+                    .. "realms no longer swallow each other's addon "
+                    .. "messages.",
+            },
+        },
+    },
+    {
         version = "4.88.1",
         date = "2026-08-22",
         lines = {

@@ -152,6 +152,7 @@ end
 local known = {}     -- guid -> specID
 local tried = {}     -- guid -> when we last asked
 local pending = {}   -- guid -> unit token, the queue
+local wantGear = {}  -- guid -> true while the gear harvester needs an answer
 local lastAsk = 0
 local ticker
 
@@ -261,6 +262,15 @@ function Specs.OnLearned(fn)
     if type(fn) == "function" then listeners[#listeners + 1] = fn end
 end
 
+-- THE OTHER THING AN INSPECT ANSWER CARRIES. Core/Gear.lua registers here
+-- and reads items and talents out of the same answer - one wire, one queue,
+-- one set of manners, two readers.
+local answeredHooks = {}
+
+function Specs.OnAnswered(fn)
+    if type(fn) == "function" then answeredHooks[#answeredHooks + 1] = fn end
+end
+
 local function Store(guid, id)
     if type(guid) == "string" and type(id) == "number" and id > 0 then
         local news = known[guid] ~= id
@@ -316,8 +326,10 @@ function Specs.Sweep()
         if not (UnitExists and UnitExists(unit) and UnitGUID
             and UnitGUID(unit) == guid) then
             pending[guid] = nil
-        elseif Specs.Absorb(unit) then
-            -- Already cached from somebody else's inspect. Free.
+        elseif not wantGear[guid] and Specs.Absorb(unit) then
+            -- Already cached from somebody else's inspect. Free. NOT taken
+            -- for a gear want: this shortcut never asks the server, and the
+            -- harvester needs a real INSPECT_READY to read links from.
         elseif Specs.MayAsk(now, lastAsk, tried[guid]) then
             if can and ask and can(unit) then
                 tried[guid] = now
@@ -367,6 +379,24 @@ function Specs.Want(unit)
     if UnitIsUnit and ns.Truth(UnitIsUnit(unit, "player"), false) then return end
     local guid = UnitGUID and UnitGUID(unit)
     if not guid or known[guid] then return end
+    pending[guid] = unit
+    StartTicker()
+end
+
+-- Queue somebody whose SPEC may already be known: the gear harvester needs
+-- a fresh answer even then. Same queue, same throttle, same yield to the
+-- player's own inspect window - a second queue would be a second place to
+-- get b9ty's bug back.
+function Specs.WantGear(unit)
+    if not unit then return end
+    if UnitIsUnit and ns.Truth(UnitIsUnit(unit, "player"), false) then return end
+    local guid = UnitGUID and UnitGUID(unit)
+    if not ns.CanCompute(guid) then return end
+    -- A deliberate want is a fresh question: the thirty-second failure
+    -- cooldown belongs to the OLD attempt, and a refresh button that
+    -- silently waits half a minute reads as a button that does nothing.
+    tried[guid] = nil
+    wantGear[guid] = true
     pending[guid] = unit
     StartTicker()
 end
@@ -428,6 +458,7 @@ function Specs.Forget(guid)
         wipe(known)
         wipe(tried)
         wipe(pending)
+        wipe(wantGear)
     end
 end
 
@@ -447,7 +478,24 @@ watcher:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 -- of b9ty's bug lives in here. Says which of the three things it did.
 function Specs.Answered(guid)
     local unit = pending[guid]
-    if unit then Specs.Absorb(unit) end
+    if unit then
+        Specs.Absorb(unit)
+
+        -- The harvesters, while the answer is still on the wire - after the
+        -- clear below there is nothing left to read.
+        for _, fn in ipairs(answeredHooks) do
+            local ok, err = pcall(fn, guid, unit)
+            if not ok then geterrorhandler()(err) end
+        end
+
+        -- A gear want is done the moment its answer was harvested. Absorb
+        -- dequeues a SPEC want by storing; a gear want has to be dequeued
+        -- here or the sweep would re-ask about a person it already read.
+        if wantGear[guid] then
+            wantGear[guid] = nil
+            pending[guid] = nil
+        end
+    end
 
     -- CLEARING IS HANDING THE CHANNEL BACK, so only whoever took it may do
     -- it. `unit` is nil for every answer we never asked for - the player's
@@ -474,6 +522,7 @@ watcher:SetScript("OnEvent", function(_, event, arg1)
         -- Not a wipe: people who are still here have not changed anything.
         -- Only the queue, because its unit tokens have just been reshuffled.
         wipe(pending)
+        wipe(wantGear)
         if ns.Roster then ns.Roster() end
     end
 end)

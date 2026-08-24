@@ -162,6 +162,28 @@ function Comm.DecodeCheck(message)
     return { what = Comm.CHECK, fields = fields }
 end
 
+-- NAME-REALM, always - the one spelling every store keys by. The channel
+-- hands over "Name-Realm" for some senders and "Name" for others, the
+-- roster does the same, and two spellings of one person is how an answer
+-- lands in the wrong row. Own realm appended when none is named; a client
+-- that cannot name its realm leaves the name as it came, on BOTH sides of
+-- every lookup, which keeps the keys consistent if not pretty.
+function Comm.FullName(name)
+    if type(name) ~= "string" or name == "" then return nil end
+
+    local person, realm = name:match("^([^%-]+)%-(.+)$")
+    if not person then
+        person = name
+        realm = GetNormalizedRealmName and GetNormalizedRealmName() or nil
+    end
+    if type(realm) ~= "string" or realm == "" then return person end
+
+    -- The realm is written the WIRE's way: the channel says
+    -- "TwistingNether" where GetUnitName says "Twisting Nether" - one
+    -- spelling, or the same person owns two rows again.
+    return person .. "-" .. realm:gsub("[%s'%-]", "")
+end
+
 ---------------------------------------------------------------------------
 -- The wire
 --
@@ -326,10 +348,13 @@ function Comm.OnMessage(prefix, message, _, sender)
 
     -- YOUR OWN MESSAGE COMES BACK TO YOU. Every group channel echoes, and
     -- without this the person asking would light up their own answer bar and
-    -- be told they can save themselves.
-    local me = UnitName("player")
+    -- be told they can save themselves. The FULL name decides what is an
+    -- echo: a group-mate on another realm may legitimately carry this
+    -- character's short name, and dropping their messages would silently
+    -- lose every answer they ever send.
+    local me = Comm.FullName(UnitName("player"))
+    if me and Comm.FullName(sender) == me then return end
     local short = sender:match("^([^%-]+)") or sender
-    if me and (sender == me or short == me) then return end
 
     -- TWO WIRE FORMS, TRIED IN AGE ORDER. The spell form is the one nearly
     -- every message on this channel is; the raid check's is deliberately

@@ -3,7 +3,7 @@
 ## Notes: Your own cooldown bars, built on Blizzard's Cooldown Manager. Pick the spells, arrange the grid, style each bar.
 ## Notes-deDE: Eigene Cooldown-Leisten auf Basis des Blizzard-Cooldown-Managers. Spells waehlen, Raster anordnen, jede Leiste einzeln gestalten.
 ## Author: Zwölf - EU Destromath
-## Version: 4.88.1
+## Version: 4.89.0
 ## SavedVariables: ZwoelfStuffDB
 ## AddonCompartmentFunc: ZwoelfStuff_OnAddonCompartmentClick
 ## IconTexture: Interface\AddOns\ZwoelfStuff\Media\logo
@@ -88,6 +88,10 @@ Core\Chat.lua
 # message before any addon code sees it, and a channel that depends on which
 # features somebody switched on works for one of you and not the other.
 Core\Comm.lua
+# Durability over the shared LibDurability wire - the channel MRT and
+# BigWigs embed, spoken rather than embedded (the copy on this machine
+# names no licence). Below Comm, whose channel rule it reuses at call time.
+Core\Durability.lua
 
 Core\Media.lua
 # The bar textures this addon ships, registered into the SHARED registry -
@@ -187,6 +191,9 @@ Core\Taunts.lua
 # know" until the server says otherwise, and every caller is written to treat
 # that as "show it anyway".
 Core\Specs.lua
+# What everybody is wearing, read off the same inspect answers Specs asks
+# for - it registers with Specs at load, so it sits directly below it.
+Core\Gear.lua
 # The cooldowns somebody ELSE presses on you. Below Reminders because it is
 # the same kind of thing - a panel with its own placement - and it needs
 # nothing from anybody: class and the roster are all it reads.
@@ -241,6 +248,10 @@ Core\Widgets.lua
 # RaidBar reads ns.ICON_TEXTURE while it loads (one of its buttons opens a
 # window of ours and wears our own mark), so it is below Init as well.
 Core\RaidBar.lua
+# The card the raid check's magnifier opens: gear, enchants and talents of
+# one person. Below Widgets like every window, above RaidCheck, which puts
+# the magnifier in its rows.
+Core\PlayerCard.lua
 Core\RaidCheck.lua
 Core\EditMode.lua
 # Setting a key is its own mode on the screen, next to Edit Mode and for the

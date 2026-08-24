@@ -7745,7 +7745,238 @@ local function TestRaidCheck()
     Check("Every group buff has a column of its own",
         buffColumns == #RaidCheck.BUFFS)
     Check("The window is as wide as its columns", RaidCheck.Width() > 400)
-    Check("The first column is the name", RaidCheck.COLUMNS[1].key == "name")
+    Check("The first column is the magnifier - the door to the card",
+        RaidCheck.COLUMNS[1].kind == "look")
+    Check("...and the name follows it", RaidCheck.COLUMNS[2].key == "name")
+    local enchantCols = 0
+    for _, column in ipairs(RaidCheck.COLUMNS) do
+        if column.key == "vz" then enchantCols = enchantCols + 1 end
+    end
+    Check("One enchant column", enchantCols == 1)
+
+    ---------------------------------------------------------------------
+    -- WHAT 4.89 ADDED: four sources per row, three states per FIELD. The
+    -- rules are driven with hand-made data; the chain from the inspect
+    -- queue to the card has its own suite below.
+    ---------------------------------------------------------------------
+    local fed = RaidCheck.Classify(
+        { [1236763] = true, [21562] = true }, { [136000] = true })
+    Check("A fed, flasked, shouted player classifies as exactly that",
+        fed ~= nil and fed.fo == 1 and fed.fl == 1 and fed.ru == 0
+        and RaidCheck.HasBuff(fed.bf, RaidCheck.BUFFS[1]))
+    local bare = RaidCheck.Classify({}, {})
+    Check("...an empty aura list is zeros, not nil",
+        bare ~= nil and bare.fo == 0 and bare.fl == 0 and bare.bf == 0)
+    Check("...and a withholding client is nil, not zeros",
+        RaidCheck.Classify(nil, nil) == nil)
+
+    local vzColumn, foColumn, bitColumn
+    for _, column in ipairs(RaidCheck.COLUMNS) do
+        if column.key == "vz" then vzColumn = column end
+        if column.key == "fo" then foColumn = column end
+        if column.kind == "bit" then bitColumn = bitColumn or column end
+    end
+    Check("No facts at all is unknown everywhere",
+        RaidCheck.CellState(nil, foColumn) == "unknown"
+        and RaidCheck.CellState(nil, bitColumn) == "unknown")
+    Check("A durability without a flask answer leaves the flask unknown",
+        RaidCheck.CellState({ du = 80 }, foColumn) == "unknown")
+    Check("Zero missing enchants is a yes",
+        RaidCheck.CellState({ vz = 0 }, vzColumn) == "yes")
+    Check("...two missing are a no",
+        RaidCheck.CellState({ vz = 2 }, vzColumn) == "no")
+    Check("A mask with the bit clear is a no, no mask at all unknown",
+        RaidCheck.CellState({ bf = 0 }, bitColumn) == "no"
+        and RaidCheck.CellState({}, bitColumn) == "unknown")
+
+    Check("A short name gains this realm",
+        ns.Comm.FullName("Zwoelf") == "Zwoelf-Destromath")
+    Check("...a full one keeps its own",
+        ns.Comm.FullName("Akui-Gilneas") == "Akui-Gilneas")
+    Check("...and a display realm collapses to the wire's spelling",
+        ns.Comm.FullName("Nia-Twisting Nether") == "Nia-TwistingNether"
+        and ns.Comm.FullName("Nia-Kel'Thuzad") == "Nia-KelThuzad")
+
+    do
+        local keptAnswers = {}
+        for key, value in pairs(RaidCheck.answers) do
+            keptAnswers[key] = value
+        end
+        RaidCheck.Forget()
+
+        __UNIT_AURAS.party1 = {
+            { spellId = 1236763, icon = 132000 },   -- their flask, only
+        }
+        local member = { unit = "party1", name = "Akui",
+            fullName = "Akui", class = "PRIEST" }
+
+        __UNSEEN = { party1 = true }
+        Check("Somebody out of sight is not read into crosses",
+            RaidCheck.ReadUnit("party1") == nil)
+        __UNSEEN = nil
+
+        local read, readSaid = RaidCheck.FactsFor(member)
+        Check("A row with no answer is filled by reading them",
+            read ~= nil and read.fl == 1 and read.fo == 0)
+        Check("...and reading them does not count as answering",
+            readSaid == false)
+
+        RaidCheck.answers[ns.Comm.FullName("Akui")] = { il = 630, fl = 0 }
+        local merged, said = RaidCheck.FactsFor(member)
+        Check("What their client said beats what was read here",
+            merged ~= nil and merged.fl == 0 and merged.il == 630
+            and said == true)
+        Check("...and what it left unsaid is still read",
+            merged.fo == 0 and merged.bf ~= nil)
+
+        __UNIT_AURAS.party1 = nil
+        RaidCheck.Forget()
+        for key, value in pairs(keptAnswers) do
+            RaidCheck.answers[key] = value
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- Gear, the card and the shared durability wire - what 4.89 reads about
+-- people who never installed anything.
+---------------------------------------------------------------------------
+local function TestGear()
+    local Gear = ns.Gear
+    local RaidCheck = ns.RaidCheck
+
+    -- The link rule, alone.
+    local dressed = Gear.LinkFacts(
+        "|cffa335ee|Hitem:210001:7449:213743::::::80|h[Hood]|h|r")
+    Check("An enchanted, gemmed link reads as both",
+        dressed ~= nil and dressed.enchanted == true and dressed.gems == 1
+        and dressed.item == 210001)
+    local naked = Gear.LinkFacts("|cffa335ee|Hitem:210002:::::::80|h[Band]|h|r")
+    Check("...a bare one as neither",
+        naked ~= nil and naked.enchanted == false and naked.gems == 0)
+    Check("...and rubbish as nothing",
+        Gear.LinkFacts("hello") == nil and Gear.LinkFacts(nil) == nil)
+
+    -- The missing count follows the season's slots.
+    Check("Only the slots that take an enchant are counted",
+        Gear.MissingEnchants({
+            [1]  = { enchanted = false },   -- head: due, missing
+            [5]  = { enchanted = true },    -- chest: due, done
+            [15] = { enchanted = false },   -- back: not due this season
+        }) == 1)
+
+    -- The off hand is judged by the item in it, not by a spec list.
+    Check("An off-hand weapon wants an enchant",
+        Gear.OffhandWantsEnchant("|Hitem:19019::|h[Thunderfury]|h") == true)
+    Check("...an off-hand that is no weapon does not",
+        Gear.OffhandWantsEnchant("|Hitem:6948::|h[Hearthstone]|h") == false)
+    Check("...and the count follows that judgement",
+        Gear.MissingEnchants({
+            [17] = { enchanted = false, link = "|Hitem:19019::|h[T]|h" },
+        }) == 1 and Gear.MissingEnchants({
+            [17] = { enchanted = false, link = "|Hitem:6948::|h[H]|h" },
+        }) == 0)
+
+    ---------------------------------------------------------------------
+    -- THE CHAIN, END TO END: want -> answer -> harvest -> the card. The
+    -- inspect queue's manners have their own tests; this drives the seam
+    -- 4.89 added to it, through the real wiring and not a copy of it.
+    ---------------------------------------------------------------------
+    local guid = UnitGUID("party2")
+    Gear.Forget(guid)
+    __INSPECT_GEAR.party2 = nil
+
+    local card
+    if ns.PlayerCard then
+        local opened = ns.PlayerCard.Show({ unit = "party2", name = "Akui",
+            class = "PRIEST" })
+        card = ns.PlayerCard.Frame()
+        Check("The magnifier's card opens",
+            opened == true and card ~= nil and card:IsShown() == true)
+        Check("...and says it is reading while nothing has arrived",
+            card.state:IsShown() == true)
+    end
+
+    __INSPECT_GEAR.party2 = {
+        ilvl = 641,
+        loadout = "CQEAAAAAAAAAAAAAAAAAAAAAA",
+        links = {
+            [1]  = "|cffa335ee|Hitem:210001:7449:213743::::::80|h[Hood]|h|r",
+            [11] = "|cffa335ee|Hitem:210002:::::::80|h[Band]|h|r",
+            [16] = "|cffa335ee|Hitem:210003:::::::80|h[Blade]|h|r",
+        },
+    }
+    __ITEM_LEVELS[210001] = 636
+
+    ns.Specs.WantGear("party2")
+    local word = ns.Specs.Answered(guid)
+    local data = Gear.Of(guid)
+    Check("An answered gear want is harvested and the channel handed back",
+        word == "cleared" and data ~= nil)
+    Check("...the level is the server's", data ~= nil and data.ilvl == 641)
+    Check("...the missing enchants are counted",
+        data ~= nil and data.vz == 2)
+    Check("...a slot knows its own level",
+        data ~= nil and data.slots[1] ~= nil and data.slots[1].ilvl == 636)
+    Check("...and the talent string came along",
+        data ~= nil and data.loadout ~= nil and #data.loadout > 10)
+    Check("...asked again, the answer is not ours",
+        ns.Specs.Answered(guid) == "not ours")
+
+    if card then
+        Check("The landed answer fills the open card",
+            card.state:IsShown() == false)
+        Check("...with the level on it", card.level:GetText() == "641")
+        ns.PlayerCard.Hide()
+    end
+
+    __INSPECT_GEAR.party2 = nil
+    __ITEM_LEVELS[210001] = nil
+    Gear.Forget(guid)
+
+    -- A BLIND SECOND PASS MUST NOT EAT THE FIRST: by the time the 1.3s
+    -- look runs, the inspect snapshot is usually released and every read
+    -- answers nothing.
+    __INSPECT_GEAR.party2 = { ilvl = 641, links = {
+        [1] = "|cffa335ee|Hitem:210001:7449:213743::::::80|h[Hood]|h|r",
+    } }
+    Gear.Harvest("party2", guid)
+    __INSPECT_GEAR.party2 = nil
+    Gear.Harvest("party2", guid, true)
+    Check("A blind second pass keeps the first pass's slots",
+        Gear.Of(guid) ~= nil and Gear.Of(guid).slots[1] ~= nil)
+    Gear.Forget(guid)
+
+    ---------------------------------------------------------------------
+    -- The shared durability wire.
+    ---------------------------------------------------------------------
+    local D = ns.Durability
+    local percent = D.Read()
+    Check("The wire's number is the whole kit, not the worst slot",
+        type(percent) == "number" and percent > RaidCheck.Durability())
+    Check("The real library is not loaded out here",
+        D.RealLibLoaded() == false)
+    Check("An answer is heard and keyed with its realm",
+        D.OnMessage("LibDRBLT", "93,2", "RAID", "Akui") == "heard"
+        and D.Of(ns.Comm.FullName("Akui")) ~= nil
+        and D.Of(ns.Comm.FullName("Akui")).percent == 93)
+    Check("...your own echo is not",
+        D.OnMessage("LibDRBLT", "93,2", "PARTY", "Zwoelf") == "mine")
+    Check("...a same-named player from another realm is not you",
+        D.OnMessage("LibDRBLT", "88,0", "RAID", "Zwoelf-Gilneas")
+            == "heard")
+    Check("...rubbish is not",
+        D.OnMessage("LibDRBLT", "93,2,7", "RAID", "Akui") == nil
+        and D.OnMessage("OtherPrefix", "93,2", "RAID", "Akui") == nil)
+    Check("...a whisper from outside the room is not",
+        D.OnMessage("LibDRBLT", "93,2", "WHISPER", "Akui") == nil)
+    Check("...an impossible percent is a lie, not a number",
+        D.OnMessage("LibDRBLT", "999,0", "RAID", "Akui") == nil)
+    Check("...and a request is recognised",
+        D.OnMessage("LibDRBLT", "R", "RAID", "Akui") == "request")
+    D.Forget()
+    Check("Forgetting empties the store",
+        D.Of(ns.Comm.FullName("Akui")) == nil)
 end
 
 ---------------------------------------------------------------------------
@@ -12225,6 +12456,7 @@ function Test:Run()
         { "Language",      TestLocale },
         { "Raid bar",      TestRaidBar },
         { "Raid check",    TestRaidCheck },
+        { "Gear",          TestGear },
         { "Invites",       TestInvites },
         { "CD request",    TestExternals },
         { "Spell identity", TestSpellIdentity },

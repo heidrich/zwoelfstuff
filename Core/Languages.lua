@@ -211,8 +211,13 @@ Register("enUS", {
     ["No answer"] = true,
     ["Waiting for answers"] = true,
     ["Nobody has answered yet."] = true,
-    ["Only players running this addon can answer."] = true,
+    ["Grey marks are not read yet, not a no."] = true,
     ["%d of %d answered"] = true,
+    ["Enchants"] = true,
+    ["Talents"] = true,
+    ["Refresh"] = true,
+    ["Reading. If nothing arrives, they are out of range."] = true,
+    ["Click the string, then Ctrl-C. The talent window imports it."] = true,
 
     ---------------------------------------------------------------------
     -- Invites
@@ -716,9 +721,16 @@ Register("deDE", {
     ["No answer"] = "Keine Antwort",
     ["Waiting for answers"] = "Warte auf Antworten",
     ["Nobody has answered yet."] = "Noch hat niemand geantwortet.",
-    ["Only players running this addon can answer."] =
-        "Antworten können nur Spieler, die dieses Addon benutzen.",
+    ["Grey marks are not read yet, not a no."] =
+        "Graue Zeichen sind nicht gelesen - kein Nein.",
     ["%d of %d answered"] = "%d von %d haben geantwortet",
+    ["Enchants"] = "Verzauberungen",
+    ["Talents"] = "Talente",
+    ["Refresh"] = "Aktualisieren",
+    ["Reading. If nothing arrives, they are out of range."] =
+        "Wird gelesen. Kommt nichts an, sind sie außer Reichweite.",
+    ["Click the string, then Ctrl-C. The talent window imports it."] =
+        "Text anklicken, dann Strg-C. Das Talentfenster importiert ihn.",
 
     ["Invite"] = "Einladen",
     ["Keywords"] = "Schlüsselwörter",
@@ -1191,9 +1203,11 @@ Register("frFR", {
     ["No answer"] = "Pas de réponse",
     ["Waiting for answers"] = "En attente de réponses",
     ["Nobody has answered yet."] = "Personne n'a encore répondu.",
-    ["Only players running this addon can answer."] =
-        "Seuls les joueurs qui utilisent cet addon peuvent répondre.",
+    ["Grey marks are not read yet, not a no."] =
+        "Les marques grises ne sont pas lues - pas un non.",
     ["%d of %d answered"] = "%d sur %d ont répondu",
+    ["Enchants"] = "Enchantements",
+    ["Refresh"] = "Actualiser",
 
     ["Invite"] = "Inviter",
     ["Keywords"] = "Mots-clés",
@@ -1356,9 +1370,11 @@ Register("esES", {
     ["No answer"] = "Sin respuesta",
     ["Waiting for answers"] = "Esperando respuestas",
     ["Nobody has answered yet."] = "Nadie ha respondido todavía.",
-    ["Only players running this addon can answer."] =
-        "Solo pueden responder los jugadores con este addon.",
+    ["Grey marks are not read yet, not a no."] =
+        "Las marcas grises no están leídas todavía - no son un no.",
     ["%d of %d answered"] = "%d de %d han respondido",
+    ["Enchants"] = "Encantamientos",
+    ["Refresh"] = "Actualizar",
 
     ["Invite"] = "Invitar",
     ["Keywords"] = "Palabras clave",
