@@ -5,13 +5,13 @@
 -- spec die klassen sind, wenn ich einen priester in der gruppe habe, werden
 -- fuer beide heiler specs die icons angezeigt."
 --
--- He is right, and the first answer this session gave him - that a group
--- mate's spec is not readable - was WRONG. It is readable, every damage
+-- The owner is right, and the first answer this session gave them - that a
+-- group mate's spec is not readable - was WRONG. It is readable, every damage
 -- meter and every raid frame does it, and the reason no synchronous call
 -- exists is that the answer travels over the wire: you ASK the server for a
 -- player's inspect data and it arrives later, as an event.
 --
---     CanInspect(unit)               may I, and is he close enough
+--     CanInspect(unit)               may I, and are they close enough
 --     NotifyInspect(unit)            ask the server
 --     INSPECT_READY(guid)            it answered, for THIS guid
 --     GetInspectSpecialization(unit) now the number is there
@@ -171,10 +171,10 @@ end
 -- ClearInspectPlayer throws away the answer sitting in it, so either call,
 -- made while the player has that window open, takes the window's data out
 -- from under it. The two-second ticker below turned that into a coin flip:
--- land between his click and the window's read and the slots come back
+-- land between their click and the window's read and the slots come back
 -- empty. Nothing in here was ever worth that - the spec cache is a
--- convenience, his inspect window is what he actually asked for, and when
--- the two want the same wire he wins.
+-- convenience, the inspect window is what the player actually asked for, and
+-- when the two want the same wire the player wins.
 --
 -- TWO SIGNALS, because neither one covers it alone:
 --
@@ -224,8 +224,8 @@ end
 -- whose other side is a clock.
 function Specs.ForgetUserAsk() userAskedAt = nil end
 
--- The player never travels over the wire. His own spec is a plain call and
--- it is always available, which also makes him the one member of the group
+-- The player never travels over the wire. Their own spec is a plain call and
+-- it is always available, which also makes them the one member of the group
 -- the panel can filter correctly from the first second of a fight.
 function Specs.Own()
     local which = Reach("GetSpecialization")
@@ -309,7 +309,7 @@ function Specs.Sweep()
     -- BLIZZARD'S WINDOW OWNS THE CHANNEL WHILE IT IS OPEN. The queue is left
     -- exactly as it is - the ticker keeps running and simply asks again once
     -- the player closes it, so the only cost is that spec learning pauses
-    -- while he is looking at somebody.
+    -- while they are looking at somebody.
     --
     -- `next(pending)` is part of the CONDITION rather than of the guard so an
     -- empty queue still falls through to the cancel at the bottom. Otherwise
@@ -322,7 +322,7 @@ function Specs.Sweep()
     local now = Now()
 
     for guid, unit in pairs(pending) do
-        -- He may have left, or the token may now be somebody else entirely.
+        -- They may have left, or the token may now be somebody else entirely.
         if not (UnitExists and UnitExists(unit) and UnitGUID
             and UnitGUID(unit) == guid) then
             pending[guid] = nil
@@ -338,7 +338,7 @@ function Specs.Sweep()
                 return "asked"
             end
             -- Out of range or not inspectable. Not an error and not worth a
-            -- message: it resolves itself when he walks over.
+            -- message: it resolves itself when they walk over.
             tried[guid] = now
             return "waiting"
         end
@@ -372,7 +372,7 @@ function Specs.Of(unit)
     return guid and known[guid] or nil
 end
 
--- Put him in the queue if we do not know yet. Called from the roster walk,
+-- Put them in the queue if we do not know yet. Called from the roster walk,
 -- so every list of who is here is also the list of who is worth asking about.
 function Specs.Want(unit)
     if not unit then return nil end

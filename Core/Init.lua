@@ -129,7 +129,7 @@ end
 
 -- WHAT THE ADDON WRITES ON THE SCREEN IS SET IN EXPRESSWAY. Not the options
 -- window - that is "die addon font" and stays the narrow grotesk Media.lua
--- argues for. This is the other side of his sentence: the names, the numbers
+-- argues for. This is the other side of their sentence: the names, the numbers
 -- and the counters out on the bars.
 --
 -- A NAME RATHER THAN A PATH, because it goes through LibSharedMedia and has
@@ -143,10 +143,10 @@ ns.SCREEN_FONT = "Expressway"
 -- by picking a colour.
 ns.SCREEN_OUTLINE = "OUTLINE"
 
--- THE FLOOR UNDER EVERY WORKED-OUT SIZE. His "minimum 10 pixel".
+-- THE FLOOR UNDER EVERY WORKED-OUT SIZE. Their "minimum 10 pixel".
 --
 -- The automatic size STAYS - it is what keeps a 22px bar and a 64px icon
--- looking like one design, and it is not the "automatic" he asked me to take
+-- looking like one design, and it is not the "automatic" they asked me to take
 -- out. What went out is the automatic FACE: a default that read "whatever
 -- font your other addons happen to have installed" is not a default, and two
 -- players comparing screenshots of one version saw different type.
@@ -274,7 +274,7 @@ function ns.ApplyHouseLook(profile, force)
 
             elseif key == "outline" then
                 -- ONLY AN EMPTY ONE, AND IN BOTH MODES. "" is no outline at
-                -- all, which is the state his spell name shipped in and the
+                -- all, which is the state their spell name shipped in and the
                 -- reason it was the one element that disappeared over a
                 -- bright floor. A THICKOUTLINE somewhere else is a choice
                 -- with a reason - the reminder text is read across the whole
@@ -328,7 +328,7 @@ end
 
 -- THE TROUGH STEP ON ITS OWN, because it has its own migration. It was added
 -- to the walk above one commit AFTER the walk had already run and stamped
--- the owner's profile dbVersion 8 - so his panel kept its 0.12 trough while
+-- the owner's profile dbVersion 8 - so their panel kept its 0.12 trough while
 -- the desk swore the migration was complete. A step added under a version
 -- number that has already been consumed runs for nobody who was there
 -- first; Profiles.Trough gives it a number of its own (10). Returns how many
@@ -692,11 +692,11 @@ ns.DEFAULTS = {
         -- draws over the middle of the screen by default.
         -- THE OWNER'S OWN PANEL IS THE DEFAULT. Owner, 2026-08-16: "bitte
         -- mein aktuelles co tank frame setup so als default einbauen" - read
-        -- off his saved profile that evening, not typed from memory: your
+        -- off their saved profile that evening, not typed from memory: your
         -- own row in the stack, only inside an instance, rows of 30 with air
         -- between them growing UP from below the middle of the screen, the
         -- flat texture, a white name, big debuffs, a centred combat mark.
-        -- Every value below that is not commented is his.
+        -- Every value below that is not commented is theirs.
         enabled     = false,      -- still off until asked for - see above
         testMode    = false,
         includeSelf = true,
@@ -1097,7 +1097,7 @@ end
 ---------------------------------------------------------------------------
 -- SETTINGS THAT BELONG TO THE SPECIALISATION
 --
--- Owner: "nach specs settings sind wichtig in wow", and he is right about
+-- Owner: "nach specs settings sind wichtig in wow", and they are right about
 -- which ones. A protection warrior and a fury warrior share a character and
 -- share almost nothing else: not the defensives they watch, not the
 -- cooldowns they ask other people for, not what they want reminding about.
@@ -1195,7 +1195,7 @@ end
 -- DO YOU ACTUALLY HAVE IT
 --
 -- A class list is not a spellbook. Pain Suppression is on the priest list and
--- a holy priest cannot cast it; putting a cell for it on his answer bar is a
+-- a holy priest cannot cast it; putting a cell for it on their answer bar is a
 -- button that does nothing when pressed and gives no reason - which is the
 -- worst thing a button can do and the thing this whole wave is about.
 --
@@ -1233,7 +1233,7 @@ end
 -- HOW LONG A SPELL LASTS, off its own tooltip
 --
 -- The owner, looking at a replay where two defensives drew as marks: "viele
--- def cds haben FESTE zeiten, die auch so in den tooltips stehen". He is
+-- def cds haben FESTE zeiten, die auch so in den tooltips stehen". They are
 -- right, and this is not the rule against guessing - it is the opposite of
 -- it. The client writes the number in the description itself; reading it is
 -- asking, exactly like asking for the name or the icon.
@@ -1404,8 +1404,8 @@ end
 --
 -- The floor is applied HERE rather than at eleven call sites. Every one of
 -- them worked its size out from a cell height, and the smallest of them asked
--- for eight - his "minimum 10 pixel" is a property of the face on screen, not
--- of each thing that happens to use it.
+-- for eight - their "minimum 10 pixel" is a property of the face on screen,
+-- not of each thing that happens to use it.
 function ns.StyleFont(fontString, size, flags)
     size = math.max(ns.FONT_FLOOR, tonumber(size) or ns.FONT_FLOOR)
     flags = flags or ns.SCREEN_OUTLINE

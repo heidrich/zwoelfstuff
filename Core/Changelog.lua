@@ -37,8 +37,8 @@ ns.CHANGELOG = {
             {
                 icon = "Interface\\Icons\\INV_Misc_Map_01",
                 text = "|cffffd100The talents beside the card are the whole "
-                    .. "tree now.|r What he took is lit, what he passed over "
-                    .. "is dimmed, and the lines show the path he walked.",
+                    .. "tree now.|r What the player took is lit, the rest is "
+                    .. "dimmed, and the lines show the path.",
             },
             {
                 text = "Fixed: a spell nobody in the group can cast no "
@@ -606,7 +606,7 @@ ns.CHANGELOG = {
         lines = {
             "|cffffd100The lines between settings are gone.|r Each setting and its explanation sit on a ground of their own instead, two shades taking turns. Nothing to look at, and the grouping reads without being pointed out.",
             "|cffffd100The window takes the font you already have.|r If any of your other addons ships |cffffd100Expressway|r it is used by default now - the settings page has been offering it for months while the window was quietly drawn in Arial Narrow. Pick any other under |cffffd100Settings|r.",
-            "|cffffd100About says what this addon is|r, in the author's own words, and spells his name properly.",
+            "|cffffd100About says what this addon is|r, in the author's own words, and spells their name properly.",
         },
     },
     {
@@ -625,7 +625,7 @@ ns.CHANGELOG = {
         date = "2026-08-10",
         lines = {
             "|cffffd100You can ask for lust, and for a battle res|r - |cffffd100one slot each|r, not one per class. |cffffd100Lust|r asks whoever in the group has one: Bloodlust, Heroism, Time Warp, Primal Rage or Fury of the Aspects. |cffffd100Bres|r covers Rebirth, Raise Ally, Intercession and Soulstone.",
-            "|cffffd100On the answering side you get your own.|r A mage's cell is Time Warp, a warlock's is Soulstone, and a shaman gets whichever lust his faction gave him - one press on the other side lights the right cell on everybody's bar.",
+            "|cffffd100On the answering side you get your own.|r A mage's cell is Time Warp, a warlock's is Soulstone, and a shaman gets whichever lust their faction gave them - one press on the other side lights the right cell on everybody's bar.",
             "|cffffd100The co-tanks page matches the other two.|r The preview and the two buttons that act on it stay at the top while the settings scroll - they used to be at the very bottom - and the settings stand in two columns instead of one per line.",
         },
     },
@@ -684,7 +684,7 @@ ns.CHANGELOG = {
         version = "4.66.1",
         date = "2026-08-10",
         lines = {
-            "|cffffd100A taunt cell taunts what that tank is fighting|r, not what you happen to be looking at - which in a pull with adds is a different creature and a wasted taunt. If his target cannot be taunted, yours is used, so there is no press that does nothing.",
+            "|cffffd100A taunt cell taunts what that tank is fighting|r, not what you happen to be looking at - which in a pull with adds is a different creature and a wasted taunt. If their target cannot be taunted, yours is used, so there is no press that does nothing.",
             "|cffffd100Keys for the external cooldown slots|r - the first eight places, under |cffffd100ZwoelfStuff|r in the game's own Key Bindings. The key shows in the corner of the slot. Answer cells now go up to eight as well.",
             "|cffffd100A quick menu on the answer bar.|r Move the mouse over the bar and a small button appears: who you answer, set right there instead of in the settings window.",
             "|cffffd100Tank stuff|r is now called |cffffd100M+ and raid stuff|r.",
@@ -984,7 +984,7 @@ ns.CHANGELOG = {
         date = "2026-08-09",
         lines = {
             "THE REPLAY HAS THREE LANES NOW. |cffffd100Damage on you|r above the axis, |cffffd100what you pressed|r below it, and |cffffd100healing on you|r under that - with the amount, the spell's icon and |cffffd100the name of whoever cast it|r, in their class colour. Healing used to be a green column in among the red ones; \"was anybody healing me\" is its own question and now it has its own row.",
-            "The killer's portrait sits in the corner of the replay, and the hover says what HE did to you: how many hits, the total, the biggest, and which of his abilities landed.",
+            "The killer's portrait sits in the corner of the replay, and the hover says what the killer did to you: how many hits, the total, the biggest, and which of its abilities landed.",
             "The health bar says |cffffd100Your health|r over it. It is the only bar in the window and it was being read as the mob's.",
             "Speed is a slider from a quarter to triple, and the death window's size is a slider too - both were buttons walking a fixed list, and dragging to the one you want beats clicking past three you do not.",
             "The death window's buttons drew straight through the replay standing in front of it. Two windows in one layer: whichever you click comes forward now.",

@@ -14,9 +14,8 @@ oldest versions move over.
 
 ### Changed
 
-- **The talents beside the player card are the whole tree now** — what he
-  took is lit, what he passed over is dimmed, and the lines show the path he
-  walked.
+- **The talents beside the player card are the whole tree now** — what the
+  player took is lit, the rest is dimmed, and the lines show the path.
 
 ### Fixed
 
@@ -462,7 +461,7 @@ oldest versions move over.
   from the evening's copy of the same pull.
 - **The co-tank trough had missed the standard look.** The step that moves
   the empty part of the bar to #1a1a1a opaque joined the migration one commit
-  after the migration had already run on the author's profile, so his panel
+  after the migration had already run on the author's profile, so their panel
   kept the old 12% trough while the desk reported the move complete. It runs
   now, once, and only for a trough still wearing the old value.
 - **The Edit Mode tools are back.** The grid and its step, snap-to-grid, how
@@ -1088,7 +1087,7 @@ oldest versions move over.
   client that has none of them Arial Narrow is used exactly as before. Any font
   your addons register can be picked under **Settings**.
 - **About says what this addon is** — the same words the README opens with,
-  from its author — and spells his name properly.
+  from its author — and spells their name properly.
 
 ## [4.72.0] - 2026-08-10
 
@@ -1135,8 +1134,8 @@ oldest versions move over.
   same: it is somebody else's cooldown, and asking out loud mid-pull is the
   part that does not happen.
 - **On the answering side each class gets its own.** A mage's cell is Time
-  Warp, a warlock's is Soulstone, and a shaman gets whichever lust his
-  faction gave him. One press on the asker's side lights the right cell on
+  Warp, a warlock's is Soulstone, and a shaman gets whichever lust their
+  faction gave them. One press on the asker's side lights the right cell on
   everybody's.
 
 ### Changed

@@ -125,11 +125,11 @@ function MinimapButton:Create()
         -- It used to toggle the co-tank panel, which was parked at the time -
         -- so the branch was guarded, ns.CoTanks was nil, and right click
         -- quietly did the same thing as left click. (The module came back with
-        -- the co-tank wave and is in the TOC; this is history, not a gate.) Moving the bars is the thing you
-        -- come to this button for that is not "open the window", and edit mode
-        -- is two clicks deep otherwise. Co-tanks needs another home when it
-        -- comes back; the minimap has two buttons and this is the better use
-        -- of the second one.
+        -- the co-tank wave and is in the TOC; this is history, not a gate.)
+        -- Moving the bars is the thing you come to this button for that is not
+        -- "open the window", and edit mode is two clicks deep otherwise.
+        -- Co-tanks needs another home when it comes back; the minimap has two
+        -- buttons and this is the better use of the second one.
         if mouseButton == "RightButton" then
             -- The window would sit on top of what you are about to drag, and
             -- the rail entry that does this closes it for the same reason.

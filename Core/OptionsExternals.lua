@@ -72,7 +72,7 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- What you have picked
     --
-    -- IN THE STICKY BAND, at his word: "vorschau sticky machen! sprich
+    -- IN THE STICKY BAND, at their word: "vorschau sticky machen! sprich
     -- content darunter scrollt." It is the thing you are editing, and the
     -- forty rows under it are the settings for it - watching your own slots
     -- while you change what they look like is the whole point of a preview.
@@ -225,7 +225,7 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- Assignment
     --
-    -- DIRECTLY UNDER THE SLOTS, at his word - and it belongs there: these
+    -- DIRECTLY UNDER THE SLOTS, at their word - and it belongs there: these
     -- rows and the slots above them are the same decision seen twice, "which
     -- spells do I want and who gives me each one". Everything below is what
     -- the panel LOOKS like, which is a different afternoon.
@@ -322,7 +322,7 @@ function Page:BuildPage(page, width)
     -- res have to sound different, and where they happen to sit says
     -- nothing about that.
     --
-    -- His words: "bei den requests auch je nach spell nicht slot."
+    -- The owner's words: "bei den requests auch je nach spell nicht slot."
     --
     -- ONE ROW PER SPELL THERE IS, the same shape as "Who to ask" above and
     -- for the same reason - a spell lives in exactly one slot, so a row per
@@ -659,7 +659,7 @@ function Page:BuildSide(sideHost, pad)
 
     -- THIS LIST DOES NOT CARE WHO IS IN THE GROUP. Owner: "man sollte auch
     -- ohne das die klassen in der gruppe sind sich sein set zusammenstellen
-    -- koennen" - and he is right. You build a set once, on a quiet evening,
+    -- koennen" - and they are right. You build a set once, on a quiet evening,
     -- for the dungeons you run all week; a list that greys out everything
     -- because you are standing alone in Dornogal is a list that can only be
     -- used at the exact moment you have no time for it.

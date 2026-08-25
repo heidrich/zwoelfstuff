@@ -97,7 +97,7 @@ local CLOSE_ROOM = CLOSE_W + 10
 -- all. A dashboard that invents its own numbers is worse than one with four.
 -- MEMORY IS A READING LIKE THE OTHERS, and it is here because the owner had
 -- to ask: "warum ist unser addon im spiel 13 mb gross". Nothing in the window
--- could answer him, so the answer took a desktop measurement. It is one call
+-- could answer them, so the answer took a desktop measurement. It is one call
 -- and it belongs on the page whose whole job is what this addon is doing to
 -- your client.
 --
@@ -351,10 +351,10 @@ local function BuildAboutHead(parent, width, intro)
     return head
 end
 
--- WHY THIS ADDON EXISTS, IN HIS OWN WORDS, and the same words the README
--- opens with. Owner: "der text sollte auch ins about!" - and he is right that
--- it belongs here rather than only on a page nobody reads from inside the
--- game.
+-- WHY THIS ADDON EXISTS, IN THE AUTHOR'S OWN WORDS, and the same words the
+-- README opens with. Owner: "der text sollte auch ins about!" - and they are
+-- right that it belongs here rather than only on a page nobody reads from
+-- inside the game.
 --
 -- One paragraph up top rather than nine lines: the block beside the mark is
 -- what somebody reads, and everything colder than that has its own heading
@@ -684,11 +684,11 @@ local PAGES = {
     -- paragraph belonging to whichever row you point at - and the owner threw
     -- it out on sight: "die settings seite braucht keine rechte leiste."
     --
-    -- He is right, and the reason is that this page is the one where the
-    -- paragraphs are SHORT. A panel 400 wide standing empty until you hover
-    -- something, to hold two lines that fit under the row perfectly well, is
-    -- 400 pixels spent on a hover state. The notes are drawn on the page now,
-    -- which is what every other page without a third column does.
+    -- The owner is right, and the reason is that this page is the one where
+    -- the paragraphs are SHORT. A panel 400 wide standing empty until you
+    -- hover something, to hold two lines that fit under the row perfectly
+    -- well, is 400 pixels spent on a hover state. The notes are drawn on the
+    -- page now, which is what every other page without a third column does.
     { key = "settings", title = "Settings", glyph = "sliders",
       subtitle = "Every bar, this window, and the ways in.",
       build = function(page, width) return ns.OptionsSettings:BuildPage(page, width) end },
@@ -1903,7 +1903,7 @@ function Options:Create()
     --
     -- Cooldowns on the very first open - owner, 2026-08-15: "bitte cooldowns
     -- als standard open fenster einstellen wenn das erste mal geoeffnet wird
-    -- ansonsten bitte last modul merken" - and after that wherever he was.
+    -- ansonsten bitte last modul merken" - and after that wherever they were.
     --
     -- FALLS BACK TWICE, and both fallbacks matter: a remembered page whose
     -- MODULE has since been switched off is a page the rail no longer shows,

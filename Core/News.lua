@@ -101,7 +101,7 @@ end
 -- WHAT KIND OF CHANGE A LINE IS
 --
 -- Owner, on the first screenshot of the window: "unterteil das mal schoen mit
--- boxen zu features und bug fixes und neuen zeug." He is right - eleven
+-- boxen zu features und bug fixes und neuen zeug." The owner is right - eleven
 -- paragraphs in one column all weigh the same, and the two things somebody
 -- actually looks for are "what is new" and "what did they fix".
 --
@@ -162,7 +162,7 @@ end
 -- Owner, on the second screenshot: "was ich gut finden wuerde: GELB als
 -- Ueberschrift, darunter der text."
 --
--- He is describing what the changelog already IS and the window was not
+-- They are describing what the changelog already IS and the window was not
 -- drawing. Every line in that file opens with a yellow clause naming the
 -- change and then explains it - "New: the group's deaths, as a log." and
 -- then five sentences about it. Run together on one line the two read as one

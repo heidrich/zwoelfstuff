@@ -444,9 +444,9 @@ end
 -- A PANEL'S MOVER HAS A COG AND A PADLOCK, the same two a bar's mover has.
 --
 -- Owner, 2026-08-09, with a screenshot of the externals mover: "hier fehlt
--- noch das zahnrad fuer einstellungen und das lock item!" - and he is right,
--- because the two kinds of mover are one idea and having half the controls on
--- one of them is a thing to discover rather than to learn.
+-- noch das zahnrad fuer einstellungen und das lock item!" - and they are
+-- right, because the two kinds of mover are one idea and having half the
+-- controls on one of them is a thing to discover rather than to learn.
 --
 -- Built ONCE for both panels. `spec` is what they disagree about and nothing
 -- else:
@@ -848,8 +848,8 @@ local function CreateReminderMover(entry, index)
     -- THE SAME COG AND PADLOCK EVERY OTHER MOVER HAS.
     --
     -- Owner, with a screenshot of exactly this box: "mein reminder hat kein
-    -- zahnrad oder lock". He said the same sentence on 2026-08-09 about the
-    -- externals mover, and the answer then went into the PANEL builder -
+    -- zahnrad oder lock". The owner said the same sentence on 2026-08-09 about
+    -- the externals mover, and the answer then went into the PANEL builder -
     -- which this is not. See AttachTools.
     --
     -- A reminder is one of TWELVE, so `pinned` and "switch off" mean this
@@ -1355,12 +1355,12 @@ end
 -- day the rest was finished: "im edit mode fehlen die tools, wie grid
 -- groessen anpassen, snapping und und. das ist irgendwie mit rausgeflogen."
 --
--- He is right on both counts. The bar half belonged to the bars and stays
--- gone; the SCREEN half - the grid and its step, snap-to-grid, how far a
+-- The owner is right on both counts. The bar half belonged to the bars and
+-- stays gone; the SCREEN half - the grid and its step, snap-to-grid, how far a
 -- snap catches, the dim, the coordinates - is about placing PANELS, which is
 -- what Edit Mode still does all day. Its five settings kept their defaults,
--- their reader and their store the whole time; what fell out was the one
--- link in the chain a user can see, the control.
+-- their reader and their store the whole time; what fell out was the one link
+-- in the chain a user can see, the control.
 --
 -- EVERY WRITE IS A NAMED SETTER ON EditMode, not a closure in a row: the
 -- desk cannot press a toggle, but it can call SetGridStep(24) and read the

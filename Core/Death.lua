@@ -1,7 +1,7 @@
 ﻿---------------------------------------------------------------------------
 -- Death.lua - what killed you, and what could have prevented it
 --
--- The owner's ask, in his words: when you die, a window with a quick
+-- The owner's ask, word for word: when you die, a window with a quick
 -- analysis - what came in, with numbers; which defensives were AVAILABLE;
 -- whether a healthstone or a potion was sitting in the bags; and a way to
 -- share the short version in chat.
@@ -37,8 +37,8 @@ local UI -- ns.UI, taken late: Widgets loads after this file
 Death.log = {}
 Death.snapshot = nil
 
--- Ten by default, the owner's number, and his to change: some evenings are
--- worth keeping and some keys are worth forgetting. The bounds are ours -
+-- Ten by default, the owner's number, and the owner's to change: some evenings
+-- are worth keeping and some keys are worth forgetting. The bounds are ours -
 -- below three there is nothing to page through, and above fifty the saved
 -- variables grow for a list nobody reads to the end of.
 local DEATHS_KEPT = 10
@@ -790,7 +790,7 @@ end
 -- CONSUMABLES ARE DEFENSIVES
 --
 -- The owner: "wir brauchen zudem noch neben spells consumables wie traenke
--- oder healthstones, das sind auch def cds". He is right, and it is the
+-- oder healthstones, das sind auch def cds". The owner is right, and it is the
 -- same verdict either way: a potion that stayed in the bag and a defensive
 -- that stayed off cooldown are one sentence, not two.
 --
@@ -2707,7 +2707,7 @@ local function BuildWindow()
 
     -- The size, on the window rather than in a settings page: the moment
     -- you want this smaller is the moment it is in front of you. A slider
-    -- rather than a button walking six steps - the owner asked, and he is
+    -- rather than a button walking six steps - the owner asked, and they are
     -- right that dragging to a size beats clicking past four of them.
     local scaleRow = UI.Row(frame, "Size", { controlWidth = 110 })
     scaleRow:SetPoint("LEFT", replay, "RIGHT", 12, 0)
@@ -2798,8 +2798,8 @@ end
 --
 -- Owner, 2026-08-14: "mach statt die 3d model die 2d avatare head shots da
 -- rein! bei allen 3 fenstern ... dann werden die groesser und man kann das
--- besser erkennen." He is right about the reason. A whole body drawn into
--- twenty-two pixels is a dark smudge, and every smudge looks like every
+-- besser erkennen." The owner is right about the reason. A whole body drawn
+-- into twenty-two pixels is a dark smudge, and every smudge looks like every
 -- other one - which defeats the entire point of putting a face beside a name.
 --
 -- TWO DOORS, because the recap does not hand over what the 2D call wants.
@@ -2977,9 +2977,9 @@ end
 ---------------------------------------------------------------------------
 -- THE ENEMY TIP - one big tooltip, everywhere a mob's face is drawn
 --
--- His ask: "wenn ich mit der maus über den gegner fahre, bitte größeres
--- tooltip mit größerem bild und fähigkeiten etc. das bitte überall in allen
--- fenstern wo gegner bilder zu sehen sind."
+-- The owner's ask: "wenn ich mit der maus über den gegner fahre, bitte
+-- größeres tooltip mit größerem bild und fähigkeiten etc. das bitte überall in
+-- allen fenstern wo gegner bilder zu sehen sind."
 --
 -- WHAT IS HONESTLY IN IT, and the limit was measured months ago rather than
 -- assumed now: there is NO client call that lists an arbitrary NPC's
@@ -3280,8 +3280,8 @@ function Death:Show(index)
     frame.head:ClearAllPoints()
     frame.head:SetPoint("TOPLEFT", frame, "TOPLEFT", MAIN_X, -(top + 17))
     if #events > 0 then
-        -- His words for the legend (2026-08-16): "grey your health, red
-        -- damage income" - two colours, two nouns, and the total.
+        -- The owner's words for the legend (2026-08-16): "grey your health,
+        -- red damage income" - two colours, two nouns, and the total.
         frame.tableNote:SetText(maxHP
             and string.format("Oldest first - |cff8d97a6grey|r your health, "
                 .. "|cffc45c5cred|r the damage taken - out of %s.",
@@ -3394,7 +3394,7 @@ function Death:Clear()
 end
 
 ---------------------------------------------------------------------------
--- The icon on the screen - the owner's ask in his words: "ein kleines
+-- The icon on the screen - the owner's ask, word for word: "ein kleines
 -- death icon auf dem screen, das wir jederzeit frei bewegen oder locken
 -- können. beim klick öffnet sich das dann."
 --

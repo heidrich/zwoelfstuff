@@ -1,7 +1,7 @@
 ---------------------------------------------------------------------------
 -- Sounds - the noise four moments make, chosen per SPELL.
 --
--- HIS WORDS, AND THE ASYMMETRY IN THEM: "bei requests, reminder und cmd,
+-- THE OWNER'S WORDS, AND THE ASYMMETRY IN THEM: "bei requests, reminder und cmd,
 -- sounds einstellen koennen. bei den requests auch je nach spell nicht slot
 -- und beim cmd auch."
 --
@@ -118,11 +118,11 @@ end
 ---------------------------------------------------------------------------
 -- WHICH PACKS ARE OFFERED AT ALL
 --
--- Owner, the first time he opened the picker: "die exwind sounds muessen
--- alle raus oder geblockt werden vom addon, das sind 1000." Counted on his
+-- Owner, the first time they opened the picker: "die exwind sounds muessen
+-- alle raus oder geblockt werden vom addon, das sind 1000." Counted on their
 -- machine: one pack registers 188 entries, the pack beside it another 188,
 -- a third 19. Opening the whole shared registry was right - those are the
--- sounds he already has and already knows - but handing him four hundred
+-- sounds they already have and already knows - but handing them four hundred
 -- undifferentiated rows is not a picker, it is a haystack.
 --
 -- SO A WHOLE PACK CAN BE SWITCHED OFF, by the addon folder it came from,

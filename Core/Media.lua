@@ -135,7 +135,7 @@ end
 -- that is right: a missing bar texture and a plain white one look like the
 -- same kind of thing. A missing FACE does not. FRIZQT is a serif at a
 -- different weight and a different width, so one player without Expressway
--- was not getting "the design with one font substituted", he was getting a
+-- was not getting "the design with one font substituted", they were getting a
 -- different design - and every size, every offset and every band width in
 -- this addon is measured against a narrow grotesk.
 --
@@ -193,8 +193,8 @@ end
 -- A registry is only useful while it can be read. One sound pack on this
 -- machine registers 188 entries, the pack beside it another 188, and the
 -- owner's words on opening the picker were "die exwind sounds muessen alle
--- raus oder geblockt werden, das sind 1000". He is right: a list nobody can
--- scroll to the end of is the same as no list.
+-- raus oder geblockt werden, das sind 1000". The owner is right: a list nobody
+-- can scroll to the end of is the same as no list.
 --
 -- BY THE FOLDER, NOT BY THE NAME. Those 188 all happen to share a bracketed
 -- prefix, and matching on it would work today and break the moment somebody

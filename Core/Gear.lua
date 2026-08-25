@@ -3,7 +3,7 @@
 --
 -- Owner, 2026-08-23, about MRT: it "kann beim gruppen check die item level,
 -- vz, gear, food alles abfragen ohne das die addons alle haben muessen" -
--- and for gear he is right. An inspect never needed an addon on the other
+-- and for gear they are right. An inspect never needed an addon on the other
 -- side: the server answers it for ANY group member, and the answer carries
 -- the item links, the item level and the talents. Read from MRT/Inspect.lua
 -- on this machine, which is maintained against the live game.
@@ -368,7 +368,7 @@ local function ReadBuild(configID)
             -- EVERYTHING THE TREE OFFERS, chosen or not, both hero trees
             -- included. "Offered and not taken" is the one certain "cannot
             -- cast it" an inspect can give (owner, 2026-08-24: "wir
-            -- muessen das nur richtig erkennen" - his paladin had the
+            -- muessen das nur richtig erkennen" - the owner's paladin had
             -- wrong talent). A spell a tree never offers stays unjudged.
             if C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo
                 and type(node.entryIDs) == "table" then
@@ -570,7 +570,7 @@ function Gear.Harvest(unit, guid, secondPass)
 end
 
 ---------------------------------------------------------------------------
--- WANTING. The player is read on the spot - his own links never need the
+-- WANTING. The player is read on the spot - their own links never need the
 -- server. Everybody else goes through the Specs queue, which owns the
 -- inspect channel and its manners.
 ---------------------------------------------------------------------------

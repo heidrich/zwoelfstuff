@@ -74,17 +74,17 @@ end
 -- WHICH PLACE THE STYLE ROWS ARE WRITING TO, or nil for the whole bar
 --
 -- Owner, with the page open: "wo sehe ich denn, wenn ich einzelne bars oder
--- icons style? ich sehe da keinen indikator." He could not see it because
+-- icons style? ich sehe da keinen indikator." They could not see it because
 -- there was nothing to see - the rows only ever wrote to the bar, while the
--- RENDERER has always taken a place's own answer first. Out of his own file:
+-- RENDERER has always taken a place's own answer first. Out of their own file:
 --
 --     Buff Bar              fillColor = RED
 --       place 1             fillColor = GREEN
 --       place 2             fillColor = MAGENTA
 --
--- He set the red and two places ignored him in silence.
+-- They set the red and two places ignored them in silence.
 --
--- THE SELECTION IS THE ONE HE ALREADY MAKES. Clicking a place on the card has
+-- THE SELECTION IS THE ONE THE PLAYER ALREADY MAKES. Clicking a place on the card has
 -- selected it for the spell picker since the page was written; this is the
 -- same click meaning the same thing - "the place I am working on" - rather
 -- than a second selection somewhere else with its own rules.
@@ -96,15 +96,16 @@ end
 -- THE SELECTION IS THE SWITCH, and there is no second control for it.
 --
 -- The first version put a "Changing: whole bar / this place" dropdown at the
--- top of the style tabs. He saw it beside a card whose stripe and whose first
--- place were BOTH lit and said the real problem out loud: "jetzt wird immer
--- beides angewählt und man weiss nicht was man editiert."
+-- top of the style tabs. The owner saw it beside a card whose stripe and whose
+-- first place were BOTH lit and said the real problem out loud: "jetzt wird
+-- immer beides angewählt und man weiss nicht was man editiert."
 --
--- His answer, and it is better than the dropdown: *"wenn ich auf den parent
--- frame klicke wird links der frame als ganzes markiert und dann stellst du
--- alles ein. wenn ich auf eine leiste oder icon klicke dann da. dann ist das
--- auch sauber visuell getrennt."* One gesture, one mark, nothing to keep in
--- step - a switch that can disagree with the highlight is a switch that will.
+-- The owner's answer, and it is better than the dropdown: *"wenn ich auf den
+-- parent frame klicke wird links der frame als ganzes markiert und dann
+-- stellst du alles ein. wenn ich auf eine leiste oder icon klicke dann da.
+-- dann ist das auch sauber visuell getrennt."* One gesture, one mark, nothing
+-- to keep in step - a switch that can disagree with the highlight is a switch
+-- that will.
 --
 -- Nil when nothing is picked, when the pick is off the end of a bar that has
 -- since been narrowed, or when the place is EMPTY: styling is filed under the
@@ -136,7 +137,7 @@ end
 -- muessen immer 100% den ist status spiegeln, also so wie sie wirklich
 -- aussehen."
 --
--- THE MIDDLE GROUND IS: his column of live cards on the left, the tabbed
+-- THE MIDDLE GROUND IS: their column of live cards on the left, the tabbed
 -- settings on the right. One bar per card, each drawing ITSELF rather than the
 -- one that happens to be selected - so the page answers "what do my bars look
 -- like" without clicking anything, which is what the old page was better at.
@@ -164,7 +165,7 @@ end
 -- need - 400 here, 392 for the settings.
 --
 -- 400 is not a taste: the preview is SCALED to the card, and 380 of usable
--- width is what draws his widest tracking bar at its real size instead of a
+-- width is what draws their widest tracking bar at its real size instead of a
 -- shrunk picture of it. A preview that does not agree with the screen is
 -- worse than none - that lesson cost a release on the raid bar.
 --
@@ -199,7 +200,7 @@ local function CardGeometry(bar)
     -- pixels of height, came out at 60, and then STAYED at 60 however far the
     -- width slider was dragged. Owner: "die bar breite veraendert sich nicht
     -- live, kann die bar nicht im addon stylen wenn ich nicht sehe was da
-    -- passiert." He is right, and it was not the slider.
+    -- passiert." The owner is right, and it was not the slider.
     --
     -- One scale, never two: the picture has to keep the bar's shape, so a
     -- preview that fitted the width and the height separately would show a
@@ -211,7 +212,7 @@ local function CardGeometry(bar)
     local roomH = PREVIEW_MAX_H - (rows - 1) * gap
 
     -- NEVER ENLARGED. A bar drawn bigger than it is would be the same lie as
-    -- one drawn smaller, and the size he types is the size on screen.
+    -- one drawn smaller, and the size they type is the size on screen.
     local scale = 1
     if wantedW > 0 then scale = math.min(scale, (roomW / columns) / wantedW) end
     if wantedH > 0 then scale = math.min(scale, (roomH / rows) / wantedH) end
@@ -442,9 +443,9 @@ local function BuildCards(host)
             -- THE MARK, and it is asked of the same reader the SCREEN asks.
             -- Store.Overridden knows both places a look can live - the per-
             -- spell table this page writes and 4.82.0's per-slot one - so a
-            -- place he styled two versions ago is marked exactly like one he
-            -- styled a minute ago. It has to be: those were the two places
-            -- whose colours he could not account for.
+            -- place they styled two versions ago is marked exactly like one
+            -- they styled a minute ago. It has to be: those were the two
+            -- places whose colours they could not account for.
             marked = function(index)
                 local store = Store()
                 return store and card.dkBar
@@ -559,16 +560,16 @@ local function BuildCards(host)
             --
             -- Owner, with a picture of a card whose stripe and whose first
             -- place were both lit: "jetzt wird immer beides angewählt und man
-            -- weiss nicht was man editiert." He is right, and his own answer
-            -- is the one built here: click the card and the card is marked,
-            -- click a place and the place is. Two marks that are never on
-            -- together, so there is nothing to read wrong.
+            -- weiss nicht was man editiert." The owner is right, and their own
+            -- answer is the one built here: click the card and the card is
+            -- marked, click a place and the place is. Two marks that are never
+            -- on together, so there is nothing to read wrong.
             --
             -- The stripe is not "which bar is current" any more. That question
             -- is still answered - the settings, the picker and the preview all
             -- follow Page.barID - it just no longer has a mark of its own,
             -- because a second highlight meaning something subtler is exactly
-            -- what he could not read.
+            -- what they could not read.
             card.mark:SetShown(Page.barID == bar.id and Page.Place() == nil)
 
             -- A CARD IS POOLED, so the one that was armed to delete bar three
@@ -727,8 +728,8 @@ local function BuildArrangement(grid)
     -- anybody meant to ask for; it is the default nobody changed.
     --
     -- The PLACES are left alone, so a bar of five icons becomes five stacked
-    -- bars rather than one - the count is what he set and only the width of a
-    -- line is being decided here.
+    -- bars rather than one - the count is what they set and only the width of
+    -- a line is being decided here.
     UI.Dropdown(grid:Row(L["Cells are"]), {
         { value = "icon", text = L["Icons"] },
         { value = "bar",  text = L["Bars"] },
@@ -750,7 +751,7 @@ local function BuildArrangement(grid)
     -- case the first was read as a layout note: "wir brauchen 2 klare
     -- einstellungen, spalten und reihen."
     --
-    -- He is right twice over. "Across" and "Down" are directions, and a
+    -- The owner is right twice over. "Across" and "Down" are directions, and a
     -- direction is not a count - somebody reading them cannot tell whether
     -- Down is a number of lines or which way the bar grows, which is a
     -- question the two rows further down actually answer. Columns and Rows
@@ -759,7 +760,7 @@ local function BuildArrangement(grid)
     -- EITHER OF THEM WRITES THE TOTAL: cellCount = columns x rows. That is
     -- what makes "one row" a thing you can ask for rather than a thing you
     -- arrive at by dividing. Places is still there underneath as the truth,
-    -- because the pair can only ever describe a RECTANGLE and one of his own
+    -- because the pair can only ever describe a RECTANGLE and one of their own
     -- bars is not one - see Model.lua's header, "the list is the truth and
     -- the columns are the view".
     -----------------------------------------------------------------------
@@ -911,9 +912,9 @@ local function BuildSize(grid)
         get = function() return Number("spacing", 4) end,
         set = function(value) Set("spacing", value) end,
     })
-    -- TWO GAPS, NOT ONE, and the second one is not decoration: two of his own
-    -- four bars carry a row gap different from their column gap, and on the
-    -- single-column one it is the only gap the bar has.
+    -- TWO GAPS, NOT ONE, and the second one is not decoration: two of their
+    -- own four bars carry a row gap different from their column gap, and on
+    -- the single-column one it is the only gap the bar has.
     UI.Slider(grid:Row(L["Gap down"]), {
         min = 0, max = 40, step = 1,
         get = function() return Number("lineSpacing", Number("spacing", 4)) end,
@@ -962,7 +963,7 @@ function Page:BuildPage(page, width)
     local L = ns.L
 
     ---------------------------------------------------------------------
-    -- THE PAGE, IN TWO HALVES. His own layout, twice asked for: "teile das
+    -- THE PAGE, IN TWO HALVES. Their own layout, twice asked for: "teile das
     -- fenster in der mitte, links untereinander alle bars, rechts alle
     -- einstellungen", and then "ich fand es vorher besser, wo ich alle bars
     -- als live view untereinander hatte."

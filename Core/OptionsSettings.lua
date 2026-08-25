@@ -71,7 +71,7 @@ function Page:BuildPage(page, width)
     -- Language
     --
     -- HERE AND NOWHERE ELSE. Owner, 2026-08-12: "Kein Modul, das ist fest in
-    -- den settings" - and he is right for a reason worth writing down: a
+    -- den settings" - and they are right for a reason worth writing down: a
     -- module is a feature you can want or not want, and nobody wants "no
     -- language". It is a property of the whole addon, like the window's scale
     -- two sections down.
@@ -306,11 +306,11 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     -- WHICH PACKS ARE IN THE LIST AT ALL
     --
-    -- Owner, the first time he opened the picker: "die exwind sounds
-    -- muessen alle raus oder geblockt werden, das sind 1000." Counted on
-    -- his machine: 188 from one pack, 188 from the pack beside it, 19 from
-    -- a third. Opening the shared registry was right - those are the sounds
-    -- he already has - but four hundred undifferentiated rows is a haystack.
+    -- Owner, the first time they opened the picker: "die exwind sounds muessen
+    -- alle raus oder geblockt werden, das sind 1000." Counted on their
+    -- machine: 188 from one pack, 188 from the pack beside it, 19 from a
+    -- third. Opening the shared registry was right - those are the sounds they
+    -- already have - but four hundred undifferentiated rows is a haystack.
     --
     -- BY THE ADDON, NOT BY THE NAME. The names in a pack happen to share a
     -- bracketed prefix, and matching on that would work today and break the

@@ -2,7 +2,7 @@
 -- Externals - the cooldowns SOMEBODY ELSE presses on you.
 --
 -- Owner, 2026-08-09: "das sind quasi cooldowns von extern die man auf tanks
--- wirken kann" - and what he wants from them is not a tracker: "wo alle cds
+-- wirken kann" - and what they want from them is not a tracker: "wo alle cds
 -- der klassen aufgelistet sind, da ziehe ich mir wieder welche in slots, die
 -- slots kann ich dann auf dem screen frei platzieren. beim klick auf einen
 -- spell wird der heiler / klasse angewispert."
@@ -45,7 +45,7 @@ ns.Externals = Externals
 -- healer:   true when only the healing specialisation has it. Used to pick
 --           WHO to ask in a five-man, where there is one healer and asking
 --           the retribution paladin for a Blessing of Sacrifice is asking
---           the wrong paladin - even though he does have it.
+--           the wrong paladin - even though they do have it.
 -- specIndex: which specialisation of that class, as an INDEX, plus the role
 --           that index has to have in specRole. Owner: "es wird nicht
 --           geprueft in welchen spec die klassen sind, wenn ich einen priester
@@ -151,10 +151,10 @@ Externals.SPELLS = {
     -- zumindest beim request. sonst muesste man alle reinziehen" - "sprich
     -- das waere ein Lust command und Bres".
     --
-    -- He is right, and the reason is what the panel IS: a slot is a QUESTION,
-    -- not a spell. "Who can lust" is one question with five spellings, and
-    -- dragging all five in to cover every group you might walk into is five
-    -- slots that can never be pressed at the same time.
+    -- The owner is right, and the reason is what the panel IS: a slot is a
+    -- QUESTION, not a spell. "Who can lust" is one question with five
+    -- spellings, and dragging all five in to cover every group you might walk
+    -- into is five slots that can never be pressed at the same time.
     --
     -- So `covers` holds the spellings, and the entry's own spellID is the one
     -- the slot is stored, keyed and drawn under. Everything that crosses
@@ -210,9 +210,9 @@ function Externals.Get(spellID) return byID[spellID] end
 --
 -- There WAS a second one, "the spell this class casts for that slot", and it
 -- was wrong in a way a test caught: a shaman has two spellings and which one
--- he owns is his faction's business, so a function that has to return exactly
--- one would light up nothing at all for half the shamans in the game. The
--- answer side does not need it either - it already knows which spells the
+-- they own is their faction's business, so a function that has to return
+-- exactly one would light up nothing at all for half the shamans in the game.
+-- The answer side does not need it either - it already knows which spells the
 -- player really has, and asks whether any of THEM belongs to this slot.
 ---------------------------------------------------------------------------
 local coveredBy = {}
@@ -507,8 +507,8 @@ end
 --
 -- Each member is { name = , class = , role = , isPlayer = }.
 --
--- THE PLAYER HIMSELF IS NEVER A CANDIDATE. He is the tank asking for help;
--- a paladin tank whispering himself for a Blessing of Sacrifice is the panel
+-- THE PLAYER IS NEVER A CANDIDATE. The player is the tank asking for help; a
+-- paladin tank whispering themselves for a Blessing of Sacrifice is the panel
 -- answering its own question.
 ---------------------------------------------------------------------------
 -- WHICH SPEC ID THIS SLOT WANTS, or nil for "any". Resolved through
@@ -525,7 +525,7 @@ end
 -- PURE, and the whole rule.
 --
 -- UNKNOWN MEANS YES. Somebody who has not been read yet - out of range, just
--- joined, an inspect the server has not answered - keeps his icon. The
+-- joined, an inspect the server has not answered - keeps their icon. The
 -- alternative is a panel that goes blank while you run into the room, and a
 -- tank who cannot ask for Pain Suppression because the priest was thirty
 -- yards away when the pull started has been failed by the feature.
@@ -533,12 +533,12 @@ end
 -- BUT THE ROLE IS NOT UNKNOWN. Owner, 2026-08-24: "mit tank monk in der
 -- gruppe, da wurde es angezeigt" - the Life Cocoon slot stood there with a
 -- brewmaster in the group. The spec rule was right and the desk proves it;
--- his spec had merely not been read yet, so the slot failed open for the
+-- their spec had merely not been read yet, so the slot failed open for the
 -- seconds an inspect takes - and to the person looking at it, an icon that
 -- asks the tank for a healer's spell is simply wrong.
 --
 -- Nothing had to be read. The game assigns the role and the group frames
--- draw it: he was queued as the TANK, and Life Cocoon needs a HEALER spec.
+-- draw it: they were queued as the TANK, and Life Cocoon needs a HEALER spec.
 -- A role that CONTRADICTS the wanted one is certain in the only direction
 -- that matters, so it may close the gate. Everything else still fails open:
 -- "NONE" outside an instance is not a role, a matching role decides nothing
@@ -549,7 +549,7 @@ local ROLES = { TANK = true, HEALER = true, DAMAGER = true }
 
 function Externals.SpecFits(member, wanted, wantedRole)
     -- A SPEC THAT WAS ACTUALLY READ IS THE WHOLE ANSWER, either way: it
-    -- outranks the role, so a healer queued as damage is put right by his
+    -- outranks the role, so a healer queued as damage is put right by their
     -- inspect rather than hidden for the pull.
     if member and member.spec then
         if not wanted then return true end
@@ -605,8 +605,9 @@ function Externals.SpecRestrictions()
     return out
 end
 
--- WHO A CLICK ASKS. Owner's rule, in his words: "in 5 mann dungeons werden
--- heiler der klasse angewispert. im raid sollte man das zuweisen koennen."
+-- WHO A CLICK ASKS. The owner's rule, word for word: "in 5 mann dungeons
+-- werden heiler der klasse angewispert. im raid sollte man das zuweisen
+-- koennen."
 --
 -- So: an assignment wins whenever one has been made, and the group size
 -- decides nothing about that - a name you typed in is a decision, and a
@@ -832,7 +833,7 @@ function Externals.Ask(spellID)
 
     -- THE SLOT'S NAME, NOT A SPELLING OF IT. For an ordinary spell those are
     -- the same word. For a grouped one they are not, and picking a spelling
-    -- would mean deciding which lust the shaman has - which is his faction's
+    -- would mean deciding which lust the shaman has - which is their faction's
     -- business and none of ours. "Lust bitte!" is what people type anyway,
     -- and it is never the wrong spell.
     -- THE SENTENCE READS THE SHORT NAME, THE WHISPER IS ADDRESSED TO THE FULL
@@ -908,9 +909,9 @@ end
 ---------------------------------------------------------------------------
 -- KEYS
 --
--- Owner, 2026-08-10: "dann brauchen wir die möglichkeit die external
--- cooldowns slots und answer slots mit keybinds belegen zu können" - "das
--- sollte standard sein, das haben fast alle addons". He is right, and asking
+-- Owner, 2026-08-10: "dann brauchen wir die möglichkeit die external cooldowns
+-- slots und answer slots mit keybinds belegen zu können" - "das sollte
+-- standard sein, das haben fast alle addons". The owner is right, and asking
 -- for a cooldown is exactly the thing you do not have a spare hand for.
 --
 -- NOT a CLICK binding, unlike the answer cells. Asking is a message, not a

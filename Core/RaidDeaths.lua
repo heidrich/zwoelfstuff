@@ -1,9 +1,10 @@
 ---------------------------------------------------------------------------
 -- RaidDeaths.lua - who else died, when, and to what
 --
--- His ask: a timeline of who died, when, and to what - "sollte man aus dem
--- dmg meter ablesen koennen." He was right, and Death.OwnRecapID had been
--- reading that very list for weeks and throwing away every row but his own.
+-- The owner's ask: a timeline of who died, when, and to what - "sollte man aus
+-- dem dmg meter ablesen koennen." The owner was right, and Death.OwnRecapID
+-- had been reading that very list for weeks and throwing away every row but
+-- their own.
 --
 -- WHAT THE CLIENT ACTUALLY HANDS OVER. Measured 2026-08-14 by `/zs death
 -- probe` after a wipe, not reasoned about. Every claim below is from that
@@ -100,7 +101,7 @@ function RaidDeaths.Row(src, seq, me)
     end
 
     -- -1 is the Overall session saying "there is no clock in here", which is
-    -- a different thing from "he died at second zero".
+    -- a different thing from "they died at second zero".
     local at = src.deathTimeSeconds
     if not (ns.CanCompute(at) and type(at) == "number" and at >= 0) then
         at = nil
@@ -267,7 +268,7 @@ function RaidDeaths.Avoidable(entries)
     return yes, no, unknown
 end
 
--- What did the killing, counted. This is the row of mobs and abilities he
+-- What did the killing, counted. This is the row of mobs and abilities they
 -- asked for along the top: which thing, with which ability, ended the most
 -- people. Ties break by name so two runs of the same fight print the same
 -- order.
@@ -348,10 +349,10 @@ end
 ---------------------------------------------------------------------------
 -- ONE DEATH'S RECAP, READ ONCE AND KEPT WHOLE
 --
--- His ask after the first live run: a death in the list should open the way
--- his own does - the last ten seconds of the person who fell. The recap says
--- all of it and always did; this file was keeping the last line and throwing
--- the story away.
+-- The owner's ask after the first live run: a death in the list should open
+-- the way their own does - the last ten seconds of the person who fell. The
+-- recap says all of it and always did; this file was keeping the last line and
+-- throwing the story away.
 --
 -- So the events are kept. Not because they might be useful later: BECAUSE
 -- THE RECAP IS GONE by the time anybody clicks the row. C_DeathRecap answers
@@ -495,11 +496,12 @@ end
 ---------------------------------------------------------------------------
 -- Keeping the fight, because the clock does not wait
 --
--- His first live run: "4 in this session, 27:39 long (no clock)" and `--:--`
--- on every line. Nothing was broken - he typed the command AFTER the pull,
--- and by then the Current session had been reset and only Overall was left,
--- which answers -1 for every death. The whole point of the feature is when
--- each person fell, and that number exists only while the fight is running.
+-- The owner's first live run: "4 in this session, 27:39 long (no clock)" and
+-- `--:--` on every line. Nothing was broken - they typed the command AFTER the
+-- pull, and by then the Current session had been reset and only Overall was
+-- left, which answers -1 for every death. The whole point of the feature is
+-- when each person fell, and that number exists only while the fight is
+-- running.
 --
 -- So it is captured while it is still there. This is the same lesson the
 -- own-death log learned about reloading, one step earlier: the data is not
@@ -616,7 +618,7 @@ end
 
 -- A DAY IS THE UNIT. Yesterday's wipes are not tonight's, and a tally that
 -- carries them over answers "third wipe tonight" with a number from a raid
--- two days ago. The client's own date, so it turns over when his does.
+-- two days ago. The client's own date, so it turns over when their does.
 function RaidDeaths.Today()
     local ok, today = pcall(date, "%Y-%m-%d")
     if ok and type(today) == "string" then return today end
@@ -856,8 +858,8 @@ function RaidDeaths.Capture()
 
     -- Every tick rather than at the end of the pull. Saved variables only
     -- reach the disk at logout, so this is not about crashes - it is about
-    -- the in-memory copy being CURRENT when he types /reload in the middle
-    -- of a fight, which is when he types it.
+    -- the in-memory copy being CURRENT when they type /reload in the middle
+    -- of a fight, which is when they type it.
     RaidDeaths.Save()
     return fight
 end
@@ -888,7 +890,7 @@ end
 --
 -- The same argument the own-death log made, and it is stronger here: a
 -- reload happens after every settings change and every error, and the side
--- list is a list of PULLS. One that empties itself every time he presses
+-- list is a list of PULLS. One that empties itself every time they press
 -- /reload is a list of one thing.
 --
 -- The two rules are Death's, and so are the two functions that enforce them:
@@ -1033,7 +1035,7 @@ end
 -- TWO STORES, because they are two different things. The log is a handful of
 -- pulls in full and is rewritten every two seconds during a fight; the tally
 -- is one thin line per pull for one day. Folding the second into the first
--- would have meant a migration of everything already on his disk to add a
+-- would have meant a migration of everything already on their disk to add a
 -- field, for no gain.
 local function Store()
     if not ns.account then return nil end
@@ -1076,7 +1078,7 @@ end
 -- THE PLACE, MENDED FROM THE OTHER COPY. Pulls saved before Persist
 -- carried the instance and its guide id have neither, while the evening's
 -- thin copy of the same pull - same key - has had both from the start.
--- Read back together, the full log takes them from there, so the pulls he
+-- Read back together, the full log takes them from there, so the pulls they
 -- already has get their tile too instead of only the pulls from now on.
 -- Pure; the log is changed in place and returned.
 function RaidDeaths.Mend(log, session)
@@ -1450,10 +1452,10 @@ local function BuildRow(parent)
     row:SetScript("OnEnter", function() Lit(true) end)
     row:SetScript("OnLeave", function() Lit(false) end)
 
-    -- THE MAGNIFIER, and it is the whole affordance. His ask: "damit man
-    -- sieht das es Details gibt." Shown ONLY on a row that can be opened,
-    -- so the column answers "which of these have a story" at a glance
-    -- instead of being a decoration in front of every line.
+    -- THE MAGNIFIER, and it is the whole affordance. The owner's ask: "damit
+    -- man sieht das es Details gibt." Shown ONLY on a row that can be opened,
+    -- so the column answers "which of these have a story" at a glance instead
+    -- of being a decoration in front of every line.
     row.glass = row:CreateTexture(nil, "ARTWORK")
     row.glass:SetSize(GLASS, GLASS)
     row.glass:SetPoint("LEFT", row, "LEFT", 1, 0)
@@ -1467,9 +1469,9 @@ local function BuildRow(parent)
     row.when:SetWidth(46)
     row.when:SetJustifyH("LEFT")
 
-    -- WHAT THEY WERE PLAYING, in front of their name. His ask, and it is the
-    -- one thing a name alone never says: "Grauertiger died" reads completely
-    -- differently depending on whether that was the tank.
+    -- WHAT THEY WERE PLAYING, in front of their name. The owner's ask, and it
+    -- is the one thing a name alone never says: "Grauertiger died" reads
+    -- completely differently depending on whether that was the tank.
     row.spec = row:CreateTexture(nil, "ARTWORK")
     row.spec:SetSize(SPEC, SPEC)
     row.spec:SetPoint("LEFT", row.when, "RIGHT", 2, 0)
@@ -1481,7 +1483,7 @@ local function BuildRow(parent)
     row.who:SetJustifyH("LEFT")
     row.who:SetWordWrap(false)
 
-    -- AND THE MOB IN FRONT OF ITS OWN NAME, which is where he moved it: a
+    -- AND THE MOB IN FRONT OF ITS OWN NAME, which is where they moved it: a
     -- face sitting in the WHEN column belonged to nothing on the line.
     row.face = ns.Death.CreateFace(row, FACE)
     row.face:SetPoint("LEFT", row.who, "RIGHT", 6, 0)
@@ -1543,7 +1545,7 @@ local function BuildRow(parent)
     row.killerHit:SetScript("OnLeave", HideEnemy)
     row.killerHit:SetScript("OnMouseUp", Open)
 
-    -- And the face itself, which is the thing he actually points at.
+    -- And the face itself, which is the thing they actually point at.
     row.face:EnableMouse(true)
     row.face:SetScript("OnEnter", ShowEnemy)
     row.face:SetScript("OnLeave", HideEnemy)
@@ -1737,10 +1739,10 @@ function RaidDeaths:Create()
     close:SetScript("OnClick", function() frame:Hide() end)
     frame.close = close
 
-    -- THE WAY OUT OF A ROW, in the window's header rather than inside the
-    -- page it leaves. His ask, and it is the right corner: this is a WINDOW
-    -- action - it changes which page the window shows - and it now sits
-    -- beside the other one, which closes the window entirely.
+    -- THE WAY OUT OF A ROW, in the window's header rather than inside the page
+    -- it leaves. The owner's ask, and it is the right corner: this is a WINDOW
+    -- action - it changes which page the window shows - and it now sits beside
+    -- the other one, which closes the window entirely.
     --
     -- Inside the page it also cost the first line its left edge: the head
     -- was hung off the BUTTON, and every line under the head off the head,
@@ -1901,7 +1903,7 @@ function RaidDeaths:Create()
     --
     -- It hung off the head with fourteen pixels of lift, which put its first
     -- row - a 34-pixel portrait centred on a 26-pixel button - straight
-    -- through the verdict sentence above it. That was visible in his
+    -- through the verdict sentence above it. That was visible in their
     -- screenshot as a face sitting in the middle of a line of text.
     --
     -- The place line is the one thing above this that belongs to BOTH pages:
@@ -1912,10 +1914,10 @@ function RaidDeaths:Create()
     detail:Hide()
     frame.detail = detail
 
-    -- WHOSE DEATH THIS IS, in a picture. His ask: the detail head should
-    -- carry their avatar and their spec icon again. A page about one person
-    -- that names them only in text makes you read the name to know who you
-    -- stepped into.
+    -- WHOSE DEATH THIS IS, in a picture. The owner's ask: the detail head
+    -- should carry their avatar and their spec icon again. A page about one
+    -- person that names them only in text makes you read the name to know who
+    -- you stepped into.
     --
     -- A person's portrait needs a UNIT, not an id - the client draws it for
     -- somebody it can still see - so a group mate who has left since is
@@ -1971,11 +1973,12 @@ function RaidDeaths:Create()
     -- out of the same function - one table in two windows.
     -- ANCHORED ON BOTH SIDES, not given a width and hoped for.
     --
-    -- His screenshot showed "Health left" drawn over the list of pulls. The
-    -- head was sized from an arithmetic - window minus side column minus two
-    -- pads minus a gutter - and an arithmetic that is out by anything at all
-    -- puts a right-aligned caption outside the window it belongs to. The
-    -- rectangle it has to fit is right there and can simply be pointed at.
+    -- The owner's screenshot showed "Health left" drawn over the list of
+    -- pulls. The head was sized from an arithmetic - window minus side column
+    -- minus two pads minus a gutter - and an arithmetic that is out by
+    -- anything at all puts a right-aligned caption outside the window it
+    -- belongs to. The rectangle it has to fit is right there and can simply be
+    -- pointed at.
     --
     -- The rows below get the same treatment, so the columns and their
     -- captions cannot come out of two different sums.
@@ -2163,7 +2166,7 @@ function RaidDeaths.FootLine(culprits, count, openable)
             parts[#parts + 1] = string.format("%dx %s - %s",
                 culprit.count, culprit.who, culprit.spell)
         end
-        -- "Killing blow:" - his words (2026-08-16), for the line that
+        -- "Killing blow:" - their words (2026-08-16), for the line that
         -- counts them: it IS the killing blows, tallied.
         line = "Killing blow: " .. table.concat(parts, ", ")
         if #culprits > CULPRITS_SHOWN then
@@ -2177,7 +2180,8 @@ function RaidDeaths.FootLine(culprits, count, openable)
     return line
 end
 
--- His words (2026-08-16): "click on details for their last 10 seconds".
+-- The owner's words (2026-08-16): "click on details for their last 10
+-- seconds".
 RaidDeaths.FOOT_HINT = "click on details for their last 10 seconds"
 
 -- The same sentence as pieces for the rich line: every mob's name with
@@ -2221,7 +2225,7 @@ end
 ---------------------------------------------------------------------------
 -- ONE DEATH, OPENED
 --
--- His own death window answers "what happened to me"; this answers the same
+-- Their own death window answers "what happened to me"; this answers the same
 -- question about whoever the row names, out of the same recap and with the
 -- same four columns. The wording lives here, apart from the frame, so it can
 -- be read back in a check without a window in the room.
@@ -2464,7 +2468,7 @@ function RaidDeaths:Refresh()
 
         row.when:SetText(timed and RaidDeaths.Clock(entry.at) or "--:--")
 
-        -- ASKED AGAIN AT PAINT TIME, and his own run is why.
+        -- ASKED AGAIN AT PAINT TIME, and their own run is why.
         --
         -- `/zs test` in game reported "0 of 17 had a readable spec". The
         -- capture happens DURING the fight, and an inspect is throttled to
@@ -2576,7 +2580,7 @@ end
 -- still see, so a group mate who has since left is name and spec alone. A
 -- missing picture must cost its own width and nothing else - laid out
 -- blind, it leaves a 46-pixel hole with the name shunted out of line, which
--- is exactly what his screenshot showed.
+-- is exactly what their screenshot showed.
 --
 -- Anchors rather than a running x: each thing sits on the last thing that
 -- IS there, and the first of them sits on the row itself.
@@ -2942,8 +2946,9 @@ end
 ---------------------------------------------------------------------------
 -- The icon, docked to the death one
 --
--- His ask: "mach doch ein zweites death log item, mit 3 kleinen sculls, aber
--- genauso gross wie das normale und dock das direkt an das andere icon".
+-- The owner's ask: "mach doch ein zweites death log item, mit 3 kleinen
+-- sculls, aber genauso gross wie das normale und dock das direkt an das andere
+-- icon".
 --
 -- Anchored to the death icon's FRAME rather than to its saved numbers, so it
 -- travels WITH it during a drag instead of catching up when the mouse is
@@ -2997,7 +3002,7 @@ local function BuildRaidIcon()
     --
     -- Docked, this drags the death icon: it owns the position, and moving
     -- the anchored one would tear the pair apart, which is the opposite of
-    -- the word he used. Standing alone - a wipe this character walked out of
+    -- the word they used. Standing alone - a wipe this character walked out of
     -- - it drags itself and writes the same position back, so the death icon
     -- reappears exactly where the pair was left.
     raidIcon:SetScript("OnDragStart", function(self)

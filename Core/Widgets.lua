@@ -54,10 +54,10 @@ local C = {
     -- the alternation stopped meaning anything. Owner: "entferne bitte nochmal
     -- die bg farben hell dunkel, das zerschiesst gerade das layout."
     --
-    -- What separates a setting from the next one now is AIR, and nothing else -
-    -- no stripe, and no hairline either (that one he had already thrown out).
-    -- If a page ever needs a ground again it has to be per ROW, not per block,
-    -- because a row is the only thing here that knows its own width.
+    -- What separates a setting from the next one now is AIR, and nothing else
+    -- - no stripe, and no hairline either (that one they had already thrown
+    -- out). If a page ever needs a ground again it has to be per ROW, not per
+    -- block, because a row is the only thing here that knows its own width.
     edge       = { 0.165, 0.184, 0.216 },  -- #2A2F37  card outline, window edge
 
     accent     = { 1.000, 0.478, 0.239 },  -- #FF7A3D  ZwoelfStuff orange
@@ -375,11 +375,11 @@ end
 
 -- HOW WIDE A BUTTON IS, IS NOT A DECISION ANYBODY SHOULD BE MAKING.
 --
--- Owner, 2026-08-10: "auch die button größen sind wahnsinn." He is right and
--- the count says so: 54, 84, 96, 106, 110, 120, 130, 132, 140, 150, 156, 170,
--- 190, 200, 220 - fifteen widths, every one of them typed by hand at a call
--- site and none of them measured. A label that grew by a word got clipped; a
--- short one sat in a slab.
+-- Owner, 2026-08-10: "auch die button größen sind wahnsinn." The owner is
+-- right and the count says so: 54, 84, 96, 106, 110, 120, 130, 132, 140, 150,
+-- 156, 170, 190, 200, 220 - fifteen widths, every one of them typed by hand at
+-- a call site and none of them measured. A label that grew by a word got
+-- clipped; a short one sat in a slab.
 --
 -- The design gives the answer and it is not a number: "Innenabstand 12-14".
 -- So the button is as wide as its words plus its padding, with a floor so
@@ -802,9 +802,9 @@ end
 -- three: "beim regler fehlen die icons, zoom und speed, man weiss nicht was
 -- was ist."
 --
--- Called after the control is in. It takes the control's REAL width, gives
--- the slot exactly that, and makes the row wide enough to hold its label
--- beside it. His rule, and it is the right one: "kein grund zu quetschen."
+-- Called after the control is in. It takes the control's REAL width, gives the
+-- slot exactly that, and makes the row wide enough to hold its label beside
+-- it. The owner's rule, and it is the right one: "kein grund zu quetschen."
 function UI.FitRow(row)
     if not (row and row.slot) then return row end
     local width = (row.control and row.control:GetWidth()) or CONTROL_W
@@ -910,11 +910,11 @@ end
 -- A ROW OF SPELLS, drawn the way this game draws spells
 --
 -- The owner's rule: anything with an icon and a tooltip shows both. Written
--- into a sentence that wraps, that is an inline texture escape - and a list
--- of six of them packed with spaces wraps wherever it likes, leaves a name
--- stranded on the next line without its icon, and reads as a mess. He said
--- so: "icons sind alle verschoben, das kann man auch in einer eigenen zeile
--- anzeigen. einfach bissel schoenes ui machen".
+-- into a sentence that wraps, that is an inline texture escape - and a list of
+-- six of them packed with spaces wraps wherever it likes, leaves a name
+-- stranded on the next line without its icon, and reads as a mess. The owner
+-- said so: "icons sind alle verschoben, das kann man auch in einer eigenen
+-- zeile anzeigen. einfach bissel schoenes ui machen".
 --
 -- So a list of spells is LAID OUT, not written: icon and name as one chip,
 -- chips flowing left to right, wrapping onto as many rows as they need, the
@@ -3450,9 +3450,10 @@ function UI.CellGrid(parent, cfg)
         -- THIS PLACE CARRIES A LOOK OF ITS OWN.
         --
         -- Owner, with the page open: "wo sehe ich denn, wenn ich einzelne bars
-        -- oder icons style? ich sehe da keinen indikator." He was right that
-        -- there was none, and it had already cost him: he set a fill colour on
-        -- a bar and two of its places kept their own and said nothing.
+        -- oder icons style? ich sehe da keinen indikator." The owner was right
+        -- that there was none, and it had already cost them: they set a fill
+        -- colour on a bar and two of its places kept their own and said
+        -- nothing.
         --
         -- A DOT AND NOT A RING. The ring is the SELECTION and the two would be
         -- unreadable together on the cell that is both - which is the cell you
@@ -3625,7 +3626,7 @@ function UI.CellGrid(parent, cfg)
                 -- THE ICON'S OWN OPACITY, which the screen spends on exactly
                 -- this texture. It was a flat 1 here, so the one control the
                 -- owner had just asked to be told apart from the rest of the
-                -- place was the one the preview could not show him.
+                -- place was the one the preview could not show them.
                 --
                 -- The ACTIVE value, not Look.Opacity's answer: everything in
                 -- this card is drawn as if it were up, which is what makes a
@@ -4518,7 +4519,7 @@ end
 --
 -- Owner, with the game's own memory list open: "unser addon braucht was 40 mb,
 -- was isn da los", and the constraint under it - "wir duerfen auf keinen fall
--- groesser als eui werden, wir haben nur 1% von dem seinem umfang". He is
+-- groesser als eui werden, wir haben nur 1% von dem seinem umfang". They are
 -- right, and nothing about this is a feature being cut: five of those six tabs
 -- are off screen at any moment, and a frame in this API cannot be destroyed
 -- once made, so every one built is held for the session.
@@ -4848,9 +4849,9 @@ end
 -- ONE PER LINE. Owner, 2026-08-10, looking at three of them side by side:
 -- "kannste die 3 buttons alle untereinander machen, das sieht nicht gut aus."
 --
--- He is right, and the reason is that a row of them is a row of NOTHING ELSE:
--- every other block on these pages is a line with a name on the left and a
--- control on the right, so three boxes shoulder to shoulder read as a dialog
+-- The owner is right, and the reason is that a row of them is a row of NOTHING
+-- ELSE: every other block on these pages is a line with a name on the left and
+-- a control on the right, so three boxes shoulder to shoulder read as a dialog
 -- that wandered in. Stacked, they are a short list of things the page can do,
 -- which is what they are. All to the widest one's width so they line up on
 -- both edges rather than making a staircase.
@@ -5007,10 +5008,10 @@ end
 -- Owner, with a picture of the result: "lass den verlauf weg, das sieht
 -- unmoeglich aus."
 --
--- The mechanism was sound and the idea was his. What it could not survive is
--- that a GRADIENT IS NOT ARTWORK: a launcher's wordmark stands on a painting,
--- and standing it on a colour ramp spends a third of the column to say
--- nothing. It also cost the page header its readability once already - the
+-- The mechanism was sound and the idea was theirs. What it could not survive
+-- is that a GRADIENT IS NOT ARTWORK: a launcher's wordmark stands on a
+-- painting, and standing it on a colour ramp spends a third of the column to
+-- say nothing. It also cost the page header its readability once already - the
 -- run-out closed from the right, exactly where the title starts.
 --
 -- Removed rather than switched off, along with UI.RailArtHeight, which existed
@@ -5040,7 +5041,7 @@ end
 -- plaetze tauschen, reinziehen, rausziehen etc. ueberall wo man sachen adden
 -- kann. das ist ein total natuerliches wow verhalten."
 --
--- He is describing the action bar, which every player has used for twenty
+-- They are describing the action bar, which every player has used for twenty
 -- years without being told how: you pick a thing up, and where you let go
 -- decides what happens. Four outcomes, and they are the whole feature:
 --
@@ -5097,8 +5098,8 @@ end
 -- HOW BIG ONE SLOT IS DRAWN IN A PREVIEW LATTICE
 --
 -- Owner, with a picture of the raid bar page: "die icons sind einfach zu gross
--- in der vorschau." He is right, and the reason is worth writing down because
--- it is a whole class of mistake rather than one number:
+-- in der vorschau." The owner is right, and the reason is worth writing down
+-- because it is a whole class of mistake rather than one number:
 --
 -- THE RAID BAR PAGE COPIED THE EXTERNALS PAGE'S CONSTANT, NOT ITS CALIBRATION.
 -- On the externals page 40 is not a taste, it is the externals panel's own
@@ -5905,8 +5906,8 @@ function UI.NavItem(parent, text, glyphKind, onClick)
     -- one of mine: "feature oder funktion an, schoenes gruen, aus rot! das
     -- erkennt jeder sofort. denk dran, wow spielen menschen von 12-80."
     --
-    -- He is right, and the reason is worth writing down: the old marker was
-    -- the word OFF in the faintest grey in the palette, which is a 2.5:1
+    -- The owner is right, and the reason is worth writing down: the old marker
+    -- was the word OFF in the faintest grey in the palette, which is a 2.5:1
     -- contrast ratio - readable if you go looking, invisible if you are not.
     -- Colour is read before text is, and everybody already knows this pair.
     --
@@ -6266,7 +6267,8 @@ function UI.ListHeading(parent, width, height)
 
     -- Both ends resolve to the same height: the label's bottom sits 5 above
     -- the heading's, so +5 there and +10 here are the same line. Two anchors
-    -- that disagree vertically do not make a slanted rule, they make a wrong one.
+    -- that disagree vertically do not make a slanted rule, they make a wrong
+    -- one.
     heading.line = UI.Separator(heading)
     heading.line:SetPoint("BOTTOMLEFT", heading.label, "BOTTOMRIGHT", 8, 5)
     heading.line:SetPoint("BOTTOMRIGHT", heading.count, "BOTTOMLEFT", -8, 5)

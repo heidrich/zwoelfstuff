@@ -49,7 +49,7 @@ Answers.DEFAULTS = {
     linger    = 8,       -- how long a request keeps shouting
 
     -- WHO GETS A ROW. Owner, 2026-08-10: "man kann keine spieler auswaehlen,
-    -- oder einstellen also targets" - and he was right that there was no
+    -- oder einstellen also targets" - and they were right that there was no
     -- answer to that at all: the tanks were picked for you and that was the
     -- whole of it. Three modes and a row count, which is the same shape the
     -- externals panel has for the other direction.
@@ -171,7 +171,7 @@ end
 -- spell of its own.
 --
 -- AND ONLY THE ONES YOU ACTUALLY HAVE. A holy priest is not a discipline
--- priest: a Pain Suppression cell on his bar is a button that does nothing
+-- priest: a Pain Suppression cell on their bar is a button that does nothing
 -- when it is pressed and says nothing about why, which is the exact failure
 -- this whole wave is about. `known` is a predicate rather than a call so this
 -- stays pure and a test can ask what a priest of either spec would see.
@@ -187,7 +187,7 @@ function Answers.Offers(class, chosen, known)
             -- A GROUPED SLOT IS ONE QUESTION WITH SEVERAL ANSWERS, and which
             -- one is yours depends on your class. The asker's slot says
             -- "lust"; what goes on YOUR bar is the lust you have. A shaman
-            -- gets both spellings offered here and `known` drops the one his
+            -- gets both spellings offered here and `known` drops the one their
             -- faction does not have, which is the same filter that already
             -- keeps a holy priest from being offered Pain Suppression.
             for _, sub in ipairs(entry.covers) do
@@ -238,7 +238,7 @@ end
 
 -- Blood's Death Grip is the one taunt with a spec on it, and Offers leaves
 -- every spec-bound entry out rather than showing a frost death knight a
--- button that taunts nothing. His own taunt is Dark Command either way.
+-- button that taunts nothing. Their own taunt is Dark Command either way.
 
 ---------------------------------------------------------------------------
 -- WHO MIGHT ASK
@@ -387,27 +387,27 @@ function Answers.Macro(kind, spellName, asker, alsoTarget)
     if not asker or asker.preview then return nil end
     if type(spellName) ~= "string" or spellName == "" then return nil end
 
-    -- A TAUNT GOES ON WHAT HE IS FIGHTING. Owner, 2026-08-10: "bei spott
-    -- müsste das target von akui anvisiert werden, nicht akui selbst" - and
-    -- that is the whole point of a swap: the boss he is holding, not the one
-    -- you happen to be looking at, which in a pull with adds is a different
-    -- creature and a taunt wasted.
+    -- A TAUNT GOES ON WHAT THAT TANK IS FIGHTING. Owner, 2026-08-10: "bei
+    -- spott müsste das target von akui anvisiert werden, nicht akui selbst" -
+    -- and that is the whole point of a swap: the boss they are holding, not
+    -- the one you happen to be looking at, which in a pull with adds is a
+    -- different creature and a taunt wasted.
     --
     -- THIS IS THE ONE PLACE A UNIT TOKEN IS UNAVOIDABLE. Everywhere else this
     -- file addresses people by name, because names survive the shuffle that
-    -- turns party2 into party1 when somebody leaves. But "his target" has no
+    -- turns party2 into party1 when somebody leaves. But "their target" has no
     -- name form: `[@Akui-Gilneastarget]` is a player nobody is called. Only a
     -- token takes the suffix, so a token it is - and the bar is rebuilt on
     -- every roster change, which is when a token could go stale.
     if kind == Comm.TAUNT then
         local unit = asker.unit
         if type(unit) ~= "string" or unit == "" then
-            -- No token to reach him by. Your own target, which is what this
+            -- No token to reach them by. Your own target, which is what this
             -- did before and is still better than nothing.
             return "/cast " .. spellName
         end
 
-        -- His target when it is something you can taunt, YOURS otherwise -
+        -- Their target when it is something you can taunt, YOURS otherwise -
         -- the empty clause. Between them there is no press that does nothing.
         local line = "/cast [@" .. unit .. "target,harm][] " .. spellName
         if alsoTarget then
@@ -496,7 +496,7 @@ end
 -- THE QUICK MENU ON THE BAR ITSELF
 --
 -- Owner, 2026-08-10: "kann man das als button an die answer bar hauen, damit
--- man das dort schnell einstellen kann?" - and the reason he is right is
+-- man das dort schnell einstellen kann?" - and the reason they are right is
 -- WHEN this decision happens: the group forms, somebody is on a second tank,
 -- and the options window is four clicks and a different part of the screen
 -- away from the bar you are looking at.
@@ -652,10 +652,10 @@ function Answers.Rebuild()
     local style = Answers.Style()
 
     -- WHILE PLACING, THERE IS SOMETHING TO PLACE. Owner, 2026-08-10: "awnser
-    -- button sehe ich im edit mode nicht" - and he was right: standing alone,
-    -- there are no tanks to build cells FOR, so the bar had nothing in it and
-    -- correctly drew nothing. Which is useless when the whole point of edit
-    -- mode is to decide where it goes.
+    -- button sehe ich im edit mode nicht" - and they were right: standing
+    -- alone, there are no tanks to build cells FOR, so the bar had nothing in
+    -- it and correctly drew nothing. Which is useless when the whole point of
+    -- edit mode is to decide where it goes.
     --
     -- A stand-in row, and it carries NO macro: a cell aimed at nobody must do
     -- nothing when it is clicked rather than cast at whoever you happen to
@@ -978,21 +978,21 @@ function Answers:Start()
 
         -- Only what you could actually answer. A druid being told that
         -- somebody wants Pain Suppression is noise: there is no button of
-        -- his that answers it. Neither has a holy priest - which is the same
-        -- sentence one step further in, and why the spellbook is asked here
-        -- as well as on the bar.
+        -- theirs that answers it. Neither has a holy priest - which is the
+        -- same sentence one step further in, and why the spellbook is asked
+        -- here as well as on the bar.
         local _, class = UnitClass("player")
 
         -- MATCHED ON THE SLOT, ANSWERED WITH MY OWN SPELL.
         --
         -- The asker's slot can stand for several spells - "lust" is one
-        -- question with five spellings - so the test is not "is that my
-        -- spell" but "does one of MY spells answer that question". Asking it
-        -- this way round is what makes it right for the shaman: which lust he
-        -- owns is his faction's business, and this list has already been
-        -- through the spellbook, so whichever one is really his is the one
-        -- that matches. Deciding it the other way - working out the spell
-        -- from the class - would light up nothing for half of them.
+        -- question with five spellings - so the test is not "is that my spell"
+        -- but "does one of MY spells answer that question". Asking it this way
+        -- round is what makes it right for the shaman: which lust they owns is
+        -- their faction's business, and this list has already been through the
+        -- spellbook, so whichever one is really theirs is the one that
+        -- matches. Deciding it the other way - working out the spell from the
+        -- class - would light up nothing for half of them.
         --
         -- `wanted` is that spell, and every line below uses it: the cell that
         -- brightens, the macro it runs, the ACK that goes back.
@@ -1081,7 +1081,7 @@ function Answers:Start()
         end
 
         -- AND SAY WHAT YOU HAVE. A tank who joins mid-key missed every
-        -- message sent before he arrived, so the group re-introduces itself
+        -- message sent before they arrived, so the group re-introduces itself
         -- whenever it changes. Two seconds late on purpose: a roster event
         -- comes in a burst of three or four while people load in.
         if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
@@ -1134,7 +1134,7 @@ end
 
 -- Announce one spell's state. Sent on a cast, when it comes back, and once
 -- when the group changes - the last one is what a tank joining mid-key needs,
--- because he missed every message that came before he was there.
+-- because they missed every message that came before they were there.
 function Answers.Report(spellID, kind)
     local left = Answers.Remaining(spellID)
     if left == nil then return false end
@@ -1181,7 +1181,7 @@ function Answers.OnCast(spellID)
     end
 
     -- THE COOLDOWN GOES OUT WHETHER ANYBODY ASKED OR NOT. A tank wants to
-    -- know his healer just spent Lay on Hands even if the press was the
+    -- know their healer just spent Lay on Hands even if the press was the
     -- healer's own idea - which it usually is.
     --
     -- One frame later: the cooldown does not exist yet in the moment the cast

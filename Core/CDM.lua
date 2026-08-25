@@ -392,7 +392,7 @@ end
 -- Fill.CanFeed asks for this function by name, Fill.Overlays is handed an
 -- empty list when it is not there, and the ticker that pushes counts in gives
 -- up before it starts - so not one stack band has painted since the rebuild,
--- on a bar he had already configured three of them on. The options page says
+-- on a bar they had already configured three of them on. The options page says
 -- so in a sentence that now goes away by itself, which is why it was written
 -- as a question rather than a paragraph.
 --
@@ -920,7 +920,7 @@ end
 -- The Cooldown Manager's four viewers split cleanly - Essential and Utility
 -- hold abilities, TrackedBuff and TrackedBar hold auras - and the difference
 -- decides which question about the item even HAS an answer. Owner, of the
--- buffs: "die haben oft keinen cd", and he is right: an aura frequently has
+-- buffs: "die haben oft keinen cd", and they are right: an aura frequently has
 -- no cooldown at all, so asking the spell's cooldown about one answers
 -- "ready" for ever, and a ready-flash rule built on that fires permanently.
 --
@@ -974,7 +974,7 @@ end
 -- inactive", which is off by default - so IsShown would say yes all evening.
 --
 ---------------------------------------------------------------------------
--- AND THE IsShown FALLBACK IS GONE, which is the answer to the thing he
+-- AND THE IsShown FALLBACK IS GONE, which is the answer to the thing they
 -- could not stop seeing.
 --
 -- Owner, 2026-08-16, three reports that turned out to be one:
@@ -991,12 +991,12 @@ end
 -- answers "would the Cooldown Manager put this on screen right now", and
 -- that answer moves when you click a mob.
 --
--- Reading it as activity meant every reader downstream inherited a range
--- check nobody wrote: `inactiveDesaturate` and `inactiveAlpha` fire on
--- exactly `false`, so selecting a target greyed an icon whose buff was
--- plainly running, and deselecting lit it again. He suspected a range check
--- and he was right about the effect and right to call it a bug - it was
--- Blizzard's rule arriving through a door we left open.
+-- Reading it as activity meant every reader downstream inherited a range check
+-- nobody wrote: `inactiveDesaturate` and `inactiveAlpha` fire on exactly
+-- `false`, so selecting a target greyed an icon whose buff was plainly
+-- running, and deselecting lit it again. The owner suspected a range check and
+-- was right about the effect and right to call it a bug - it was Blizzard's
+-- rule arriving through a door we left open.
 --
 -- IT WAS A FALLBACK, WHICH IS WHY IT SURVIVED. On a buff-bar item IsActive
 -- exists and answers, so the second branch never ran and every test of this
@@ -1045,7 +1045,7 @@ end
 -- Owner, 2026-08-16: "kann es sein das du ein range check bei den bars mit
 -- drin hast? weil manchmal ist das icon ausgegraut manchmal nicht."
 --
--- THERE IS NO RANGE CHECK ANYWHERE IN THIS ADDON. What he is looking at is
+-- THERE IS NO RANGE CHECK ANYWHERE IN THIS ADDON. What they are looking at is
 -- the THIRD ANSWER above. ItemIsActive says true, false, or nil - and nil is
 -- "the client will not say", because on this patch `IsShown` can hand back a
 -- SECRET boolean and whether it does depends on where you are standing and
@@ -1195,7 +1195,7 @@ end
 -- Blizzard frame at all, and one whose frame will not say, both have to fall
 -- back to their own judgement rather than being silenced.
 --
--- THE pcall GUARDS THE CALL, NOT THE ANSWER, AND THAT WAS THE HOLE. His
+-- THE pcall GUARDS THE CALL, NOT THE ANSWER, AND THAT WAS THE HOLE. Their
 -- client, four times in one pass:
 --
 --     CDM.lua:1103: attempt to perform boolean test on local 'shown'

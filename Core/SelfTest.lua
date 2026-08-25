@@ -75,7 +75,7 @@ local function PretendSpec(key, known)
 end
 
 ---------------------------------------------------------------------------
--- A PROFILE THAT IS NOT HIS, FOR EVERYTHING THAT WRITES
+-- A PROFILE THAT IS NOT THE OWNER'S, FOR EVERYTHING THAT WRITES
 --
 -- Owner's client, 2026-08-15: eight red checks that were all green on the
 -- desk, and one cause under every one of them.
@@ -86,9 +86,9 @@ end
 -- "remember cfg.cells, put an empty one there, do the test, put the
 -- remembered one back" - stopped working the day the slots moved. The empty
 -- table was thrown away by the next reader, and every Pick, SetSlot and
--- ClearSlot after it went into HIS panel. The restore at the end could not
--- notice: what it saved and what it wrote through had become the same table.
--- It cost him a spell out of slot 3.
+-- ClearSlot after it went into the owner's panel. The restore at the end could
+-- not notice: what it saved and what it wrote through had become the same
+-- table. It cost them a spell out of slot 3.
 --
 -- The fix is not a more careful restore. It is not writing there at all.
 --
@@ -113,7 +113,7 @@ local function OnStandInProfile(externals, body)
 
     ns.db, ns.SpecKey = realDB, realKey
     -- The panel on screen was drawn from the stand-in while that ran; this
-    -- puts his own back on it.
+    -- puts their own back on it.
     if ns.Externals and ns.Externals.Refresh then ns.Externals.Refresh() end
 
     if not ok then Check("The stand-in profile ran to the end", false, tostring(err)) end
@@ -246,7 +246,7 @@ end
 ---------------------------------------------------------------------------
 -- Which noise, for which spell
 --
--- HIS RULE: "bei den requests auch je nach spell nicht slot und beim cmd
+-- THE OWNER'S RULE: "bei den requests auch je nach spell nicht slot und beim cmd
 -- auch." A key belongs to the place, a sound belongs to the spell.
 --
 -- Four links in the chain and one check per link, in order, each naming the
@@ -349,7 +349,7 @@ local function TestSounds()
     -- SWITCHING A WHOLE PACK OUT OF THE LIST
     --
     -- Owner: "die exwind sounds muessen alle raus oder geblockt werden, das
-    -- sind 1000." Two packs on his machine register 188 entries each. Driven
+    -- sind 1000." Two packs on their machine register 188 entries each. Driven
     -- against whatever is really registered here rather than against a made
     -- up one, because registering a fake pack would leave it in the shared
     -- registry for every other addon for the rest of the session.
@@ -924,7 +924,7 @@ local function TestVisibility()
     -- WAITING FOR THE COMBAT STATE WE ARE NOT IN. Written as a literal "in"
     -- it asserted the world: run during a fight, a bar waiting for combat IS
     -- on screen, Explain answers nil, and the check went red on a healthy
-    -- client - his paste, five reds, all of them combat. The fixture now
+    -- client - their paste, five reds, all of them combat. The fixture now
     -- waits for whichever state is not the current one, which is the same
     -- claim in both worlds.
     local pull = Fresh()
@@ -1084,8 +1084,8 @@ local function TestHistory()
     -- THE NUMBER IN THE TOOLTIP. The owner: "viele def cds haben FESTE
     -- zeiten, die auch so in den tooltips stehen". Reading it is asking the
     -- client, not guessing - but the WORD for "seconds" has to come from
-    -- the client as well, or this works in English and nowhere else. He
-    -- plays German.
+    -- the client as well, or this works in English and nowhere else. The
+    -- owner plays German.
     -----------------------------------------------------------------------
     local words = ns.DurationWords({ "%d |4Sekunde:Sekunden;", "%d |4Sek.:Sek.;" })
     Check("Both forms of the word come out of the client's own format",
@@ -1382,8 +1382,8 @@ local function TestDeath()
 
 
     -- CONSUMABLES ARE PICKED, NOT SHIPPED - and this check used to prove it
-    -- by DELETING his list and leaving it deleted. Every /zs test threw away
-    -- what he had chosen, and the next look re-seeded the starter items, so
+    -- by DELETING their list and leaving it deleted. Every /zs test threw away
+    -- what they had chosen, and the next look re-seeded the starter items, so
     -- it read as "the addon does not save my consumables". The file's own
     -- header promises it never touches your settings; now it does not.
     --
@@ -1427,7 +1427,7 @@ local function TestDeath()
         ns.SpecKey = realKey
 
         ns.db.rescueItemsBySpec, ns.db.rescueItems = keptItems, keptLegacy
-        Check("The self test gave his own list back untouched",
+        Check("The self test gave their own list back untouched",
             ns.db.rescueItemsBySpec == keptItems
             and ns.db.rescueItems == keptLegacy)
     end
@@ -1893,7 +1893,7 @@ local function TestDeath()
         rightOne.defensivesUsed[1].spellID == 48792)
 
     ---------------------------------------------------------------------
-    -- ICON AND TOOLTIP, ALWAYS. The owner's rule, in his words: "immer
+    -- ICON AND TOOLTIP, ALWAYS. The owner's rule, in their words: "immer
     -- wenn eine faehigkeit oder was auch immer einen tooltip und icon hat,
     -- muss das angezeigt werden. egal bei was". A wrapped sentence cannot
     -- hold a hover target, so the verdict carries the icon inline - and
@@ -1972,7 +1972,7 @@ end
 ---------------------------------------------------------------------------
 -- Everybody ELSE's deaths
 --
--- The rows below are the four his client actually handed over on 2026-08-14,
+-- The rows below are the four their client actually handed over on 2026-08-14,
 -- typed in as they came rather than rounded into tidy examples. That matters
 -- for exactly one reason: two of the four died in the SAME SECOND, which is
 -- the case a made-up list would never have contained and the one where the
@@ -2224,7 +2224,7 @@ local function TestRaidDeaths()
         tostring(order[4] and order[4].gap))
 
     -- Overall answers -1 for every death. That is "there is no clock in
-    -- here", not "he died at second zero", and a timeline drawn off it would
+    -- here", not "they died at second zero", and a timeline drawn off it would
     -- put four people on the same tick.
     local blind = Recorded()
     for _, row in ipairs(blind) do row.deathTimeSeconds = -1 end
@@ -2273,7 +2273,7 @@ local function TestRaidDeaths()
     -- What ended each one
     ---------------------------------------------------------------------
     -- Death.ReadRecap hands events over OLDEST first, so the last one is the
-    -- one that landed last. The amounts are his: 31829 with 28483 of it
+    -- one that landed last. The amounts are theirs: 31829 with 28483 of it
     -- wasted on a corpse.
     local events = {
         { name = "Spirit Rend", who = "Tormented Shade", amount = 4000 },
@@ -3452,11 +3452,11 @@ local function TestDesignSystem()
     -- THE AURA BINDS ITSELF
     --
     -- Owner: "das muss auch ohne mich gehen, die sachen sind doch alle im
-    -- spiel." He is right about the second half and it does not follow from
-    -- it: there is no call that says which buff an ability lights up for -
-    -- EllesmereUI is fully on 12.1 and keeps exactly ONE such pairing, by
-    -- hand. So it is watched instead, and the watching is what must not need
-    -- a person.
+    -- spiel." The owner is right about the second half and it does not follow
+    -- from it: there is no call that says which buff an ability lights up for
+    -- - EllesmereUI is fully on 12.1 and keeps exactly ONE such pairing, by
+    -- hand. So it is watched instead, and the watching is what must not need a
+    -- person.
     --
     -- A proc's glow rises with the buff and falls when it is spent, so the
     -- buff is in the aura list at SHOW and gone at HIDE. The flask, the food
@@ -5318,10 +5318,10 @@ local function TestExternals()
     -- change would be a worse bug than the one this fixes.
     -----------------------------------------------------------------------
     -- ON A PROFILE OF ITS OWN, and the version before this one is the reason
-    -- why. It emptied his real per-spec store, ran the checks and put the
+    -- why. It emptied their real per-spec store, ran the checks and put the
     -- store back - honest enough - and then asked "is the other spec's first
-    -- slot empty" against the LEGACY list, which is his and is not empty.
-    -- Green on an empty desk, red in his client, and the check was asking
+    -- slot empty" against the LEGACY list, which is theirs and is not empty.
+    -- Green on an empty desk, red in their client, and the check was asking
     -- about the world rather than about the code. A fixture states what the
     -- old list held, so the answer cannot depend on who runs it.
     OnStandInProfile({ cells = { [1] = 6940 }, rows = 2, columns = 5, x = 120 },
@@ -5375,7 +5375,7 @@ local function TestExternals()
     -- Owner, 2026-08-24: "mit tank monk in der gruppe, da wurde es
     -- angezeigt" - Life Cocoon on the panel with a brewmaster standing
     -- there. Cocoon is a mistweaver's spell, so the panel has to drop it
-    -- the moment his spec is READ, and keep it while it is not, because
+    -- the moment their spec is READ, and keep it while it is not, because
     -- unknown means yes and a healer who is out of range at the pull must
     -- not vanish off the bar.
     --
@@ -5414,17 +5414,17 @@ local function TestExternals()
         Check("A mistweaver keeps it", Drawn())
 
         -- A SPEC THAT WAS READ OUTRANKS THE ROLE, both ways round: a healer
-        -- queued as damage is put right by his inspect, not hidden by the
-        -- queue he stood in.
+        -- queued as damage is put right by their inspect, not hidden by the
+        -- queue they stood in.
         Monk("Nebel", "DAMAGER", mist)
-        Check("...even when the queue called him damage", Drawn())
+        Check("...even when the queue called them damage", Drawn())
         Monk("Braumeister", "HEALER", brew)
         Check("...and a brewmaster queued as healer still cannot", not Drawn())
 
-        -- AND WITH NOTHING READ, which is the state he was actually in: the
+        -- AND WITH NOTHING READ, which is the state they were actually in: the
         -- role the game assigned answers it without an inspect at all.
         Monk("Braumeister", "TANK", nil)
-        Check("...an unread TANK monk drops it on his role alone", not Drawn())
+        Check("...an unread TANK monk drops it on their role alone", not Drawn())
         Check("...with a refusal that names the role", (function()
             local _, why = X.Ask(116849)
             return type(why) == "string"
@@ -5671,7 +5671,7 @@ local function TestExternals()
     end
 
     -- THE ROUND TRIP. The asker's panel holds the slot; the mage answers with
-    -- his own spell; the ACK coming back has to land on the slot again, or
+    -- their own spell; the ACK coming back has to land on the slot again, or
     -- the asker's cell never goes quiet.
     Check("A mage's Time Warp lands back on the Lust slot",
         X.SlotFor(80353) == 2825)
@@ -5755,7 +5755,7 @@ local function TestExternals()
     Check("Nobody of that class means nobody is asked",
         X.Whom(X.Get(116849), ROSTER) == nil)   -- Life Cocoon, no monk here
 
-    -- THE PLAYER IS NEVER ASKED. A paladin tank whispering himself for a
+    -- THE PLAYER IS NEVER ASKED. A paladin tank whispering themselves for a
     -- Blessing of Sacrifice is the panel answering its own question.
     local SELF_ONLY = {
         { name = "Zwoelf", class = "PALADIN", role = "TANK", isPlayer = true },
@@ -5820,7 +5820,7 @@ local function TestExternals()
     -- equipment slot blank while the 3D model still wore the gear, with no
     -- Lua error. The client keeps ONE inspect target, and this file's queue
     -- was moving it with NotifyInspect and handing it back with
-    -- ClearInspectPlayer while his window was reading it.
+    -- ClearInspectPlayer while their window was reading it.
     --
     -- THE RULE FIRST, THEN THE TWO PLACES THAT HAVE TO ASK IT, and that
     -- order is the whole point: a guard written, green and never called is
@@ -5851,21 +5851,21 @@ local function TestExternals()
         -- desk - calling it on a client would open the window on somebody.
         if __FAKE_SPECS then
             InspectUnit("party1")
-            Check("His own click closes the channel for us", S.Busy())
+            Check("Their own click closes the channel for us", S.Busy())
             S.ForgetUserAsk()
             Check("And letting go opens it again", not S.Busy())
         else
-            Skip("His own click closes the channel for us",
-                "calling InspectUnit on a client would open his window")
+            Skip("Their own click closes the channel for us",
+                "calling InspectUnit on a client would open their window")
         end
 
-        -- NOT WHILE HE IS ACTUALLY LOOKING. The sweep below is the real one
+        -- NOT WHILE THE PLAYER IS ACTUALLY LOOKING. The sweep below is the real one
         -- and it really does ask the server, so a test run with the inspect
         -- window open would cause the very bug it is here to prevent.
         if realBusy() then
             Skip("A sweep asks nothing while the player is inspecting",
                 "an inspect window is open right now - come back after")
-            Skip("An answer that lands while his window is open is kept",
+            Skip("An answer that lands while their window is open is kept",
                 "an inspect window is open right now - come back after")
         else
             -- WIRING, HALF ONE: the sweep. Needs one name in the queue, so
@@ -5884,12 +5884,12 @@ local function TestExternals()
             else
                 Check("A sweep asks nothing while the player is inspecting",
                     verdict == "busy", tostring(verdict))
-                Check("And it sweeps again the moment he closes the window",
+                Check("And it sweeps again the moment they close the window",
                     after ~= "busy", tostring(after))
             end
 
             -- WIRING, HALF TWO: the answer. The clear used to happen for
-            -- every INSPECT_READY, including the ones his own window asked
+            -- every INSPECT_READY, including the ones their own window asked
             -- for. That is what emptied the slots.
             local guid = UnitGUID and UnitGUID("party1")
             if guid then
@@ -5898,14 +5898,14 @@ local function TestExternals()
                 local said = S.Answered(guid)
                 Pretend(nil)
                 if said == "not ours" then
-                    Skip("An answer that lands while his window is open is kept",
-                        "nothing was queued for party1 - his spec is known")
+                    Skip("An answer that lands while their window is open is kept",
+                        "nothing was queued for party1 - their spec is known")
                 else
-                    Check("An answer that lands while his window is open is kept",
+                    Check("An answer that lands while their window is open is kept",
                         said == "kept", tostring(said))
                 end
             else
-                Skip("An answer that lands while his window is open is kept",
+                Skip("An answer that lands while their window is open is kept",
                     "no party1 - this one needs a group")
             end
         end
@@ -5981,7 +5981,7 @@ local function TestExternals()
         end
 
         -- THE BUG ITSELF, end to end. Two priest slots, one priest, and the
-        -- panel must offer exactly the one he can actually cast.
+        -- panel must offer exactly the one they can actually cast.
         local priest = list.PRIEST
         local disc = priest and priest[1] and priest[1].id
         local holy = priest and priest[2] and priest[2].id
@@ -6181,7 +6181,7 @@ local function TestExternals()
     -- Slots
     --
     -- Every check below writes, so all of it runs on a stand-in profile
-    -- (see OnStandInProfile). It used to run on HIS, and emptying cfg.cells
+    -- (see OnStandInProfile). It used to run on the owner's, and emptying cfg.cells
     -- first stopped being enough the day the slots became per-spec.
     ---------------------------------------------------------------------
     OnStandInProfile({ cells = {}, rows = 1, columns = 4 }, function()
@@ -6301,12 +6301,12 @@ local function TestExternals()
     -- profile that HAS slots. Setting it here would be a fixture that could
     -- not exist, and it would hide the migration behind it.
     --
-    -- THE HAND-OFF IS PART OF THE MIGRATION NOW, and this is where his client
-    -- said so: what the list migration writes lands in cfg.cells, and the
-    -- last thing Config does is re-point cfg.cells at the table for the spec
-    -- being played. If those two are the wrong way round, the migration runs,
-    -- succeeds, and is thrown away in the same call - and nobody sees it,
-    -- because the desk has no spec and never reaches the hand-off.
+    -- THE HAND-OFF IS PART OF THE MIGRATION NOW, and this is where their
+    -- client said so: what the list migration writes lands in cfg.cells, and
+    -- the last thing Config does is re-point cfg.cells at the table for the
+    -- spec being played. If those two are the wrong way round, the migration
+    -- runs, succeeds, and is thrown away in the same call - and nobody sees
+    -- it, because the desk has no spec and never reaches the hand-off.
     OnStandInProfile({ count = 6, perLine = 6, picked = { 6940, 102342 } },
     function()
         local ok, cfg = pcall(X.Config)
@@ -6324,12 +6324,12 @@ local function TestExternals()
     -- WHAT A LOGIN DOES TO A PANEL SOMEBODY HAS ARRANGED
     --
     -- Owner, 2026-08-09: "nach rl ist mein preset von meinen external cds
-    -- immer weg." What he was actually looking at was a preview that did not
-    -- draw - but "the login path keeps what I arranged" is worth pinning down
-    -- rather than believing, because ApplyDefaults runs over every profile
-    -- before anything reads it and it is the one thing that could.
+    -- immer weg." What they were actually looking at was a preview that did
+    -- not draw - but "the login path keeps what I arranged" is worth pinning
+    -- down rather than believing, because ApplyDefaults runs over every
+    -- profile before anything reads it and it is the one thing that could.
     --
-    -- Run on a stand-in profile, so this can never touch his own.
+    -- Run on a stand-in profile, so this can never touch their own.
     ---------------------------------------------------------------------
     local realDB = ns.db
     local saved = {
@@ -6526,8 +6526,8 @@ local function TestTaunts()
     Check("And a dungeon is not",
         S({ announce = true, onlyInInstance = true }, true, true) == true)
 
-    -- TWO PRESSES IN A SECOND ARE ONE ANNOUNCE. A taunt that misses is
-    -- pressed again straight away, and a tank who spams his own group over it
+    -- TWO PRESSES IN A SECOND ARE ONE ANNOUNCE. A taunt that misses is pressed
+    -- again straight away, and a tank who spams their own group over it
     -- switches the feature off and never comes back.
     Check("The first press always speaks", T.MaySpeak(100, nil))
     Check("A second one straight after does not",
@@ -6713,7 +6713,7 @@ local function TestAnswers()
     for _, offer in ipairs(paladin) do
         if offer.kind == C.TAUNT then hasTaunt = true end
     end
-    Check("And one of them is his taunt", hasTaunt)
+    Check("And one of them is their taunt", hasTaunt)
 
     Check("A rogue can be asked for nothing", #A.Offers("ROGUE") == 0)
     Check("With no class there is nothing to offer", #A.Offers(nil) == 0)
@@ -6734,7 +6734,7 @@ local function TestAnswers()
     -- Owner: "und answering muesste das dann fuer jede klasse entsprechend
     -- anders wiedergeben". The request side collapses five spells into one
     -- slot; this side has to expand it again, per class. A mage had NOTHING
-    -- on his answer bar before lust existed, so this is also the check that
+    -- on their answer bar before lust existed, so this is also the check that
     -- the expansion happens at all.
     ---------------------------------------------------------------------
     local function Offered(class, spellID, chosen, known)
@@ -6755,7 +6755,7 @@ local function TestAnswers()
     -- Pain Suppression. Faction is not something this addon should guess at.
     Check("A shaman is offered both lusts",
         Offered("SHAMAN", 2825) and Offered("SHAMAN", 32182))
-    Check("And the spellbook drops the one he has not got",
+    Check("And the spellbook drops the one they have not got",
         Offered("SHAMAN", 2825, nil, function(id) return id ~= 32182 end)
         and not Offered("SHAMAN", 32182, nil,
             function(id) return id ~= 32182 end))
@@ -6871,25 +6871,26 @@ local function TestAnswers()
             == "/cast [@Akui-Gilneas] Lay on Hands",
         tostring(A.Macro(C.EXTERNAL, "Lay on Hands", tank)))
 
-    -- A TAUNT GOES ON WHAT HE IS FIGHTING. Not on him - that is a taunt on a
-    -- friendly player, which does nothing and says nothing - and not on your
-    -- own target either, which in a pull with adds is a different creature.
-    -- Owner: "bei spott müsste das target von akui anvisiert werden".
+    -- A TAUNT GOES ON WHAT THAT TANK IS FIGHTING. Not on them - that is a
+    -- taunt on a friendly player, which does nothing and says nothing - and
+    -- not on your own target either, which in a pull with adds is a different
+    -- creature. Owner: "bei spott müsste das target von akui anvisiert
+    -- werden".
     Check("A taunt is cast on the ASKER'S target",
         A.Macro(C.TAUNT, "Dark Command", tank)
             == "/cast [@party2target,harm][] Dark Command",
         tostring(A.Macro(C.TAUNT, "Dark Command", tank)))
 
-    Check("And it never names the tank himself",
+    Check("And it never names the tank themselves",
         A.Macro(C.TAUNT, "Dark Command", tank):find("Akui") == nil)
 
-    -- The empty clause: if what he is on cannot be taunted, your own target
+    -- The empty clause: if what they are on cannot be taunted, your own target
     -- is used rather than the press doing nothing at all.
     Check("A taunt falls back to your own target",
         A.Macro(C.TAUNT, "Dark Command", tank):find("[]", 1, true) ~= nil)
 
-    -- Without a token there is no way to say "his target" at all.
-    Check("With no unit to reach him by, it is your own target",
+    -- Without a token there is no way to say "their target" at all.
+    Check("With no unit to reach them by, it is your own target",
         A.Macro(C.TAUNT, "Dark Command", { name = "Akui" })
             == "/cast Dark Command")
 
@@ -6901,9 +6902,9 @@ local function TestAnswers()
         A.Macro(C.EXTERNAL, "Ironbark", tank, true)
             == "/target Akui-Gilneas\n/cast [@Akui-Gilneas] Ironbark")
 
-    -- And with the switch on it takes HIS target, not him: after a swap you
-    -- are the one holding that creature, so being on it is the point.
-    Check("With the switch on, a taunt takes what he is fighting",
+    -- And with the switch on it takes that tank's target, not them: after a
+    -- swap you are the one holding that creature, so being on it is the point.
+    Check("With the switch on, a taunt takes what they are fighting",
         A.Macro(C.TAUNT, "Taunt", tank, true)
             == "/target party2target\n/cast [@party2target,harm][] Taunt",
         tostring(A.Macro(C.TAUNT, "Taunt", tank, true)))
@@ -6954,7 +6955,7 @@ local function TestAnswers()
     Check("There is a key mode", ns.Keys ~= nil)
     -- NOT DURING A FIGHT. Every line below moves real bindings, and the game
     -- refuses that in combat - Keys.Bind answers nil, SetActive stands down,
-    -- and four checks went red on a healthy client (his paste). A test that
+    -- and four checks went red on a healthy client (their paste). A test that
     -- can only pass out of combat says so instead of failing.
     if ns.Keys and InCombatLockdown and InCombatLockdown() then
         Skip("Binding a key to a place",
@@ -7237,7 +7238,7 @@ local function TestPanelMovers()
             Check("An unpinned one takes the drag", mover.grab ~= nil)
 
             -- Never left holding one. Edit mode's OnUpdate reads this every
-            -- frame, and a grab nobody asked for would move his panel.
+            -- frame, and a grab nobody asked for would move their panel.
             mover.grab = nil
             cfg.pinned = was
             mover:RefreshLock()
@@ -7248,7 +7249,7 @@ local function TestPanelMovers()
     -- AND THE REMINDERS, WHICH ARE MOVERS TOO
     --
     -- Owner, with a screenshot of one: "mein reminder hat kein zahnrad oder
-    -- lock". He had said the same sentence about the externals mover five
+    -- lock". They had said the same sentence about the externals mover five
     -- days earlier - and the answer then went into the PANEL builder, which
     -- the reminders do not use. Nothing could see the difference, because
     -- the reminder movers were a local nothing could reach.
@@ -7311,7 +7312,7 @@ local function TestPanelMovers()
     -- zahnrad oder lock" five days after saying it about the externals mover.
     --
     -- So the bars get the same walk on the day they get their movers, rather
-    -- than on the day he photographs one.
+    -- than on the day they photograph one.
     ---------------------------------------------------------------------
     local barMovers = ns.EditMode.BarMovers and ns.EditMode:BarMovers() or {}
 
@@ -7874,10 +7875,10 @@ local function TestRaidCheck()
         end
 
         -- AND THEN SAY WHAT IT FOUND, rather than have an opinion about it.
-        -- This is the half that was worth having: if he is sitting there with
-        -- a flask up and this line says no, THAT is the bug - and now it is
-        -- one line to read instead of a red check that cries wolf every time
-        -- somebody tests outside a raid.
+        -- This is the half that was worth having: if they are sitting there
+        -- with a flask up and this line says no, THAT is the bug - and now it
+        -- is one line to read instead of a red check that cries wolf every
+        -- time somebody tests outside a raid.
         local carried = {}
         for _, buff in ipairs(RaidCheck.BUFFS) do
             if RaidCheck.HasBuff(mine.bf, buff) then
@@ -8235,9 +8236,9 @@ local function TestGear()
                 if icon:GetAlpha() == 1 then lit = lit + 1 end
             end
         end
-        -- FIVE, not four: the node he passed over is drawn too, and the
+        -- FIVE, not four: the node they passed over is drawn too, and the
         -- other hero tree's node is not drawn at all.
-        Check("...drawing the whole tree he can see", drawn == 5,
+        Check("...drawing the whole tree they can see", drawn == 5,
             tostring(drawn))
         Check("...with exactly the taken ones lit", lit == 4, tostring(lit))
         Check("...and an icon leaves room beside it rather than filling "
@@ -8761,7 +8762,7 @@ end
 ---------------------------------------------------------------------------
 -- READING A STORED BAR
 --
--- Every fixture in here is the SHAPE his own file actually has, taken off
+-- Every fixture in here is the SHAPE their own file actually has, taken off
 -- disk rather than off the defaults table - including the two things that
 -- would have been got wrong by writing against the defaults: a cell list with
 -- holes in it, and a stagger stored as a percentage.
@@ -8773,7 +8774,7 @@ local function TestCooldownStore()
         return
     end
 
-    -- HIS SHAPE. A hole at slot 2 is a bar somebody arranged, not a broken
+    -- THE OWNER'S SHAPE. A hole at slot 2 is a bar somebody arranged, not a broken
     -- one, and `#` on this table may legally answer 1.
     local bar = {
         id = 3, name = "Cooldowns", rows = 1, columns = 5,
@@ -8785,9 +8786,9 @@ local function TestCooldownStore()
     Check("A hole in the middle does not shorten the bar",
         S.Capacity(bar) == 5, tostring(S.Capacity(bar)))
 
-    -- THE ONE HIS FILE ACTUALLY HAS: a bar declaring five columns in one row
-    -- and a cell list twelve long. Trusting the declared number drops seven
-    -- of his picks, silently.
+    -- THE ONE THE OWNER'S FILE ACTUALLY HAS: a bar declaring five columns in
+    -- one row and a cell list twelve long. Trusting the declared number drops
+    -- seven of their picks, silently.
     local wide = { rows = 1, columns = 5, cells = {} }
     for index = 1, 12 do wide.cells[index] = 1000 + index end
     Check("A cell past the declared width still counts",
@@ -8802,9 +8803,9 @@ local function TestCooldownStore()
     -- HOW MANY PLACES, SAID OUTRIGHT.
     --
     -- rows x columns can only ever describe a RECTANGLE - six across is six,
-    -- twelve or eighteen, never seven - and his own 4.82.0 bars already carry
-    -- the real number under `freeCount`. Owner, 2026-08-15: "feste cells und
-    -- rows sollte man einstellen koennen."
+    -- twelve or eighteen, never seven - and their own 4.82.0 bars already
+    -- carry the real number under `freeCount`. Owner, 2026-08-15: "feste cells
+    -- und rows sollte man einstellen koennen."
     Check("A bar that says how many places it has is believed",
         S.Capacity({ rows = 1, columns = 6, cellCount = 7 }) == 7,
         tostring(S.Capacity({ rows = 1, columns = 6, cellCount = 7 })))
@@ -8815,8 +8816,8 @@ local function TestCooldownStore()
     --
     -- It used to check that a pick past the declared end RAISED the count -
     -- Capacity answered with the largest of what was declared and what was
-    -- referenced. Owner, 2026-08-15, with a photograph of a bar he could not
-    -- get down to one line: "ich muss auf eine reihe begrenzen koennen." He
+    -- referenced. Owner, 2026-08-15, with a photograph of a bar they could not
+    -- get down to one line: "ich muss auf eine reihe begrenzen koennen." They
     -- could not, and this was why: a bar carrying twelve picks went on drawing
     -- twelve however low Rows was set, because the picks outvoted the setting.
     -- A limit a stored value can overrule is not a limit.
@@ -8861,12 +8862,12 @@ local function TestCooldownStore()
     end
 
     ---------------------------------------------------------------------
-    -- THE THREE AN AUDIT AGAINST HIS OWN BARS FOUND, all of which drew
+    -- THE THREE AN AUDIT AGAINST THE OWNER'S BARS FOUND, all of which drew
     -- something rather than failing
     ---------------------------------------------------------------------
 
-    -- HIS SECOND BAR: column gap 2, row gap 4. One number for both axes is
-    -- right on one of his four bars by coincidence.
+    -- THE OWNER'S SECOND BAR: column gap 2, row gap 4. One number for both
+    -- axes is right on one of their four bars by coincidence.
     local twoGaps = S.Lattice({ columns = 5, iconSize = 36,
         spacing = 2, lineSpacing = 4 })
     Check("A bar's row gap is not its column gap",
@@ -8878,7 +8879,7 @@ local function TestCooldownStore()
             x == 0 and y == -40, string.format("%s,%s", x, y))
     end
 
-    -- HIS THIRD BAR, "Bars 2": kind="bar", 250 by 24, carrying an untouched
+    -- THE OWNER'S THIRD BAR, "Bars 2": kind="bar", 250 by 24, carrying an untouched
     -- iconSize of 40. Reading iconSize and never kind hands the model four
     -- forty-pixel squares for a bar a quarter of the screen wide.
     local statusBar = S.Lattice({ kind = "bar", rows = 3, columns = 1,
@@ -8892,7 +8893,7 @@ local function TestCooldownStore()
         icons.size == 40 and icons.width == nil)
 
     -- THE VALUE RENAME. 4.82.0 stored "stagger"; this model says "staggered".
-    -- None of his bars is staggered, so nothing would have said a word until
+    -- None of their bars is staggered, so nothing would have said a word until
     -- somebody imported one from a shared string.
     Check("A bar stored as 'stagger' is still staggered",
         S.Lattice({ layout = "stagger" }).layout == "staggered")
@@ -8905,7 +8906,7 @@ local function TestCooldownStore()
     local waves, unknown = S.Survey(bar)
     Check("Keys that are read today are named as such",
         waves.now and #waves.now > 0)
-    Check("A bar of his has no unclaimed keys", #unknown == 0,
+    Check("A bar of theirs has no unclaimed keys", #unknown == 0,
         table.concat(unknown, ", "))
 
     local invented = { id = 1, somethingNobodyDeclared = true }
@@ -8916,9 +8917,9 @@ local function TestCooldownStore()
     ---------------------------------------------------------------------
     -- ONE PLACE'S OWN STYLING, AND THE ONE RESOLVER THAT DECIDES IT
     --
-    -- Out of his real saved variables: "Buff Bar" carries a RED fillColor,
-    -- its first place carries GREEN and its second MAGENTA. He set the red
-    -- and two places ignored him in silence. Both readers were right and
+    -- Out of their real saved variables: "Buff Bar" carries a RED fillColor,
+    -- its first place carries GREEN and its second MAGENTA. They set the red
+    -- and two places ignored them in silence. Both readers were right and
     -- there were TWO of them - Look's own and Fill's - each with a header
     -- saying it must move here rather than gain a third. This is that move,
     -- so this is where the precedence is asked.
@@ -8946,7 +8947,7 @@ local function TestCooldownStore()
 
     -- THE WHOLE REASON IT IS KEYED BY SPELL. `cellOpts` is keyed by SLOT, so
     -- moving a spell one along leaves its styling behind for whatever lands
-    -- there next - which is what actually happens when he rearranges a bar.
+    -- there next - which is what actually happens when they rearrange a bar.
     local moved = {
         cells = { 102342, 1044 },
         fillColor = "bar",
@@ -8973,8 +8974,8 @@ local function TestCooldownStore()
             cellOpts = { [1] = { look = { chargeMarks = false } } } },
             1, "chargeMarks") == false)
 
-    -- HIS THREE STORED ENTRIES ARE READ AND NEVER REWRITTEN. They were
-    -- written by 4.82.0 and they are real settings of his; a resolver that
+    -- THE OWNER'S THREE STORED ENTRIES ARE READ AND NEVER REWRITTEN. They were
+    -- written by 4.82.0 and they are real settings of theirs; a resolver that
     -- "upgraded" them into the new shape would be a migration, and Store
     -- translates rather than migrates.
     S.Option(styled, 1, "fillColor")
@@ -9033,11 +9034,11 @@ local function TestCooldownStore()
 
     -- ON A PROFILE OF ITS OWN. Store.Cells reads through ns.SpecStore, so
     -- these writes need a spec that is ANSWERED - and they must not go
-    -- anywhere near his bars.
+    -- anywhere near their bars.
     local realKey = PretendSpec("DEATHKNIGHT:250")
 
     local mine = { cells = { 1044, 102342 }, fillColor = "bar",
-        cellOpts = { [1] = { look = { showSpark = "his" } } } }
+        cellOpts = { [1] = { look = { showSpark = "theirs" } } } }
 
     Check("Styling a place writes under its SPELL, not under its slot",
         B.SetPlaceLook(mine, 1, "fillColor", "ours") == true
@@ -9048,12 +9049,12 @@ local function TestCooldownStore()
     Check("and the resolver answers with it",
         S.Option(mine, 1, "fillColor") == "ours")
 
-    -- THE ONE THING THAT MUST NEVER HAPPEN TO HIS FILE: his 4.82.0 settings
-    -- were written by a version that is not running any more, and nothing
-    -- here may rewrite or delete them.
-    Check("His older per-slot settings are left exactly where they were",
-        mine.cellOpts[1].look.showSpark == "his"
-            and S.Option(mine, 1, "showSpark") == "his")
+    -- THE ONE THING THAT MUST NEVER HAPPEN TO THE OWNER'S FILE: their 4.82.0
+    -- settings were written by a version that is not running any more, and
+    -- nothing here may rewrite or delete them.
+    Check("The owner's older per-slot settings are left exactly where they were",
+        mine.cellOpts[1].look.showSpark == "theirs"
+            and S.Option(mine, 1, "showSpark") == "theirs")
 
     -- A PLACE WITH NOTHING ON IT CANNOT CARRY STYLING, and it is refused with
     -- a reason rather than filed under nil - the crash this addon has already
@@ -9063,8 +9064,8 @@ local function TestCooldownStore()
         and type(why) == "string" and why ~= "", tostring(why))
 
     -- CLEARING ONE KEY IS "FOLLOW THE BAR" FOR ONE ROW, and it must leave
-    -- nothing behind: an empty table is not styling, but it IS a table his
-    -- profile would carry for every place he ever clicked on.
+    -- nothing behind: an empty table is not styling, but it IS a table their
+    -- profile would carry for every place they ever clicked on.
     B.SetPlaceLook(mine, 1, "fillColor", nil)
     Check("Clearing the last key takes the place's whole entry with it",
         mine.cellLook == nil, type(mine.cellLook))
@@ -9082,7 +9083,7 @@ local function TestCooldownStore()
     Check("Following the bar again clears what this page wrote",
         B.ClearPlaceLook(mine, 1) == true and mine.cellLook == nil)
     Check("and leaves the older version's settings alone",
-        mine.cellOpts[1].look.showSpark == "his")
+        mine.cellOpts[1].look.showSpark == "theirs")
 
     ---------------------------------------------------------------------
     -- WHICH PLACE THE ROWS ARE POINTED AT
@@ -9090,7 +9091,7 @@ local function TestCooldownStore()
     -- THE SELECTION IS THE SWITCH. There was a "whole bar / this place"
     -- dropdown here for one wave, and the owner named what was wrong with it
     -- from a screenshot: the card had a highlight, the place had a ring and
-    -- the menu had an answer, so three things claimed to say what he was
+    -- the menu had an answer, so three things claimed to say what they were
     -- editing and two of them could disagree. "Jetzt wird immer beides
     -- angewählt und man weiss nicht was man editiert."
     --
@@ -9131,9 +9132,9 @@ local function TestCooldownStore()
         Check("Nor is a place past the end of a bar that has been narrowed",
             page.Place() == nil)
 
-        -- AND THE TWO MARKS ARE NEVER LIT TOGETHER, which is the whole of his
-        -- report. The card's stripe is drawn from this same answer - "the
-        -- settings are editing the WHOLE bar" - so one press moves both.
+        -- AND THE TWO MARKS ARE NEVER LIT TOGETHER, which is the whole of
+        -- their report. The card's stripe is drawn from this same answer -
+        -- "the settings are editing the WHOLE bar" - so one press moves both.
         --
         -- Asked as the condition the card is drawn from rather than by reading
         -- a texture: the stripe is a region on a pooled frame in a column this
@@ -9174,7 +9175,7 @@ end
 -- the lazy way, and 1 is what most of them happen to be.
 --
 -- The frames are ours, built here. Nothing in this suite touches a frame
--- Blizzard owns, which is what makes it safe to run in his client.
+-- Blizzard owns, which is what makes it safe to run in their client.
 ---------------------------------------------------------------------------
 local function TestCooldownClaim()
     local Claim = ns.Cooldowns and ns.Cooldowns.Claim
@@ -9196,7 +9197,7 @@ local function TestCooldownClaim()
     -- SetAlpha(0.9) reads back as 0.90196084976196, which is 230 times a
     -- float32 reciprocal of 255. The first version of this suite compared
     -- against the number it had PASSED IN, which is true out on the desk and
-    -- false in his client - five checks failed at once on a round trip that
+    -- false in their client - five checks failed at once on a round trip that
     -- was working perfectly.
     --
     -- Half a step is the widest a correct answer can be wrong by, and the
@@ -9228,7 +9229,7 @@ local function TestCooldownClaim()
     local alertAlpha = item.SpellActivationAlert:GetAlpha()
 
     -- THE CHROME, matched by atlas prefix rather than by name - which is how
-    -- the out-of-range veil was found on his client at all. One that must go
+    -- the out-of-range veil was found on their client at all. One that must go
     -- and one that must not, so a matcher that dims everything is caught.
     local veil = item:CreateTexture()
     veil:SetAtlas("UI-CooldownManager-OORshadow")
@@ -9300,10 +9301,10 @@ local function TestCooldownClaim()
     --
     -- Claim.Placed() counts EVERY frame this addon is holding an anchor for,
     -- across the whole session - not the ones this test made. On the desk
-    -- nothing else is running and it answered 1 and then 0, so `== 1` and
-    -- `== 0` looked like statements about this frame. In HIS client the bars
-    -- are up and drawing while /zs test runs, so it counts his cells too, and
-    -- both lines went red on a Claim that is working perfectly.
+    -- nothing else is running and it answered 1 and then 0, so `== 1` and `==
+    -- 0` looked like statements about this frame. In the owner's client the
+    -- bars are up and drawing while /zs test runs, so it counts their cells
+    -- too, and both lines went red on a Claim that is working perfectly.
     --
     -- That is a test asserting THE WORLD rather than the code, and it is the
     -- second time in this file: `mine.fo == 1` once meant "you happen to have
@@ -9368,10 +9369,10 @@ local function TestCooldownClaim()
     -- A FONT SIZE DOES NOT COME BACK AS THE NUMBER YOU GAVE IT.
     --
     -- The same lesson as ALPHA_STEP above, on a second value, and it cost the
-    -- same thing: two checks red in his client against a round trip that was
+    -- same thing: two checks red in their client against a round trip that was
     -- working. A FontString's size goes through the UI scale and is kept as a
-    -- 32-bit float, so it comes back a rounding error away. Measured, from his
-    -- own log rather than reasoned about:
+    -- 32-bit float, so it comes back a rounding error away. Measured, from
+    -- their own log rather than reasoned about:
     --
     --     SetFont(..., 22, ...)  ->  GetFont() = 22.000001907349
     --     SetFont(..., 14, ...)  ->  GetFont() = 13.999999046326
@@ -9394,11 +9395,11 @@ local function TestCooldownClaim()
 
     -- Near FOR THE SIZE, exactly as the styled check above and for the
     -- reason the long comment above it measures out. That comment documented
-    -- 13.999999046326 FROM HIS LOG and the line under it still said `== 14`
-    -- - the first check got the tolerance when he reported it, its twin five
-    -- lines down did not, and his client duly went red on the twin a week
+    -- 13.999999046326 FROM THE OWNER'S LOG and the line under it still said `== 14`
+    -- - the first check got the tolerance when they reported it, its twin five
+    -- lines down did not, and their client duly went red on the twin a week
     -- later. The harness models the UI-scale rounding now, so the desk goes
-    -- red on an `==` here before he can.
+    -- red on an `==` here before they can.
     local _, counterSize = counter:GetFont()
     local counterRed = counter:GetTextColor()
     Check("An unnamed counter gets its font, colour and place back too",
@@ -9452,11 +9453,11 @@ end
 -- cell goes, Claim writes it. Run against a Cooldown Manager built here out
 -- of frames of ours.
 --
--- NOT RUN IN HIS CLIENT, and that is a safety rule rather than a limitation.
--- Faking the viewers means writing four globals that Blizzard owns, and a
--- suite that threw halfway would leave his Cooldown Manager replaced by a
--- stub for the rest of the session. Where the real ones exist, the real ones
--- win and this says so.
+-- NOT RUN IN THE OWNER'S CLIENT, and that is a safety rule rather than a
+-- limitation. Faking the viewers means writing four globals that Blizzard
+-- owns, and a suite that threw halfway would leave their Cooldown Manager
+-- replaced by a stub for the rest of the session. Where the real ones exist,
+-- the real ones win and this says so.
 ---------------------------------------------------------------------------
 local function TestCooldownRender()
     local Render = ns.Cooldowns and ns.Cooldowns.Render
@@ -9524,7 +9525,7 @@ local function TestCooldownRender()
     -- Blizzard genuinely is not showing are the same answer.
     ns.CDM.indexBuilt = nil
 
-    -- HIS OWN BAR'S SHAPE: three across, 40px icons, a gap of 4.
+    -- THE OWNER'S BAR SHAPE: three across, 40px icons, a gap of 4.
     ns.db.bars = { {
         id = 9001, name = "desk", enabled = true,
         rows = 1, columns = 3, kind = "icon",
@@ -9600,7 +9601,7 @@ local function TestCooldownRender()
         ---------------------------------------------------------------
         -- AND THE MOVER, IN THE SAME WORLD
         --
-        -- Its own suite skips on this desk and skips in his client too
+        -- Its own suite skips on this desk and skips in their client too
         -- unless a bar happens to be on screen - and a check that never runs
         -- is not a lenient check, it is an absent one. There is a bar on
         -- screen right here, built two paragraphs up, so this is the one
@@ -9666,10 +9667,11 @@ local function TestCooldownRender()
     --
     -- Render.Stop is itself pcall'd, and that is not belt and braces: it was
     -- the FIRST line here, it threw on a fixture of mine, and every line below
-    -- it - the fake viewer, his bars, his module switch - was never reached.
-    -- The profile guard caught it and said "db.modules.cooldowns: true became
-    -- false", which is a settings change left behind by a test. Cleanup that
-    -- can throw has to be cleanup that cannot stop the rest of the cleanup.
+    -- it - the fake viewer, their bars, their module switch - was never
+    -- reached. The profile guard caught it and said "db.modules.cooldowns:
+    -- true became false", which is a settings change left behind by a test.
+    -- Cleanup that can throw has to be cleanup that cannot stop the rest of
+    -- the cleanup.
     pcall(Render.Stop)
     _G[ns.CDM.VIEWERS[1].global] = nil
     ns.db.bars = saved.bars
@@ -9826,7 +9828,7 @@ local function TestCooldownOwn()
     ---------------------------------------------------------------------
     -- A COUNTER THAT WILL NOT SAY WHETHER IT IS SHOWN
     --
-    -- His client, four times in one pass, on a bar that was drawing:
+    -- The owner's client, four times in one pass, on a bar that was drawing:
     --
     --     CDM.lua:1103: attempt to perform boolean test on local 'shown'
     --     (a secret boolean value, while execution tainted by 'ZwoelfStuff')
@@ -9856,7 +9858,7 @@ local function TestCooldownOwn()
         -- not false. False is Blizzard saying it looked at a count and decided
         -- it was not worth a number - final. Nil is nobody having said
         -- anything, and on a place we draw that means we judge it ourselves,
-        -- which is the number he asked for three times.
+        -- which is the number they asked for three times.
         Check("and a place we draw still writes its own number",
             ns.Cooldowns.Text.StackToShow(said, 3, true) == 3)
     else
@@ -9921,9 +9923,9 @@ local function TestCooldownOwn()
     --
     -- Owner, with the Fill tab open: "wir brauchen hier eine bg farbe fuer den
     -- bar fill." OFF for a bar that never said, and that is the half worth a
-    -- check: every bar he has arranged looks the way it does because the empty
-    -- part shows the cell's backdrop, and a default of ON would have repainted
-    -- all nine of them for a setting nobody chose.
+    -- check: every bar they have arranged looks the way it does because the
+    -- empty part shows the cell's backdrop, and a default of ON would have
+    -- repainted all nine of them for a setting nobody chose.
     ---------------------------------------------------------------------
     Check("A bar that never asked for a trough does not get one",
         Fill.Paint({}, 1).back.on == false)
@@ -9935,9 +9937,9 @@ local function TestCooldownOwn()
         string.format("%s %s", tostring(trough.color[3]),
             tostring(trough.alpha)))
 
-    -- AND THE CELL'S OWN ANSWER WINS, like every other key on this tab. His
+    -- AND THE CELL'S OWN ANSWER WINS, like every other key on this tab. Their
     -- "Bars 2" carries five look keys on cell 1 alone, so a reader that only
-    -- looked at bar level would throw away styling he set by hand.
+    -- looked at bar level would throw away styling they set by hand.
     local perCell = Fill.Paint({ fillBack = false,
         cellOpts = { [2] = { look = { fillBack = true } } } }, 2).back
     Check("and a place with its own answer keeps it", perCell.on == true)
@@ -9998,8 +10000,8 @@ local function TestCooldownOwn()
         -- It used to model "the buff is up" by being SHOWN, because
         -- CDM:ItemIsActive fell back to IsShown for a frame with no IsActive.
         -- That fallback is gone - IsShown is Blizzard's answer to "is this
-        -- usable on your target", not to "is the buff up", and reading one
-        -- for the other is what greyed his icons the moment he clicked a mob.
+        -- usable on your target", not to "is the buff up", and reading one for
+        -- the other is what greyed their icons the moment they clicked a mob.
         --
         -- So the fixture answers the question a real buff-bar item answers.
         -- Keeping the old shape would have been a fixture proving a path the
@@ -10078,7 +10080,7 @@ local function TestCooldownOwn()
         -- shape of a guard that reads one line and reports green.
         effects = { readyGlow = true },
         stackThresholds = { { value = 3, color = { 0, 1, 0 }, alpha = 1 } },
-        -- ON, so the two things he reported about it on 2026-08-16 can be
+        -- ON, so the two things they reported about it on 2026-08-16 can be
         -- asked at a desk: where it sits, and whether it goes out.
         showSpark = true,
     } }
@@ -10193,7 +10195,7 @@ local function TestCooldownOwn()
                 tostring(bars.Applications and bars.Applications:GetAlpha())))
 
         -----------------------------------------------------------------
-        -- THE THREE THINGS HE SAID USED TO WORK ON A BAR
+        -- THE THREE THINGS THE OWNER SAID USED TO WORK ON A BAR
         -- "da konnte ich NAME, aufladung und restzeit anzeigen"
         -----------------------------------------------------------------
         Check("The spell name is on the bar",
@@ -10229,7 +10231,7 @@ local function TestCooldownOwn()
         -- AND THE CHARGES, WIRED AND NOT JUST THE RULE. The harness had no
         -- charge API at all, so Text.ChargesUp returned at its first guard
         -- and the whole path had never run out here - which is how the
-        -- `not ours` gate could go out and take the charges on his bars
+        -- `not ours` gate could go out and take the charges on their bars
         -- with it while every desk light stayed green. 47568 is Empowered
         -- Rune Weapon in the harness: two charges, one spent.
         -----------------------------------------------------------------
@@ -10257,7 +10259,7 @@ local function TestCooldownOwn()
                 or "none")
 
         -----------------------------------------------------------------
-        -- THE RELAY, on the state his items are actually in: our count
+        -- THE RELAY, on the state their items are actually in: our count
         -- reader DRY, Blizzard's counter shown, its string carrying the
         -- number. With the item ALIVE on the cell the engine feeds that
         -- string - that is the whole point of Claim.Quiet - and the bar
@@ -10338,8 +10340,8 @@ local function TestCooldownOwn()
         -- This asks the WIRING - that Paint actually hands that pair to the
         -- texture - and it can only be asked at a desk, because this API has
         -- no way to read a gradient back. Skipped rather than quietly passed
-        -- in his client: "the rule is right" and "the rule reached the screen"
-        -- have been different answers twice in this file's history.
+        -- in their client: "the rule is right" and "the rule reached the
+        -- screen" have been different answers twice in this file's history.
         -- WHETHER THIS CLIENT CAN BE ASKED IS PROBED, NOT ASSUMED.
         --
         -- The first draft read the ramp back and skipped when there was none,
@@ -10389,10 +10391,10 @@ local function TestCooldownOwn()
         --
         -- Owner, on the game's own memory list: "wenn das addon offen ist
         -- sollte das weniger ein problem sein, schlimm waere es nur, wenn im
-        -- zu zustand so viele ressourcen verbraucht werden." He is right
-        -- about which half matters, and it is the half no other check here
-        -- can see: a window opened once is HELD and then stops growing, while
-        -- a table or a closure built per frame never stops.
+        -- zu zustand so viele ressourcen verbraucht werden." The owner is
+        -- right about which half matters, and it is the half no other check
+        -- here can see: a window opened once is HELD and then stops growing,
+        -- while a table or a closure built per frame never stops.
         --
         -- This mirror is the addon's only sixty-times-a-second job, and its
         -- first version wrapped its four calls in `pcall(function() ... end)`
@@ -10498,7 +10500,7 @@ local function TestCooldownOwn()
             tick(own.fill)
 
             -----------------------------------------------------------
-            -- THE SPARK, AND BOTH OF THE THINGS HE SAW ON 2026-08-16
+            -- THE SPARK, AND BOTH OF THE THINGS THE OWNER SAW ON 2026-08-16
             --
             -- "rechts von den bars ist immer noch ein weisser border" and
             -- "wenn die bar leer ist, ist der spark immer noch zu sehen"
@@ -10534,10 +10536,10 @@ local function TestCooldownOwn()
                     spark:IsShown() == false)
 
                 -----------------------------------------------------
-                -- AND THE STATE HIS BARS ARE ACTUALLY IN: everything
+                -- AND THE STATE THE OWNER'S BARS ARE ACTUALLY IN: everything
                 -- below the mirror unreadable, the WIDTH included.
                 --
-                -- Two designs died here, in his client and not at the
+                -- Two designs died here, in their client and not at the
                 -- desk. The first asked the fill's VALUE - secret on
                 -- every frame, and "cannot say counts as lit" was the
                 -- only branch that ever ran. The second asked the
@@ -10548,7 +10550,7 @@ local function TestCooldownOwn()
                 -- The harness now stores a secret SetValue as itself
                 -- AND sizes the texture with the sentinel, so any
                 -- future reader of either raises right here instead
-                -- of in his combat log. These checks hold the fill in
+                -- of in their combat log. These checks hold the fill in
                 -- exactly that state and drive the spark through the
                 -- only legal door - being TOLD.
                 -----------------------------------------------------
@@ -10600,7 +10602,7 @@ local function TestCooldownOwn()
             -----------------------------------------------------------------
         -- "KANN ES SEIN DAS DU EIN RANGE CHECK BEI DEN BARS MIT DRIN HAST?"
         --
-        -- No. What he was looking at is CDM:ItemIsActive's THIRD answer.
+        -- No. What they were looking at is CDM:ItemIsActive's THIRD answer.
         -- `IsShown` can hand back a secret boolean on this patch, and whether
         -- it does depends on where you are standing - so an unchanged,
         -- inactive spell was greyed on the frames the client answered and
@@ -10653,10 +10655,10 @@ local function TestCooldownOwn()
             -- it is why the defect survived a suite this size. IsActive
             -- answers on a buff-bar item, so the IsShown fallback under it
             -- never ran in any test - it only ran on the frames that have
-            -- no IsActive, out in his client, where `IsShown` means "would
+            -- no IsActive, out in their client, where `IsShown` means "would
             -- the Cooldown Manager put this on screen for your current
             -- target". Reading that as "is the buff up" is what greyed an
-            -- icon the moment he clicked a mob and lit it again when he
+            -- icon the moment they clicked a mob and lit it again when they
             -- deselected.
             --
             -- Restoring the fallback has to turn THIS red and nothing else,
@@ -11036,7 +11038,7 @@ local function TestCooldownStyling()
         Look.Opacity(off, false) == 0)
 
     ---------------------------------------------------------------------
-    -- HIS OWN BARS' LOOK, read back rather than assumed
+    -- THE OWNER'S BARS' LOOK, read back rather than assumed
     ---------------------------------------------------------------------
     local bare = Look.Style({}, 1)
     Check("A bar with no look keys at all still resolves to numbers",
@@ -11155,8 +11157,8 @@ local function TestCooldownStyling()
     -- AND THE OTHER READER OF THE SAME SETTING AGREES.
     --
     -- Look.Style resolved this key on its own and knew nothing about
-    -- `fillSide`, so a bar written in 4.82.0 - which is every bar he made -
-    -- ran the way he set it on screen and left-to-right in the style table.
+    -- `fillSide`, so a bar written in 4.82.0 - which is every bar they made -
+    -- ran the way they set it on screen and left-to-right in the style table.
     -- Two readers of one setting, disagreeing on exactly the bars that carry
     -- the old key, which is the quietest way for a setting to half-work.
     --
@@ -11212,12 +11214,13 @@ local function TestCooldownStyling()
             tostring(sorted[3] and sorted[3].value)))
     Check("A bar with none has none", #Fill.Thresholds({}, 1) == 0)
 
-    -- HIS OWN THREE, AND THEY HAVE NEVER PAINTED. All three thresholds in his
-    -- file carry value 0, which the renderer discards because a threshold of
-    -- zero is crossed by an aura that is merely present. The panel wrote rows
-    -- the renderer throws away, and nothing said so - so the count DROPPED
-    -- comes back as a second answer rather than being swallowed, which is
-    -- what lets the page fix its writer instead of somebody loosening this.
+    -- THE OWNER'S OWN THREE, AND THEY HAVE NEVER PAINTED. All three thresholds
+    -- in their file carry value 0, which the renderer discards because a
+    -- threshold of zero is crossed by an aura that is merely present. The
+    -- panel wrote rows the renderer throws away, and nothing said so - so the
+    -- count DROPPED comes back as a second answer rather than being swallowed,
+    -- which is what lets the page fix its writer instead of somebody loosening
+    -- this.
     local kept, dropped = Fill.Thresholds({ stackThresholds = {
         { value = 0, color = { 1, 0, 0 } },
         { value = 0, color = { 1, 0, 0 } },
@@ -11239,11 +11242,11 @@ local function TestCooldownStyling()
     -- Fill.CanFeed tests for ns.CDM.ItemStacks by name. For one wave that
     -- function was gone, so it answered false on every client - Fill.Overlays
     -- was handed an empty list whatever was stored, the ticker gave up before
-    -- it started, and not one band painted on a bar he had already set three of
-    -- them on. Every test above passed throughout: they check that a threshold
-    -- SURVIVES the filter, which says nothing about whether anything downstream
-    -- can ever feed it. The band arriving at a real overlay is asked where the
-    -- ticker is walked, in "Places we draw ourselves".
+    -- it started, and not one band painted on a bar they had already set three
+    -- of them on. Every test above passed throughout: they check that a
+    -- threshold SURVIVES the filter, which says nothing about whether anything
+    -- downstream can ever feed it. The band arriving at a real overlay is
+    -- asked where the ticker is walked, in "Places we draw ourselves".
     Check("A stack count can be read off a frame at all",
         Fill.CanFeed() == true,
         "ns.CDM.ItemStacks is " .. type(ns.CDM and ns.CDM.ItemStacks))
@@ -11992,7 +11995,7 @@ local function TestCasts()
 
         -- The killer's card, driven without a mouse.
         if ns.Death and ns.Death.OpenKillerCard then
-            Check("A killer the list knows opens his card",
+            Check("A killer the list knows opens their card",
                 ns.Death.OpenKillerCard(
                     { killerArt = { creatureID = probeID } }) == true)
             local card = ZwoelfStuffMobCard
@@ -12546,7 +12549,7 @@ local function TestHouseLook()
             string.format("%.1f/%.1f/%.1f/%.1f", auto.countdown.size,
                 auto.stacks.size, auto.charges.size, auto.spellName.size))
 
-        -- HIS OWN PROFILE CARRIES A NINE. The rail's minimum moved, which
+        -- THE OWNER'S PROFILE CARRIES A NINE. The rail's minimum moved, which
         -- stops a new one being made; a stored one is clamped where it is
         -- READ, so nothing reaches into a saved setting to do it.
         local typed = Text.Style({ countdown = { size = 6 } }, 40)
@@ -12653,10 +12656,10 @@ local function TestHouseLook()
 
     -- THE PROMISE. Anything else here would be the addon overwriting a
     -- decision somebody made and never telling them.
-    Check("but a colour he PICKED is left exactly where it was",
+    Check("but a colour they PICKED is left exactly where it was",
         old.bars[1].borderColor[1] == 0.9,
         tostring(old.bars[1].borderColor[1]))
-    Check("and a size he typed is not rewritten either",
+    Check("and a size they typed is not rewritten either",
         old.bars[1].spellName.size == 9,
         tostring(old.bars[1].spellName.size))
     Check("and the two strips keep the colours that tell them apart",
@@ -12730,7 +12733,7 @@ local function TestHouseLook()
     -- Version 10: the trough step version 8 missed
     --
     -- THE OWNER'S OWN PROFILE is the fixture: stamped 9, trough still 0.12,
-    -- because the trough joined the house look one commit after his profile
+    -- because the trough joined the house look one commit after their profile
     -- had been stamped 8. A step under a consumed number runs for nobody
     -- who was there first - it needs a number of its own.
     ---------------------------------------------------------------------

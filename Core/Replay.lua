@@ -1,7 +1,7 @@
 ﻿---------------------------------------------------------------------------
 -- Replay.lua - the death, played back on a timeline
 --
--- The owner's ask, in his words: "dann würde ich das als extra fenster
+-- The owner's ask, in their words: "dann würde ich das als extra fenster
 -- aufmachen - dann ein zeitstrahl in der mitte, oben der income also was an
 -- dmg und heal reinkommt. und spieler aktionen. mit speed regler, pause.
 -- play stop. und spell icons, zahlen, tooltips".
@@ -71,7 +71,7 @@ local LANE_OUT_Y = 312      -- your DEFENSIVES, as bars, under those
 
 -- THERE WAS A FOURTH LANE, "Healing on you", and it went in 4.81.0. Owner:
 -- "bitte noch im death log replay der healing on you bereich rausnehmen." It
--- held a fifth of the window's height and, on the death he photographed,
+-- held a fifth of the window's height and, on the death they photographed,
 -- nothing at all - which is the ordinary case for the deaths worth opening
 -- this window over. The heals are still RECORDED and the death window still
 -- counts them; what went is the empty band under the plot.
@@ -125,7 +125,7 @@ end
 
 -- WHICH SLICE OF TIME THE PLOT SHOWS.
 --
--- The owner's problem, in his words: six spells inside two tenths of a
+-- The owner's problem, in their words: six spells inside two tenths of a
 -- second all draw on top of each other. The answer is not smaller icons -
 -- it is a plot that can be zoomed into and scrolled along, the way every
 -- log viewer works.
@@ -267,7 +267,7 @@ end
 ---------------------------------------------------------------------------
 -- What you pressed, as BARS
 --
--- The owner asked for it and he is right: an icon says "you pressed it" and
+-- The owner asked for it and they are right: an icon says "you pressed it" and
 -- a bar says "and it was up for these four seconds, which is the half of it
 -- that was still true when the hit landed". Two of them running at once
 -- stack, so an overlap is visible instead of two icons on top of each other.
@@ -1137,11 +1137,11 @@ function Place(snapshot, from, to)
     -- keinen balken, nur def cds die man einstellt. das verwirrt nur. ich
     -- wuerde auch normale spells in eine eigene reihe legen."
     --
-    -- He is right on both counts. A bar means "this was up for this long",
-    -- and a Death Strike has nothing that is up - drawing it as a bar off
-    -- its tooltip's number invents a state that does not exist. So the
-    -- rotation goes in a row of its own, as icons: moments, which is what
-    -- they are. Only the defensives picked on the Deaths page get bars.
+    -- The owner is right on both counts. A bar means "this was up for this
+    -- long", and a Death Strike has nothing that is up - drawing it as a bar
+    -- off its tooltip's number invents a state that does not exist. So the
+    -- rotation goes in a row of its own, as icons: moments, which is what they
+    -- are. Only the defensives picked on the Deaths page get bars.
     local colourOf, nextColour = {}, 0
     local bars, others = {}, {}
     for _, cast in ipairs(snapshot.casts or {}) do

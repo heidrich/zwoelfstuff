@@ -172,8 +172,8 @@ end
 -- Announcing
 ---------------------------------------------------------------------------
 -- TWO PRESSES IN A SECOND ARE ONE ANNOUNCE. A taunt that does not land is
--- pressed again immediately, and a tank who spams his own group because his
--- first taunt missed will switch the feature off and never come back.
+-- pressed again immediately, and a tank who spams their own group because
+-- their first taunt missed will switch the feature off and never come back.
 Taunts.QUIET = 2.0
 local lastAt = 0
 
@@ -276,7 +276,7 @@ local watcher = CreateFrame("Frame")
 
 -- The handler, with a name on it: the desktop harness cannot fire an event,
 -- so without this the whole path from "a spell was cast" to "something was
--- said" would only ever run for the first time on his screen.
+-- said" would only ever run for the first time on their screen.
 function Taunts.OnCast(spellID)
     if not ns.db then return end
     if not ns.Modules:IsOn("cotanks") then return end

@@ -16,9 +16,9 @@
 --                              spell and target are set OUT OF COMBAT. The
 --                              player presses it; the addon never casts.
 --
--- His answer to that: "ja, also der spieler muss schon klicken" - and "ja
--- ist klar. alle brauchen das addon". Both limits accepted, both written on
--- the settings page rather than left to be discovered.
+-- The owner's answer to that: "ja, also der spieler muss schon klicken" - and
+-- "ja ist klar. alle brauchen das addon". Both limits accepted, both written
+-- on the settings page rather than left to be discovered.
 --
 -- THE VISIBLE CHAT LINE STAYS. Everybody who does not run this addon still
 -- gets the sentence; this channel is what turns it into a button for the

@@ -231,10 +231,10 @@ function PlayerCard.Create()
     -- THE SKILLUNG, DOCKED. Owner, 2026-08-24: "rechts neben dem gear
     -- fenster direkt das skill fenster andocken, damit man direkt die
     -- skillung sieht" - "nicht nur den string". Drawn from the same answer
-    -- the string comes from, and drawn as the TREE: every node of it at its
-    -- own place, the taken ones lit, the ones he walked past dimmed, the
-    -- lines that join them underneath. A child of the card, so it moves,
-    -- hides and closes with it.
+    -- the string comes from, and drawn as the TREE: every node at its own
+    -- place, the taken ones lit, the ones the player walked past dimmed,
+    -- and the lines that join them underneath. A child of the card, so it
+    -- moves, hides and closes with it.
     local skills = CreateFrame("Frame", nil, card)
     skills:SetPoint("TOPLEFT", card, "TOPRIGHT", 2, 0)
     skills:SetSize(PANEL_W, 596)
@@ -354,10 +354,10 @@ local function PaintBuild(data)
         * 0.5
 
     ---------------------------------------------------------------------
-    -- EVERY NODE, DIMMED - the ones he walked past are half of what a
-    -- skillung says. The other hero tree is not drawn at all: its nodes are
-    -- real but they are not his, and a dimmed icon means "offered and not
-    -- taken", which about the tree he did not pick would be a lie.
+    -- EVERY NODE, DIMMED - the ones the player walked past are half of
+    -- what a skillung says. The other hero tree is not drawn at all: those
+    -- nodes are real, but a dimmed icon means "offered and not taken", and
+    -- about a tree the player never chose that would be a lie.
     ---------------------------------------------------------------------
     local shown = 0
     local placed = {}   -- board index -> which icon drew it, this paint only
@@ -385,8 +385,8 @@ local function PaintBuild(data)
     end
 
     ---------------------------------------------------------------------
-    -- AND THE ONES HE TOOK, LIT. Matched by SPELL, because a choice node
-    -- answers to either of its two and the one he took may not be the one
+    -- AND THE TAKEN ONES, LIT. Matched by SPELL, because a choice node
+    -- answers to either of its two, and the one the player took may not
     -- the board drew.
     ---------------------------------------------------------------------
     for _, pick in ipairs(picks or {}) do
@@ -407,8 +407,8 @@ local function PaintBuild(data)
 
     ---------------------------------------------------------------------
     -- WHAT JOINS THEM, underneath. A line between two lit nodes is lit;
-    -- anything touching a node he did not take is dim, so the path he
-    -- actually walked reads at a glance.
+    -- anything touching a node the player did not take is dim, so the
+    -- path they actually walked reads at a glance.
     ---------------------------------------------------------------------
     local drawnLines = 0
     for index, node in ipairs(board.nodes) do

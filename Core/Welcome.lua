@@ -91,8 +91,8 @@ local function BuildFrame()
 
     -- ONE LINE UNDER THE NAME, AND IT SAYS WHAT THE ADDON IS. The strapline
     -- that stood here until 2026-08-15 counted the features and told you to
-    -- pick some - narrating the rows under it - and went on his word ("den
-    -- text raus"). This one is his too (2026-08-16): "A Tank and Group Play
+    -- pick some - narrating the rows under it - and went on their word ("den
+    -- text raus"). This one is theirs too (2026-08-16): "A Tank and Group Play
     -- addon" - not a count, not an instruction, the one sentence a stranger
     -- needs. The rule stays at its fixed offset, so nothing below moves.
     local subline = UI.Label(frame, "A Tank and Group Play addon", UI.FS.meta,
@@ -114,7 +114,7 @@ local function BuildFrame()
     -- addons claiming Blizzard's cooldown frames produce a broken screen that
     -- neither of them can diagnose, because the frames belong to neither.
     --
-    -- ONE CONTROL, NOT TWO. The choice he asked for is the switch on the
+    -- ONE CONTROL, NOT TWO. The choice they asked for is the switch on the
     -- Cooldowns row directly underneath - this strip is the reason for it, not
     -- a second way to set it. A warning with its own pair of buttons beside a
     -- toggle that sets the same thing is two answers to one question, and the
@@ -242,11 +242,11 @@ local function BuildFrame()
     footer:SetJustifyH("LEFT")
 
     -- AND THEN THE ADDON IS OPEN. Owner, 2026-08-10: "beim welcome screen,
-    -- wenn ich da auf lets go klicke, sollte das addon auf gehen" - and he is
-    -- right about what the sentence promises: this window asks which features
-    -- you want, and "let's go" is an answer that expects to arrive SOMEWHERE.
-    -- Closing onto an empty screen leaves the newcomer exactly where they
-    -- were, with a settings window they have not found yet.
+    -- wenn ich da auf lets go klicke, sollte das addon auf gehen" - and they
+    -- are right about what the sentence promises: this window asks which
+    -- features you want, and "let's go" is an answer that expects to arrive
+    -- SOMEWHERE. Closing onto an empty screen leaves the newcomer exactly
+    -- where they were, with a settings window they have not found yet.
     --
     -- Escape still just closes, which is the difference between the two ways
     -- out: one is "yes, show me" and the other is "not now".

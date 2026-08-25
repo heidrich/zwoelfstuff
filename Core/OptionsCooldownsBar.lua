@@ -230,7 +230,7 @@ local function Picture(grid, bar, label, kind, key, fallback, icon, inherit)
         Get(bar, key, fallback), Put(bar, key), Refresh, inherit)
 end
 
--- THE SMALLEST A NUMBER WITH AN OUTLINE CAN BE READ AT. Measured on his own
+-- THE SMALLEST A NUMBER WITH AN OUTLINE CAN BE READ AT. Measured on their own
 -- screenshot rather than chosen: the outline eats a pixel on each side, so
 -- below this the glyph is two pixels of colour between two of black.
 --
@@ -311,11 +311,11 @@ end
 --
 -- The renderer takes a place's own answer FIRST and the bar only afterwards,
 -- so a place with an override of its own does not move when these rows do.
--- That is not hypothetical and it is not rare: his "Bars 2" carries fillColor,
--- chargeMarks, showSpark, fillGradient and stackThresholds on place 1 and
--- fillColor, fillGrow and showSpark on place 2, and the bar underneath them
--- carries none of it - so on that one bar most of the fill block would look
--- like it had stopped working.
+-- That is not hypothetical and it is not rare: their "Bars 2" carries
+-- fillColor, chargeMarks, showSpark, fillGradient and stackThresholds on place
+-- 1 and fillColor, fillGrow and showSpark on place 2, and the bar underneath
+-- them carries none of it - so on that one bar most of the fill block would
+-- look like it had stopped working.
 --
 -- ASKED OF Store.Own RATHER THAN OF cellOpts. This used to walk `cellOpts`
 -- itself, which was the whole story while there was one place styling could
@@ -397,10 +397,11 @@ local function PlaceRows(grid, bar)
     -- place for that place - and this line is the same answer written in
     -- words, beside the rows it applies to.
     --
-    -- BOTH ENDS SAY IT, which is what §3 of the plan asked for and what he
-    -- asked for in his own words: a mark on the place, and the same fact next
-    -- to the block being edited. The eye that is on the settings column should
-    -- not have to travel back to the picture to know what it is changing.
+    -- BOTH ENDS SAY IT, which is what §3 of the plan asked for and what they
+    -- asked for in the owner's own words: a mark on the place, and the same
+    -- fact next to the block being edited. The eye that is on the settings
+    -- column should not have to travel back to the picture to know what it is
+    -- changing.
     local row = grid:Row(L["Changing"])
     local what = UI.Label(row.slot, "", UI.FS.body, C.accent)
     what:SetPoint("LEFT", row.slot, "LEFT", 0, 0)
@@ -411,15 +412,15 @@ local function PlaceRows(grid, bar)
         .. "own wins over the bar, which is why a colour set on the bar can "
         .. "leave one place looking untouched."])
 
-    -- THE WAY BACK, and it is a button rather than a "reset" on every row: he
-    -- has three places carrying styling from 4.82.0 and the honest offer is
-    -- "this place follows the bar again", once.
+    -- THE WAY BACK, and it is a button rather than a "reset" on every row:
+    -- the owner has three places carrying styling from 4.82.0, and the
+    -- honest offer is "this place follows the bar again", once.
     --
-    -- ONLY WHAT THIS PAGE WROTE. 4.82.0's per-slot settings are his, written by
-    -- a version that is not running any more, and a button that quietly deleted
-    -- settings it did not write is the one thing this wave exists to stop
-    -- happening to him. The sentence under it says so out loud rather than in a
-    -- comment nobody reads.
+    -- ONLY WHAT THIS PAGE WROTE. 4.82.0's per-slot settings are theirs,
+    -- written by a version that is not running any more, and a button that
+    -- quietly deleted settings it did not write is the one thing this wave
+    -- exists to stop happening to them. The sentence under it says so out loud
+    -- rather than in a comment nobody reads.
     local followRow = grid:Buttons({
         { text = L["Follow the bar again"], onClick = function()
             local bars = ns.Cooldowns and ns.Cooldowns.Bars
@@ -454,7 +455,7 @@ local function PlaceRows(grid, bar)
         followRow.dkSkip = not hasOwn
         followRow:SetShown(hasOwn)
 
-        -- And the sentence about his 4.82.0 settings appears only on a place
+        -- And the sentence about their 4.82.0 settings appears only on a place
         -- that actually has some, because on every other place it would be a
         -- warning about nothing.
         local opts = editing and current
@@ -713,7 +714,7 @@ local TEXT_ELEMENTS = {
     -- "kann es sein dass du hier paar sachen durcheinander bringst und wild
     -- benennst?"
     --
-    -- He is right, and it is worth being exact about whose fault it is.
+    -- The owner is right, and it is worth being exact about whose fault it is.
     -- BLIZZARD has two frames: `Applications` counts the stacks of an aura,
     -- `ChargeCount` counts the charges of a spell, and no frame ever carries
     -- both. That is a real distinction inside the engine. It is not a
@@ -855,21 +856,21 @@ function Panel.BuildText(grid, bar)
         -- cooldowns has nothing for the stack rows to reach.
         --
         -- AND SAID ABOUT THIS BAR RATHER THAN IN GENERAL. The sentence below
-        -- was correct and did not help: he spent a session in the Stack count
-        -- block setting up a spell that has CHARGES, because nothing on the
-        -- page said which of the two his own places carry. Counted live now,
-        -- off the frames themselves.
-        -- THE TWO PARAGRAPHS THAT USED TO STAND HERE ARE GONE. One explained
-        -- that Blizzard puts a stack count on a buff and a charge count on a
-        -- cooldown; the other explained the inheritance between them. Owner,
-        -- with a picture of both: "die beschreibung kannst du rausnehmen, das
-        -- juckt niemanden, entweder es geht oder nicht."
+        -- was correct and did not help: they spent a session in the Stack
+        -- count block setting up a spell that has CHARGES, because nothing on
+        -- the page said which of the two their own places carry. Counted live
+        -- now, off the frames themselves. THE TWO PARAGRAPHS THAT USED TO
+        -- STAND HERE ARE GONE. One explained that Blizzard puts a stack count
+        -- on a buff and a charge count on a cooldown; the other explained the
+        -- inheritance between them. Owner, with a picture of both: "die
+        -- beschreibung kannst du rausnehmen, das juckt niemanden, entweder es
+        -- geht oder nicht."
         --
-        -- He is right, and the live line above them is why: it says the same
-        -- thing about HIS bar, in numbers, and it is the sentence that
-        -- actually sends him to the right block. A rule stated in general
-        -- next to the same rule stated about the thing in front of you is the
-        -- general one being read twice and acted on neither time.
+        -- The owner is right, and the live line above them is why: it says the
+        -- same thing about the owner's bar, in numbers, and it is the sentence
+        -- that actually sends them to the right block. A rule stated in
+        -- general next to the same rule stated about the thing in front of you
+        -- is the general one being read twice and acted on neither time.
 
         Keep(UI.Toggle(grid:Row(L["Show"]),
             TextGet(bar, spec.key, "show", true),
@@ -896,7 +897,7 @@ function Panel.BuildText(grid, bar)
         -- Worse than it looks, and this is why it is fixed rather than
         -- explained: the charge count INHERITS from the stack count field by
         -- field, so one drag to 4 while hunting for a missing number made the
-        -- other number invisible too - and the second one is the one his
+        -- other number invisible too - and the second one is the one their
         -- spell actually has. A setting that hides the thing you are looking
         -- for, while you are looking for it, is a trap.
         --
@@ -998,7 +999,7 @@ end
 --
 -- Grouped by what each one is FOR. Alphabetical is how the old page ended up
 -- with the edge style three sections below the edge it changes: the owner had
--- that control built for him and still had to ask where it was.
+-- that control built for them and still had to ask where it was.
 --
 -- EVERY ROW ASKS THE FILE THAT DRIVES IT. Effects.ANSWERED names the keys
 -- something actually reads and its own comment says the options page builds
@@ -1110,7 +1111,7 @@ function Panel.BuildEffects(grid, bar)
 
     -- BESIDE THE EDGE IT CHANGES rather than three sections further down. The
     -- old page put it under a different heading and the owner, who had it
-    -- built for him, still had to ask where it was: a control nobody can find
+    -- built for them, still had to ask where it was: a control nobody can find
     -- is a control that does not work.
     local styleOf = FxGet(bar, "glowStyle")
     Keep(glow, FxChoice(grid, bar, L["Edge style"], "glowStyle", {
@@ -1208,10 +1209,10 @@ function Panel.BuildEffects(grid, bar)
     -- etc. das fehlt komplett" - and then "ich kann es aber nicht einstellen
     -- im addon! das sind noch alte regeln."
     --
-    -- He is right about both halves. The rule was welded shut: one behaviour,
-    -- and a two-value switch that could only turn it on or off. Every other
-    -- state was already ANSWERABLE - Effects.CellState has had the arithmetic
-    -- all along - and none of them could be ASKED for.
+    -- The owner is right about both halves. The rule was welded shut: one
+    -- behaviour, and a two-value switch that could only turn it on or off.
+    -- Every other state was already ANSWERABLE - Effects.CellState has had the
+    -- arithmetic all along - and none of them could be ASKED for.
     --
     -- READ THROUGH Effects.ShowWhen, NOT OFF THE KEY. A bar written in 4.82.0
     -- carries `hideWhen` and no `showWhen`, and the translation lives in
@@ -1285,7 +1286,7 @@ local FILL_KEYS = {
 --
 -- A fixed pool rather than rows made on demand, because a page in this window
 -- is built ONCE and a row created by a click would never be laid out. Six is
--- twice what the old page's three fixed bands offered and twice what he has
+-- twice what the old page's three fixed bands offered and twice what they have
 -- ever stored; a stack bar has two or three readings worth marking.
 local BANDS = 6
 
@@ -1560,10 +1561,10 @@ function Panel.BuildFill(grid, bar)
     -- THE FLOOR IS ON THE PAGE, and it is the writer's half of a fault the
     -- renderer already reports. Fill.Thresholds drops every band below one -
     -- "a threshold of 0 is crossed by an aura that is merely present" - and
-    -- counts what it dropped; measured against his own file, all three of his
-    -- bands carry value = 0, so the one bar he ever set bands on has never
-    -- painted a single one. The old panel called nought "off" and wrote rows
-    -- the renderer threw away. Off is having no band.
+    -- counts what it dropped; measured against their own file, all three of
+    -- their bands carry value = 0, so the one bar they ever set bands on has
+    -- never painted a single one. The old panel called nought "off" and wrote
+    -- rows the renderer threw away. Off is having no band.
     grid:Note(L["A band starts at one stack. To switch one off, take it "
         .. "away - a band of nought would be crossed by an aura that is "
         .. "merely there."])

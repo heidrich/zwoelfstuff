@@ -6,8 +6,8 @@
 -- button, dann grauen die buttons aus und du kannst auf den button klicken
 -- und einen key belegen. dann steht der da drin."
 --
--- He is describing what every action bar addon does, and the reason it won a
--- long time ago is that a key belongs to a PLACE ON THE SCREEN. A row called
+-- They are describing what every action bar addon does, and the reason it won
+-- a long time ago is that a key belongs to a PLACE ON THE SCREEN. A row called
 -- "Slot 3" asks you to hold a picture of the panel in your head and count;
 -- the panel itself is right there, and you can point at it.
 --
@@ -263,7 +263,7 @@ end
 -- THERE HAS TO BE A WAY OUT THAT YOU CAN SEE.
 --
 -- Owner, 2026-08-10: "man kommt nicht mehr aus dem modus. ein speichern
--- button oder done wäre cool" - and he was stuck for a reason worth writing
+-- button oder done wäre cool" - and they were stuck for a reason worth writing
 -- down: Escape was handled on the SQUARE, and a square only listens while it
 -- is waiting for a key. Standing in the mode without having clicked one,
 -- nothing on screen was listening at all.

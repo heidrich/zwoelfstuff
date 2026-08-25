@@ -160,7 +160,7 @@ end
 ---------------------------------------------------------------------------
 -- WHEN THE CLIENT REFUSES
 --
--- 2026-08-14, out of his BugSack, twice:
+-- 2026-08-14, out of their BugSack, twice:
 --
 --   [ADDON_ACTION_BLOCKED] AddOn 'ZwoelfStuff' tried to call the protected
 --   function 'UNKNOWN()'      ... Chat.lua:174 in function 'Post'
@@ -173,8 +173,8 @@ end
 -- window, which is how a refused whisper reads as "the button does nothing".
 --
 -- WHAT IS KNOWN AND WHAT IS NOT, kept apart on purpose:
---   * Known: his externals config has WHISPER on and nothing else, so it is
---     not the SAY/YELL restriction. Read out of his saved variables, not
+--   * Known: their externals config has WHISPER on and nothing else, so it is
+--     not the SAY/YELL restriction. Read out of their saved variables, not
 --     guessed.
 --   * Known: the destination was the SHORT name. The roster computes a
 --     NAME-REALM `fullName` precisely because a short name addresses nobody
@@ -187,7 +187,8 @@ end
 --     loader and ChatThrottleLib both take that same namespaced door in
 --     shipping code, so it is not proof, and nothing here is flipped on it.
 --
--- `/zs chat probe` is what settles it, and it asks HIS client rather than me.
+-- `/zs chat probe` is what settles it, and it asks the owner's client rather
+-- than me.
 ---------------------------------------------------------------------------
 local lastSend
 local lastBlocked
@@ -263,7 +264,7 @@ end
 --
 -- The same move that unblocked the group death log: stop reasoning about
 -- what a client does and ask it. Everything here is READ - no message is
--- sent, because a probe that spams his group to learn something is a worse
+-- sent, because a probe that spams their group to learn something is a worse
 -- probe than one that does not.
 ---------------------------------------------------------------------------
 function Chat.Probe()
@@ -301,8 +302,8 @@ function Chat.Probe()
             tostring(member.class)))
     end
 
-    -- AND WHERE A REQUEST WOULD GO right now, resolved against the group he
-    -- is actually standing in.
+    -- AND WHERE A REQUEST WOULD GO right now, resolved against the group
+    -- actually being stood in.
     local cfg = ns.Externals and ns.Externals.Config()
     local chosen = (cfg and cfg.channels) or {}
     local picked = {}

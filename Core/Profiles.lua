@@ -175,13 +175,13 @@ end
 -- Version 10: the co-tank trough, which version 8 missed
 --
 -- The house look (8) moved every surface to #1a1a1a opaque; the co-tank
--- panel's trough joined that rule ONE COMMIT LATER, inside the same
--- function, under the same version number - which had already been stamped
--- on the owner's profile. His panel kept a 0.12 trough and nothing said so:
+-- panel's trough joined that rule ONE COMMIT LATER, inside the same function,
+-- under the same version number - which had already been stamped on the
+-- owner's profile. The owner's panel kept a 0.12 trough and nothing said so:
 -- the migration reported complete, and it WAS complete for the list it had
--- when it ran. This runs the one step it missed, once, for profiles that
--- still wear the old value. Somebody who has since chosen a trough of their
--- own is left alone - the same recognise-don't-assume rule as the walk.
+-- when it ran. This runs the one step it missed, once, for profiles that still
+-- wear the old value. Somebody who has since chosen a trough of their own is
+-- left alone - the same recognise-don't-assume rule as the walk.
 ---------------------------------------------------------------------------
 function Profiles.Trough(profile)
     if type(profile) ~= "table" then return 0 end

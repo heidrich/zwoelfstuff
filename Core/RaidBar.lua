@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------
--- RaidBar - the buttons a raid leader needs in his hands.
+-- RaidBar - the buttons a raid leader needs in their hands.
 --
 -- Owner, 2026-08-12: "ich moechte ein neues feature und m+ und raids -> Raid
 -- Bar. das ist eine Funktion aus Method raid tools, da kann ich eine bar
@@ -131,8 +131,8 @@ end
 -- picture of the picker: "ready check und pull timer, die icons sind
 -- vertauscht."
 --
--- He is right, and the reason is worth writing down because it decides both
--- of these buttons rather than one:
+-- The owner is right, and the reason is worth writing down because it decides
+-- both of these buttons rather than one:
 --
 --   A ready check IS THE QUESTION. The green tick is what somebody ANSWERS
 --   with; the yellow "?" is what the game's own ready-check window shows

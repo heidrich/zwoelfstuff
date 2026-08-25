@@ -326,9 +326,9 @@ end)
 --
 --   1. the Cooldown Manager is not up at all
 --   2. its BUFF viewers have no items - nothing to watch, so no window is
---      ever recorded, and nothing will change however long he plays
+--      ever recorded, and nothing will change however long they play
 --   3. the items are there but their spell ids are secret
---   4. everything works and the death he is looking at is simply OLDER than
+--   4. everything works and the death they are looking at is simply OLDER than
 --      this recorder, so it carries no windows and never will
 --
 -- Four causes, one symptom - that is the case that has cost this project
