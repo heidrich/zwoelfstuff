@@ -5369,6 +5369,80 @@ local function TestExternals()
     Check("What is shown is a subset of what is picked",
         #X.Shown() <= #X.Picked(), #X.Shown() .. " of " .. #X.Picked())
 
+    ---------------------------------------------------------------------
+    -- THE SLOT A BREWMASTER CANNOT FILL
+    --
+    -- Owner, 2026-08-24: "mit tank monk in der gruppe, da wurde es
+    -- angezeigt" - Life Cocoon on the panel with a brewmaster standing
+    -- there. Cocoon is a mistweaver's spell, so the panel has to drop it
+    -- the moment his spec is READ, and keep it while it is not, because
+    -- unknown means yes and a healer who is out of range at the pull must
+    -- not vanish off the bar.
+    --
+    -- Roster is swapped rather than a group faked: the rule takes the
+    -- list as an argument precisely so it can be asked without one.
+    ---------------------------------------------------------------------
+    do
+        local monk = (ns.Specs and ns.Specs.Table().MONK) or {}
+        local brew = monk[1] and monk[1].id
+        local mist = monk[2] and monk[2].id
+        local cfg = X.Config()
+        local keptCell, keptRoster = cfg.cells[1], X.Roster
+        cfg.cells[1] = 116849
+
+        local monkInGroup = {}
+        X.Roster = function() return { monkInGroup } end
+        local function Monk(name, role, spec)
+            monkInGroup.name, monkInGroup.role, monkInGroup.spec =
+                name, role, spec
+            monkInGroup.class, monkInGroup.unit = "MONK", "party1"
+        end
+        local function Drawn()
+            for _, spellID in ipairs(X.Shown()) do
+                if spellID == 116849 then return true end
+            end
+            return false
+        end
+
+        Check("The desk knows both monk specs apart",
+            type(brew) == "number" and type(mist) == "number"
+                and brew ~= mist)
+
+        Monk("Braumeister", "TANK", brew)
+        Check("A BREWMASTER DROPS IT", not Drawn())
+        Monk("Nebel", "HEALER", mist)
+        Check("A mistweaver keeps it", Drawn())
+
+        -- A SPEC THAT WAS READ OUTRANKS THE ROLE, both ways round: a healer
+        -- queued as damage is put right by his inspect, not hidden by the
+        -- queue he stood in.
+        Monk("Nebel", "DAMAGER", mist)
+        Check("...even when the queue called him damage", Drawn())
+        Monk("Braumeister", "HEALER", brew)
+        Check("...and a brewmaster queued as healer still cannot", not Drawn())
+
+        -- AND WITH NOTHING READ, which is the state he was actually in: the
+        -- role the game assigned answers it without an inspect at all.
+        Monk("Braumeister", "TANK", nil)
+        Check("...an unread TANK monk drops it on his role alone", not Drawn())
+        Check("...with a refusal that names the role", (function()
+            local _, why = X.Ask(116849)
+            return type(why) == "string"
+                and why:find("Braumeister", 1, true) ~= nil
+                and why:find("tank", 1, true) ~= nil
+        end)())
+
+        Monk("Nebel", "HEALER", nil)
+        Check("...while an unread HEALER monk keeps it", Drawn())
+
+        -- The rule that must survive all of this: a role nobody assigned is
+        -- no evidence at all.
+        Monk("Draussen", "NONE", nil)
+        Check("...and an unassigned role hides nobody", Drawn())
+
+        X.Roster, cfg.cells[1] = keptRoster, keptCell
+    end
+
     -- A KEY PRESSED AT AN EMPTY PLACE MUST SAY SO, not throw and not go
     -- quiet. Alone, with nobody to ask, every slot is empty - so this is the
     -- press that happens most often while nothing is going on.
@@ -8035,16 +8109,32 @@ local function TestGear()
         },
     }
     __ITEM_LEVELS[210001] = 636
+    -- A TREE WORTH READING: two taken, one PASSED OVER, a choice node whose
+    -- second spelling is the one taken, the chooser that is not a talent at
+    -- all, and both hero trees. Every one of those is a branch of the walk,
+    -- and a fixture where everything is taken cannot tell a board that draws
+    -- the tree from one that draws only the build.
     __INSPECT_BUILD = {
         [1] = { posX = 100, posY = 100, currentRank = 1, maxRanks = 1,
-                entryIDs = { 11 } },
+                entryIDs = { 11 },
+                visibleEdges = { { targetNode = 2 } } },
         [2] = { posX = 600, posY = 400, currentRank = 2, maxRanks = 2,
-                entryIDs = { 12 } },
+                entryIDs = { 12 },
+                visibleEdges = { { targetNode = 5 } } },
         [3] = { posX = 200, posY = 120, currentRank = 1, maxRanks = 1,
                 subTreeID = 5, subTreeActive = true, entryIDs = { 13 } },
         [4] = { posX = 300, posY = 120, currentRank = 1, maxRanks = 1,
                 subTreeID = 6, subTreeActive = false, entryIDs = { 14 } },
+        [5] = { posX = 900, posY = 250, currentRank = 0, maxRanks = 1,
+                entryIDs = { 15 } },
+        [6] = { posX = 300, posY = 700, currentRank = 1, maxRanks = 1,
+                entryIDs = { 16, 17 },
+                activeEntry = { entryID = 17 } },
+        [7] = { posX = 400, posY = 500, currentRank = 1, maxRanks = 1,
+                type = Enum.TraitNodeType.SubTreeSelection,
+                entryIDs = { 18 } },
     }
+    ns.Gear.ForgetBoards()
 
     ns.Specs.WantGear("party2")
     local word = ns.Specs.Answered(guid)
@@ -8059,7 +8149,8 @@ local function TestGear()
     Check("...and the talent string came along",
         data ~= nil and data.loadout ~= nil and #data.loadout > 10)
     Check("...the build came as picks on the board",
-        data ~= nil and data.build ~= nil and #data.build == 3)
+        data ~= nil and data.build ~= nil and #data.build == 4,
+        data and data.build and tostring(#data.build) or "none")
     local heroPicks = 0
     for _, pick in ipairs((data and data.build) or {}) do
         if pick.hero then heroPicks = heroPicks + 1 end
@@ -8067,6 +8158,67 @@ local function TestGear()
     Check("...with the inactive hero tree left out", heroPicks == 1)
     Check("...and the hero tree is named",
         data ~= nil and data.hero == "Harness Hero 5")
+    Check("...and named by its id as well, so the other one can be hidden",
+        data ~= nil and data.heroSub == 5)
+
+    ---------------------------------------------------------------------
+    -- THE BOARD, WHICH IS THE TREE AND NOT THE BUILD
+    --
+    -- Owner, 2026-08-25: "muessen wir die talentbaeume noch richtig
+    -- darstellen." Only the taken nodes used to be read, and their own
+    -- extent was stretched over the panel - so the picture's shape came
+    -- from the build. Everything below is about the difference.
+    ---------------------------------------------------------------------
+    local board = data and data.board
+    Check("The whole tree came, not only what was taken",
+        board ~= nil and #board.nodes == 6,
+        board and tostring(#board.nodes) or "no board")
+    Check("...and the hero-tree CHOOSER is not one of its talents",
+        (function()
+            for _, node in ipairs((board and board.nodes) or {}) do
+                if node.id == 7 then return false end
+            end
+            return board ~= nil
+        end)())
+    Check("...a node nobody took is on it all the same",
+        board ~= nil and board.byNode[5] ~= nil)
+    Check("...both spellings of a choice node lead to the one place",
+        board ~= nil and board.bySpell[100016] ~= nil
+            and board.bySpell[100016] == board.bySpell[100017])
+    Check("...the edges came with it",
+        board ~= nil and board.nodes[board.byNode[1]].edges ~= nil
+            and board.nodes[board.byNode[1]].edges[1] == 2)
+    Check("...the hero tree was moved onto the board, not left where it lay",
+        (function()
+            if not board then return false end
+            local hero = board.nodes[board.byNode[3]]
+            return hero ~= nil and hero.x ~= 200
+        end)())
+    Check("...the grid it sits on was measured, not assumed", (function()
+        if not board then return false end
+        local best
+        for _, a in ipairs(board.nodes) do
+            for _, b in ipairs(board.nodes) do
+                local dx, dy = math.abs(a.x - b.x), math.abs(a.y - b.y)
+                if dx > 0 and (not best or dx < best) then best = dx end
+                if dy > 0 and (not best or dy < best) then best = dy end
+            end
+        end
+        return board.pitch == best
+    end)(), tostring(board and board.pitch))
+    Check("...and nothing on it falls outside its own extent", (function()
+        if not board then return false end
+        for _, node in ipairs(board.nodes) do
+            if node.x < board.minX or node.x > board.maxX then return false end
+            if node.y < board.minY or node.y > board.maxY then return false end
+        end
+        return true
+    end)())
+    Check("...read once and kept, not walked again per person", (function()
+        if not board then return false end
+        local again = ns.Gear.Harvest("party2", guid, false)
+        return again ~= nil and again.board == board
+    end)())
     Check("...asked again, the answer is not ours",
         ns.Specs.Answered(guid) == "not ours")
 
@@ -8076,11 +8228,39 @@ local function TestGear()
         Check("...with the level on it", card.level:GetText() == "641")
         Check("...and the skillung docks beside it",
             card.skills ~= nil and card.skills:IsShown() == true)
-        local drawn = 0
+        local drawn, lit = 0, 0
         for _, icon in ipairs(card.skills.icons) do
-            if icon:IsShown() then drawn = drawn + 1 end
+            if icon:IsShown() then
+                drawn = drawn + 1
+                if icon:GetAlpha() == 1 then lit = lit + 1 end
+            end
         end
-        Check("...drawing every chosen talent once", drawn == 3)
+        -- FIVE, not four: the node he passed over is drawn too, and the
+        -- other hero tree's node is not drawn at all.
+        Check("...drawing the whole tree he can see", drawn == 5,
+            tostring(drawn))
+        Check("...with exactly the taken ones lit", lit == 4, tostring(lit))
+        Check("...and an icon leaves room beside it rather than filling "
+            .. "its square", (function()
+            local first
+            for _, icon in ipairs(card.skills.icons) do
+                if icon:IsShown() then first = first or icon end
+            end
+            if not (first and board and board.pitch) then return false end
+            local step = board.pitch
+                * ((480 - 14 * 2 - first:GetWidth()) /
+                    math.max(1, board.maxX - board.minX))
+            return first:GetWidth() <= step / 1.2
+        end)())
+        Check("...and the lines between them", (function()
+            local shownLines = 0
+            for _, line in ipairs(card.skills.lines or {}) do
+                if line:IsShown() then shownLines = shownLines + 1 end
+            end
+            -- One edge joins two drawn nodes; the other ends on a node that
+            -- is drawn as well, so both are laid.
+            return shownLines == 2
+        end)())
         ns.PlayerCard.Hide()
     end
 

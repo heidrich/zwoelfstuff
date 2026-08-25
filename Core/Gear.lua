@@ -219,12 +219,119 @@ local function NodeSpell(configID, node)
     return EntrySpell(configID, entryID)
 end
 
+---------------------------------------------------------------------------
+-- THE BOARD ITSELF - every node of a tree, where it sits and what joins it
+--
+-- Owner, 2026-08-25: "muessen wir die talentbaeume noch richtig darstellen."
+-- The first drawing placed only the CHOSEN nodes and stretched them across
+-- the panel, so the picture's shape came from the BUILD rather than from the
+-- tree: a dense corner clumped into touching rows, two people's boards could
+-- not be compared, and there was no way to see what somebody had walked
+-- past. A talent tree is read by its holes as much as by its icons.
+--
+-- So the geometry is read whole and kept: the nodes, their places, and the
+-- lines between them. It belongs to the TREE and not to the player, which is
+-- why it is cached - otherwise a hundred-node walk would be paid again for
+-- every single group member. MRT caches the same thing for the same reason.
+---------------------------------------------------------------------------
+local boards = {}
+
+-- For the desk, and for a client that changed trees under us.
+function Gear.ForgetBoards() boards = {} end
+
+-- WHERE THE HERO TREE GOES. Its nodes carry their own origin, so they are
+-- re-based onto it and then dropped into the empty middle column between the
+-- class half and the spec half - which is where the game itself draws them,
+-- and where MRT puts them for the same reason. A subtree we cannot re-base
+-- keeps its own coordinates rather than being moved by a guess.
+local function PlaceHero(board, configID, minX, maxX, minY, maxY)
+    local origins = {}
+    for _, node in ipairs(board.nodes) do
+        if node.sub then
+            local origin = origins[node.sub]
+            if origin == nil then
+                origin = false
+                if C_Traits and C_Traits.GetSubTreeInfo then
+                    local ok, info = pcall(C_Traits.GetSubTreeInfo,
+                        configID, node.sub)
+                    if ok and type(info) == "table"
+                        and type(info.posX) == "number"
+                        and type(info.posY) == "number" then
+                        origin = { info.posX, info.posY }
+                    end
+                end
+                origins[node.sub] = origin
+            end
+            if origin then
+                node.x = minX + (maxX - minX) * 0.5 + (node.x - origin[1])
+                node.y = minY + (maxY - minY) * 0.35 + (node.y - origin[2])
+            end
+        end
+    end
+end
+
+local function FinishBoard(board, configID)
+    -- THE EXTENT IS THE CLASS AND SPEC HALVES, hero nodes left out: they are
+    -- about to be moved INTO that extent, and letting them set it first
+    -- would scale the whole tree around wherever their own tree happens to
+    -- live in the coordinate space.
+    local minX, maxX, minY, maxY
+    for _, node in ipairs(board.nodes) do
+        if not node.sub then
+            if not minX or node.x < minX then minX = node.x end
+            if not maxX or node.x > maxX then maxX = node.x end
+            if not minY or node.y < minY then minY = node.y end
+            if not maxY or node.y > maxY then maxY = node.y end
+        end
+    end
+    if not minX then minX, maxX, minY, maxY = 0, 1, 0, 1 end
+
+    PlaceHero(board, configID, minX, maxX, minY, maxY)
+
+    -- AND NOW EVERYTHING DRAWN IS INSIDE IT. A hero tree can reach past the
+    -- class board, and a node normalized past one is a node off the panel.
+    for _, node in ipairs(board.nodes) do
+        if node.x < minX then minX = node.x end
+        if node.x > maxX then maxX = node.x end
+        if node.y < minY then minY = node.y end
+        if node.y > maxY then maxY = node.y end
+    end
+
+    board.minX, board.maxX, board.minY, board.maxY = minX, maxX, minY, maxY
+
+    -- THE GRID IT SITS ON: the smallest step between two different columns
+    -- or rows. Whoever draws this decides how big an icon may be from it,
+    -- rather than from a number somebody typed while looking at one class.
+    local seen, steps = {}, nil
+    for _, node in ipairs(board.nodes) do
+        seen[node.x] = true
+    end
+    local function Smallest(set)
+        local list = {}
+        for value in pairs(set) do list[#list + 1] = value end
+        table.sort(list)
+        local best
+        for index = 2, #list do
+            local step = list[index] - list[index - 1]
+            if step > 0 and (not best or step < best) then best = step end
+        end
+        return best
+    end
+    steps = Smallest(seen)
+    seen = {}
+    for _, node in ipairs(board.nodes) do
+        seen[node.y] = true
+    end
+    local down = Smallest(seen)
+    if down and (not steps or down < steps) then steps = down end
+    board.pitch = steps
+end
+
 -- THE BUILD, off the trait tree the answer carries: every CHOSEN node with
--- its place on the board, and the hero tree's name. One walk answers both -
--- the game offers no shorter question than all nodes - and it is guarded
--- throughout: a client without C_Traits answers "not read". Owner,
--- 2026-08-24: "damit man direkt die skillung sieht ... nicht nur den
--- string" - the card draws these picks as a board.
+-- its rank, the hero tree's name and which one is active, and - the first
+-- time this tree is seen - the board every one of them sits on. One walk
+-- answers all of it; the game offers no shorter question than all nodes.
+-- Guarded throughout: a client without C_Traits answers "not read".
 local function ReadBuild(configID)
     if type(configID) ~= "number" then return nil, nil end
     if not (C_Traits and C_Traits.GetConfigInfo and C_Traits.GetTreeNodes
@@ -238,12 +345,25 @@ local function ReadBuild(configID)
     local okNodes, nodes = pcall(C_Traits.GetTreeNodes, treeID)
     if not (okNodes and type(nodes) == "table") then return nil, nil end
 
-    local picks, hero = {}, nil
+    local board = boards[treeID]
+    local building = board == nil
+    if building then board = { nodes = {}, byNode = {}, bySpell = {} } end
+
+    -- THE "PICK A HERO TREE" NODE IS A CONTROL, NOT A TALENT. It carries the
+    -- two trees as its entries, so a walk that does not know it draws a
+    -- talent nobody has and a spell nobody can cast. MRT skips it by type
+    -- and so do we; a client without the enum simply keeps it, which is the
+    -- old behaviour rather than a new bug.
+    local selector = Enum and Enum.TraitNodeType
+        and Enum.TraitNodeType.SubTreeSelection or nil
+
+    local picks, hero, heroSub = {}, nil, nil
     local offered, knows = {}, {}
     for _, nodeID in ipairs(nodes) do
         local okNode, node = pcall(C_Traits.GetNodeInfo, configID, nodeID)
-        if okNode and type(node) == "table" then
+        if okNode and type(node) == "table" and node.ID ~= 0 then
             local inHero = node.subTreeID ~= nil
+            local isSelector = selector ~= nil and node.type == selector
 
             -- EVERYTHING THE TREE OFFERS, chosen or not, both hero trees
             -- included. "Offered and not taken" is the one certain "cannot
@@ -257,18 +377,59 @@ local function ReadBuild(configID)
                     if option then offered[option] = true end
                 end
             end
-            if inHero and node.subTreeActive and not hero
-                and C_Traits.GetSubTreeInfo then
-                local okSub, sub = pcall(C_Traits.GetSubTreeInfo,
-                    configID, node.subTreeID)
-                if okSub and type(sub) == "table"
-                    and type(sub.name) == "string" and sub.name ~= "" then
-                    hero = sub.name
+            if inHero and node.subTreeActive then
+                heroSub = heroSub or node.subTreeID
+                if not hero and C_Traits.GetSubTreeInfo then
+                    local okSub, sub = pcall(C_Traits.GetSubTreeInfo,
+                        configID, node.subTreeID)
+                    if okSub and type(sub) == "table"
+                        and type(sub.name) == "string" and sub.name ~= "" then
+                        hero = sub.name
+                    end
+                end
+            end
+
+            -- THE BOARD, once per tree: where this node sits, what it would
+            -- be, how many ranks it holds and which nodes it leads to.
+            if building and not isSelector
+                and type(node.posX) == "number"
+                and type(node.posY) == "number"
+                and type(node.entryIDs) == "table" then
+                local first = EntrySpell(configID, node.entryIDs[1])
+                if first then
+                    local entry = {
+                        id = nodeID,
+                        x = node.posX,
+                        y = node.posY,
+                        spell = first,
+                        most = node.maxRanks,
+                        sub = node.subTreeID,
+                    }
+                    if type(node.visibleEdges) == "table" then
+                        for _, edge in ipairs(node.visibleEdges) do
+                            if type(edge) == "table" and edge.targetNode then
+                                entry.edges = entry.edges or {}
+                                entry.edges[#entry.edges + 1] = edge.targetNode
+                            end
+                        end
+                    end
+                    board.nodes[#board.nodes + 1] = entry
+                    board.byNode[nodeID] = #board.nodes
+                    -- EVERY SPELLING OF THE SAME PLACE. A choice node holds
+                    -- two spells and only one of them is taken, so the board
+                    -- has to answer to both or a chosen talent lights up
+                    -- nothing.
+                    for _, entryID in ipairs(node.entryIDs) do
+                        local option = EntrySpell(configID, entryID)
+                        if option then
+                            board.bySpell[option] = #board.nodes
+                        end
+                    end
                 end
             end
             -- Chosen, and on an ACTIVE board: the other hero tree's nodes
             -- keep their ranks and would draw a build nobody is playing.
-            if (not inHero or node.subTreeActive)
+            if (not inHero or node.subTreeActive) and not isSelector
                 and type(node.currentRank) == "number"
                 and node.currentRank > 0
                 and type(node.posX) == "number"
@@ -288,14 +449,20 @@ local function ReadBuild(configID)
             end
         end
     end
+    if building then
+        FinishBoard(board, configID)
+        boards[treeID] = board
+    end
+
     if #picks == 0 then picks = nil end
     if next(offered) == nil then offered = nil end
     if next(knows) == nil then knows = nil end
-    return picks, hero, offered, knows
+    if #board.nodes == 0 then board = nil end
+    return picks, hero, offered, knows, board, heroSub
 end
 
 local function ReadTalents(unit, own)
-    local loadout, hero, picks, offered, knows
+    local loadout, hero, picks, offered, knows, board, heroSub
 
     if own then
         local getConfig = C_ClassTalents and C_ClassTalents.GetActiveConfigID
@@ -309,7 +476,8 @@ local function ReadTalents(unit, own)
                         loadout = text
                     end
                 end
-                picks, hero, offered, knows = ReadBuild(configID)
+                picks, hero, offered, knows, board, heroSub =
+                    ReadBuild(configID)
             end
         end
     else
@@ -322,10 +490,11 @@ local function ReadTalents(unit, own)
         end
         local inspectConfig = Constants and Constants.TraitConsts
             and Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
-        picks, hero, offered, knows = ReadBuild(inspectConfig)
+        picks, hero, offered, knows, board, heroSub =
+            ReadBuild(inspectConfig)
     end
 
-    return loadout, hero, picks, offered, knows
+    return loadout, hero, picks, offered, knows, board, heroSub
 end
 
 function Gear.Harvest(unit, guid, secondPass)
@@ -354,7 +523,8 @@ function Gear.Harvest(unit, guid, secondPass)
         if has < had then return before end
     end
 
-    local loadout, hero, picks, offered, knows = ReadTalents(unit, own)
+    local loadout, hero, picks, offered, knows, board, heroSub =
+        ReadTalents(unit, own)
     local carry = secondPass and before or nil
 
     local data = {
@@ -373,6 +543,8 @@ function Gear.Harvest(unit, guid, secondPass)
         build = picks or (carry and carry.build) or nil,
         offered = offered or (carry and carry.offered) or nil,
         knows = knows or (carry and carry.knows) or nil,
+        board = board or (carry and carry.board) or nil,
+        heroSub = heroSub or (carry and carry.heroSub) or nil,
     }
     known[guid] = data
 

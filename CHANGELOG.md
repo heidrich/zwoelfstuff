@@ -10,6 +10,19 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.90.0] - 2026-08-25
+
+### Changed
+
+- **The talents beside the player card are the whole tree now** — what he
+  took is lit, what he passed over is dimmed, and the lines show the path he
+  walked.
+
+### Fixed
+
+- A spell nobody in the group can cast no longer sits on the request bar
+  waiting to be checked. A tank monk's Life Cocoon goes at once.
+
 ## [4.89.0] - 2026-08-23
 
 ### Added

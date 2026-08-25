@@ -31,6 +31,23 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.90.0",
+        date = "2026-08-25",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Map_01",
+                text = "|cffffd100The talents beside the card are the whole "
+                    .. "tree now.|r What he took is lit, what he passed over "
+                    .. "is dimmed, and the lines show the path he walked.",
+            },
+            {
+                text = "Fixed: a spell nobody in the group can cast no "
+                    .. "longer sits on the request bar waiting to be "
+                    .. "checked. A tank monk's Life Cocoon goes at once.",
+            },
+        },
+    },
+    {
         version = "4.89.0",
         date = "2026-08-23",
         lines = {

@@ -24,8 +24,15 @@ local C = UI.C
 
 local CARD_W = 470
 local ROW_H = 24
-local PANEL_W = 240
+-- WIDE ENOUGH TO BE A TREE. A class half, a spec half and the gap between
+-- them at twenty pixels a node needs the room; at 240 the columns landed on
+-- top of each other and the board read as rows of touching icons.
+local PANEL_W = 480
+local PANEL_PAD = 14
+local PANEL_TOP = 38
 local PICK = 20
+local PICK_MIN = 11
+local BOARD_MAX_H = 520
 
 local TICK_READY = "Interface\\RaidFrame\\ReadyCheck-Ready"
 local TICK_NOT = "Interface\\RaidFrame\\ReadyCheck-NotReady"
@@ -224,14 +231,14 @@ function PlayerCard.Create()
     -- THE SKILLUNG, DOCKED. Owner, 2026-08-24: "rechts neben dem gear
     -- fenster direkt das skill fenster andocken, damit man direkt die
     -- skillung sieht" - "nicht nur den string". Drawn from the same answer
-    -- the string comes from: every chosen talent at its place on the
-    -- board, the shared class-and-spec tree on top, the hero tree under
-    -- its name. Only what is CHOSEN is drawn - the shape of the build is
-    -- what a glance needs, not the game's whole window. A child of the
-    -- card, so it moves, hides and closes with it.
+    -- the string comes from, and drawn as the TREE: every node of it at its
+    -- own place, the taken ones lit, the ones he walked past dimmed, the
+    -- lines that join them underneath. A child of the card, so it moves,
+    -- hides and closes with it.
     local skills = CreateFrame("Frame", nil, card)
     skills:SetPoint("TOPLEFT", card, "TOPRIGHT", 2, 0)
     skills:SetSize(PANEL_W, 596)
+    skills.lines = {}
     UI.Fill(skills, "BACKGROUND", C.windowBg)
     local skillsEdge = ns.CreateBorder(skills, 1, "BORDER")
     skillsEdge:SetColor(C.overlayEdge[1], C.overlayEdge[2],
@@ -285,68 +292,164 @@ local function BuildPick(parent)
     return pick
 end
 
--- One board, scaled into its rectangle. The picks keep their RELATIVE
--- places - the trait tree's own coordinates, normalized over what is
--- chosen - so the class half, the spec half and the middle gap appear by
--- themselves without this code knowing which node is which.
-local function PlaceBoard(skills, picks, hero, top, height, used)
-    local subset = {}
-    for _, pick in ipairs(picks) do
-        if (pick.hero == true) == hero then subset[#subset + 1] = pick end
-    end
-    if #subset == 0 then return used end
+local function SpellArt(spellID)
+    if not (spellID and C_Spell and C_Spell.GetSpellTexture) then return nil end
+    local ok, art = pcall(C_Spell.GetSpellTexture, spellID)
+    if ok then return art end
+    return nil
+end
 
-    local minX, maxX, minY, maxY
-    for _, pick in ipairs(subset) do
-        if minX == nil or pick.x < minX then minX = pick.x end
-        if maxX == nil or pick.x > maxX then maxX = pick.x end
-        if minY == nil or pick.y < minY then minY = pick.y end
-        if maxY == nil or pick.y > maxY then maxY = pick.y end
-    end
+local function BuildLine(parent)
+    local line = parent:CreateLine(nil, "ARTWORK")
+    line:SetThickness(1.5)
+    return line
+end
 
-    local width = PANEL_W - 16 - PICK
-    local room = height - PICK
-    for _, pick in ipairs(subset) do
-        used = used + 1
-        local icon = skills.icons[used]
-        if not icon then
-            icon = BuildPick(skills)
-            skills.icons[used] = icon
-        end
-        local fx = (maxX > minX) and (pick.x - minX) / (maxX - minX) or 0.5
-        local fy = (maxY > minY) and (pick.y - minY) / (maxY - minY) or 0.5
-        icon:ClearAllPoints()
-        icon:SetPoint("TOPLEFT", skills, "TOPLEFT",
-            8 + fx * width, -(top + fy * room))
-        icon.spell = pick.spell
-        local texture
-        if C_Spell and C_Spell.GetSpellTexture then
-            local ok, art = pcall(C_Spell.GetSpellTexture, pick.spell)
-            if ok then texture = art end
-        end
-        icon.tex:SetTexture(texture)
-        icon.rank:SetText((pick.most or 1) > 1
-            and tostring(pick.rank or 1) or "")
-        icon:Show()
+-- ONE SCALE FOR BOTH DIRECTIONS, and that is the whole difference between a
+-- talent tree and a scatter of icons. Normalizing width and height
+-- separately fills the panel and squashes the tree into a shape it does not
+-- have; a single factor keeps the game's own proportions, and the leftover
+-- room is given back as height rather than spent stretching.
+local function BoardScale(board)
+    local spanX = math.max(1, (board.maxX or 0) - (board.minX or 0))
+    local spanY = math.max(1, (board.maxY or 0) - (board.minY or 0))
+    local roomW = PANEL_W - PANEL_PAD * 2 - PICK
+    local scale = roomW / spanX
+    if spanY * scale > BOARD_MAX_H then scale = BOARD_MAX_H / spanY end
+
+    -- AND NOW THE ICON, cut to the gap the grid actually leaves. A step of
+    -- one grid square has to hold an icon and some air; at full size on a
+    -- twenty-column tree it holds an icon and nothing, which is the row of
+    -- touching icons the owner was looking at.
+    local size = PICK
+    if board.pitch and board.pitch > 0 then
+        size = math.min(PICK, math.floor(board.pitch * scale / 1.25))
+        size = math.max(PICK_MIN, size)
     end
-    return used
+    -- The room was set aside for a full-width icon; a smaller one gives
+    -- some of it back to the tree.
+    if size < PICK then
+        scale = (roomW + PICK - size) / spanX
+        if spanY * scale > BOARD_MAX_H then scale = BOARD_MAX_H / spanY end
+    end
+    return scale, spanX, spanY, size
 end
 
 local function PaintBuild(data)
     local skills = card.skills
     if not skills then return end
+    local board = data and data.board
     local picks = data and data.build
-    if not picks then
+    if not (board and board.nodes and #board.nodes > 0) then
         skills:Hide()
         return
     end
     skills:Show()
     skills.title:SetText(ns.L["Talents"])
     skills.hero:SetText(data.hero or "")
-    local used = 0
-    used = PlaceBoard(skills, picks, false, 40, 350, used)
-    used = PlaceBoard(skills, picks, true, 448, 120, used)
-    for index = used + 1, #skills.icons do skills.icons[index]:Hide() end
+
+    local scale, spanX, spanY, size = BoardScale(board)
+    -- Centred, because a height-limited board is narrower than its room.
+    local left = PANEL_PAD + (PANEL_W - PANEL_PAD * 2 - size - spanX * scale)
+        * 0.5
+
+    ---------------------------------------------------------------------
+    -- EVERY NODE, DIMMED - the ones he walked past are half of what a
+    -- skillung says. The other hero tree is not drawn at all: its nodes are
+    -- real but they are not his, and a dimmed icon means "offered and not
+    -- taken", which about the tree he did not pick would be a lie.
+    ---------------------------------------------------------------------
+    local shown = 0
+    local placed = {}   -- board index -> which icon drew it, this paint only
+    for index, node in ipairs(board.nodes) do
+        if (not node.sub) or node.sub == data.heroSub then
+            shown = shown + 1
+            local icon = skills.icons[shown]
+            if not icon then
+                icon = BuildPick(skills)
+                skills.icons[shown] = icon
+            end
+            placed[index] = shown
+            icon:SetSize(size, size)
+            icon:ClearAllPoints()
+            icon:SetPoint("TOPLEFT", skills, "TOPLEFT",
+                left + (node.x - board.minX) * scale,
+                -(PANEL_TOP + (node.y - board.minY) * scale))
+            icon.spell = node.spell
+            icon.tex:SetTexture(SpellArt(node.spell))
+            icon.tex:SetDesaturated(true)
+            icon:SetAlpha(0.35)
+            icon.rank:SetText("")
+            icon:Show()
+        end
+    end
+
+    ---------------------------------------------------------------------
+    -- AND THE ONES HE TOOK, LIT. Matched by SPELL, because a choice node
+    -- answers to either of its two and the one he took may not be the one
+    -- the board drew.
+    ---------------------------------------------------------------------
+    for _, pick in ipairs(picks or {}) do
+        local index = board.bySpell[pick.spell]
+        local node = index and board.nodes[index]
+        local icon = index and placed[index] and skills.icons[placed[index]]
+        if icon then
+            if icon.spell ~= pick.spell then
+                icon.spell = pick.spell
+                icon.tex:SetTexture(SpellArt(pick.spell))
+            end
+            icon.tex:SetDesaturated(false)
+            icon:SetAlpha(1)
+            icon.rank:SetText((node.most or 1) > 1
+                and tostring(pick.rank or 1) or "")
+        end
+    end
+
+    ---------------------------------------------------------------------
+    -- WHAT JOINS THEM, underneath. A line between two lit nodes is lit;
+    -- anything touching a node he did not take is dim, so the path he
+    -- actually walked reads at a glance.
+    ---------------------------------------------------------------------
+    local drawnLines = 0
+    for index, node in ipairs(board.nodes) do
+        if placed[index] and node.edges then
+            for _, targetID in ipairs(node.edges) do
+                local other = board.byNode[targetID]
+                if other and placed[other] then
+                    drawnLines = drawnLines + 1
+                    local line = skills.lines[drawnLines]
+                    if not line then
+                        line = BuildLine(skills)
+                        skills.lines[drawnLines] = line
+                    end
+                    local from = skills.icons[placed[index]]
+                    local to = skills.icons[placed[other]]
+                    local both = from:GetAlpha() == 1 and to:GetAlpha() == 1
+                    line:SetStartPoint("CENTER", from)
+                    line:SetEndPoint("CENTER", to)
+                    if both then
+                        line:SetColorTexture(C.text[1], C.text[2],
+                            C.text[3], 0.55)
+                    else
+                        line:SetColorTexture(1, 1, 1, 0.12)
+                    end
+                    line:Show()
+                end
+            end
+        end
+    end
+
+    for index = shown + 1, #skills.icons do skills.icons[index]:Hide() end
+    for index = drawnLines + 1, #skills.lines do
+        skills.lines[index]:Hide()
+    end
+
+    -- THE PANEL IS AS TALL AS WHAT IS IN IT. A fixed height either cropped
+    -- a tall tree or left a hand's width of empty plate under a short one.
+    local bottom = PANEL_TOP + spanY * scale + size + 10
+    skills.hero:ClearAllPoints()
+    skills.hero:SetPoint("TOPLEFT", skills, "TOPLEFT", 12, -bottom)
+    skills:SetHeight(bottom + 26)
 end
 
 function PlayerCard.Redraw()

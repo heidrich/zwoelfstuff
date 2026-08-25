@@ -522,17 +522,51 @@ function Externals.SpecID(spell)
     return (specs.IdFor(spell.class, spell.specIndex, spell.specRole))
 end
 
--- PURE, and the whole rule in four lines.
+-- PURE, and the whole rule.
 --
 -- UNKNOWN MEANS YES. Somebody who has not been read yet - out of range, just
 -- joined, an inspect the server has not answered - keeps his icon. The
 -- alternative is a panel that goes blank while you run into the room, and a
 -- tank who cannot ask for Pain Suppression because the priest was thirty
 -- yards away when the pull started has been failed by the feature.
-function Externals.SpecFits(member, wanted)
-    if not wanted then return true end
-    if not (member and member.spec) then return true end
-    return member.spec == wanted
+--
+-- BUT THE ROLE IS NOT UNKNOWN. Owner, 2026-08-24: "mit tank monk in der
+-- gruppe, da wurde es angezeigt" - the Life Cocoon slot stood there with a
+-- brewmaster in the group. The spec rule was right and the desk proves it;
+-- his spec had merely not been read yet, so the slot failed open for the
+-- seconds an inspect takes - and to the person looking at it, an icon that
+-- asks the tank for a healer's spell is simply wrong.
+--
+-- Nothing had to be read. The game assigns the role and the group frames
+-- draw it: he was queued as the TANK, and Life Cocoon needs a HEALER spec.
+-- A role that CONTRADICTS the wanted one is certain in the only direction
+-- that matters, so it may close the gate. Everything else still fails open:
+-- "NONE" outside an instance is not a role, a matching role decides nothing
+-- on its own, and the moment a real spec arrives it overrules this
+-- entirely - a healer wrongly queued as damage is corrected by the inspect
+-- seconds later rather than hidden for the pull.
+local ROLES = { TANK = true, HEALER = true, DAMAGER = true }
+
+function Externals.SpecFits(member, wanted, wantedRole)
+    -- A SPEC THAT WAS ACTUALLY READ IS THE WHOLE ANSWER, either way: it
+    -- outranks the role, so a healer queued as damage is put right by his
+    -- inspect rather than hidden for the pull.
+    if member and member.spec then
+        if not wanted then return true end
+        return member.spec == wanted
+    end
+    if wantedRole and member and ROLES[member.role]
+        and member.role ~= wantedRole then
+        return false
+    end
+    return true
+end
+
+-- The role that spec must have, straight off the catalogue entry - and only
+-- when the game agreed the index really is that role, because SpecID hands
+-- back nil when it does not and a dropped restriction must drop whole.
+function Externals.SpecRole(spell)
+    return spell and spell.specRole or nil
 end
 
 function Externals.Candidates(spell, roster)
@@ -543,9 +577,10 @@ function Externals.Candidates(spell, roster)
     -- version of it.
     local classes = Externals.ClassesFor(spell)
     local wanted = Externals.SpecID(spell)
+    local wantedRole = Externals.SpecRole(spell)
     for _, member in ipairs(roster or {}) do
         if classes[member.class] and not member.isPlayer
-            and Externals.SpecFits(member, wanted) then
+            and Externals.SpecFits(member, wanted, wantedRole) then
             out[#out + 1] = member
         end
     end
@@ -657,6 +692,8 @@ end
 function Externals.NobodyLine(spell, roster)
     local classes = Externals.ClassesFor(spell)
     local wanted = Externals.SpecID(spell)
+    local wantedRole = Externals.SpecRole(spell)
+    local byRole
     for _, member in ipairs(roster or {}) do
         if classes[member.class] and not member.isPlayer then
             if wanted and member.spec and member.spec ~= wanted then
@@ -669,8 +706,17 @@ function Externals.NobodyLine(spell, roster)
                         specName, class, member.name)
                 end
             end
+            -- Kept rather than returned: a spec that was actually read is
+            -- the better sentence, and it may still be standing further
+            -- down the list.
+            if not byRole and wantedRole and not member.spec
+                and not Externals.SpecFits(member, wanted, wantedRole) then
+                byRole = string.format("%s is the %s here", member.name,
+                    member.role:lower())
+            end
         end
     end
+    if byRole then return byRole end
     return "nobody in the group can cast it"
 end
 
