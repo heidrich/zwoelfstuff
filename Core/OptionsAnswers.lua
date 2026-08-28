@@ -304,6 +304,15 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Switch it on")
 
+    -- STRAIGHT AFTER THE HEADING, WHICH IS THE ONLY PLACE A NOTE ON THIS
+    -- PAGE IS ACTUALLY DRAWN: Section clears lastRow, so this one is laid
+    -- out instead of becoming some toggle's tooltip. Owner, 2026-08-25:
+    -- "requesten geht immer, answer nur MIT addon" - the asymmetry belongs
+    -- at the top of the page it is about, not four sections down.
+    grid:Note("|cffffd100This bar needs the addon on both sides.|r Anybody "
+        .. "can ask you in chat. The bar only lights up when the person "
+        .. "asking runs ZwoelfStuff too.")
+
     UI.Toggle(grid:Row("Show the bar"),
         function() return Cfg().enabled and true or false end,
         function(value) Cfg().enabled = value and true or false; Apply() end)
@@ -314,9 +323,6 @@ function Page:BuildPage(page, width)
 
     grid:Note("Off, a request is printed in chat instead. The quick menu is a "
         .. "small button above the bar for |cffffd100who you answer|r.")
-
-    grid:Note("Only players who also run ZwoelfStuff can light up your bar - "
-        .. "everybody else still gets the chat line.")
 
     ---------------------------------------------------------------------
     -- WHO GETS A ROW

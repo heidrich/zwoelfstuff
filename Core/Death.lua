@@ -1281,8 +1281,13 @@ function Death.Where()
     -- one - the open world has no page in the guide.
     local inside = instanceType == "party" or instanceType == "raid"
         or instanceType == "scenario"
+    -- AND THE BOSS ON ITS OWN, fifth. It is already inside `short` when
+    -- there is one, but only as a word among other words: "M+11" and
+    -- "Molten Blood" are the same field and nothing downstream can tell
+    -- which of them is a boss. The pull list has to, so it is handed over
+    -- separately rather than parsed back out of a label.
     return place, short, inside and instanceName or nil,
-        inside and Death.Journal() or nil
+        inside and Death.Journal() or nil, Death.encounter
 end
 
 -- WHAT YOU PRESSED in the seconds before it, off ns.History - the player's

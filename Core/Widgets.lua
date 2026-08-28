@@ -4711,6 +4711,26 @@ function Grid:Note(text, height)
         -- its switch is on, and a note swept into one is force-shown with the
         -- rows around it. The note is the thing that knows it has no height,
         -- so the note is where the answer belongs.
+        -- ONE ROW, ONE NOTE - and the second one silently wins.
+        --
+        -- A row keeps exactly one dkNote, so a second note written under it
+        -- REPLACES the first and the first can never be read again. That is
+        -- how the answer page's "off, a request is printed in chat instead"
+        -- stopped being reachable: a general sentence about the addon was
+        -- written under the same toggle and took its place.
+        --
+        -- Recorded, not raised: a page that half-builds in the game is worse
+        -- than a tooltip that is wrong. The desk fails on the count. Bounded
+        -- because this is a live client too, and a list that only grows is
+        -- the wrong way to report that something is already wrong.
+        if self.lastRow.dkNote then
+            ns.NoteCollisions = ns.NoteCollisions or {}
+            if #ns.NoteCollisions < 20 then
+                ns.NoteCollisions[#ns.NoteCollisions + 1] =
+                    tostring(self.sectionName or "?") .. " / "
+                    .. tostring(text):sub(1, 48)
+            end
+        end
         note.dkTooltipOnly = true
         self.lastRow.dkNote = note
         if self.tooltipNotes then self:WireTooltip(self.lastRow) end

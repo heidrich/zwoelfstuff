@@ -569,6 +569,95 @@ local SESSION_KEPT = 60
 RaidDeaths.SESSION_KEPT = SESSION_KEPT
 RaidDeaths.session = { fights = {} }
 
+---------------------------------------------------------------------------
+-- WHAT A PULL WAS, AND HOW THE COLUMN IS ARRANGED
+--
+-- Owner, 2026-08-25: "in der zeile von der instanz, eine trennlinie, dann
+-- steht da pulls 11 ... dann ein chevron zum ausfahren nachn unten, da geht
+-- nach unten die liste mit den Pulls auf, 1, 2, 3, bei Trash steht trash
+-- pull da, beim boss pull, dann boss."
+--
+-- Both pure. The column paints whatever SideItems returns and knows nothing
+-- about instances, runs or pull numbers - which is the only way any of this
+-- arithmetic can be checked without a screen in front of it.
+---------------------------------------------------------------------------
+
+-- The boss, or trash. Recorded at capture from ENCOUNTER_START, so this is
+-- what the game said rather than a word picked out of a label. No boss is a
+-- real answer and not a missing one: it was trash.
+function RaidDeaths.PullLabel(fight)
+    local boss = type(fight) == "table" and Plain(fight.boss, "string") or nil
+    return boss or "Trash pull", boss ~= nil
+end
+
+-- THE COLUMN AS A LIST OF THINGS TO DRAW: a row per run, and under it a row
+-- per pull while the run is open.
+--
+-- Newest first, the way the column has always read. A RUN is a contiguous
+-- block in one instance, so walking into the same dungeon twice in an
+-- evening is two runs rather than one heap - which is what a person
+-- remembers doing. The pulls inside it are numbered from the oldest, so
+-- pull 1 is the first one of that run whatever order they are drawn in.
+--
+-- `collapsed` is keyed by the run's id, and a run nobody has touched is
+-- OPEN: the pulls are the thing that was asked for, and a column that opens
+-- shut hides it behind a click.
+function RaidDeaths.SideItems(log, collapsed)
+    local out = {}
+    log = type(log) == "table" and log or {}
+    collapsed = type(collapsed) == "table" and collapsed or {}
+
+    local index = #log
+    while index >= 1 do
+        local newest = log[index]
+        local where = (newest and newest.instance) or ""
+
+        -- How far back this run reaches.
+        local oldest = index
+        while oldest > 1 do
+            local before = log[oldest - 1]
+            if ((before and before.instance) or "") ~= where then break end
+            oldest = oldest - 1
+        end
+
+        -- KEYED ON THE RUN'S FIRST PULL, not on its place in the list: a
+        -- capture two seconds later renumbers every run above it, and a
+        -- collapse that moves to another run when somebody dies is a
+        -- setting that appears to have a mind of its own.
+        local start = log[oldest]
+        local id = tostring(where) .. "#"
+            .. tostring((start and (start.at or start.when)) or oldest)
+        local shut = collapsed[id] == true
+
+        out[#out + 1] = {
+            kind = "run",
+            id = id,
+            instance = newest and newest.instance or nil,
+            journal = newest and newest.journal or nil,
+            pulls = index - oldest + 1,
+            open = not shut,
+        }
+
+        if not shut then
+            for at = index, oldest, -1 do
+                local fight = log[at]
+                local label, isBoss = RaidDeaths.PullLabel(fight)
+                out[#out + 1] = {
+                    kind = "pull",
+                    index = at,
+                    fight = fight,
+                    number = at - oldest + 1,
+                    label = label,
+                    boss = isBoss,
+                }
+            end
+        end
+
+        index = oldest - 1
+    end
+    return out
+end
+
 -- A fight, reduced to what a tally reads. Pure.
 function RaidDeaths.Light(fight)
     if type(fight) ~= "table" or type(fight.entries) ~= "table" then
@@ -581,6 +670,7 @@ function RaidDeaths.Light(fight)
         whereShort = Plain(fight.whereShort, "string"),
         instance = Plain(fight.instance, "string"),
         journal = Plain(fight.journal, "number"),
+        boss = Plain(fight.boss, "string"),
         duration = Plain(fight.duration, "number"),
         entries = {},
     }
@@ -836,7 +926,7 @@ function RaidDeaths.Capture()
         end
     end
 
-    local where, whereShort, instance, journal = ns.Death.Where()
+    local where, whereShort, instance, journal, boss = ns.Death.Where()
     local fight = RaidDeaths.Remember(RaidDeaths.log, {
         key = key,
         at = GetTime(),
@@ -845,6 +935,10 @@ function RaidDeaths.Capture()
         whereShort = whereShort,
         instance = instance,
         journal = journal,
+        -- WHICH BOSS, or nil for trash. Read from ENCOUNTER_START rather
+        -- than from the label above, which holds either a boss or a
+        -- difficulty and cannot say which.
+        boss = boss,
         duration = duration,
         entries = entries,
         culprits = RaidDeaths.Culprits(entries),
@@ -941,6 +1035,7 @@ function RaidDeaths.Persist(fight)
         -- the other lives exactly until the next /reload.
         instance = Plain(fight.instance, "string"),
         journal = Plain(fight.journal, "number"),
+        boss = Plain(fight.boss, "string"),
         duration = Plain(fight.duration, "number"),
         entries = {},
     }
@@ -1877,7 +1972,9 @@ function RaidDeaths:Create()
 
     local listHost = CreateFrame("Frame", nil, frame)
     listHost:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -8)
-    listHost:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -18, 26)
+    -- THE BOTTOM IS SET ONCE THE FOOTER EXISTS, forty lines down. It used to
+    -- be a number here - 26 above the window - and the footer sits at 46 and
+    -- grows UPWARD as it wraps, so the two were given the same strip.
     frame.listHost = listHost
 
     local MAIN_W = WIDTH - SIDE_W - UI.PAD * 2 - 18
@@ -2033,6 +2130,24 @@ function RaidDeaths:Create()
     frame.foot = ns.Death.BuildRichLine(frame)
     frame.foot:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 46)
     frame.foot:SetPoint("RIGHT", side, "LEFT", -18, 0)
+
+    -- WHERE THE LIST STOPS, and it is the footer rather than a number.
+    -- Owner, 2026-08-25, with a picture: "im gruppen death log fehlt unten
+    -- der footer bg, der inhalt scrollt hinter den bg info". A pull with
+    -- enough dead in it filled the list to a fixed bottom edge while the
+    -- footer wrapped to two lines and grew up into the same place - so the
+    -- sentence and the last rows were drawn through each other. Anchored to
+    -- the footer, the arithmetic belongs to the client and it stays right
+    -- however much the footer ends up naming.
+    listHost:SetPoint("BOTTOMRIGHT", frame.foot, "TOPRIGHT", 0, 10)
+
+    -- AND THE FOOTER IS OPAQUE. The anchor above is what keeps a row out of
+    -- this strip; the plate is what makes sure nothing is SEEN through it if
+    -- one ever gets there again - the list is a sibling frame and it draws
+    -- over this one, so "nothing behind it" cannot be left to the layout
+    -- alone. Same colour as the window, so it reads as the window.
+    UI.Fill(frame.foot, "BACKGROUND", C.windowBg)
+    frame.foot:SetFrameLevel(listHost:GetFrameLevel() + 5)
 
     -----------------------------------------------------------------------
     -- The same two buttons the death window carries, in the same corner.

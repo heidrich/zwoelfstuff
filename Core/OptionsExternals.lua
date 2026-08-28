@@ -241,6 +241,15 @@ function Page:BuildPage(page, width)
     ---------------------------------------------------------------------
     grid:Section("Who to ask")
 
+    -- THE HALF THAT NEEDS NOTHING FROM ANYBODY. Externals.Ask sends the
+    -- sentence on chat AND the same request on the addon channel: the chat
+    -- line reaches every group-mate, the addon message only reaches the ones
+    -- running this. So asking is never the thing that fails - what changes
+    -- is whether they answer with a button or by reading a line.
+    grid:Note("|cffffd100Asking always works.|r The request goes out as a "
+        .. "chat line anybody can read. A group-mate who also runs "
+        .. "ZwoelfStuff gets a button that answers it with one click.")
+
     -- ONE ROW PER SPELL THERE IS, not per slot there could be. A spell lives
     -- in exactly one slot, so #SPELLS is the real ceiling however large the
     -- lattice gets - and building a row per possible slot would be seventy-two
