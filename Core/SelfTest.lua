@@ -2158,6 +2158,29 @@ local function TestRaidDeaths()
     -- dann boss ... da geht nach unten die liste mit den Pulls auf, 1, 2,
     -- 3." Both functions are pure, so all of it is checkable here.
     -----------------------------------------------------------------------
+    -- THE TIME, IN EITHER CLOCK. Owner, 2026-08-25: "koennen wir die
+    -- Uhrzeit noch mit reinnehmen? also 10:34:24 oder so, uns naklar in
+    -- deren format."
+    do
+        -- A moment this desk can name: built from the pieces rather than
+        -- typed as an epoch, so it means the same hour in every timezone
+        -- this ever runs in.
+        local noon = time({ year = 2026, month = 8, day = 25,
+            hour = 13, min = 34, sec = 24 })
+        Check("A pull says when it happened, on a 24 hour clock",
+            R.PullTime({ stamp = noon }, true) == "13:34:24",
+            R.PullTime({ stamp = noon }, true))
+        Check("...and on a 12 hour one, with no leading zero",
+            R.PullTime({ stamp = noon }, false) == "1:34:24 PM",
+            R.PullTime({ stamp = noon }, false))
+        Check("...a fight from before the moment was kept still says one",
+            R.PullTime({ when = "18:22:21" }, false) == "18:22:21")
+        Check("...and one that says nothing says nothing",
+            R.PullTime({}, true) == "" and R.PullTime(nil, true) == "")
+        Check("The client's own clock setting is what decides",
+            type(R.Military()) == "boolean")
+    end
+
     Check("A pull with no boss was trash",
         R.PullLabel({ }) == "Trash pull")
     Check("...and one with a boss is named after it",
@@ -2170,8 +2193,9 @@ local function TestRaidDeaths()
 
     do
         -- Oldest first, the way the log is kept: two pulls in Ruby Life
-        -- Pools, then a raid, then back to the dungeon - so the same
-        -- instance twice, and the two visits must not become one heap.
+        -- Pools, then a raid, then BACK to the dungeon. The place must
+        -- appear once with all three under it - owner, 2026-08-25: "nicht
+        -- 3 mal rubi stehen, sondern nur einmal".
         local log = {
             { instance = "Ruby Life Pools", at = 10 },
             { instance = "Ruby Life Pools", at = 20, boss = "Kokia Blazehoof" },
@@ -2180,54 +2204,67 @@ local function TestRaidDeaths()
         }
         local items = R.SideItems(log, nil)
 
-        Check("The column groups a run under one row", (function()
-            local runs = 0
-            for _, item in ipairs(items) do
-                if item.kind == "run" then runs = runs + 1 end
-            end
-            return runs == 3
-        end)())
-        Check("...newest run first", items[1] ~= nil
-            and items[1].kind == "run" and items[1].instance == "Ruby Life Pools"
-            and items[1].pulls == 1)
-        Check("...and the same dungeon twice is two runs, not one",
-            items[3] ~= nil and items[3].kind == "run"
-                and items[3].instance == "Ulduar" and items[3].pulls == 1
-                and items[5] ~= nil and items[5].kind == "run"
-                and items[5].pulls == 2)
+        Check("A place is one row however often it was walked into",
+            (function()
+                local rows, seen = 0, {}
+                for _, item in ipairs(items) do
+                    if item.kind == "run" then
+                        rows = rows + 1
+                        if seen[item.instance or ""] then return false end
+                        seen[item.instance or ""] = true
+                    end
+                end
+                return rows == 2
+            end)())
+        Check("...the one last died in first, carrying all of its pulls",
+            items[1] ~= nil and items[1].kind == "run"
+                and items[1].instance == "Ruby Life Pools"
+                and items[1].pulls == 3)
+        Check("...and its pulls newest first, numbered from the oldest",
+            items[2] ~= nil and items[2].index == 4 and items[2].number == 3
+                and items[3] ~= nil and items[3].index == 2
+                and items[3].number == 2
+                and items[4] ~= nil and items[4].index == 1
+                and items[4].number == 1)
+        Check("...each saying what it was",
+            items[3] ~= nil and items[3].label == "Kokia Blazehoof"
+                and items[3].boss == true
+                and items[4] ~= nil and items[4].label == "Trash pull"
+                and items[4].boss == false)
+        Check("...and the other place follows with its own",
+            items[5] ~= nil and items[5].kind == "run"
+                and items[5].instance == "Ulduar" and items[5].pulls == 1
+                and items[6] ~= nil and items[6].kind == "pull"
+                and items[6].number == 1)
 
-        Check("A run's pulls are numbered from its oldest", (function()
-            -- The two-pull run is the last one; its pulls follow its row.
-            local first, second = items[6], items[7]
-            return first ~= nil and first.kind == "pull" and first.number == 2
-                and second ~= nil and second.kind == "pull"
-                and second.number == 1
-        end)())
-        Check("...and each says what it was",
-            items[6] ~= nil and items[6].label == "Kokia Blazehoof"
-                and items[7] ~= nil and items[7].label == "Trash pull")
-        Check("...and carries the index the list is read by",
-            items[7] ~= nil and items[7].index == 1
-                and items[6] ~= nil and items[6].index == 2)
-
-        -- SHUT, and only that one: a collapse is about a run, and a column
-        -- that closes them all together is a column with one setting.
-        local shut = R.SideItems(log, { [items[5].id] = true })
-        Check("A closed run keeps its row and drops its pulls", (function()
+        -- SHUT, and only that one: a collapse is about a place, and a
+        -- column that closes them all together is a column with one
+        -- setting.
+        local shut = R.SideItems(log, { [items[1].id] = true })
+        Check("A closed place keeps its row and drops its pulls", (function()
             local pulls = 0
             for _, item in ipairs(shut) do
                 if item.kind == "pull" then pulls = pulls + 1 end
             end
-            return #shut == #items - 2 and pulls == 2
+            return #shut == #items - 3 and pulls == 1
         end)())
-        Check("...and says it is closed", (function()
+        Check("...and says so, still counting what it holds", (function()
             for _, item in ipairs(shut) do
-                if item.kind == "run" and item.id == items[5].id then
-                    return item.open == false and item.pulls == 2
+                if item.kind == "run" and item.id == items[1].id then
+                    return item.open == false and item.pulls == 3
                 end
             end
             return false
         end)())
+        Check("A place keeps its picture from whichever pull had one",
+            (function()
+                local mixed = {
+                    { instance = "Ulduar", at = 1 },
+                    { instance = "Ulduar", at = 2, journal = 1136 },
+                }
+                local rows = R.SideItems(mixed, nil)
+                return rows[1] ~= nil and rows[1].journal == 1136
+            end)())
         Check("An empty log arranges into nothing",
             #R.SideItems({}, nil) == 0 and #R.SideItems(nil, nil) == 0)
     end

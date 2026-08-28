@@ -582,6 +582,33 @@ RaidDeaths.session = { fights = {} }
 -- arithmetic can be checked without a screen in front of it.
 ---------------------------------------------------------------------------
 
+-- WHEN A PULL HAPPENED, in the client's own format. Pure: the caller reads
+-- the setting and hands it over, so both formats can be checked here.
+--
+-- `military` false is the twelve-hour clock, and the leading zero goes:
+-- "09:34:24 AM" is a clock face, not a sentence. A fight from before the
+-- moment was recorded keeps the words it was captured with - nothing else
+-- knows what hour they meant, and inventing one would be worse than
+-- printing what was written down.
+function RaidDeaths.PullTime(fight, military)
+    if type(fight) ~= "table" then return "" end
+    local stamp = Plain(fight.stamp, "number")
+    if not stamp then return Plain(fight.when, "string") or "" end
+    if military == false then
+        return (date("%I:%M:%S %p", stamp):gsub("^0", ""))
+    end
+    return date("%H:%M:%S", stamp)
+end
+
+-- Which clock the client is set to. Its own answer, and the same question
+-- every other addon on this machine asks.
+function RaidDeaths.Military()
+    if not GetCVar then return true end
+    local ok, value = pcall(GetCVar, "timeMgrUseMilitaryTime")
+    if not ok then return true end
+    return value == "1"
+end
+
 -- The boss, or trash. Recorded at capture from ENCOUNTER_START, so this is
 -- what the game said rather than a word picked out of a label. No boss is a
 -- real answer and not a missing one: it was trash.
@@ -590,70 +617,76 @@ function RaidDeaths.PullLabel(fight)
     return boss or "Trash pull", boss ~= nil
 end
 
--- THE COLUMN AS A LIST OF THINGS TO DRAW: a row per run, and under it a row
--- per pull while the run is open.
+-- THE COLUMN AS A LIST OF THINGS TO DRAW: a row per PLACE, and under it a
+-- row per pull while that place is open.
 --
--- Newest first, the way the column has always read. A RUN is a contiguous
--- block in one instance, so walking into the same dungeon twice in an
--- evening is two runs rather than one heap - which is what a person
--- remembers doing. The pulls inside it are numbered from the oldest, so
--- pull 1 is the first one of that run whatever order they are drawn in.
+-- ONE ROW PER PLACE, however often the evening went back to it. Owner,
+-- 2026-08-25: "dann hast du rechts auch nicht 3 mal rubi stehen oder so,
+-- sondern nur einmal und 3 death sortiert nach zeit abwaerts." The first
+-- draft cut a place into one row per contiguous visit, which put the same
+-- dungeon in the column three times with the evening chopped up between
+-- them - the opposite of what a column like this is read for.
 --
--- `collapsed` is keyed by the run's id, and a run nobody has touched is
--- OPEN: the pulls are the thing that was asked for, and a column that opens
--- shut hides it behind a click.
+-- Newest first throughout: the places in the order they were last died in,
+-- and the pulls inside one in the order they happened. The NUMBER counts
+-- from the oldest, so pull 1 is the first of the evening in that place
+-- whatever order they are drawn in.
+--
+-- `collapsed` is keyed by the place, and one nobody has touched is OPEN:
+-- the pulls are the thing that was asked for, and a column that opens shut
+-- hides it behind a click.
 function RaidDeaths.SideItems(log, collapsed)
     local out = {}
     log = type(log) == "table" and log or {}
     collapsed = type(collapsed) == "table" and collapsed or {}
 
-    local index = #log
-    while index >= 1 do
-        local newest = log[index]
-        local where = (newest and newest.instance) or ""
-
-        -- How far back this run reaches.
-        local oldest = index
-        while oldest > 1 do
-            local before = log[oldest - 1]
-            if ((before and before.instance) or "") ~= where then break end
-            oldest = oldest - 1
+    -- Walked newest first, so a place takes its position in the column from
+    -- the last time somebody died there.
+    local order, byPlace = {}, {}
+    for index = #log, 1, -1 do
+        local fight = log[index]
+        local where = (fight and fight.instance) or ""
+        local place = byPlace[where]
+        if not place then
+            place = { where = where, pulls = {} }
+            byPlace[where] = place
+            order[#order + 1] = place
         end
+        place.pulls[#place.pulls + 1] = index
+        -- The tile comes from whichever pull carried one: a fight captured
+        -- before the guide answered has no journal id, and one row of the
+        -- same place having a picture is enough for the place to have one.
+        if not place.journal and fight then place.journal = fight.journal end
+    end
 
-        -- KEYED ON THE RUN'S FIRST PULL, not on its place in the list: a
-        -- capture two seconds later renumbers every run above it, and a
-        -- collapse that moves to another run when somebody dies is a
-        -- setting that appears to have a mind of its own.
-        local start = log[oldest]
-        local id = tostring(where) .. "#"
-            .. tostring((start and (start.at or start.when)) or oldest)
+    for _, place in ipairs(order) do
+        local id = "place#" .. tostring(place.where)
         local shut = collapsed[id] == true
+        local total = #place.pulls
 
         out[#out + 1] = {
             kind = "run",
             id = id,
-            instance = newest and newest.instance or nil,
-            journal = newest and newest.journal or nil,
-            pulls = index - oldest + 1,
+            instance = place.where ~= "" and place.where or nil,
+            journal = place.journal,
+            pulls = total,
             open = not shut,
         }
 
         if not shut then
-            for at = index, oldest, -1 do
-                local fight = log[at]
+            for position, index in ipairs(place.pulls) do
+                local fight = log[index]
                 local label, isBoss = RaidDeaths.PullLabel(fight)
                 out[#out + 1] = {
                     kind = "pull",
-                    index = at,
+                    index = index,
                     fight = fight,
-                    number = at - oldest + 1,
+                    number = total - position + 1,
                     label = label,
                     boss = isBoss,
                 }
             end
         end
-
-        index = oldest - 1
     end
     return out
 end
@@ -671,6 +704,7 @@ function RaidDeaths.Light(fight)
         instance = Plain(fight.instance, "string"),
         journal = Plain(fight.journal, "number"),
         boss = Plain(fight.boss, "string"),
+        stamp = Plain(fight.stamp, "number"),
         duration = Plain(fight.duration, "number"),
         entries = {},
     }
@@ -931,6 +965,12 @@ function RaidDeaths.Capture()
         key = key,
         at = GetTime(),
         when = date("%H:%M:%S"),
+        -- THE MOMENT, beside the words. `when` is a string fixed at capture
+        -- and cannot be re-read in another format; this can, and a list
+        -- drawn half in one format and half in the other is worse than
+        -- either. Both are kept: a fight saved before this existed has only
+        -- the words, and they still say the right thing.
+        stamp = time(),
         where = where,
         whereShort = whereShort,
         instance = instance,
@@ -1036,6 +1076,7 @@ function RaidDeaths.Persist(fight)
         instance = Plain(fight.instance, "string"),
         journal = Plain(fight.journal, "number"),
         boss = Plain(fight.boss, "string"),
+        stamp = Plain(fight.stamp, "number"),
         duration = Plain(fight.duration, "number"),
         entries = {},
     }
