@@ -10,6 +10,23 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.96.0] - 2026-08-30
+
+### Added
+
+- **The combat log's column wears its pictures.** A place carries the
+  Adventure Guide's tile and opens the guide when you click it; a boss
+  carries its portrait, its name is a link, and pointing at either says
+  what is behind it. The two death logs have had this for weeks - this
+  window was the one built last and had none of it.
+
+### Changed
+
+- **The replay's zoom goes as far as the fight is long.** It stopped at
+  eight, which was written for a ten-second death: eight times into a
+  four-minute pull still left half a minute on screen. Any fight of half a
+  minute or more now reaches thirty, and a long one goes further.
+
 ## [4.95.1] - 2026-08-30
 
 ### Fixed

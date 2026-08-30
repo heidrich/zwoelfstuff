@@ -31,6 +31,26 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.96.0",
+        date = "2026-08-30",
+        lines = {
+            {
+                text = "|cffffd100The combat log's column wears its "
+                    .. "pictures.|r A place carries the Adventure Guide's "
+                    .. "tile and opens the guide when you click it; a boss "
+                    .. "carries its portrait and its name is a link. Both "
+                    .. "death logs have had this for weeks.",
+            },
+            {
+                text = "|cffffd100The replay's zoom goes as far as the "
+                    .. "fight is long.|r It stopped at eight, which was "
+                    .. "written for a ten-second death - eight times into a "
+                    .. "four-minute pull still left half a minute on "
+                    .. "screen.",
+            },
+        },
+    },
+    {
         version = "4.95.1",
         date = "2026-08-30",
         lines = {

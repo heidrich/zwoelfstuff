@@ -206,9 +206,27 @@ local SWITCH_BAND = SWITCH_W * 2 + SWITCH_GAP
 -- when it starts moving rather than arriving after it.
 local LEAD = 0.5
 local SPEED_MIN, SPEED_MAX, SPEED_STEP = 0.25, 3, 0.25
--- Eight times in means a ten-second death shown one and a quarter seconds
--- at a time, which is finer than any press sequence a person makes.
-local ZOOM_MAX = 8
+-- HOW FAR IN A PLOT MAY BE ZOOMED, and it depends on how long the plot is.
+--
+-- Owner, 2026-08-30: "im combat log brauchen wir einen zoom der bis locker
+-- 30 gehen muss."
+--
+-- Eight was written for a DEATH and is right for one: ten seconds shown a
+-- second and a quarter at a time is finer than any press sequence a person
+-- makes. A pull is minutes, and eight times into four of them still leaves
+-- half a minute on screen - which is the width at which two presses in the
+-- same second are the same pixel, and telling those apart is the whole
+-- reason anybody drags this slider.
+--
+-- So the ceiling follows the SPAN rather than the file: far enough in to
+-- bring the view down to ONE second, which is where a single press fills
+-- the plot and there is nothing left to separate. Any fight of half a
+-- minute or more therefore reaches thirty, which is what he asked for, and
+-- a four-minute one is capped so the slider keeps a usable travel.
+--
+-- Never below the eight a death always had: a fight can be shorter than
+-- eight seconds and the slider must not shrink to nothing on it.
+local ZOOM_MIN_MAX, ZOOM_CEILING, ZOOM_CLOSEST = 8, 60, 1
 
 ---------------------------------------------------------------------------
 -- Pure rules, exported for the self test
@@ -251,6 +269,12 @@ function Replay.View(span, zoom, centre)
         from = visible
     end
     return from, to
+end
+
+function Replay.ZoomMax(span)
+    if type(span) ~= "number" or span <= 0 then return ZOOM_MIN_MAX end
+    return math.max(ZOOM_MIN_MAX,
+        math.min(ZOOM_CEILING, math.floor(span / ZOOM_CLOSEST + 0.5)))
 end
 
 -- Where a moment sits, as a fraction from the left edge of what is shown.
@@ -1039,17 +1063,24 @@ local function BuildWindow()
     local zoomRow = UI.Row(frame, "Zoom", { controlWidth = 116 })
     zoomRow:SetPoint("LEFT", speedRow, "RIGHT", 10, 0)
     zoomRow.rule:Hide()
-    UI.Slider(zoomRow, {
+    -- THE CEILING IS THE FIGHT'S, so the config table is kept and its max
+    -- moved when a window opens. The slider reads cfg.max every time it is
+    -- asked rather than at build, which is what makes that legal - and a
+    -- slider whose travel ends where the fight does is the difference
+    -- between "as far as it goes" and a number silently clamped behind it.
+    frame.zoomCfg = {
         get = function() return (Replay.state and Replay.state.zoom) or 1 end,
         set = function(value)
             if not Replay.state then return end
-            Replay.state.zoom = math.max(1, math.min(ZOOM_MAX, value))
+            local most = Replay.ZoomMax(Replay.state.span)
+            Replay.state.zoom = math.max(1, math.min(most, value))
             Replay.Redraw()
         end,
-        min = 1, max = ZOOM_MAX, step = 0.5,
+        min = 1, max = ZOOM_MIN_MAX, step = 0.5,
         silent = true,
         format = function(v) return Replay.SpeedLabel(v) end,
-    })
+    }
+    UI.Slider(zoomRow, frame.zoomCfg)
     UI.FitRow(zoomRow)
     frame.zoomRow = zoomRow
 
@@ -2239,6 +2270,10 @@ function Replay:Open(snapshot)
     if frame.wornLabel then
         frame.wornLabel:SetShown(pull and #(snapshot.worn or {}) > 0)
     end
+
+    -- A LONG FIGHT GETS A LONG SLIDER. Set before the row is refreshed, or
+    -- the control draws its handle against last window's range.
+    frame.zoomCfg.max = Replay.ZoomMax(span)
 
     frame.playButton.label:SetText("Pause")
     frame.speedRow.Refresh()

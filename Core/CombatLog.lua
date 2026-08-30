@@ -3534,6 +3534,11 @@ end
 -- shared is the rule that decides the three levels - ns.Death.GroupItems -
 -- so the two columns cannot group a night two different ways.
 ---------------------------------------------------------------------------
+-- The face and the tile, at the sizes the other two columns use: a column
+-- that reads the same way is the point of copying them at all.
+local SIDE_FACE = 22
+local SIDE_ART_W, SIDE_ART_H = 52, 32
+
 local function BuildSideRow(parent)
     local UI, C = ns.UI, ns.UI.C
     local row = CreateFrame("Button", nil, parent)
@@ -3570,6 +3575,59 @@ local function BuildSideRow(parent)
     row.num:SetJustifyH("RIGHT")
     row.num:SetWidth(16)
     row.num:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -6)
+
+    -- THE SAME FURNITURE THE OTHER TWO COLUMNS CARRY.
+    --
+    -- Owner, 2026-08-30: "auch fehlt auf der rechten seite die komplette
+    -- boss avatare, dungeon bilder etc - verlinkungen." Both death logs put
+    -- a boss's face and the guide's tile down their column and this one had
+    -- neither - the standing rule broken in the window built last: "wir
+    -- sollten death log und combat log immer abgleichen ... auch was icons,
+    -- spell namen, boss namen, hover infos angeht."
+    --
+    -- NOTHING NEW WAS NEEDED FOR IT. The items already carry `journal` and
+    -- `bossID` - Death.GroupItems has put them there all along, for all
+    -- three windows - and both the face and the tile are Death's own
+    -- builders. This column simply never drew them.
+    --
+    -- BORROWED, NOT REBUILT, so a fix to either shows up in all three.
+    row.face = ns.Death.CreateFace(row, SIDE_FACE)
+    row.face:EnableMouse(true)
+    row.face:Hide()
+
+    -- THE GUIDE'S TILE down the right of a place header, sized to the row
+    -- rather than left at its default, which is taller than one.
+    row.art = ns.Death.CreatePlaceArt(row, SIDE_ART_W, SIDE_ART_H)
+    row.art:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
+    -- THE FACE AND THE NAME ANSWER TOGETHER: the tip says whose page is
+    -- behind it, and the click opens it. One pair of handlers for both,
+    -- because two would be two places to forget one of them.
+    local function FaceEnter(self)
+        if not row.faceName then return end
+        ns.Death.ShowEnemyTip(self, { who = row.faceName, art = row.faceArt,
+            note = row.facePage
+                and "Click to open it in the Adventure Guide" or nil })
+    end
+    local function FaceLeave()
+        ns.Death.HideEnemyTip()
+    end
+    local function FaceClick()
+        if not row.facePage then return end
+        ns.Death.OpenJournal(row.faceJournal, row.facePage.journal)
+    end
+    row.face:SetScript("OnEnter", FaceEnter)
+    row.face:SetScript("OnLeave", FaceLeave)
+    row.face:SetScript("OnMouseUp", FaceClick)
+
+    -- AND SO DOES THE BOSS'S NAME BESIDE IT. Orange in this addon is a
+    -- promise that a word can be pointed at, and a name wearing it with
+    -- nothing behind it is the promise broken.
+    row.tagHit = CreateFrame("Button", nil, row)
+    row.tagHit:SetScript("OnEnter", FaceEnter)
+    row.tagHit:SetScript("OnLeave", FaceLeave)
+    row.tagHit:SetScript("OnClick", FaceClick)
+    row.tagHit:Hide()
 
     -- EVERY LABEL ANCHORED HERE, not only in the painter. An unanchored
     -- region is not drawn at all, so a branch that forgets one leaves a blank
@@ -3677,6 +3735,23 @@ local function PaintSideRow(row, item, chosen)
     row.num:SetText("")
     row.note:SetText("")
 
+    -- WIPED BY THE ONE PAINTER, not by each branch. The rows are a shared
+    -- pool: what a branch does not set, the row inherits from whatever it
+    -- was last time - a boss's face left standing on a pull is not a
+    -- misplaced picture, it is the wrong boss.
+    row.face:Hide()
+    row.tagHit:Hide()
+    row.faceName, row.facePage, row.faceArt, row.faceJournal = nil, nil, nil, nil
+    row.art.Paint(nil)
+    row.lead:ClearAllPoints()
+    row.lead:SetPoint("TOPLEFT", row, "TOPLEFT", 28, -6)
+    row.right:ClearAllPoints()
+    row.right:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -6)
+    row.note:ClearAllPoints()
+    row.note:SetPoint("TOPLEFT", row.lead, "BOTTOMLEFT", 0, -3)
+    row.note:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.lead:SetPoint("RIGHT", row.right, "LEFT", -8, 0)
+
     if item.kind == "run" then
         row.foldID, row.pick = item.id, item.id
         row.rule:Show()
@@ -3684,6 +3759,21 @@ local function PaintSideRow(row, item, chosen)
         row.chev:Show()
         row.foldHit:Show()
         row.chev:SetKind(item.open and "caretDOWN" or "caretRIGHT")
+
+        -- THE PLACE'S OWN PICTURE, and the words stop before it. Which edge
+        -- they stop at is decided by what was actually DRAWN rather than by
+        -- the fact that a dungeon has a journal id: a line indented past an
+        -- empty square reads as a missing image.
+        local drew = row.art.Paint(item.journal)
+        local edge, corner, side = row, "TOPRIGHT", "RIGHT"
+        if drew then edge, corner, side = row.art, "TOPLEFT", "LEFT" end
+        row.right:ClearAllPoints()
+        row.right:SetPoint("TOPRIGHT", edge, corner, -6, -6)
+        row.note:ClearAllPoints()
+        row.note:SetPoint("TOPLEFT", row.lead, "BOTTOMLEFT", 0, -3)
+        row.note:SetPoint("RIGHT", edge, side, -6, 0)
+        row.lead:SetPoint("RIGHT", row.right, "LEFT", -6, 0)
+
         row.lead:SetText(item.instance or item.tag or "Somewhere")
         row.lead:SetTextColor(C.accentCool[1], C.accentCool[2], C.accentCool[3])
         row.right:SetText(item.tag or "")
@@ -3701,10 +3791,30 @@ local function PaintSideRow(row, item, chosen)
         row.foldHit:Show()
         row.chev:SetKind(item.open and "caretDOWN" or "caretRIGHT")
         row.lead:SetText(item.label or "")
-        -- A BOSS IS NAMED, TRASH IS A FACT. The colour is the same promise
-        -- the other two windows make with it.
+        -- A BOSS IS A LINK, TRASH IS A FACT - the same three things both
+        -- death logs say with this row: the orange, the face, and the
+        -- click. Owner, 2026-08-29 about the other pair: "die rechte seite
+        -- beim normalen log muesste ja gleich wie beim group sein oder
+        -- nicht." It holds for the third window too.
         if item.boss then
-            row.lead:SetTextColor(C.text[1], C.text[2], C.text[3])
+            row.lead:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+            row.faceName = item.label
+            row.faceJournal = item.journal
+            row.faceArt = ns.Death.GuideFace(item.journal, item.bossID,
+                item.label)
+            row.facePage = ns.Death.BossPage(item.journal, item.bossID,
+                item.label)
+            if ns.Death.PaintFace(row.face, row.faceArt) then
+                row.face:ClearAllPoints()
+                row.face:SetPoint("LEFT", row, "LEFT", 28, 0)
+                row.face:Show()
+                row.lead:ClearAllPoints()
+                row.lead:SetPoint("LEFT", row.face, "RIGHT", 6, 0)
+                row.lead:SetPoint("RIGHT", row.right, "LEFT", -8, 0)
+            end
+            row.tagHit:ClearAllPoints()
+            row.tagHit:SetAllPoints(row.lead)
+            row.tagHit:Show()
         else
             row.lead:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
         end

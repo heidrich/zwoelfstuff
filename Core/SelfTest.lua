@@ -2290,6 +2290,29 @@ local function TestDeath()
             Check("and it still does with the health block put away",
                 shut.height - shut.bottom >= shut.foot)
         end
+        -- HOW FAR IN THE PLOT MAY BE ZOOMED, and it follows the fight.
+        --
+        -- Owner, 2026-08-30: "im combat log brauchen wir einen zoom der bis
+        -- locker 30 gehen muss." Eight was written for a ten-second death;
+        -- eight times into four minutes still leaves half a minute on
+        -- screen, which is the width at which two presses in the same
+        -- second are the same pixel.
+        Check("A death keeps the eight it always had",
+            Replay.ZoomMax(10) >= 8)
+        Check("A half-minute pull reaches thirty",
+            Replay.ZoomMax(30) >= 30)
+        Check("and a four-minute one goes further still",
+            Replay.ZoomMax(240) > Replay.ZoomMax(30))
+        -- A FIGHT CAN BE SHORTER THAN THE FLOOR, and the slider must not
+        -- shrink to nothing on it.
+        Check("A very short fight still gets a slider",
+            Replay.ZoomMax(3) == 8 and Replay.ZoomMax(nil) == 8
+                and Replay.ZoomMax(0) == 8)
+        -- AND IT IS BOUNDED. A travel of a thousand steps is a slider
+        -- nobody can put on a number.
+        Check("and it is capped rather than open-ended",
+            Replay.ZoomMax(100000) == Replay.ZoomMax(3600))
+
         -- THE DEBUFF LANE'S ROOM DEPENDS ON WHAT IS UNDER IT. It is the one
         -- lane with a hard edge below - the recap's columns grow up towards
         -- it - so where there are none, that room is free and it may use it.
