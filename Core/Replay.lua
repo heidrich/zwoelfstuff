@@ -191,6 +191,17 @@ local GRAPH_UP_H = 48
 -- Both are worked out in Replay.DebuffTop and Replay.Metrics, from however
 -- many rows this fight's debuffs actually needed.
 
+-- WHAT THE TWO HEADER SWITCHES TAKE, and what the title gives up for them.
+--
+-- A row is its label plus the control - see UI.FitRow - and both labels are
+-- one short word, so one width covers both. Written once because the title's
+-- right edge and the switches' own anchor are the SAME edge: two numbers
+-- would be two places for it to be got wrong, and the symptom would be a
+-- mob's name running under a switch on exactly the fights whose names are
+-- long.
+local SWITCH_W, SWITCH_GAP = 92, 12
+local SWITCH_BAND = SWITCH_W * 2 + SWITCH_GAP
+
 -- Half a second before the first thing happens, so the eye is on the plot
 -- when it starts moving rather than arriving after it.
 local LEAD = 0.5
@@ -737,11 +748,23 @@ local function BuildWindow()
     -- (owner, 2026-08-16: "vor dem gegner namen fehlt noch avatar und
     -- hover ... bei replay").
     frame.title = ns.Death.BuildRichLine(frame, 15)
+    -- THE TITLE STOPS SHORT OF THE TWO SWITCHES. Owner, 2026-08-30: "pack
+    -- die 2 buttons nach oben in den header." They stood over Play, in the
+    -- bottom-left corner - which is inside the plot, so a bar that ran to
+    -- the left edge was drawn across them. Up here they are beside the
+    -- title, out of the picture entirely, and the plot has its corner back.
+    --
+    -- SWITCH_BAND is what they take, so this edge and their own anchor are
+    -- one number rather than two that drift apart.
     frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -14)
-    frame.title:SetPoint("RIGHT", frame, "RIGHT", -44, 0)
+    frame.title:SetPoint("RIGHT", frame, "RIGHT", -(44 + SWITCH_BAND), 0)
 
     frame.sub = UI.Label(frame, "", 11, C.textFaint)
     frame.sub:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -3)
+    -- The sub-line stops at the same edge. It carries a place and a length
+    -- and would otherwise run under them.
+    frame.sub:SetPoint("RIGHT", frame, "RIGHT", -(44 + SWITCH_BAND), 0)
+    frame.sub:SetJustifyH("LEFT")
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(24, 24)
@@ -1035,10 +1058,17 @@ local function BuildWindow()
     -- (owner, 2026-08-16: "der graph button ist zu weit rechts aussen, den
     -- kannste auch ueber den play button schieben"): it sits between the
     -- thing it switches and the buttons, where the eye already is.
-    -- AND THE HEALTH BLOCK'S OWN SWITCH, over the graph's, in the same
-    -- column: two things this window can put away, one place to say so.
+    -- THE TWO THINGS THIS WINDOW CAN PUT AWAY, in the header beside the
+    -- title. Owner, 2026-08-30: "pack die 2 buttons nach oben in den
+    -- header." They were stacked over Play in the bottom-left, which is
+    -- the plot's own corner - a defensive still running at the left edge
+    -- was drawn straight across them, and a switch you cannot read is a
+    -- switch nobody presses.
+    --
+    -- Health first, then Graph, in the order the window folds them away.
     local healthRow = UI.Row(frame, "Health", { controlWidth = 40 })
-    healthRow:SetPoint("BOTTOMLEFT", play, "TOPLEFT", 0, 30)
+    healthRow:SetPoint("TOPRIGHT", frame, "TOPRIGHT",
+        -(44 + SWITCH_W + SWITCH_GAP), -10)
     healthRow.rule:Hide()
     UI.Toggle(healthRow,
         function()
@@ -1056,7 +1086,7 @@ local function BuildWindow()
     frame.healthRow = healthRow
 
     local graphRow = UI.Row(frame, "Graph", { controlWidth = 40 })
-    graphRow:SetPoint("BOTTOMLEFT", play, "TOPLEFT", 0, 6)
+    graphRow:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -44, -10)
     graphRow.rule:Hide()
     UI.Toggle(graphRow,
         function() return Replay.GraphWanted() end,

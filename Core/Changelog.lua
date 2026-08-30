@@ -31,6 +31,18 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.95.1",
+        date = "2026-08-30",
+        lines = {
+            {
+                text = "|cffffd100The replay's Health and Graph switches "
+                    .. "moved into the header|r, beside the title. They sat "
+                    .. "in the corner of the plot, where a bar running to "
+                    .. "the left edge was drawn over them.",
+            },
+        },
+    },
+    {
         version = "4.95.0",
         date = "2026-08-30",
         lines = {

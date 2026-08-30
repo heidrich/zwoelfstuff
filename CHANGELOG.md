@@ -10,6 +10,14 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.95.1] - 2026-08-30
+
+### Fixed
+
+- **The replay's two switches moved into the header**, beside the title.
+  They sat in the bottom-left corner of the plot, so a defensive still
+  running at the left edge was drawn straight across them.
+
 ## [4.95.0] - 2026-08-30
 
 ### Added
