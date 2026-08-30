@@ -31,6 +31,31 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.97.0",
+        date = "2026-08-30",
+        lines = {
+            {
+                text = "|cffffd100The combat log is its own switch.|r It is "
+                    .. "the one that costs something while you play, and it "
+                    .. "sat inside the death log's. Off, nothing is "
+                    .. "recorded at all - not recorded and hidden.",
+                link = { label = "Where the switch is", page = "deaths" },
+            },
+            {
+                text = "|cffffd100And you say how much of a fight is "
+                    .. "kept|r - a minute by default, up to fifteen. "
+                    .. "Counted back from the END, because that is where a "
+                    .. "fight goes wrong.",
+            },
+            {
+                text = "|cffffd100And the debuff clock stopped costing what "
+                    .. "it did.|r It walked up to sixty aura slots on every "
+                    .. "aura event, all day. It runs in a fight now, at "
+                    .. "most five times a second.",
+            },
+        },
+    },
+    {
         version = "4.96.0",
         date = "2026-08-30",
         lines = {

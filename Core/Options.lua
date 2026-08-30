@@ -828,7 +828,17 @@ local PAGES = {
     -- would never guess held it.
     { key = "deaths", title = "Combat / Death Log", glyph = "skull",
       deaths = true,
+      -- TWO MODULES, ONE PAGE. The switches are separate - the death log
+      -- records on a death and the combat log records every fight - but
+      -- everything you can SET is shared: the defensives, the cooldowns,
+      -- the consumables, what is recorded, where it is shared. A second
+      -- page holding the same list would be the same settings twice.
       module = "deaths",
+      -- AND IT CARRIES THE COMBAT LOG'S SWITCH TOO, as a row under "While
+      -- you fight". The page GATE stays the death log's: switching the
+      -- combat log off must not grey out the defensives that both windows
+      -- read. See OptionsDeaths.
+      extraModule = "combatlog",
       subtitle = "What killed you, and what could have prevented it.",
       actions = {
           { text = "Open it", onClick = function() ns.Death:Show() end },

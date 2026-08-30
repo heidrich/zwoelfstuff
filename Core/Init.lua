@@ -472,6 +472,13 @@ ns.DEFAULTS = {
         externals = true,
         answers   = true,
         deaths    = true,
+        -- ON, and that is a decision rather than a habit. It shipped inside
+        -- the death log's switch in 4.95.0 and 4.96.0, so every profile out
+        -- there already has it running; defaulting the new switch to OFF
+        -- would take a working feature away from everybody who updates.
+        -- The cost it was switched apart FOR is the per-event one, and that
+        -- is fixed rather than deferred - see History's aura sweep.
+        combatlog = true,
         raidbar   = false,
         invites   = false,
         -- OFF UNTIL ASKED FOR. It watches every nameplate ten times a second

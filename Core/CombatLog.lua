@@ -2382,8 +2382,27 @@ do
 
     CombatLog.SampleHealth = Sample
 
-    local function TrackAt(now)
-        return CombatLog.TrackRows(ring, ringHead, ringCount, now, TRACK_SIZE)
+    local function TrackAt(now, window)
+        local rows = CombatLog.TrackRows(ring, ringHead, ringCount, now,
+            TRACK_SIZE)
+        if type(window) ~= "number" then return rows end
+        -- OLDEST FIRST, so what falls out comes off the FRONT. Kept as one
+        -- reading past the edge where there is one: the line has to start
+        -- somewhere, and a plot whose left end has no reading at all is the
+        -- blank bar the owner photographed.
+        local out, carry = {}, nil
+        for _, one in ipairs(rows) do
+            if one.ago > window then
+                carry = one
+            else
+                if carry then
+                    out[#out + 1] = carry
+                    carry = nil
+                end
+                out[#out + 1] = one
+            end
+        end
+        return out
     end
 
     -- THE FIGHT NOW RUNNING has no pull to carry its samples yet, and the
@@ -2414,6 +2433,24 @@ do
     end
 
     watcher:SetScript("OnEvent", function(_, event)
+        -- OFF MEANS NOTHING IS RECORDED, not "recorded and hidden".
+        --
+        -- Owner, 2026-08-30: "das frisst zu viel performance." A switch that
+        -- only took the window away would leave every cost behind it - the
+        -- reading a second, the copy when combat drops - and answer the
+        -- complaint with a picture.
+        --
+        -- CHECKED ON BOTH EVENTS, so a fight that began while it was on and
+        -- ended after it was switched off files nothing rather than half a
+        -- pull: `startedAt` is left where it was and Finish never runs.
+        if ns.Modules and not ns.Modules:IsOn("combatlog") then
+            if ticker then
+                ticker:Cancel()
+                ticker = nil
+            end
+            startedAt = nil
+            return
+        end
         if event == "PLAYER_REGEN_DISABLED" then
             startedAt = GetTime and GetTime() or nil
             -- FROM EMPTY, and with the opening reading taken at once: a pull
@@ -2444,6 +2481,12 @@ do
         startedAt = nil
         if not lasted or lasted < MIN_FIGHT then return end
 
+        -- TRIMMED TO WHAT IS KEPT, and all three lists to the SAME number.
+        -- Three windows would be three answers about one fight: a press
+        -- inside the plot with no health line under it, or a debuff bar
+        -- running off the left edge of a stretch that does not reach it.
+        local kept = math.min(lasted, CombatLog.RecordWindow())
+
         local meter = CombatLog.Snapshot("Current")
         -- A pull the meter said nothing about is still a pull - it happened,
         -- it has a place and a clock, and a list that silently drops it would
@@ -2465,7 +2508,7 @@ do
         -- up again when it is drawn, and neither belongs in a saved file.
         local casts = {}
         for _, cast in ipairs(CombatLog.Pressed(
-            ns.History and ns.History.casts, now, lasted)) do
+            ns.History and ns.History.casts, now, kept)) do
             local kept = { spellID = cast.spellID, ago = cast.ago }
             -- AND HOW LONG IT WAS ACTUALLY UP, measured on this very press
             -- rather than looked up in a table. Same door the death snapshot
@@ -2490,7 +2533,7 @@ do
         if #casts > 0 then fight.casts = casts end
 
         -- AND THE FIGHT'S OWN SHAPE. One reading is a dot, not a line.
-        local track = TrackAt(now)
+        local track = TrackAt(now, kept)
         if #track > 1 then fight.track = track end
 
         -- AND WHAT WAS ON YOU WHILE IT LASTED. Same reason as the presses:
@@ -2498,7 +2541,7 @@ do
         -- this is the only moment the answer exists. The ones still on you
         -- when it ended are in it and say so.
         local worn = ns.History and ns.History.DebuffsWithin
-            and ns.History.DebuffsWithin(now, lasted) or {}
+            and ns.History.DebuffsWithin(now, kept) or {}
         if #worn > 0 then fight.debuffs = worn end
 
         -- AND WHO WENT DOWN WHILE IT LASTED, for the same reason and off the
@@ -5510,10 +5553,34 @@ function CombatLog.Anchor()
     return nil
 end
 
+-- HOW MUCH OF A FIGHT IS KEPT, in seconds, counted back from its END.
+--
+-- Owner, 2026-08-30: "also das live logging auch 60 sekunden begrenzen, oder
+-- selbst einstellbar machen in den einstellungen, ich glaube das ist noch
+-- besser."
+--
+-- THE END AND NOT THE START, and that is the whole design of it. A four
+-- minute boss pull that went wrong went wrong at the end; keeping the first
+-- minute would keep the part nobody opens the window for. So the readings,
+-- the presses and the debuffs are all trimmed to the same trailing window,
+-- and what falls out of it is the quiet beginning.
+--
+-- The fight's own LENGTH is still recorded in full and the page still draws
+-- the whole stretch - the marks simply sit in the part that was kept, at the
+-- second they happened. Nothing here says a four-minute pull was one minute.
+CombatLog.KEEP_MIN, CombatLog.KEEP_MAX = 15, 900
+function CombatLog.RecordWindow()
+    local want = ns.db and ns.db.death and ns.db.death.recordSeconds
+    if type(want) ~= "number" then want = 60 end
+    return math.max(CombatLog.KEEP_MIN, math.min(CombatLog.KEEP_MAX, want))
+end
+
 function CombatLog.RefreshIcon()
     if not (ns.UI and ns.UI.C) then return end
     local cfg = (ns.db and ns.db.death and ns.db.death.icon) or {}
-    local moduleOff = ns.Modules and not ns.Modules:IsOn("deaths")
+    -- ITS OWN SWITCH now, not the death log's - see Modules.lua. The two
+    -- windows share a page and a column and cost entirely different things.
+    local moduleOff = ns.Modules and not ns.Modules:IsOn("combatlog")
 
     -- ONE SWITCH FOR THE CLUSTER. The three icons share a position and a
     -- docking chain; a switch that took two of the three away would leave
@@ -5524,6 +5591,7 @@ function CombatLog.RefreshIcon()
         return
     end
     if not icon then BuildIcon() end
+    CombatLog.icon = icon
 
     local anchor = CombatLog.Anchor()
     icon.docked = anchor ~= nil

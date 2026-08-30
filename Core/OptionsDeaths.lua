@@ -325,6 +325,55 @@ function Page:BuildPage(page, width)
     grid:Note("Drag anything out of your bags onto a slot.")
 
     ---------------------------------------------------------------------
+    -- WHILE YOU FIGHT - the combat log, which is its own module
+    --
+    -- Owner, 2026-08-30: "wir muessen den combat log separat ausschaltbar
+    -- machen koennen, oder das live logging irgendwie auf 60 sekunden
+    -- begrenzen. das frisst zu viel performance."
+    --
+    -- The death log records ON a death: once, and only then. This one
+    -- records the whole fight, so it is the one that costs anything while
+    -- you play - and it is the one that has to be switchable on its own.
+    --
+    -- A MODULE SWITCH ON A SETTINGS PAGE, which is unusual here and is the
+    -- point: every module needs a page you can switch it on FROM, and these
+    -- two share this one. A page of its own would hold this row and nothing
+    -- else, because every setting below is shared by both windows.
+    ---------------------------------------------------------------------
+    grid:Section("While you fight")
+
+    UI.Toggle(grid:Row("Record every fight"),
+        function() return ns.Modules:IsOn("combatlog") end,
+        function(value)
+            ns.Modules:Set("combatlog", value)
+            ns.Options:Refresh()
+        end)
+
+    grid:Note("A health reading a second, every button you press, and what "
+        .. "is put on you - kept per pull, and played back. Off, nothing is "
+        .. "recorded while you fight and the combat log's icon stays away. "
+        .. "The death log below is a separate switch.")
+
+    UI.Slider(grid:Row("How much of a fight to keep"), {
+        get = function() return ns.CombatLog.RecordWindow() end,
+        set = function(value)
+            Config().recordSeconds = math.floor(value + 0.5)
+        end,
+        min = ns.CombatLog.KEEP_MIN, max = ns.CombatLog.KEEP_MAX, step = 15,
+        format = function(v)
+            v = math.floor((v or 60) + 0.5)
+            if v < 60 then return string.format("%ds", v) end
+            if v % 60 == 0 then return string.format("%dm", v / 60) end
+            return string.format("%dm %ds", math.floor(v / 60), v % 60)
+        end,
+    })
+
+    grid:Note("Counted back from the END of the fight, because that is where "
+        .. "one goes wrong. A minute by default. The fight's own length is "
+        .. "still recorded in full - only the readings, the presses and the "
+        .. "debuffs before this are dropped.")
+
+    ---------------------------------------------------------------------
     -- When you die
     ---------------------------------------------------------------------
     grid:Section("When you die")

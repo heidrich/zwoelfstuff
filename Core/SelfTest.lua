@@ -2290,6 +2290,53 @@ local function TestDeath()
             Check("and it still does with the health block put away",
                 shut.height - shut.bottom >= shut.foot)
         end
+        -- A DEBUFF WORN THROUGH THE WHOLE STRETCH IS DRAWN ACROSS IT.
+        --
+        -- It used to be dropped for starting before the window, which was
+        -- harmless while the window was the whole fight and became a hole
+        -- the moment it could be shorter: a curse worn from the pull to the
+        -- wipe starts before any window worth setting.
+        do
+            local rows = ns.History.DebuffsWithin(100, 30,
+                { { spellID = 7, from = 10, to = 95 } })
+            Check("One that began before the stretch is clamped to its edge",
+                #rows == 1 and rows[1].ago == 30)
+            Check("and its length is what it was on you INSIDE the stretch",
+                rows[1].held ~= nil and math.abs(rows[1].held - 25) < 0.01)
+            -- AND ONE THAT ENDED BEFORE IT BEGAN IS STILL GONE. Clamping
+            -- everything would draw a debuff that was over before the plot
+            -- starts.
+            local old = ns.History.DebuffsWithin(100, 30,
+                { { spellID = 7, from = 10, to = 20 } })
+            Check("but one that was over before it began is not drawn",
+                #old == 0)
+        end
+
+        -- HOW MUCH OF A FIGHT IS KEPT. Owner, 2026-08-30: "das live
+        -- logging auch 60 sekunden begrenzen, oder selbst einstellbar
+        -- machen in den einstellungen."
+        do
+            local CL = ns.CombatLog
+            local keptCfg = ns.db.death and ns.db.death.recordSeconds
+            ns.db.death = ns.db.death or {}
+            ns.db.death.recordSeconds = nil
+            Check("A minute unless somebody says otherwise",
+                CL.RecordWindow() == 60)
+            ns.db.death.recordSeconds = 300
+            Check("and what they say is what is kept",
+                CL.RecordWindow() == 300)
+            -- HELD TO ITS ENDS. A saved file from another version, or a
+            -- hand-edited one, must not be able to ask for a window the ring
+            -- cannot hold or one too short to draw a line in.
+            ns.db.death.recordSeconds = 99999
+            Check("A number past the top comes back at the top",
+                CL.RecordWindow() == CL.KEEP_MAX)
+            ns.db.death.recordSeconds = 1
+            Check("and one under the bottom at the bottom",
+                CL.RecordWindow() == CL.KEEP_MIN)
+            ns.db.death.recordSeconds = keptCfg
+        end
+
         -- HOW FAR IN THE PLOT MAY BE ZOOMED, and it follows the fight.
         --
         -- Owner, 2026-08-30: "im combat log brauchen wir einen zoom der bis
@@ -7073,6 +7120,18 @@ local function TestModules()
             Check("Page '" .. page.key .. "' names a module that exists",
                 Modules:Get(page.module) ~= nil, tostring(page.module))
             pageByModule[page.module] = page.key
+        end
+        -- A PAGE MAY HOLD A SECOND MODULE'S SWITCH without belonging to it.
+        -- The death log and the combat log share every setting they have -
+        -- the defensives, the cooldowns, the consumables - so they share a
+        -- page, and the second switch is a row on it. What they do NOT share
+        -- is the gate: switching the combat log off must not grey out a list
+        -- the death log reads.
+        if page.extraModule then
+            Check("Page '" .. page.key .. "' names a second module that "
+                .. "exists", Modules:Get(page.extraModule) ~= nil,
+                tostring(page.extraModule))
+            pageByModule[page.extraModule] = page.key
         end
     end
     for _, entry in ipairs(list) do

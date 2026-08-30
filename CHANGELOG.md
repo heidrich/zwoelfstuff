@@ -10,6 +10,28 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.97.0] - 2026-08-30
+
+### Added
+
+- **The combat log is its own switch.** It is the one that costs something
+  while you play - a health reading a second, every press, and the clock on
+  what is put on you - and it sat inside the death log's switch. Turn it off
+  under **While you fight** on the Deaths page and nothing is recorded at
+  all: not recorded and hidden, not recorded.
+- **And you say how much of a fight is kept** - a minute by default, fifteen
+  seconds to fifteen minutes. Counted back from the END, because that is
+  where a fight goes wrong. The fight's own length is still recorded in
+  full; only the readings, the presses and the debuffs before the window are
+  dropped.
+
+### Fixed
+
+- **The debuff clock stopped costing what it did.** It walked up to sixty
+  aura slots on every aura event, all day, in a city and on a flight path.
+  It now runs only while you are in a fight, at most five times a second,
+  and builds nothing per call.
+
 ## [4.96.0] - 2026-08-30
 
 ### Added

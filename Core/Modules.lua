@@ -65,7 +65,7 @@ ns.Modules = Modules
 --    usual: it is the only module in the list that can COLLIDE with another
 --    addon, and the answer has to be given before either of us draws
 --    anything. See Cooldowns/Rivals.lua.
-Modules.GENERATION = 6
+Modules.GENERATION = 7
 
 local LIST = {
     {
@@ -224,7 +224,7 @@ local LIST = {
         detail = "Off, nothing is listening and no invitation is sent.",
     },
     {
-        key = "deaths", title = "Combat / Death Log", glyph = "skull",
+        key = "deaths", title = "Death Log", glyph = "skull",
         since = 1,
         blurb = "What killed you, played back, and what you had that could have stopped it.",
         detail = "Off, nothing is recorded and the skull stays away.",
@@ -233,6 +233,28 @@ local LIST = {
         -- switching the module on. The recorder and the skull are gated
         -- instead, in Death.lua, where they already ask whether to run.
         Apply = function() ns.Death.RefreshIcon() end,
+    },
+    {
+        -- A SWITCH OF ITS OWN, because it is the one that COSTS something.
+        --
+        -- Owner, 2026-08-30: "wir muessen den combat log separat ausschaltbar
+        -- machen koennen, oder das live logging irgendwie auf 60 sekunden
+        -- begrenzen. das frisst zu viel performance."
+        --
+        -- The death log records on a death - once, and only then. This one
+        -- records the whole fight: a health reading a second, the presses,
+        -- and the clock on what is put on you. That is worth the cost to
+        -- somebody who reads it afterwards and worth nothing to somebody who
+        -- does not, and until now the two were one switch.
+        --
+        -- SEPARATE FROM "deaths" AND NOT UNDER IT: the death log's own
+        -- replay reads the same measured windows, so a player who wants the
+        -- death log and not this must be able to say exactly that.
+        key = "combatlog", title = "Combat Log", glyph = "pulse",
+        since = 7,
+        blurb = "Every fight recorded end to end - what you dealt, took and pressed, with a replay of the whole pull.",
+        detail = "Off, nothing is recorded while you fight and the icon stays away. The death log is a separate switch.",
+        Apply = function() ns.CombatLog.RefreshIcon() end,
     },
 }
 Modules.LIST = LIST
