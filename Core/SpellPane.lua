@@ -330,8 +330,10 @@ function SpellPane:Build(parent, width, host)
     -- so the column ends in a cut-off row like any scrolling list and not in a
     -- hole that fills itself in a moment later.
     Paint = function()
-        local offset = scroll:GetVerticalScroll() or 0
-        local height = scroll:GetHeight() or 0
+        -- Both readings through the scroll area's guarded door. Taken raw
+        -- with `or 0` they are boolean tests on values the client withholds
+        -- the moment anything in this list has drawn one.
+        local offset, height = scroll.Window()
         local first, last = UI.VisibleRange(plan, offset, height + SPELL_ROW_H)
 
         local rowCount, headCount = 0, 0
@@ -490,11 +492,11 @@ function SpellPane:Build(parent, width, host)
         -- there, above the fold. Now it would paint an empty column: nothing
         -- is in the window, so nothing gets drawn. Typing into the search box
         -- is exactly this case.
-        local overshoot = y - (scroll:GetHeight() or 0)
-        if overshoot < 0 then overshoot = 0 end
-        if (scroll:GetVerticalScroll() or 0) > overshoot then
-            scroll:SetVerticalScroll(overshoot)
-        end
+        -- Asked of the scroll area rather than worked out here. Both
+        -- readings this took - how much of the list shows, and where it sits
+        -- - come straight off the client, and `or 0` on either is a boolean
+        -- test on a value the client may be withholding.
+        scroll.Clamp()
 
         Paint()
         if scroll.Update then scroll.Update() end

@@ -224,7 +224,8 @@ local LIST = {
         detail = "Off, nothing is listening and no invitation is sent.",
     },
     {
-        key = "deaths", title = "Death-log", glyph = "skull", since = 1,
+        key = "deaths", title = "Combat / Death Log", glyph = "skull",
+        since = 1,
         blurb = "What killed you, played back, and what you had that could have stopped it.",
         detail = "Off, nothing is recorded and the skull stays away.",
         -- No Boot. Its watcher is a file-scope frame that also LOADS the saved

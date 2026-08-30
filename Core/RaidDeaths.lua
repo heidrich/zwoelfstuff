@@ -518,6 +518,17 @@ local FIGHTS_KEPT = 5
 RaidDeaths.FIGHTS_KEPT = FIGHTS_KEPT
 RaidDeaths.log = {}
 
+-- WHICH PLACES ARE FOLDED SHUT, keyed by the place. Kept in memory and not
+-- on disk on purpose: it is a reading gesture, not a setting, and a column
+-- that came back after a reload with a place shut looks exactly like a
+-- column that lost its pulls. Unfolded is the answer nobody has to undo.
+RaidDeaths.collapsed = {}
+-- AND WHICH FIGHTS ON THE EVENING'S PAGE ARE FOLDED. A separate table from
+-- the column's, on purpose: the two are keyed by different things - a place
+-- and a run there, a fight of the night here - and one shared table would
+-- have a fold in one window close a row in the other that only looks alike.
+RaidDeaths.overCollapsed = {}
+
 -- Which fight a set of rows belongs to. Recap ids count up and are never
 -- reused within a session, so the LOWEST one in the list is the first death
 -- of this fight and names it. Pure, and the whole of "is this the same pull
@@ -535,9 +546,27 @@ end
 -- Where a fight goes in the log: onto the end, or over the top of the last
 -- one when it is the same pull still running. Pure and exported for the same
 -- reason Death.Remember is - it is the one rule about how the list grows.
+-- WHAT A LATER CAPTURE OF THE SAME PULL MUST NOT UNLEARN.
+--
+-- The same pull is read again every two seconds and once more when combat
+-- drops, and the client answers FEWER questions each time: the encounter has
+-- ended and taken its name, the group has left and taken the instance, the
+-- guide has stopped answering. The later read replaces the fight whole, so
+-- anything it could not answer is taken from the copy it replaces.
+--
+-- Only fields that cannot change WITHIN one pull are on this list. A pull
+-- has one key, and a key cannot walk into a different dungeon.
+local CARRIED = {
+    "boss", "bossID", "kind", "instance", "journal", "where", "whereShort",
+    "stamp",
+}
+
 function RaidDeaths.Remember(log, fight, cap)
     local last = log[#log]
     if last and fight.key and last.key == fight.key then
+        for _, field in ipairs(CARRIED) do
+            if fight[field] == nil then fight[field] = last[field] end
+        end
         log[#log] = fight
     else
         log[#log + 1] = fight
@@ -617,78 +646,130 @@ function RaidDeaths.PullLabel(fight)
     return boss or "Trash pull", boss ~= nil
 end
 
--- THE COLUMN AS A LIST OF THINGS TO DRAW: a row per PLACE, and under it a
--- row per pull while that place is open.
+-- WHAT A PULL COST, in the words a narrow column has room for: how many
+-- fell, and then the ONE thing worth saying beside that - the mechanic that
+-- took more than one of them, or failing that how long the pull lasted.
 --
--- ONE ROW PER PLACE, however often the evening went back to it. Owner,
--- 2026-08-25: "dann hast du rechts auch nicht 3 mal rubi stehen oder so,
--- sondern nur einmal und 3 death sortiert nach zeit abwaerts." The first
--- draft cut a place into one row per contiguous visit, which put the same
--- dungeon in the column three times with the evening chopped up between
--- them - the opposite of what a column like this is read for.
---
--- Newest first throughout: the places in the order they were last died in,
--- and the pulls inside one in the order they happened. The NUMBER counts
--- from the oldest, so pull 1 is the first of the evening in that place
--- whatever order they are drawn in.
---
--- `collapsed` is keyed by the place, and one nobody has touched is OPEN:
--- the pulls are the thing that was asked for, and a column that opens shut
--- hides it behind a click.
-function RaidDeaths.SideItems(log, collapsed)
-    local out = {}
-    log = type(log) == "table" and log or {}
-    collapsed = type(collapsed) == "table" and collapsed or {}
-
-    -- Walked newest first, so a place takes its position in the column from
-    -- the last time somebody died there.
-    local order, byPlace = {}, {}
-    for index = #log, 1, -1 do
-        local fight = log[index]
-        local where = (fight and fight.instance) or ""
-        local place = byPlace[where]
-        if not place then
-            place = { where = where, pulls = {} }
-            byPlace[where] = place
-            order[#order + 1] = place
-        end
-        place.pulls[#place.pulls + 1] = index
-        -- The tile comes from whichever pull carried one: a fight captured
-        -- before the guide answered has no journal id, and one row of the
-        -- same place having a picture is enough for the place to have one.
-        if not place.journal and fight then place.journal = fight.journal end
+-- Pulled out of the painter so the desk can read it. It was four branches
+-- inside a loop that also moved anchors and set colours, which is where a
+-- sentence like "1 dead" quietly becomes "1 dead  -  " with nothing after
+-- the dash and nobody notices for a version.
+function RaidDeaths.PullLine(fight)
+    if type(fight) ~= "table" then return "" end
+    local line = string.format("%d dead", #(fight.entries or {}))
+    local worst = (fight.culprits or {})[1]
+    if worst and (worst.count or 0) > 1 and (worst.spell or worst.who) then
+        return line .. "  -  " .. ns.UI.HarmText(worst.spell or worst.who)
     end
+    if fight.duration then
+        return line .. "  -  " .. RaidDeaths.Clock(fight.duration)
+    end
+    return line
+end
 
-    for _, place in ipairs(order) do
-        local id = "place#" .. tostring(place.where)
-        local shut = collapsed[id] == true
-        local total = #place.pulls
+-- WHAT TOOK MOST OF THEM, on its own - the count moved to a column of its
+-- own when the row became two of them, and a sentence carrying both would
+-- have said "12 dead" twice.
+--
+-- Falling back to how long the pull lasted: a pull where everybody died to
+-- something different has no one mechanic to name, and saying nothing at all
+-- leaves a blank line under the clock.
+--
+-- Returns the ABILITY'S ID as well, and only when the word IS the ability:
+-- the id draws the icon in front of it and opens the client's tooltip, and
+-- a mob's name or a clock has neither. Owner, 2026-08-29: "kannst du in der
+-- rechten spalte die kill spells verlinken und das icon davor packen?"
+function RaidDeaths.PullMechanic(fight)
+    if type(fight) ~= "table" then return "" end
+    local worst = (fight.culprits or {})[1]
+    if worst and (worst.count or 0) > 1 and (worst.spell or worst.who) then
+        if worst.spell then return worst.spell, worst.spellID end
+        return worst.who
+    end
+    if fight.duration then return RaidDeaths.Clock(fight.duration) end
+    return ""
+end
 
-        out[#out + 1] = {
-            kind = "run",
-            id = id,
-            instance = place.where ~= "" and place.where or nil,
-            journal = place.journal,
-            pulls = total,
-            open = not shut,
-        }
+-- WHICH PAGE OF THE ADVENTURE GUIDE A BOSS IS ON.
+--
+-- The mapping itself moved to Death.lua, beside Death.OpenJournal: it is
+-- about places and bosses rather than about the group's pulls, and BOTH
+-- columns ask it now that the own log's fight rows link their boss too.
+-- Forwarded rather than aliased at file scope, so the load order cannot
+-- decide whether this name exists.
+function RaidDeaths.BossPage(journalID, bossID, name)
+    return ns.Death.BossPage(journalID, bossID, name)
+end
 
-        if not shut then
-            for position, index in ipairs(place.pulls) do
-                local fight = log[index]
-                local label, isBoss = RaidDeaths.PullLabel(fight)
-                out[#out + 1] = {
-                    kind = "pull",
-                    index = index,
-                    fight = fight,
-                    number = total - position + 1,
-                    label = label,
-                    boss = isBoss,
-                }
-            end
+-- WHO DID MOST OF THE KILLING ON ONE PULL, and its face.
+--
+-- The right-hand column of a pull row, so it reads exactly like the own
+-- death log's rows do - owner, 2026-08-29: "dann muesste das layout im
+-- normalen death log naklar genauso sein wie beim group death log". There
+-- the right column names the mob that landed the blow; here it names the one
+-- that landed the most of them.
+function RaidDeaths.PullCulprit(fight, log)
+    if type(fight) ~= "table" then return nil end
+    local worst = (fight.culprits or {})[1]
+    local who = worst and worst.who
+    if not who then return nil end
+    for _, entry in ipairs(fight.entries or {}) do
+        local art = RaidDeaths.ArtFor(entry, who)
+        if art then return who, art end
+    end
+    -- A PULL OUT OF THE TALLY CARRIES NO PICTURES, and the same mob is very
+    -- likely still in one of the newest five that do. The same fallback the
+    -- evening's page uses; without it the column draws a face on the pulls
+    -- that still have their hits and a hole on every row above them, for
+    -- the same mob under the same name.
+    local kept = RaidDeaths.ArtForWho(log, who)
+    if kept then return who, kept end
+    -- Named without a picture is still an answer; the row simply draws no
+    -- face, the way a pull whose recap kept no art always has.
+    return who, nil
+end
+
+-- THE BOSS'S FACE, and the guide is asked only when nobody died to it.
+--
+-- The recap first: a mob somebody actually died to carries its art, it is
+-- the model the client has already drawn once, and it is right even where
+-- the guide has no page at all. The guide's own portrait is the fallback,
+-- and it lives in Death.lua with the rest of the mapping - on a fight whose
+-- adds do the killing, NOBODY has ever been killed by the boss, so the
+-- recap has no picture of it and the header over the block sat blank.
+function RaidDeaths.BossArt(journalID, bossID, name)
+    local art = RaidDeaths.ArtForWho(RaidDeaths.log, name)
+    if art then return art end
+    return ns.Death.GuideFace(journalID, bossID, name)
+end
+
+-- THE COLUMN AS A LIST OF THINGS TO DRAW, three levels deep: the place, the
+-- fight inside it, and the pulls inside that.
+--
+-- The rule itself is ns.Death.GroupItems, shared with the own-death window.
+-- Owner, 2026-08-25, about a column with the same dungeon in it four times:
+-- "wenn wir das pro instant / raid sortieren, dann hast du rechts auch nicht
+-- 3 mal rubi stehen" - and 2026-08-29, about the level under it: "wir
+-- brauchen also noch eine sortierung NACH bossen, in DER die pull counts
+-- sind."
+--
+-- A pull row keeps `fight` as well as `entry`, because everything that reads
+-- this column asks a fight for its clock, its dead and its culprits.
+--
+-- `pulls` is the MERGED list from RaidDeaths.Pulls - the evening's sixty,
+-- with the newest five carrying their hits - and not the log. The column and
+-- the selection have to be counting the same rows or an index taken from one
+-- names a different pull in the other.
+function RaidDeaths.SideItems(pulls, collapsed)
+    local items = ns.Death.GroupItems(pulls, collapsed, "pull")
+    for _, item in ipairs(items) do
+        if item.kind == "pull" then
+            item.fight = item.entry
+            item.label, item.bossPull = RaidDeaths.PullLabel(item.entry)
+            item.dead = #((item.entry and item.entry.entries) or {})
         end
     end
-    return out
+    return items
 end
 
 -- A fight, reduced to what a tally reads. Pure.
@@ -704,6 +785,8 @@ function RaidDeaths.Light(fight)
         instance = Plain(fight.instance, "string"),
         journal = Plain(fight.journal, "number"),
         boss = Plain(fight.boss, "string"),
+        kind = Plain(fight.kind, "string"),
+        bossID = Plain(fight.bossID, "number"),
         stamp = Plain(fight.stamp, "number"),
         duration = Plain(fight.duration, "number"),
         entries = {},
@@ -712,6 +795,7 @@ function RaidDeaths.Light(fight)
         local name = Plain(entry.name, "string")
         if name then
             local blow = type(entry.blow) == "table" and entry.blow or nil
+            local spellID
             -- WRITTEN OUT RATHER THAN GUARDED WITH `and ... or`, and this is
             -- the second time in one evening: `blow and Plain(x) or nil`
             -- turns a readable FALSE into nil, so "the game says this was not
@@ -723,6 +807,12 @@ function RaidDeaths.Light(fight)
                 who = Plain(blow.who, "string")
                 spell = Plain(blow.spell, "string")
                 avoidable = Plain(blow.avoidable, "boolean")
+                -- AND THE ABILITY'S ID, one number, so a pull the log no
+                -- longer holds still draws the icon in front of the name
+                -- and still opens the client's tooltip on it. Without it
+                -- the newest five would carry an icon and every row above
+                -- them a bare word, for the same ability.
+                spellID = Plain(blow.spellID, "number")
             end
             out.entries[#out.entries + 1] = {
                 name = name,
@@ -732,11 +822,150 @@ function RaidDeaths.Light(fight)
                 you = entry.you == true,
                 who = who,
                 spell = spell,
+                spellID = spellID,
                 avoidable = avoidable,
             }
         end
     end
     if #out.entries == 0 then return nil end
+    return out
+end
+
+---------------------------------------------------------------------------
+-- THE EVENING AND THE LOG, READ AS ONE LIST
+--
+-- Owner, 2026-08-28, given the choice between raising the log's five and
+-- feeding the column out of the tally: the tally. Measured before it was
+-- asked rather than guessed - twenty full pulls came to 862 KB of saved
+-- variables against 304 KB for sixty thin ones, so the thin sixty is both
+-- the longer memory and the smaller file.
+--
+-- So the column draws SIXTY pulls and the hit-by-hit recordings stay at
+-- five. A pull that has fallen out of the log is still a row, still counts
+-- its dead, still names what did most of the killing and still opens; what
+-- it no longer has is the seconds before each death, and the page says so
+-- rather than looking like a pull whose recap refused every question.
+---------------------------------------------------------------------------
+
+-- The evening's thin copy, put back into the shape the window reads.
+--
+-- The alternative was to teach every reader about two shapes - the table,
+-- the detail, the culprit count, the faces, the verdict - and every one of
+-- those would have been a place where the thin one was forgotten. One shape
+-- goes through the window instead, and `thin` is the single field that says
+-- what is not in it.
+--
+-- Memoised ON the thin table, which is safe for the one reason that matters:
+-- RememberSession REPLACES a running pull's thin copy with a new table every
+-- capture, so the memo dies with the table it was written on instead of
+-- going stale. `Light` copies field by name, so it never reaches the disk.
+function RaidDeaths.Thick(light)
+    if not (type(light) == "table" and type(light.entries) == "table") then
+        return nil
+    end
+    if type(light.thick) == "table" then return light.thick end
+
+    local out = {
+        key = Plain(light.key, "number"),
+        when = Plain(light.when, "string"),
+        where = Plain(light.where, "string"),
+        whereShort = Plain(light.whereShort, "string"),
+        instance = Plain(light.instance, "string"),
+        journal = Plain(light.journal, "number"),
+        boss = Plain(light.boss, "string"),
+        kind = Plain(light.kind, "string"),
+        bossID = Plain(light.bossID, "number"),
+        stamp = Plain(light.stamp, "number"),
+        duration = Plain(light.duration, "number"),
+        -- WHAT IS NOT IN HERE, SAID OUT LOUD. Every "is this the reduced
+        -- copy" question asks this one field rather than sniffing for
+        -- something missing: "it has no events" is also true of a full pull
+        -- whose recaps all refused, and those two must not read alike.
+        thin = true,
+        entries = {},
+    }
+
+    for _, entry in ipairs(light.entries) do
+        -- The tally flattened the killing blow into three fields on the
+        -- death; this folds them back up. A death whose recap said nothing
+        -- has none of the three and gets no blow at all - which is exactly
+        -- the shape an unanswered death has in a full pull.
+        local blow
+        if entry.who or entry.spell then
+            blow = {
+                who = Plain(entry.who, "string"),
+                spell = Plain(entry.spell, "string"),
+                spellID = Plain(entry.spellID, "number"),
+                avoidable = Plain(entry.avoidable, "boolean"),
+            }
+        end
+        out.entries[#out.entries + 1] = {
+            name = Plain(entry.name, "string"),
+            short = Plain(entry.short, "string")
+                or Plain(entry.name, "string"),
+            class = Plain(entry.class, "string"),
+            spec = Plain(entry.spec, "number"),
+            you = entry.you == true,
+            blow = blow,
+        }
+    end
+
+    -- DERIVED, not carried: the tally never stored a culprit count, and the
+    -- rule for one is the same rule the full pulls use - so a better rule
+    -- written next month applies to these as well.
+    out.culprits = RaidDeaths.Culprits(out.entries)
+    light.thick = out
+    return out
+end
+
+-- ONE LIST OF PULLS OUT OF THE TWO, oldest first, each pull exactly once.
+--
+-- A pull that is in both comes out as the FULL one: it is the same pull with
+-- more in it. The two lists can hold different pulls, which is why this is a
+-- merge and not a concatenation - the log keeps its five across days while
+-- the tally is emptied when the date turns over, so after midnight the log
+-- has pulls the evening does not.
+--
+-- Ordered by the moment each was captured. A pull saved before that moment
+-- was recorded has no stamp of its own and takes the last one seen in its
+-- own list, which puts it where it belongs instead of at one end - and, un-
+-- like falling back to "whichever list it came from", it leaves every row
+-- with a NUMBER to sort on. A comparator that switches between two keys is
+-- not transitive, and table.sort throws on those rather than mis-sorting.
+function RaidDeaths.Pulls(log, session)
+    local seen, rows = {}, {}
+
+    local function Take(list, make)
+        local carried = 0
+        for _, item in ipairs(list or {}) do
+            if type(item) == "table" then
+                local key = Plain(item.key, "number")
+                local stamp = Plain(item.stamp, "number")
+                if stamp then carried = stamp end
+                if not (key and seen[key]) then
+                    local fight = make(item)
+                    if fight then
+                        if key then seen[key] = true end
+                        rows[#rows + 1] = { fight = fight,
+                            stamp = stamp or carried, order = #rows }
+                    end
+                end
+            end
+        end
+    end
+
+    -- The full pulls first, so a pull that is in both lists is taken as the
+    -- one with the hits in it and its thin twin is never even built.
+    Take(log, function(fight) return fight end)
+    Take((session or {}).fights, RaidDeaths.Thick)
+
+    table.sort(rows, function(a, b)
+        if a.stamp ~= b.stamp then return a.stamp < b.stamp end
+        return a.order < b.order
+    end)
+
+    local out = {}
+    for _, row in ipairs(rows) do out[#out + 1] = row.fight end
     return out
 end
 
@@ -775,8 +1004,18 @@ end
 -- Ties break by name so two readings of the same evening print the same
 -- order.
 function RaidDeaths.Repeat(session)
+    return RaidDeaths.RepeatIn(session and session.fights)
+end
+
+-- THE SAME RULE OVER A LIST OF PULLS RATHER THAN OVER THE EVENING.
+--
+-- Split out when the page grew a boss layer: the block under one boss asks
+-- exactly the question the page asks of the night, of its own three pulls.
+-- Two copies of this loop would be two places for a better rule to be
+-- written into one of them.
+function RaidDeaths.RepeatIn(fights)
     local byKey, out = {}, {}
-    for _, fight in ipairs((session and session.fights) or {}) do
+    for _, fight in ipairs(fights or {}) do
         local seenThisPull = {}
         for _, entry in ipairs(fight.entries or {}) do
             if entry.who then
@@ -810,8 +1049,12 @@ end
 -- because a person whose client withheld the flag must not read as a person
 -- who did nothing wrong.
 function RaidDeaths.Fallen(session)
+    return RaidDeaths.FallenIn(session and session.fights)
+end
+
+function RaidDeaths.FallenIn(fights)
     local byName, out = {}, {}
-    for _, fight in ipairs((session and session.fights) or {}) do
+    for _, fight in ipairs(fights or {}) do
         local seenThisPull = {}
         for _, entry in ipairs(fight.entries or {}) do
             local row = byName[entry.name]
@@ -840,6 +1083,182 @@ function RaidDeaths.Fallen(session)
         return a.name < b.name
     end)
     return out
+end
+
+---------------------------------------------------------------------------
+-- THE EVENING, BROKEN AT THE BOSSES
+--
+-- Owner, 2026-08-29, about a page that answered "what keeps killing us" with
+-- one list for a whole raid night: it wants the boss layer the column
+-- already has. A night that reads "Cosmic Singularity  9 deaths across 4
+-- pulls" and nothing else has thrown away the one thing that makes it
+-- actionable - WHICH FIGHT that was on.
+--
+-- A BOSS IS A BUCKET HERE, AND A RUN IN THE COLUMN, and that is not an
+-- inconsistency: they answer two questions. The column answers WHERE IN THE
+-- EVENING a pull sat, so its trash breaks into blocks and the trash before a
+-- boss is a different row from the trash after it. This page answers WHAT
+-- KEEPS HAPPENING, and three attempts at one boss with a trash pull between
+-- them are three attempts at one boss. Splitting them here would give the
+-- same mechanic two rows and halve both of its counts - which is the exact
+-- pattern the page exists to make visible.
+--
+-- Ordered by the FIRST time the evening met each of them, so the page reads
+-- as the night in the order it happened rather than as a leaderboard. The
+-- leaderboard is one sentence at the top instead.
+---------------------------------------------------------------------------
+
+-- WHAT MAKES ONE BLOCK: the place, and the fight in it. The same two fields
+-- the column keys on (ns.Death.FightKeyOf), so a night that groups one way
+-- there cannot group another way here.
+function RaidDeaths.BossKey(fight)
+    if type(fight) ~= "table" then return "" end
+    local place = Plain(fight.instance, "string")
+        or Plain(fight.whereShort, "string") or ""
+    return place .. "\1" .. (Plain(fight.boss, "string") or "")
+end
+
+function RaidDeaths.Bosses(session)
+    local byKey, out = {}, {}
+    for _, fight in ipairs((session and session.fights) or {}) do
+        if type(fight) == "table" and type(fight.entries) == "table" then
+            local key = RaidDeaths.BossKey(fight)
+            local block = byKey[key]
+            if not block then
+                local boss = Plain(fight.boss, "string")
+                block = {
+                    id = "tonight#" .. key,
+                    boss = boss,
+                    -- TRASH IS THE WORD IN BOTH WINDOWS. The column already
+                    -- writes it over a block with no boss on it, and two
+                    -- pages calling one thing two names is a reader
+                    -- wondering whether they are the same thing.
+                    label = boss or "Trash",
+                    pulls = 0, deaths = 0, avoidable = 0, fights = {},
+                }
+                byKey[key] = block
+                out[#out + 1] = block
+            end
+
+            block.fights[#block.fights + 1] = fight
+            block.pulls = block.pulls + 1
+            block.deaths = block.deaths + #fight.entries
+
+            -- HOW MANY OF THEM THE GAME ITSELF CALLED AVOIDABLE, and only
+            -- those: a death whose client withheld the flag is counted
+            -- nowhere rather than rounded into the flattering answer.
+            for _, entry in ipairs(fight.entries) do
+                if entry.avoidable == true then
+                    block.avoidable = block.avoidable + 1
+                end
+            end
+
+            -- The clock of a block is its first pull and its last. A pull
+            -- saved before the field was kept has neither, so both are taken
+            -- as they turn up instead of assumed to be there.
+            local when = Plain(fight.when, "string")
+            if when then
+                if not block.first then block.first = when end
+                block.last = when
+            end
+
+            -- THESE CAN ARRIVE ON ANY PULL OF THE BLOCK, not only its first:
+            -- a fall recorded before ENCOUNTER_START ever named the fight
+            -- carries no id and no guide page, and the pull after it does.
+            if block.bossID == nil then
+                block.bossID = Plain(fight.bossID, "number")
+            end
+            if block.journal == nil then
+                block.journal = Plain(fight.journal, "number")
+            end
+            if block.instance == nil then
+                block.instance = Plain(fight.instance, "string")
+            end
+            if block.tag == nil then
+                block.tag = Plain(fight.kind, "string")
+            end
+        end
+    end
+
+    for _, block in ipairs(out) do
+        block.killers = RaidDeaths.RepeatIn(block.fights)
+        block.fallen = RaidDeaths.FallenIn(block.fights)
+    end
+    return out
+end
+
+-- What a block cost, in the two numbers and the words the column already
+-- uses for them.
+function RaidDeaths.BossNote(block)
+    if type(block) ~= "table" then return "" end
+    local pulls, dead = block.pulls or 0, block.deaths or 0
+    return string.format("%d pull%s, %d dead",
+        pulls, pulls == 1 and "" or "s", dead)
+end
+
+-- When it happened. One clock for a block that is one pull, two for more -
+-- and NOTHING at all for pulls saved before the clock was kept, rather than
+-- a dash that reads like a value the page failed to find.
+function RaidDeaths.BossWhen(block)
+    if type(block) ~= "table" or not block.first then return "" end
+    if not block.last or block.last == block.first then return block.first end
+    return block.first .. " - " .. block.last
+end
+
+-- HOW MANY OF THIS FIGHT'S DEATHS THE GAME CALLED AVOIDABLE. Spoken only
+-- when there were some: "0 to avoidable damage" under a fight whose client
+-- answered nothing would be a clean bill nobody issued.
+function RaidDeaths.BossAvoidable(block)
+    if type(block) ~= "table" or (block.avoidable or 0) == 0 then return "" end
+    return string.format("%d to avoidable damage", block.avoidable)
+end
+
+-- WHO FELL ON THIS FIGHT, on one line. The evening's own table names
+-- everybody once, over the whole night; this says who it was HERE, which is
+-- the question somebody asks between two pulls of the same boss.
+local FELL_NAMED = 4
+RaidDeaths.FELL_NAMED = FELL_NAMED
+
+function RaidDeaths.FellLine(fallen, named)
+    fallen = type(fallen) == "table" and fallen or {}
+    if #fallen == 0 then return "" end
+    named = named or FELL_NAMED
+    local parts = {}
+    for index = 1, min(#fallen, named) do
+        local person = fallen[index]
+        parts[#parts + 1] = string.format("%s %dx",
+            person.short or person.name or "?", person.deaths or 0)
+    end
+    local line = table.concat(parts, ", ")
+    if #fallen > named then
+        line = line .. string.format(" and %d more", #fallen - named)
+    end
+    return line
+end
+
+-- THE ONE SENTENCE AT THE TOP: which fight of the night cost the most.
+--
+-- Said only when there is something to compare and one clear answer. A
+-- single block IS the evening and says nothing by being its own worst; a tie
+-- would name one of two while the page shows both, and a page that picks a
+-- winner out of a draw is a page inventing a fact.
+function RaidDeaths.NightVerdict(blocks)
+    blocks = type(blocks) == "table" and blocks or {}
+    if #blocks < 2 then return "" end
+    local total, best, most, second = 0, nil, -1, -1
+    for _, block in ipairs(blocks) do
+        local dead = block.deaths or 0
+        total = total + dead
+        if dead > most then
+            second = most
+            best, most = block, dead
+        elseif dead > second then
+            second = dead
+        end
+    end
+    if not best or most <= second or most <= 0 then return "" end
+    return string.format("%s cost the most - %d of %d.",
+        best.label or "?", most, total)
 end
 
 -- The one line at the top of the evening. Pure, so the wording is checkable.
@@ -960,7 +1379,8 @@ function RaidDeaths.Capture()
         end
     end
 
-    local where, whereShort, instance, journal, boss = ns.Death.Where()
+    local where, whereShort, instance, journal, boss, kind, bossID =
+        ns.Death.Where()
     local fight = RaidDeaths.Remember(RaidDeaths.log, {
         key = key,
         at = GetTime(),
@@ -979,6 +1399,14 @@ function RaidDeaths.Capture()
         -- than from the label above, which holds either a boss or a
         -- difficulty and cannot say which.
         boss = boss,
+        -- AND THE DIFFICULTY, for the same reason from the other side. The
+        -- header over eleven pulls of one key has to say "M+11", and every
+        -- one of those pulls may have been a boss - in which case not one
+        -- of them has the word left in `whereShort`.
+        kind = kind,
+        -- AND THE FIGHT'S OWN ID, which is what finds the boss's page in the
+        -- Adventure Guide. The name alone would only work in one language.
+        bossID = bossID,
         duration = duration,
         entries = entries,
         culprits = RaidDeaths.Culprits(entries),
@@ -1000,14 +1428,22 @@ end
 
 -- EMPTYING WHICHEVER LIST IS BEING READ - and refusing its resurrection.
 -- One method rather than button-body code, so the desk can press it.
+-- BOTH LISTS, from either page. They used to be two things a button could
+-- empty separately, and the reason that was right died the moment the column
+-- started drawing the evening: emptying only the log left sixty rows
+-- standing in a column the button had just claimed to clear, and emptying
+-- only the tally left five.
 function RaidDeaths:Clear()
-    if RaidDeaths.overview then
-        RaidDeaths.session = { day = RaidDeaths.Today(), fights = {} }
-    else
-        RaidDeaths.log = {}
-        RaidDeaths.showing = nil
-        RaidDeaths.sideOffset = 0
-    end
+    RaidDeaths.session = { day = RaidDeaths.Today(), fights = {} }
+    RaidDeaths.log = {}
+    RaidDeaths.showing = nil
+    RaidDeaths.sideOffset = 0
+    -- AND WHAT WAS FOLDED IS FORGOTTEN WITH IT. The keys name places,
+    -- not pulls, so one left standing would fold the next visit to the
+    -- same dungeon shut - a column that opens closed for a reason nobody
+    -- on screen can see.
+    RaidDeaths.collapsed = {}
+    RaidDeaths.overCollapsed = {}
     RaidDeaths.reading = nil
     RaidDeaths.dismissed = RaidDeaths.HoldingKey()
     RaidDeaths.Save()
@@ -1076,6 +1512,8 @@ function RaidDeaths.Persist(fight)
         instance = Plain(fight.instance, "string"),
         journal = Plain(fight.journal, "number"),
         boss = Plain(fight.boss, "string"),
+        kind = Plain(fight.kind, "string"),
+        bossID = Plain(fight.bossID, "number"),
         stamp = Plain(fight.stamp, "number"),
         duration = Plain(fight.duration, "number"),
         entries = {},
@@ -1247,18 +1685,51 @@ function RaidDeaths.Load()
     RaidDeaths.RefreshIcon()
 end
 
--- WHICH PULL IS BEING LOOKED AT. `showing` is an index into the log and nil
--- means the newest, exactly like Death.showing. Clamped rather than wrapped:
--- paging past the oldest and landing on the newest reads as the list
--- jumping, not as an edge.
+-- WHICH PULL IS BEING LOOKED AT, named by the pull's own id rather than by
+-- where it sits in the list.
+--
+-- It used to be a position, and a position is only a name for as long as
+-- nothing joins or leaves. Both happen: the evening drops its oldest at
+-- sixty, and until it does, every new pull pushes the numbering along - so a
+-- window left open on the third wipe of the night was quietly showing the
+-- fourth an hour later. The id survives both, and it survives the capture
+-- tick REPLACING the running pull's table every two seconds, which a
+-- reference to the table itself would not.
+--
+-- Nil means the newest, exactly like Death.showing. A pull whose recap never
+-- gave an id cannot be named this way; there is nothing about such a fight
+-- that a second one could not share, so it falls back to the newest rather
+-- than being given a mechanism of its own to go wrong.
+function RaidDeaths.Pick(pulls, showing)
+    pulls = type(pulls) == "table" and pulls or {}
+    local total = #pulls
+    if total == 0 then return nil, nil end
+    if showing ~= nil then
+        for index = 1, total do
+            if pulls[index].key == showing then return pulls[index], index end
+        end
+    end
+    return pulls[total], total
+end
+
+-- The chosen pull, its position in the merged list, and the list itself -
+-- the column needs all three, and building it twice per paint would be two
+-- answers to one question.
 function RaidDeaths.Selected()
-    local total = #RaidDeaths.log
-    if total == 0 then return nil end
-    local index = RaidDeaths.showing or total
-    if index < 1 then index = 1 end
-    if index > total then index = total end
-    RaidDeaths.showing = index
-    return RaidDeaths.log[index], index
+    local pulls = RaidDeaths.Pulls(RaidDeaths.log, RaidDeaths.session)
+    local fight, index = RaidDeaths.Pick(pulls, RaidDeaths.showing)
+    -- A CHOICE THAT NAMES NOTHING IS DROPPED rather than kept: an id nobody
+    -- answers to sits there until the meter hands the SAME id to a later
+    -- pull - recap ids are reused within a session - and that pull would
+    -- then open itself.
+    if not fight then
+        RaidDeaths.showing = nil
+        return nil, nil, pulls
+    end
+    if RaidDeaths.showing ~= nil and fight.key ~= RaidDeaths.showing then
+        RaidDeaths.showing = nil
+    end
+    return fight, index, pulls
 end
 
 -- WHAT TO SHOW: the pull that is selected, or - when nothing has been
@@ -1269,7 +1740,12 @@ function RaidDeaths.Best()
     local fight = RaidDeaths.Selected()
     if fight then
         return fight.entries, {
-            timed = true,
+            -- NOT FOR A PULL OUT OF THE TALLY. The clock on this page is
+            -- per DEATH - "fell at 0:41" - and the thin copy keeps the
+            -- pull's length but not the moment inside it. Read through
+            -- Clock, a nil would print a time that was never measured.
+            timed = fight.thin ~= true,
+            thin = fight.thin == true,
             duration = fight.duration,
             label = fight.whereShort and (fight.whereShort .. ", " .. fight.when)
                 or fight.when,
@@ -1505,23 +1981,87 @@ local GLASS, COL_WHEN = 14, 20
 -- side column carries a third line now - the instance's name with the
 -- guide's tile beside it - and the column had to be wider and the rows
 -- taller for it. Eight pulls fit at 50; the desk does the sum below.
-local WIDTH, HEIGHT = 956, 640
-local SIDE_W, SIDE_ROW_H, SIDE_ROWS = 232, 50, 8
+-- BIGGER AGAIN. Owner, 2026-08-25: "wir koennen das death log auch groesser
+-- machen, und seiten ein ausklappbar, kann sich jeder anzeigen was er will."
+-- The height buys rows of dead in the table; the width buys the column its
+-- second line back, now that a pull says what killed people as well as how
+-- many fell.
+local WIDTH, HEIGHT = 1096, 724
+-- THE SAME WIDTH IN BOTH WINDOWS. It lives on ns.Death because that file
+-- loads first and owns the other column; two numbers for one measurement is
+-- how they drifted to 264 and 232 in the first place.
+local SIDE_W = ns.Death.SIDE_W
+
+-- TWO ROW HEIGHTS, because the column has two kinds of row now: a place, and
+-- a pull under it. The place is the taller of the two - it carries the
+-- guide's tile - and the pull is indented under it.
+local SIDE_RUN_H, SIDE_BOSS_H, SIDE_PULL_H, SIDE_SESSION_H = 46, 30, 40, 40
+local SIDE_ART_W, SIDE_ART_H = 52, 32
+-- The boss's face on a pull row: as tall as one of its two lines, so a row
+-- with a picture is the same height as one without.
+local SIDE_FACE = 22
+-- How far a pull sits in from the edge its place header starts at, and where
+-- the header's own text starts - to the right of the chevron.
+-- THE INDENT LADDER, one rung per level, and BOTH numbers are written down.
+--
+-- It used to be one number per level with the text placed at "+8" and the
+-- chevron at "-5", and those two sums did not know that a glyph is fourteen
+-- pixels wide: the fight's chevron ran under the first letter of its own
+-- name (owner, 2026-08-29: "das chevron vor Trash ist zu nah dran"). Where
+-- the mark sits and where the words start are two facts, so they are two
+-- numbers, and the gap between them is visible here rather than implied.
+local L_PLACE_CHEV, L_PLACE_TEXT = 6, 26
+local L_FIGHT_CHEV, L_FIGHT_TEXT = 18, 38
+local L_LEAF_NUM, L_LEAF_TEXT = 22, 42
+local SIDE_TOP, SIDE_BOTTOM = 8, 40
+local SIDE_TITLE, SIDE_TITLE_GAP, SIDE_GAP = 18, 6, 2
 
 -- THE NUMBERS THE COLUMN IS BUILT FROM, exported so the arithmetic can be
--- checked without a screen. Raising SIDE_ROWS is a one-word change that runs
--- the list off the bottom of the window and through the buttons, and nothing
--- on a desk can see that happen - but the sum can be done.
+-- checked without a screen.
+--
+-- It used to carry a row COUNT, and the check on it was that eight rows of
+-- fifty fit between the header and the buttons. There is no count any more:
+-- how many rows are on screen depends on how many places the evening had and
+-- which of them are folded away. So the numbers here are the ones the rows
+-- are DRAWN with, the room is derived from them in one place below, and how
+-- many fit is asked of the list itself.
 --
 --   top     where the column starts, under the window's header
 --   bottom  the room the two buttons keep for themselves
---   title   the "This session - N pulls" line above the rows
---   extra   the evening's own row, which is not one of SIDE_ROWS
+--   title   the "N pulls in 2 places" line above the rows
+--   session the evening's own row, which is not one of the items
 RaidDeaths.LAYOUT = {
-    width = WIDTH, height = HEIGHT,
-    sideRows = SIDE_ROWS, sideRowH = SIDE_ROW_H, sideGap = 2,
-    top = 8, bottom = 40, title = 18, extra = 1,
+    width = WIDTH, height = HEIGHT, sideW = SIDE_W,
+    runH = SIDE_RUN_H, bossH = SIDE_BOSS_H, pullH = SIDE_PULL_H,
+    session = SIDE_SESSION_H,
+    sideGap = SIDE_GAP, top = SIDE_TOP, bottom = SIDE_BOTTOM,
+    title = SIDE_TITLE, titleGap = SIDE_TITLE_GAP,
 }
+
+-- HOW TALL ONE ITEM OF THE COLUMN IS. Handed to the fit arithmetic rather
+-- than written into it, so there is one answer to this question and the
+-- painter and the sum cannot disagree about a row's height.
+function RaidDeaths.SideHeight(item)
+    local L = RaidDeaths.LAYOUT
+    local kind = type(item) == "table" and item.kind or nil
+    if kind == "run" then return L.runH end
+    if kind == "boss" then return L.bossH end
+    return L.pullH
+end
+
+-- THE ROOM THE COLUMN'S ROWS HAVE, from the window's own numbers.
+--
+-- Not from `side:GetHeight()`, though the frame knows it: that answer only
+-- exists once the client has laid the window out, and the whole point of
+-- keeping these numbers here is that the sum can be done on a desk with no
+-- screen attached - which is where the eight-rows-of-fifty overflow was
+-- caught the last three times.
+function RaidDeaths.SideRoom()
+    local L = RaidDeaths.LAYOUT
+    local headerH = (ns.UI and ns.UI.HEADER_H) or 0
+    return L.height - headerH - L.top - L.bottom
+        - L.title - L.titleGap - L.session - L.sideGap
+end
 -- One line of the evening's two tables.
 local TALLY_ROW_H = 24
 local TALLY_PIC, TALLY_PIC_X = 18, 56  -- the picture column on a tally row
@@ -1529,6 +2069,22 @@ local TALLY_PIC, TALLY_PIC_X = 18, 56  -- the picture column on a tally row
 -- silent caps: a list that stops at eight and does not say so reads as a
 -- list of eight.
 local TALLY_SHOWN = 8
+
+-- THE FIGHT HEADER ON THE EVENING'S PAGE. Taller than a tally row because it
+-- is a different KIND of thing rather than a bigger one - the same reason the
+-- column's place header carries a ground of its own.
+local BOSS_ROW_H = 26
+local BOSS_ROW_GAP = 2
+-- The chevron's column, the portrait's, and where the name starts once a
+-- portrait is in front of it. Written once and read by both the builder and
+-- the painter: two sums for one column is how a name ends up on top of a face.
+local BOSS_CHEV_X, BOSS_PIC_X = 6, 22
+local BOSS_TEXT_X = BOSS_PIC_X + TALLY_PIC + 6
+-- HOW MANY ABILITIES ARE NAMED UNDER ONE FIGHT. Fewer than the evening's
+-- eight: a night with five bosses would otherwise be forty rows of mechanic
+-- and the shape of the page - which fight cost what - would be gone.
+local BLOCK_SHOWN = 4
+RaidDeaths.BLOCK_SHOWN = BLOCK_SHOWN
 
 -- A hover target over a font string. A string cannot take the mouse itself,
 -- and the two things worth asking about here - the mob and the ability - sit
@@ -1779,15 +2335,208 @@ local function BuildTallyRow(parent, width)
     return row
 end
 
+---------------------------------------------------------------------------
+-- THE FIGHT HEADER ON THE EVENING'S PAGE
+--
+-- One line, and it carries the same three things the column's fight row
+-- does: a chevron that folds it, a portrait that opens the Adventure Guide,
+-- and a name that is orange ONLY when there is a page behind it. "A boss is
+-- a link, trash is a fact" is the column's rule, and a second page breaking
+-- it would teach this addon's orange to mean nothing.
+--
+-- TWO CLICK TARGETS, SPATIALLY APART. The row folds; the name opens the
+-- guide. The invisible button over the name is shown only on a boss - over
+-- "Trash" it would swallow the click that folds and answer with nothing.
+--
+-- EVERY LABEL IS ANCHORED HERE, not only in the painter. An unanchored
+-- region is not drawn at all, so a branch of the painter that forgets one
+-- leaves a blank strip rather than a misplaced word.
+---------------------------------------------------------------------------
+local function BuildBossRow(parent, width)
+    local UI, C = ns.UI, ns.UI.C
+    local row = CreateFrame("Button", nil, parent)
+    row:SetSize(width, BOSS_ROW_H)
+
+    -- Its own ground, under everything else on the row: this says "a
+    -- different kind of thing", which is not what a hover says.
+    row.band = row:CreateTexture(nil, "BACKGROUND", nil, -2)
+    row.band:SetAllPoints(row)
+    row.band:SetColorTexture(C.surface[1], C.surface[2], C.surface[3], 1)
+
+    row.chev = UI.Glyph(row, "caretDOWN", 10, C.textFaint)
+    row.chev:SetPoint("LEFT", row, "LEFT", BOSS_CHEV_X, 0)
+
+    row.face = ns.Death.CreateFace(row, TALLY_PIC)
+    row.face:SetPoint("LEFT", row, "LEFT", BOSS_PIC_X, 0)
+    row.face:EnableMouse(true)
+    row.face:Hide()
+
+    row.lead = ns.UI.Label(row, "", UI.FS.row, C.text)
+    row.lead:SetPoint("LEFT", row, "LEFT", BOSS_TEXT_X, 0)
+    row.lead:SetJustifyH("LEFT")
+    row.lead:SetWordWrap(false)
+
+    -- The difficulty, and never in the orange: that colour is this addon's
+    -- promise that a word can be pointed at.
+    row.tag = ns.UI.Label(row, "", UI.FS.meta, C.textFaint)
+    row.tag:SetPoint("LEFT", row.lead, "RIGHT", 8, 0)
+    row.tag:SetJustifyH("LEFT")
+    row.tag:SetWordWrap(false)
+
+    -- TWO RIGHT-HAND COLUMNS, and the order is fixed right to left so they
+    -- cannot overlap however long either of them turns out to be.
+    row.note = ns.UI.Label(row, "", UI.FS.meta, C.textDim)
+    row.note:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.note:SetJustifyH("RIGHT")
+    row.note:SetWordWrap(false)
+
+    row.when = ns.UI.Label(row, "", UI.FS.meta, C.textFaint)
+    row.when:SetPoint("RIGHT", row.note, "LEFT", -14, 0)
+    row.when:SetJustifyH("RIGHT")
+    row.when:SetWordWrap(false)
+
+    row.hit = CreateFrame("Button", nil, row)
+    row.hit:Hide()
+
+    local function Enter(self)
+        if not row.faceName then return end
+        ns.Death.ShowEnemyTip(self, {
+            who = row.faceName,
+            art = row.faceArt,
+            note = row.facePage
+                and "Click to open it in the Adventure Guide" or nil,
+        })
+    end
+    local function Leave()
+        ns.Death.HideEnemyTip()
+    end
+    local function Open()
+        if not row.facePage then return end
+        ns.Death.OpenJournal(row.faceJournal, row.facePage.journal)
+    end
+    row.face:SetScript("OnEnter", Enter)
+    row.face:SetScript("OnLeave", Leave)
+    row.face:SetScript("OnMouseUp", Open)
+    row.hit:SetScript("OnEnter", Enter)
+    row.hit:SetScript("OnLeave", Leave)
+    row.hit:SetScript("OnClick", Open)
+
+    -- THE ROW ITSELF FOLDS. Written out rather than as `x and y or z`: what
+    -- is stored is a boolean and that idiom cannot carry a false through it.
+    row:SetScript("OnClick", function(self)
+        if not self.blockID then return end
+        if RaidDeaths.overCollapsed[self.blockID] == true then
+            RaidDeaths.overCollapsed[self.blockID] = nil
+        else
+            RaidDeaths.overCollapsed[self.blockID] = true
+        end
+        RaidDeaths:Refresh()
+    end)
+
+    row:Hide()
+    return row
+end
+
+-- The header, dressed for the fight it names. Split out of the paint loop so
+-- the boss branch and the trash branch stand beside each other and can be
+-- read against one another.
+local function PaintBossRow(row, block, shut)
+    local C = ns.UI.C
+    row.blockID = block.id
+    row.chev:SetKind(shut and "caretRIGHT" or "caretDOWN")
+
+    row.lead:SetText(block.label or "")
+    row.tag:SetText(block.tag or "")
+    row.note:SetText(RaidDeaths.BossNote(block))
+    row.when:SetText(RaidDeaths.BossWhen(block))
+
+    row.lead:ClearAllPoints()
+    if block.boss then
+        row.lead:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+        row.faceName = block.label
+        row.faceJournal = block.journal
+        row.faceArt = RaidDeaths.BossArt(block.journal, block.bossID,
+            block.label)
+        row.facePage = RaidDeaths.BossPage(block.journal, block.bossID,
+            block.label)
+        if ns.Death.PaintFace(row.face, row.faceArt) then
+            row.face:Show()
+            row.lead:SetPoint("LEFT", row, "LEFT", BOSS_TEXT_X, 0)
+        else
+            row.lead:SetPoint("LEFT", row, "LEFT", BOSS_PIC_X, 0)
+        end
+        row.hit:ClearAllPoints()
+        row.hit:SetAllPoints(row.lead)
+        row.hit:Show()
+    else
+        row.lead:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        row.faceName, row.facePage, row.faceArt = nil, nil, nil
+        ns.Death.PaintFace(row.face, nil)
+        row.face:Hide()
+        row.lead:SetPoint("LEFT", row, "LEFT", BOSS_PIC_X, 0)
+        row.hit:Hide()
+    end
+end
+
 -- ONE PULL IN THE SIDE LIST: when it was, where, and how many fell.
+---------------------------------------------------------------------------
+-- ONE ROW OF THE COLUMN, IN EITHER OF ITS TWO SHAPES
+--
+-- ONE WIDGET, NOT TWO POOLS. A place header and a pull look nothing alike,
+-- and the tempting answer is a builder for each - but they are stacked in
+-- ONE chain, every row hung off the bottom of the one above it, and two
+-- pools cannot interleave in a single chain without an ordering rule nobody
+-- could read six months from now. So every part is built once and the
+-- painter says which of them this row is wearing.
+--
+-- The fields are named for their POSITION rather than their contents, since
+-- the contents differ: `lead` is the first line's left, `tag` its right,
+-- `note` the second line. A field called `when` would be the clock on a pull
+-- and the name of a dungeon on the header above it.
+---------------------------------------------------------------------------
 local function BuildSideRow(parent, slot)
     local UI, C = ns.UI, ns.UI.C
     local row = CreateFrame("Button", nil, parent)
-    row:SetHeight(SIDE_ROW_H)
+    row:SetHeight(SIDE_PULL_H)
+
+    -- THE PLACE HEADER'S GROUND. Owner, 2026-08-28: "gib dem header mal
+    -- einen schoenen bg". A heading over a list with no ground is a line of
+    -- text somebody has to be told is a heading; with one, the eye finds the
+    -- next place without reading a word.
+    --
+    -- Under `bg`, which is hover and selection: those two are about ONE row
+    -- answering the mouse, this is about a row being a different KIND of
+    -- thing, and a hover has to still be visible on top of it.
+    row.band = row:CreateTexture(nil, "BACKGROUND", nil, -2)
+    row.band:SetAllPoints(row)
+    row.band:SetColorTexture(C.surface[1], C.surface[2], C.surface[3], 1)
+    row.band:Hide()
 
     row.bg = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints(row)
     row.bg:Hide()
+
+    -- THE BLUE EDGE DOWN A PLACE, and the orange one below marks the pull
+    -- being read. Two marks that mean two different things, so they are two
+    -- colours - the blue is the same one the place's name wears.
+    row.edge = row:CreateTexture(nil, "ARTWORK")
+    row.edge:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.edge:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.edge:SetWidth(2)
+    row.edge:SetColorTexture(C.accentCool[1], C.accentCool[2],
+        C.accentCool[3], 1)
+    row.edge:Hide()
+
+    -- THE LINE ABOVE A PLACE. Owner, 2026-08-25: "in der zeile von der
+    -- instanz, eine trennlinie". It belongs to the header rather than
+    -- sitting between every pair of rows, because what it separates is one
+    -- place from the one before it - the pulls in between must not get one.
+    row.rule = row:CreateTexture(nil, "ARTWORK")
+    row.rule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
+    row.rule:SetHeight(1)
+    row.rule:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.rule:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+    row.rule:Hide()
 
     -- The accent bar on the left edge marks the one being read, exactly as
     -- the death window's list does. A fill alone reads as hover on a list
@@ -1799,37 +2548,185 @@ local function BuildSideRow(parent, slot)
     row.mark:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
     row.mark:Hide()
 
-    row.when = UI.Label(row, "", UI.FS.meta, C.text)
-    row.when:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -3)
+    -- THE CHEVRON. Owner: "dann ein chevron zum ausfahren nachn unten /
+    -- open". It points DOWN while the pulls are under it and RIGHT while
+    -- they are folded away - the direction the list would move, which is
+    -- what every tree in this client means by those two shapes.
+    row.chev = UI.Glyph(row, "caretDOWN", 10, C.textFaint)
+    row.chev:SetPoint("LEFT", row, "LEFT", 5, 0)
+    row.chev:Hide()
 
-    -- Where, in the orange the whole addon now uses for a place, and on the
-    -- right, which is where the death window puts "M+18". The count moves
-    -- down to the second line with it.
-    row.count = UI.Label(row, "", UI.FS.eyebrow, C.hot)
-    row.count:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -3)
-    row.count:SetJustifyH("RIGHT")
+    -- WHICH PULL OF THE PLACE. Owner: "da geht nach unten die liste mit den
+    -- Pulls auf, 1, 2, 3". Counted from the oldest, so pull 1 is still pull
+    -- 1 after four more have happened on top of it.
+    row.num = UI.Label(row, "", UI.FS.eyebrow, C.textFaint)
+    row.num:SetJustifyH("RIGHT")
+    row.num:SetWidth(16)
 
-    -- THE GUIDE'S TILE, a column of its own down the right, row-high and
-    -- in its true shape - the death window's rows carry the same. It opens
-    -- the guide; the row underneath still opens the pull.
-    row.art = ns.Death.CreatePlaceArt(row)
+    -- THE BOSS'S FACE. Owner, 2026-08-28: "ggf bei den bossen noch einen
+    -- avatar". Taken from whichever kept pull recorded the mob's art, which
+    -- is the same door the detail page and the evening's tables use - so a
+    -- boss nobody has died to yet simply has no picture, rather than a box.
+    row.face = ns.Death.CreateFace(row, SIDE_FACE)
+    row.face:EnableMouse(true)
+    row.face:Hide()
+
+    -- AND THE NAME IS THE LINK. Owner: "denk dran, bei bossen, dann richtig
+    -- linken". A font string cannot take the mouse, so this sits on top of
+    -- it - the same trick the pull table uses for its two hoverable words.
+    -- Only shown on a boss: an invisible click target over "Trash pull"
+    -- would swallow the click that chooses the pull.
+    row.tagHit = CreateFrame("Button", nil, row)
+    row.tagHit:Hide()
+
+    -- THE GUIDE'S TILE, down the right of a place header and row-high. It
+    -- opens the guide; the row underneath still folds the place. Sized to
+    -- the header rather than left at its default, which is taller than this
+    -- row and would hang out of both ends of it.
+    row.art = ns.Death.CreatePlaceArt(row, SIDE_ART_W, SIDE_ART_H)
     row.art:SetPoint("RIGHT", row, "RIGHT", -4, 0)
 
-    row.where = UI.Label(row, "", UI.FS.meta, C.textFaint)
-    row.where:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
-    row.where:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
-    row.where:SetJustifyH("LEFT")
-    row.where:SetWordWrap(false)
+    -- ANCHORED HERE, NOT ONLY IN THE PAINTER.
+    --
+    -- The painter sets them again for whichever shape the row is wearing,
+    -- and every row that goes through it was fine - but the evening's row is
+    -- painted by hand and never does. Its three labels had text and no
+    -- position, which is not a misplaced label: an unanchored region is not
+    -- drawn at all, and the top of the column was a blank strip.
+    --
+    -- THE SECOND LINE HANGS OFF THE FIRST, not off the row's bottom edge.
+    -- Measuring both from opposite ends of a 34-pixel row is an arithmetic
+    -- with the font's height in it, and that height is the client's to know:
+    -- the two lines overlapped by the difference. Anchored to each other,
+    -- the client does the sum and they cannot cross whatever the font does.
+    row.lead = UI.Label(row, "", UI.FS.meta, C.text)
+    row.lead:SetJustifyH("LEFT")
+    row.lead:SetWordWrap(false)
+    row.lead:SetPoint("TOPLEFT", row, "TOPLEFT", L_LEAF_TEXT, -5)
 
-    row.place = UI.Label(row, "", UI.FS.meta, C.accentCool)
-    row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
-    row.place:SetPoint("RIGHT", row.art, "LEFT", -6, 0)
-    row.place:SetJustifyH("LEFT")
-    row.place:SetWordWrap(false)
+    row.tag = UI.Label(row, "", UI.FS.meta, C.hot)
+    row.tag:SetJustifyH("RIGHT")
+    row.tag:SetWordWrap(false)
+    row.tag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -5)
+
+    row.note = UI.Label(row, "", UI.FS.meta, C.textFaint)
+    row.note:SetJustifyH("LEFT")
+    row.note:SetWordWrap(false)
+    row.note:SetPoint("TOPLEFT", row.lead, "BOTTOMLEFT", 0, -3)
+    row.note:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+
+    -- THE RIGHT-HAND COLUMN. Owner, 2026-08-29: "mach 2 table." What a row
+    -- cost lives here, away from what it was - so a column of numbers can be
+    -- read down without the words in between.
+    row.right = UI.Label(row, "", UI.FS.meta, C.harm)
+    row.right:SetJustifyH("RIGHT")
+    row.right:SetWordWrap(false)
+    row.right:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -5)
+
+    -- Hover lights the row it is over, unless that row is already the one
+    -- being read - two different fills meaning two different things would be
+    -- one fill meaning neither.
+    local function Lit(on)
+        if row.selected then return end
+        if not on then
+            row.bg:Hide()
+            return
+        end
+        -- A place already sits on `surface`, so hovering it has to go one
+        -- step further up the ladder or the row answers the mouse with the
+        -- colour it already had.
+        local fill = C.surface
+        if row.band:IsShown() then fill = C.control end
+        row.bg:SetColorTexture(fill[1], fill[2], fill[3], 1)
+        row.bg:Show()
+    end
+    row:SetScript("OnEnter", function() Lit(true) end)
+    row:SetScript("OnLeave", function() Lit(false) end)
+
+    -- THE MECHANIC UNDER THE CLOCK OPENS THE CLIENT'S OWN TOOLTIP. Owner,
+    -- 2026-08-29: "kannst du in der rechten spalte die kill spells verlinken
+    -- und das icon davor packen? haste ja schon in der mitte." The icon
+    -- rides inside the string; this is the half that answers the mouse.
+    row.noteHit = CreateFrame("Frame", nil, row)
+    row.noteHit:SetAllPoints(row.note)
+    row.noteHit:EnableMouse(true)
+    row.noteHit:SetScript("OnEnter", function(self)
+        Lit(true)
+        if not (GameTooltip and row.noteSpell) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local shown = row.noteSpellID
+            and pcall(GameTooltip.SetSpellByID, GameTooltip, row.noteSpellID)
+        if not shown then
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine(row.noteSpell, 1, 1, 1)
+        end
+        GameTooltip:Show()
+    end)
+    row.noteHit:SetScript("OnLeave", function()
+        Lit(false)
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    -- The click belongs to the ROW; this frame is only sitting on top of it
+    -- for the sake of a tooltip.
+    row.noteHit:SetScript("OnMouseUp", function()
+        local press = row:GetScript("OnClick")
+        if press then press(row) end
+    end)
+    row.noteHit:Hide()
+
+    -- WHAT THE FACE AND THE NAME BOTH DO. The tooltip is the addon's own
+    -- enemy tip - the same one the pull table shows for a mob - with the
+    -- line about the guide under it, so the promise the orange makes is
+    -- spelled out rather than left to be discovered.
+    -- WHAT THE FACE AND THE NAME DO, on whichever row is wearing them: a
+    -- fight header wears its boss, a pull wears whatever did most of the
+    -- killing. Only the first of those has a page behind it, and the tip
+    -- says so rather than promising a click that does nothing.
+    local function BossEnter(self)
+        Lit(true)
+        if not row.faceName then return end
+        ns.Death.ShowEnemyTip(self, {
+            who = row.faceName,
+            art = row.faceArt,
+            note = row.facePage
+                and "Click to open it in the Adventure Guide" or nil,
+        })
+    end
+    local function BossLeave()
+        Lit(false)
+        ns.Death.HideEnemyTip()
+    end
+    local function BossClick()
+        if not row.facePage then return end
+        ns.Death.OpenJournal(row.faceJournal, row.facePage.journal)
+    end
+    row.face:SetScript("OnEnter", BossEnter)
+    row.face:SetScript("OnLeave", BossLeave)
+    row.face:SetScript("OnMouseUp", BossClick)
+    row.tagHit:SetScript("OnEnter", BossEnter)
+    row.tagHit:SetScript("OnLeave", BossLeave)
+    row.tagHit:SetScript("OnClick", BossClick)
 
     row:SetScript("OnClick", function(self)
+        -- A PLACE FOLDS, A PULL IS CHOSEN, and which of the two this row is
+        -- was decided by the painter. Written out rather than as one
+        -- `x and y or z`: what is being stored is a boolean, and that idiom
+        -- cannot carry a false through it.
+        if self.place then
+            if RaidDeaths.collapsed[self.place] == true then
+                RaidDeaths.collapsed[self.place] = nil
+            else
+                RaidDeaths.collapsed[self.place] = true
+            end
+            RaidDeaths:Refresh()
+            return
+        end
         if not self.index then return end
-        RaidDeaths.showing = self.index
+        -- CHOSEN BY THE PULL'S OWN ID. The row knows where it sat when it
+        -- was painted, and where it sat is not a name: a pull arriving
+        -- underneath, or the evening trimming its oldest, moves every
+        -- position in the column while naming the same pulls.
+        RaidDeaths.showing = self.pullKey
         -- Choosing a pull leaves the evening's page, or the click would
         -- select something the window is not showing.
         RaidDeaths.overview = false
@@ -1844,6 +2741,225 @@ local function BuildSideRow(parent, slot)
     return row
 end
 
+-- ONE ROW, DRESSED FOR WHAT IT IS.
+--
+-- Split out of the paint loop so the two shapes stand side by side and can
+-- be read against each other. Every anchor is cleared and set again here,
+-- because a row that was a pull a moment ago is a place header now and an
+-- anchor left over from its last life is the kind of fault that only shows
+-- up after a fold.
+local function PaintSideRow(row, item, selected, military)
+    local C = ns.UI.C
+    row:SetHeight(RaidDeaths.SideHeight(item))
+    row.lead:ClearAllPoints()
+    row.tag:ClearAllPoints()
+    row.note:ClearAllPoints()
+    row.num:ClearAllPoints()
+    row.right:ClearAllPoints()
+    row.face:ClearAllPoints()
+    row.tagHit:ClearAllPoints()
+
+    ---------------------------------------------------------------------
+    -- THE PLACE. One row however often the evening walked back into it.
+    ---------------------------------------------------------------------
+    if item.kind == "run" then
+        row.place, row.index, row.selected = item.id, nil, false
+        row.pullKey = nil
+        row.level = "place"
+        row.rule:Show()
+        row.band:Show()
+        row.edge:Show()
+        row.chev:Show()
+        row.chev:SetKind(item.open and "caretDOWN" or "caretRIGHT")
+        row.chev:ClearAllPoints()
+        row.chev:SetPoint("LEFT", row, "LEFT", L_PLACE_CHEV, 0)
+        row.num:SetText("")
+        row.right:SetText("")
+        row.bg:Hide()
+        row.mark:Hide()
+        row.face:Hide()
+        row.tagHit:Hide()
+        row.noteHit:Hide()
+        row.faceName, row.facePage = nil, nil
+
+        local drawn = row.art.Paint(item.journal)
+        local edge, corner, side = row, "TOPRIGHT", "RIGHT"
+        if drawn then edge, corner, side = row.art, "TOPLEFT", "LEFT" end
+
+        row.lead:SetText(item.instance or item.tag or "Somewhere")
+        row.lead:SetTextColor(C.accentCool[1], C.accentCool[2],
+            C.accentCool[3])
+        row.lead:SetPoint("TOPLEFT", row, "TOPLEFT", L_PLACE_TEXT, -6)
+
+        -- The difficulty, and NOT in the orange it used to wear: that colour
+        -- is this addon's promise that a word can be pointed at.
+        row.tag:SetText(item.tag or "")
+        row.tag:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+        row.tag:SetPoint("TOPRIGHT", edge, corner, -6, -6)
+        row.lead:SetPoint("RIGHT", row.tag, "LEFT", -6, 0)
+
+        local note = string.format("%d %s", item.leaves,
+            item.leaves == 1 and "pull" or "pulls")
+        if (item.dead or 0) > 0 then
+            note = note .. "  -  " .. string.format("%d dead", item.dead)
+        end
+        row.note:SetText(note)
+        row.note:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+        row.note:SetPoint("TOPLEFT", row.lead, "BOTTOMLEFT", 0, -3)
+        row.note:SetPoint("RIGHT", edge, side, -6, 0)
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- THE FIGHT INSIDE IT: a boss, or a run of trash. Owner, 2026-08-29:
+    -- "so kann man auch schoen sehen, ah, das war trash zwischen den
+    -- bossen." One line, because it is a divider with a name on it.
+    ---------------------------------------------------------------------
+    if item.kind == "boss" then
+        row.place, row.index, row.selected = item.id, nil, false
+        row.pullKey = nil
+        row.level = "fight"
+        row.rule:Hide()
+        row.band:Hide()
+        row.edge:Hide()
+        row.chev:Show()
+        row.chev:SetKind(item.open and "caretDOWN" or "caretRIGHT")
+        row.chev:ClearAllPoints()
+        row.chev:SetPoint("LEFT", row, "LEFT", L_FIGHT_CHEV, 0)
+        row.num:SetText("")
+        row.note:SetText("")
+        row.art.Paint(nil)
+        row.bg:Hide()
+        row.mark:Hide()
+        row.noteHit:Hide()
+
+        row.lead:SetText(item.label or "")
+        row.tag:SetText("")
+        row.right:SetText(string.format("%d %s", item.leaves,
+            item.leaves == 1 and "pull" or "pulls"))
+        row.right:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
+        row.right:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+
+        -- A BOSS IS A LINK, TRASH IS A FACT. The orange and the face and the
+        -- click all say the same thing - there is a page behind this word -
+        -- and trash has none of the three.
+        -- A BOSS GETS A FACE; TRASH GETS NONE. Owner, 2026-08-29: "beim
+        -- group death log fehlt der boss avatar, bei trash mach einfach kein
+        -- icon."
+        if item.boss then
+            row.lead:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+            row.faceName = item.label
+            row.faceJournal = item.journal
+            row.faceArt = RaidDeaths.BossArt(item.journal, item.bossID,
+                item.label)
+            row.facePage = RaidDeaths.BossPage(item.journal, item.bossID,
+                item.label)
+            if ns.Death.PaintFace(row.face, row.faceArt) then
+                row.face:SetPoint("LEFT", row, "LEFT", L_FIGHT_TEXT, 0)
+                row.face:Show()
+                row.lead:SetPoint("LEFT", row.face, "RIGHT", 6, 0)
+            else
+                row.lead:SetPoint("LEFT", row, "LEFT", L_FIGHT_TEXT, 0)
+            end
+            row.tagHit:SetAllPoints(row.lead)
+            row.tagHit:Show()
+        else
+            row.lead:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3])
+            row.lead:SetPoint("LEFT", row, "LEFT", L_FIGHT_TEXT, 0)
+            row.faceName, row.facePage, row.faceArt = nil, nil, nil
+            row.face:Hide()
+            row.tagHit:Hide()
+        end
+        row.lead:SetPoint("RIGHT", row.right, "LEFT", -8, 0)
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- ONE PULL, AS TWO COLUMNS. Owner, 2026-08-29: "links pull nummer,
+    -- zeit / zeile darunter was hat mich gekillt - rechte spalte ...
+    -- darunter schaden (der muss ja in rot sein)".
+    --
+    --   9  23:29:06                          12 dead
+    --      Dreadful Presence
+    ---------------------------------------------------------------------
+    row.place, row.index = nil, item.index
+    -- WHICH PULL THIS IS, as opposed to where it is. The index paints the
+    -- accent bar (it is compared against a position in the same list this
+    -- row came out of); the id is what a click stores, because that outlives
+    -- the list being rebuilt.
+    row.pullKey = nil
+    if type(item.fight) == "table" then row.pullKey = item.fight.key end
+    row.level = "pull"
+    row.rule:Hide()
+    row.band:Hide()
+    row.edge:Hide()
+    row.chev:Hide()
+    row.art.Paint(nil)
+    row.tagHit:Hide()
+    row.facePage = nil
+
+    row.num:SetText(tostring(item.number or ""))
+    row.num:SetPoint("TOPLEFT", row, "TOPLEFT", L_LEAF_NUM, -5)
+
+    -- WHEN IT HAPPENED, in the client's own format - read once per paint and
+    -- handed down, not asked per row.
+    row.lead:SetText(RaidDeaths.PullTime(item.fight, military))
+    row.lead:SetTextColor(C.textBody[1], C.textBody[2], C.textBody[3])
+    row.lead:SetPoint("TOPLEFT", row, "TOPLEFT", L_LEAF_TEXT, -5)
+
+    -- WHO DID MOST OF IT, top right with its face - which is where the own
+    -- death log puts the mob that landed the blow. Same shape, same reading.
+    local who, art = RaidDeaths.PullCulprit(item.fight, RaidDeaths.log)
+    row.tag:SetText(who or "")
+    row.tag:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+    row.tag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -5)
+    row.faceName, row.faceArt = who, art
+
+    if who and ns.Death.PaintFace(row.face, art) then
+        row.face:SetPoint("RIGHT", row.tag, "LEFT", -5, 0)
+        row.face:Show()
+        row.lead:SetPoint("RIGHT", row.face, "LEFT", -6, 0)
+    else
+        row.face:Hide()
+        row.lead:SetPoint("RIGHT", row.tag, "LEFT", -6, 0)
+    end
+
+    -- WHAT IT COST, under the name and in the harm colour: a number that
+    -- already happened, not a word to point at.
+    row.right:SetText(string.format("%d dead", item.dead or 0))
+    row.right:SetTextColor(C.harm[1], C.harm[2], C.harm[3])
+    row.right:SetPoint("TOPRIGHT", row.tag, "BOTTOMRIGHT", 0, -3)
+
+    -- AND WHAT DID IT, under the clock.
+    --
+    -- An ABILITY wears its icon and opens the client's own tooltip, the way
+    -- the pull table below the header always has - and with that it wears
+    -- the ORANGE, which in this addon is the promise that a word answers
+    -- the mouse. A mob's name or a clock keeps the red: red is what the
+    -- pull cost, and neither of those two has a page behind it.
+    local mechanic, mechanicID = RaidDeaths.PullMechanic(item.fight)
+    row.noteSpell, row.noteSpellID = nil, nil
+    if mechanicID then
+        row.note:SetText(ns.Death.SpellText(mechanicID, mechanic))
+        row.note:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+        row.noteSpell, row.noteSpellID = mechanic, mechanicID
+    else
+        row.note:SetText(mechanic)
+        row.note:SetTextColor(C.harm[1], C.harm[2], C.harm[3])
+    end
+    row.note:SetPoint("TOPLEFT", row.lead, "BOTTOMLEFT", 0, -3)
+    row.note:SetPoint("RIGHT", row.right, "LEFT", -6, 0)
+    row.noteHit:SetShown(row.noteSpell ~= nil)
+
+    local isOn = selected ~= nil and item.index == selected
+    row.selected = isOn
+    row.mark:SetShown(isOn)
+    row.bg:SetShown(isOn)
+    if isOn then
+        row.bg:SetColorTexture(C.control[1], C.control[2], C.control[3], 1)
+    end
+end
+
 function RaidDeaths:Create()
     if frame then return frame end
     local UI, C = ns.UI, ns.UI.C
@@ -1851,7 +2967,18 @@ function RaidDeaths:Create()
     frame = CreateFrame("Frame", "ZwoelfStuffRaidDeaths", UIParent)
     frame:SetSize(WIDTH, HEIGHT)
     frame:SetPoint("CENTER")
-    frame:SetFrameStrata("HIGH")
+    -- ALL THREE WINDOWS SHARE ONE STRATA AND ALL THREE ARE TOP-LEVEL.
+    --
+    -- Owner, 2026-08-29, with the group death log open over this one: "auch
+    -- solltest du die z index anpassen der fenster." Two of them sat on HIGH
+    -- and the third on DIALOG, so one was permanently above the other two and
+    -- the two peers interleaved by frame level - the far window's chips drawn
+    -- over the near window's list, which is what the screenshot showed.
+    --
+    -- SetToplevel only raises inside ITS OWN strata, so sharing one is what
+    -- makes it work at all; with that, whichever you click comes forward.
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
@@ -1886,9 +3013,19 @@ function RaidDeaths:Create()
     --
     -- It belongs to the frame now, so hiding the detail no longer hides it
     -- with it. The painter is the one place that says when it is on screen.
+    -- THE COLUMN FOLDS AWAY, and the table takes the room. Owner,
+    -- 2026-08-25: "wir koennen das death log auch groesser machen, und
+    -- seiten ein ausklappbar, kann sich jeder anzeigen was er will."
+    frame.fold = UI.Button(frame, "Hide the pulls", 118, function()
+        RaidDeaths.sideShut = not (RaidDeaths.sideShut == true)
+        frame.Widen()
+        RaidDeaths:Refresh()
+    end)
+    frame.fold:SetPoint("RIGHT", close, "LEFT", -10, 0)
+
     frame.back = UI.Button(frame, "Back to the pull", 140,
         function() RaidDeaths:CloseReading() end)
-    frame.back:SetPoint("RIGHT", close, "LEFT", -10, 0)
+    frame.back:SetPoint("RIGHT", frame.fold, "LEFT", -10, 0)
     frame.back:Hide()
 
     local rule = frame:CreateTexture(nil, "ARTWORK")
@@ -1959,27 +3096,38 @@ function RaidDeaths:Create()
     local side = CreateFrame("Frame", nil, frame)
     side:SetWidth(SIDE_W)
     side:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -UI.PAD,
-        -(UI.HEADER_H + 8))
-    side:SetPoint("BOTTOM", frame, "BOTTOM", 0, 40)
+        -(UI.HEADER_H + SIDE_TOP))
+    side:SetPoint("BOTTOM", frame, "BOTTOM", 0, SIDE_BOTTOM)
     frame.side = side
 
-    frame.sideTitle = UI.Label(side, "", UI.FS.meta, C.textFaint)
-    frame.sideTitle:SetPoint("TOPLEFT", side, "TOPLEFT", 8, 0)
+    -- EVERYTHING IN THE COLUMN HANGS OFF ONE CHILD, so folding it away is
+    -- one Show and not a walk over a list of rows that grows while it is
+    -- being walked. The column frame itself stays: what the table to its
+    -- left is anchored to is its EDGE, and an edge that disappears takes
+    -- the table's right-hand side with it.
+    local body = CreateFrame("Frame", nil, side)
+    body:SetAllPoints(side)
+    frame.sideBody = body
+
+    frame.sideTitle = UI.Label(body, "", UI.FS.meta, C.textFaint)
+    frame.sideTitle:SetPoint("TOPLEFT", body, "TOPLEFT", 8, 0)
 
     local sideRule = frame:CreateTexture(nil, "ARTWORK")
     sideRule:SetColorTexture(C.separator[1], C.separator[2], C.separator[3], 1)
     sideRule:SetWidth(1)
     sideRule:SetPoint("TOPRIGHT", side, "TOPLEFT", -8, 0)
     sideRule:SetPoint("BOTTOMRIGHT", side, "BOTTOMLEFT", -8, 0)
+    frame.sideRule = sideRule
 
     -- THE WHOLE EVENING, at the top of the list of pulls, where "all" belongs
     -- in a list of parts. Same row shape as a pull, because it is the same
     -- kind of choice - one of these is what the page shows.
-    local sessionRow = BuildSideRow(side, 0)
-    -- Two lines, not three: the evening has no single place to picture.
-    sessionRow:SetHeight(36)
-    sessionRow:SetPoint("TOPLEFT", frame.sideTitle, "BOTTOMLEFT", -8, -6)
-    sessionRow:SetPoint("RIGHT", side, "RIGHT", 0, 0)
+    local sessionRow = BuildSideRow(body, 0)
+    -- Two lines, and no place to picture: the evening was in several.
+    sessionRow:SetHeight(SIDE_SESSION_H)
+    sessionRow:SetPoint("TOPLEFT", frame.sideTitle, "BOTTOMLEFT", -8,
+        -SIDE_TITLE_GAP)
+    sessionRow:SetPoint("RIGHT", body, "RIGHT", 0, 0)
     sessionRow:SetScript("OnClick", function()
         RaidDeaths.overview = true
         RaidDeaths.reading = nil
@@ -1987,27 +3135,25 @@ function RaidDeaths:Create()
     end)
     frame.sessionRow = sessionRow
 
+    -- BUILT AS THE COLUMN NEEDS THEM. The pool used to be eight rows made at
+    -- creation, which was right while every row was the same height and the
+    -- count was a constant. Neither is true now - what is on screen depends
+    -- on how many places the evening had and which are folded - and building
+    -- for the worst case would build frames nobody ever sees.
     frame.sideRows = {}
-    for slot = 1, SIDE_ROWS do
-        local row = BuildSideRow(side, slot)
-        if slot == 1 then
-            row:SetPoint("TOPLEFT", sessionRow, "BOTTOMLEFT", 0, -2)
-        else
-            row:SetPoint("TOPLEFT", frame.sideRows[slot - 1],
-                "BOTTOMLEFT", 0, -2)
-        end
-        row:SetPoint("RIGHT", side, "RIGHT", 0, 0)
-        frame.sideRows[slot] = row
-    end
 
-    -- The wheel pages the side list, the way the death window's does. A list
-    -- longer than nine with no way down is a list that lies about its length.
+    -- The wheel pages the column, the way the death window's does. How far it
+    -- may go is whatever the last paint worked out; a list that cannot move
+    -- must not eat the gesture.
     side:EnableMouseWheel(true)
     side:SetScript("OnMouseWheel", function(_, delta)
-        local total = #RaidDeaths.log
-        if total <= SIDE_ROWS then return end
+        local far = RaidDeaths.sideMax or 0
+        if far <= 0 then return end
         local offset = (RaidDeaths.sideOffset or 0) - delta
-        RaidDeaths.sideOffset = math.max(0, math.min(total - SIDE_ROWS, offset))
+        if offset < 0 then offset = 0 end
+        if offset > far then offset = far end
+        if offset == RaidDeaths.sideOffset then return end
+        RaidDeaths.sideOffset = offset
         RaidDeaths:Refresh()
     end)
 
@@ -2159,11 +3305,19 @@ function RaidDeaths:Create()
     local _, overContent = UI.ScrollArea(overHost, MAIN_W - 8, 8)
     over.content = overContent
     over.rows = {}
+    -- A SECOND POOL, because a fight header and a tally row are two shapes.
+    -- One pool of mixed shapes would mean every reader of over.rows[3] has
+    -- to know what kind of row that happens to be today.
+    over.bossRows = {}
     over.width = MAIN_W - 8
 
     over.headKill = UI.Eyebrow(overContent, "What keeps killing us")
     over.headWho = UI.Eyebrow(overContent, "Who is falling")
     over.empty = UI.Label(overContent, "", UI.FS.row, C.textFaint)
+    -- The one sentence about the night. Its own label rather than a line in
+    -- the sub-heading: the sub-heading counts, this one judges, and a reader
+    -- should be able to tell those apart without reading the words.
+    over.verdict = UI.Label(overContent, "", UI.FS.row, C.textBody)
 
     -- A rich line, not a label: names with the enemy tip, abilities with
     -- their icons and tooltips (owner, 2026-08-16). Grows upward from its
@@ -2198,15 +3352,50 @@ function RaidDeaths:Create()
     share:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", UI.PAD, 14)
     frame.share = share
 
-    -- IT CLEARS WHAT IS ON THE SCREEN, and its label says which. One button
-    -- that empties the pulls while the evening's page is open would look
-    -- like it had done nothing, and one that emptied both would throw away
-    -- the tally somebody was reading.
-    local clear = UI.Button(frame, "Clear list", 110, function()
+    -- IT CLEARS THE EVENING, which is the only list there is: the column
+    -- draws the tally and the newest five of it carry their hits, so a
+    -- button that emptied one of the two would leave the other standing in
+    -- the column it had just claimed to clear.
+    local clear = UI.Button(frame, "Clear tonight", 110, function()
         RaidDeaths:Clear()
     end)
     clear:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -UI.PAD, 14)
     frame.clear = clear
+
+    -----------------------------------------------------------------------
+    -- WHAT THE FOLD ACTUALLY DOES: it takes the column's WIDTH away, not the
+    -- column. The head, the footer and - through the footer - the list are
+    -- all anchored to the column's left edge, so moving that edge hands the
+    -- room to the table with no number recomputed anywhere. Hiding the frame
+    -- would leave the edge exactly where it was and the room unused.
+    --
+    -- The scrolling contents are the exception, because a scroll child has a
+    -- width of its own rather than an anchor - and so is a tally row, which
+    -- is built at a width. Both are set from ONE sum here; two sums for one
+    -- width is how a right-aligned caption ends up outside its window.
+    -----------------------------------------------------------------------
+    frame.Widen = function()
+        local shut = RaidDeaths.sideShut == true
+        -- One pixel, not zero: a frame with no width has no left edge for
+        -- everything else to be measured from.
+        side:SetWidth(shut and 1 or SIDE_W)
+        body:SetShown(not shut)
+        sideRule:SetShown(not shut)
+
+        local w = WIDTH - (shut and 1 or SIDE_W) - UI.PAD * 2 - 18
+        content:SetWidth(w)
+        detailContent:SetWidth(w - 8)
+        overContent:SetWidth(w - 8)
+        over.width = w - 8
+        -- The rows already built keep the width they were built at, and a
+        -- tally row is a fixed rectangle rather than a pair of anchors.
+        for _, one in ipairs(over.rows) do one:SetWidth(over.width) end
+        for _, one in ipairs(over.bossRows) do one:SetWidth(over.width) end
+
+        frame.fold.label:SetText(shut and "Show the pulls"
+            or "Hide the pulls")
+    end
+    frame.Widen()
 
     table.insert(UISpecialFrames, "ZwoelfStuffRaidDeaths")
     return frame
@@ -2238,19 +3427,39 @@ function RaidDeaths.ShareLines(entries, info)
     return lines
 end
 
--- The evening in the four lines somebody would read out. Pure, next to the
+-- HOW MANY FIGHTS A SHARE NAMES. A chat window is not a page: a night of
+-- eleven fights posted in full is eleven lines nobody reads, and the ones
+-- left out are said out loud rather than trimmed away in silence.
+local SHARE_BLOCKS = 5
+RaidDeaths.SHARE_BLOCKS = SHARE_BLOCKS
+
+-- The evening in the few lines somebody would read out. Pure, next to the
 -- pull's version, so the two say the same kind of thing in the same shape.
 function RaidDeaths.SessionShareLines(session)
     local summary = RaidDeaths.SessionLine(session)
     if summary == "" then return nil end
 
     local lines = { "Tonight - " .. summary }
-    local killers = RaidDeaths.Repeat(session)
-    for index = 1, min(#killers, 3) do
-        local killer = killers[index]
-        lines[#lines + 1] = string.format("%s - %s: %s",
-            killer.who, ns.Death.PlainText(killer.spell),
-            RaidDeaths.RepeatLine(killer))
+
+    -- IT SENDS WHAT IS ON THE SCREEN, and the screen is broken at the
+    -- bosses now. A share that still read the night as one flat list would
+    -- put a sentence in the raid chat that nobody could find on the page it
+    -- came from - and there is no taking a raid message back.
+    local blocks = RaidDeaths.Bosses(session)
+    local verdict = RaidDeaths.NightVerdict(blocks)
+    if verdict ~= "" then lines[#lines + 1] = verdict end
+
+    for index = 1, min(#blocks, SHARE_BLOCKS) do
+        local block = blocks[index]
+        local worst = block.killers and block.killers[1]
+        lines[#lines + 1] = string.format("%s - %s%s",
+            block.label, RaidDeaths.BossNote(block),
+            worst and string.format(": %s %dx",
+                ns.Death.PlainText(worst.spell), worst.deaths) or "")
+    end
+    if #blocks > SHARE_BLOCKS then
+        lines[#lines + 1] = string.format("and %d more",
+            #blocks - SHARE_BLOCKS)
     end
 
     local fallen = RaidDeaths.Fallen(session)
@@ -2600,6 +3809,13 @@ function RaidDeaths:Refresh()
         if source == "session" then
             where = where .. "  -  no clock left on these"
         end
+        -- A PULL FROM EARLIER IN THE EVENING is a tally line rather than a
+        -- recording: who fell and to what, and nothing underneath. Said
+        -- here, because the page otherwise looks like a pull whose recap
+        -- refused every death - which is a fault, and this is not.
+        if info.thin then
+            where = where .. "  -  no hits kept this far back"
+        end
         frame.where:SetText(where)
         frame.verdict:SetText(RaidDeaths.Verdict(entries, info.culprits))
     end
@@ -2722,10 +3938,10 @@ function RaidDeaths:Refresh()
     end
     RaidDeaths.PaintDetail(reading, info)
 
-    -- The button empties whichever of the two lists is being read, so it has
-    -- to say which - and the share sends whichever is being read as well.
-    frame.clear.label:SetText(RaidDeaths.overview and "Clear tonight"
-        or "Clear list")
+    -- ONE LIST, ONE NAME. The column IS the evening now, so the button says
+    -- so on both pages rather than offering two words for one thing - and
+    -- the share still sends whichever page is being read.
+    frame.clear.label:SetText("Clear tonight")
 
     RaidDeaths.PaintSideList()
 end
@@ -2863,9 +4079,9 @@ function RaidDeaths.PaintOverview()
     over.title:SetText("Tonight")
     over.sub:SetText(RaidDeaths.SessionLine(session))
 
-    local killers = RaidDeaths.Repeat(session)
+    local blocks = RaidDeaths.Bosses(session)
     local fallen = RaidDeaths.Fallen(session)
-    local used, y = 0, 0
+    local used, bossUsed, y = 0, 0, 0
 
     local function Row()
         used = used + 1
@@ -2882,15 +4098,30 @@ function RaidDeaths.PaintOverview()
         return row
     end
 
-    -- What was left out, in a row of its own. A table that stops at eight
-    -- and says nothing reads as a table of eight.
-    local function More(total)
-        if total <= TALLY_SHOWN then return end
+    local function BossRow()
+        bossUsed = bossUsed + 1
+        local row = over.bossRows[bossUsed]
+        if not row then
+            row = BuildBossRow(over.content, over.width)
+            over.bossRows[bossUsed] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", over.content, "TOPLEFT", 0, -y)
+        row:SetPoint("RIGHT", over.content, "RIGHT", 0, 0)
+        y = y + BOSS_ROW_H + BOSS_ROW_GAP
+        row:Show()
+        return row
+    end
+
+    -- What was left out, in a row of its own. A table that stops at four and
+    -- says nothing reads as a table of four.
+    local function More(total, shown)
+        if total <= shown then return end
         local row = Row()
         row.count:SetText("")
         ns.Death.PaintFace(row.face, nil)
         row.icon:Hide()
-        row.main:SetText(string.format("and %d more", total - TALLY_SHOWN))
+        row.main:SetText(string.format("and %d more", total - shown))
         row.main:SetTextColor(C.textFaint[1], C.textFaint[2], C.textFaint[3])
         row.note:SetText("")
     end
@@ -2898,35 +4129,73 @@ function RaidDeaths.PaintOverview()
     over.empty:Hide()
     over.headKill:Hide()
     over.headWho:Hide()
+    over.verdict:Hide()
 
-    if #killers == 0 then
+    if #blocks == 0 then
         over.empty:ClearAllPoints()
         over.empty:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, 0)
         over.empty:SetText("Nothing has been kept today yet. A pull with "
             .. "deaths in it turns up here on its own.")
         over.empty:Show()
     else
+        local verdict = RaidDeaths.NightVerdict(blocks)
+        if verdict ~= "" then
+            over.verdict:ClearAllPoints()
+            over.verdict:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, -y)
+            over.verdict:SetText(verdict)
+            over.verdict:Show()
+            y = y + 24
+        end
+
         over.headKill:ClearAllPoints()
         over.headKill:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, -y)
         over.headKill:Show()
         y = y + 20
 
-        for index = 1, min(#killers, TALLY_SHOWN) do
-            local killer = killers[index]
-            local row = Row()
-            row.count:SetText(killer.deaths .. "x")
-            -- The mob's face, out of whichever kept pull still has it.
-            ns.Death.PaintFace(row.face,
-                RaidDeaths.ArtForWho(RaidDeaths.log, killer.who))
-            row.icon:Hide()
-            row.main:SetText(string.format("%s  %s",
-                ns.Death.PlainText(killer.spell), killer.who))
-            row.main:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
-            row.note:SetText(RaidDeaths.RepeatLine(killer))
-        end
-        More(#killers)
+        -- WHO FELL, PER FIGHT, ONLY WHEN THERE IS MORE THAN ONE FIGHT.
+        -- With a single block that line would name exactly the people the
+        -- evening's own table names four rows below it - the same list
+        -- twice, and the copy without the avoidable counts.
+        local perFight = #blocks > 1
 
-        y = y + 16
+        for _, block in ipairs(blocks) do
+            local shut = RaidDeaths.overCollapsed[block.id] == true
+            PaintBossRow(BossRow(), block, shut)
+            if not shut then
+                for index = 1, min(#block.killers, BLOCK_SHOWN) do
+                    local killer = block.killers[index]
+                    local row = Row()
+                    row.count:SetText(killer.deaths .. "x")
+                    -- The mob's face, out of whichever kept pull still has
+                    -- it.
+                    ns.Death.PaintFace(row.face,
+                        RaidDeaths.ArtForWho(RaidDeaths.log, killer.who))
+                    row.icon:Hide()
+                    row.main:SetText(string.format("%s  %s",
+                        ns.Death.PlainText(killer.spell), killer.who))
+                    row.main:SetTextColor(C.hot[1], C.hot[2], C.hot[3])
+                    row.note:SetText(RaidDeaths.RepeatLine(killer))
+                end
+                More(#block.killers, BLOCK_SHOWN)
+
+                if perFight then
+                    local line = RaidDeaths.FellLine(block.fallen)
+                    if line ~= "" then
+                        local row = Row()
+                        row.count:SetText("")
+                        ns.Death.PaintFace(row.face, nil)
+                        row.icon:Hide()
+                        row.main:SetText(line)
+                        row.main:SetTextColor(C.textDim[1], C.textDim[2],
+                            C.textDim[3])
+                        row.note:SetText(RaidDeaths.BossAvoidable(block))
+                    end
+                end
+                y = y + 8
+            end
+        end
+
+        y = y + 8
         over.headWho:ClearAllPoints()
         over.headWho:SetPoint("TOPLEFT", over.content, "TOPLEFT", 6, -y)
         over.headWho:Show()
@@ -2943,10 +4212,13 @@ function RaidDeaths.PaintOverview()
             row.main:SetTextColor(C.text[1], C.text[2], C.text[3])
             row.note:SetText(RaidDeaths.FallenLine(person))
         end
-        More(#fallen)
+        More(#fallen, TALLY_SHOWN)
     end
 
     for index = used + 1, #over.rows do over.rows[index]:Hide() end
+    for index = bossUsed + 1, #over.bossRows do
+        over.bossRows[index]:Hide()
+    end
     over.content:SetHeight(math.max(1, y))
 end
 
@@ -2978,17 +4250,30 @@ function RaidDeaths.KillCounts(culprits)
     return counts
 end
 
--- The side list, repainted whole. Newest at the top.
+-- ONE MORE ROW OF THE COLUMN, made the first time it is needed and kept.
+-- Recursive so that asking for slot seven builds one to six on the way: the
+-- rows are a chain, each hung off the bottom of the one above, and a chain
+-- with a hole in it is a row anchored to nothing.
+local function SideRow(slot)
+    local row = frame.sideRows[slot]
+    if row then return row end
+    row = BuildSideRow(frame.sideBody, slot)
+    if slot == 1 then
+        row:SetPoint("TOPLEFT", frame.sessionRow, "BOTTOMLEFT", 0, -SIDE_GAP)
+    else
+        row:SetPoint("TOPLEFT", SideRow(slot - 1), "BOTTOMLEFT", 0, -SIDE_GAP)
+    end
+    row:SetPoint("RIGHT", frame.sideBody, "RIGHT", 0, 0)
+    frame.sideRows[slot] = row
+    return row
+end
+
+-- The side list, repainted whole: a row per PLACE, and the pulls under it
+-- while it is open. Newest at the top throughout.
 function RaidDeaths.PaintSideList()
     if not frame then return end
     local C = ns.UI.C
-    local log = RaidDeaths.log
-    local total = #log
-    local _, selected = RaidDeaths.Selected()
-
-    local offset = math.max(0, math.min(math.max(0, total - SIDE_ROWS),
-        RaidDeaths.sideOffset or 0))
-    RaidDeaths.sideOffset = offset
+    local _, selected, pullList = RaidDeaths.Selected()
 
     -- THE EVENING'S OWN ROW. It counts pulls this DAY, which is a bigger
     -- number than the log beside it holds - and that difference is the whole
@@ -2996,11 +4281,13 @@ function RaidDeaths.PaintSideList()
     local over = RaidDeaths.overview == true
     local sessionRow = frame.sessionRow
     local pulls = #((RaidDeaths.session or {}).fights or {})
-    sessionRow.when:SetText("Tonight")
-    sessionRow.count:SetText(pulls > 0 and (pulls .. " pulls") or "")
-    sessionRow.where:SetText(pulls > 0
+    sessionRow.lead:SetText("Tonight")
+    sessionRow.lead:SetTextColor(C.text[1], C.text[2], C.text[3])
+    sessionRow.tag:SetText(pulls > 0 and (pulls .. " pulls") or "")
+    sessionRow.note:SetText(pulls > 0
         and RaidDeaths.SessionLine(RaidDeaths.session)
         or "nothing kept today yet")
+    sessionRow.selected = over
     sessionRow.bg:SetShown(over)
     sessionRow.mark:SetShown(over)
     if over then
@@ -3008,63 +4295,64 @@ function RaidDeaths.PaintSideList()
             C.control[3], 1)
     end
 
-    for slot = 1, SIDE_ROWS do
-        local row = frame.sideRows[slot]
-        local index = total - (offset + slot - 1)
-        local fight = index >= 1 and log[index] or nil
-        if not fight then
-            row.index = nil
-            row:Hide()
-        else
-            row.index = index
-            row.when:SetText(fight.when or "")
-            row.count:SetText(fight.whereShort or "")
+    RaidDeaths.collapsed = RaidDeaths.collapsed or {}
+    local items = RaidDeaths.SideItems(pullList, RaidDeaths.collapsed)
+    -- HOW MANY FIT IS ASKED, NOT COUNTED. Two row heights and a fold mean
+    -- the answer changes with the contents, and the same function answers it
+    -- for the own-death window's column.
+    local first, count, far = ns.Death.ListWindow(items,
+        RaidDeaths.sideOffset, RaidDeaths.SideRoom(),
+        RaidDeaths.SideHeight, SIDE_GAP)
+    RaidDeaths.sideOffset = first - 1
+    RaidDeaths.sideMax = far
 
-            -- The second line is what the pull WAS, the way the death
-            -- window's second line names the killer: how many fell and to
-            -- what, not a repeat of the header.
-            local dead = #(fight.entries or {})
-            local worst = (fight.culprits or {})[1]
-            local line = string.format("%d dead", dead)
-            if worst and worst.count > 1 then
-                line = line .. "  -  "
-                    .. ns.UI.HotText(worst.spell or worst.who or "?")
-            elseif fight.duration then
-                line = line .. "  -  " .. RaidDeaths.Clock(fight.duration)
-            end
-            row.where:SetText(line)
-            row.place:SetText(fight.instance or "")
-            local drawn = row.art.Paint(fight.journal)
-            local edge = drawn and row.art or row
-            row.count:ClearAllPoints()
-            row.count:SetPoint("TOPRIGHT", edge, drawn and "TOPLEFT" or "TOPRIGHT",
-                -6, drawn and -2 or -3)
-            row.where:ClearAllPoints()
-            row.where:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -19)
-            row.where:SetPoint("RIGHT", edge, drawn and "LEFT" or "RIGHT", -6, 0)
-            row.place:ClearAllPoints()
-            row.place:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 6)
-            row.place:SetPoint("RIGHT", edge, drawn and "LEFT" or "RIGHT", -6, 0)
+    -- Nothing in this column is selected while the evening's page is open:
+    -- two accent bars would claim the window is showing both. Written out,
+    -- because the index may legitimately be nil and `and ... or` would then
+    -- be answering a different question.
+    local pick
+    if not over then pick = selected end
+    local military = RaidDeaths.Military()
 
-            -- Nothing in this column is selected while the evening's page is
-            -- open: two accent bars would claim the window is showing both.
-            local isOn = (not over) and index == selected
-            row.bg:SetShown(isOn)
-            row.mark:SetShown(isOn)
-            if isOn then
-                row.bg:SetColorTexture(C.control[1], C.control[2],
-                    C.control[3], 1)
-            end
+    -- The pool is read BEFORE the loop: SideRow appends to it, and a loop
+    -- bounded by a list it is growing is a loop that decides how long it
+    -- runs while it runs.
+    local pool = #frame.sideRows
+    for slot = 1, math.max(count, pool) do
+        local item
+        if slot <= count then item = items[first + slot - 1] end
+        if item then
+            local row = SideRow(slot)
+            PaintSideRow(row, item, pick, military)
             row:Show()
+        else
+            local row = frame.sideRows[slot]
+            if row then
+                row.index, row.place, row.selected = nil, nil, false
+                row.pullKey = nil
+                row.level = nil
+                row:Hide()
+            end
         end
     end
 
-    -- The death window's own wording, so the two lists read as one idea.
+    -- WHAT THE COLUMN HOLDS, and it now has two numbers to say: the pulls,
+    -- and how many places they were spread over. No silent caps - a column
+    -- that stops at the window's edge and does not say so reads as a column
+    -- with nothing more in it.
+    local total = #pullList
+    local places = 0
+    for _, item in ipairs(items) do
+        if item.kind == "run" then places = places + 1 end
+    end
     if total == 0 then
         frame.sideTitle:SetText("This session - no pull kept yet")
-    elseif total > SIDE_ROWS then
-        frame.sideTitle:SetText(string.format("%d pulls - scroll for more",
-            total))
+    elseif far > 0 then
+        frame.sideTitle:SetText(string.format(
+            "%d pulls in %d places - scroll for more", total, places))
+    elseif places > 1 then
+        frame.sideTitle:SetText(string.format("%d pulls in %d places",
+            total, places))
     else
         frame.sideTitle:SetText(total == 1 and "This session - 1 pull"
             or string.format("This session - %d pulls", total))
@@ -3088,6 +4376,8 @@ function RaidDeaths:Show()
     RaidDeaths.reading = nil
     RaidDeaths:Create()
     frame:Show()
+    -- To the front on opening, not only on the next click.
+    frame:Raise()
     RaidDeaths:Refresh()
 end
 
@@ -3219,8 +4509,11 @@ function RaidDeaths.RefreshIcon()
     local moduleOff = ns.Modules and not ns.Modules:IsOn("deaths")
     local count = RaidDeaths.IconCount()
 
-    if moduleOff or count == 0 or cfg.show == false then
+    if moduleOff or cfg.show == false then
         if raidIcon then raidIcon:Hide() end
+        -- The one behind it docks to THIS one when it is up, so it has to be
+        -- told the moment it is not.
+        if ns.CombatLog then ns.CombatLog.RefreshIcon() end
         return
     end
     if not raidIcon then BuildRaidIcon() end
@@ -3240,8 +4533,15 @@ function RaidDeaths.RefreshIcon()
         raidIcon:SetPoint("CENTER", UIParent, "CENTER",
             cfg.x or 320, cfg.y or -180)
     end
-    raidIcon.count:SetText(tostring(count))
+    -- WITH NOTHING IN IT, NO BADGE - and the icon stays. Owner, 2026-08-29:
+    -- all three are always on screen now. A "0" in the corner would be a
+    -- count of nothing dressed as a count.
+    raidIcon.count:SetText(count > 0 and tostring(count) or "")
     raidIcon:Show()
+
+    -- The third one hangs off this one, so it is refreshed after this has
+    -- decided whether it is on screen and not before.
+    if ns.CombatLog then ns.CombatLog.RefreshIcon() end
 
     -- The window behind it, if it happens to be open, is looking at the same
     -- three-way answer and has to move with it.

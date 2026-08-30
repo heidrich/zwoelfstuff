@@ -226,6 +226,7 @@ News.OPENERS = {
     death      = function() if ns.Death then ns.Death:Show() end end,
     replay     = function() if ns.Replay then ns.Replay:Toggle() end end,
     welcome    = function() if ns.Welcome then ns.Welcome:Show() end end,
+    combatlog  = function() if ns.CombatLog then ns.CombatLog:Toggle() end end,
 }
 
 -- Whether a link can actually be followed. Checked when the button is BUILT,

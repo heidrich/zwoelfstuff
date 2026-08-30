@@ -31,6 +31,318 @@ end
 
 ns.CHANGELOG = {
     {
+        version = "4.95.0",
+        date = "2026-08-30",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Spyglass_03",
+                text = "|cffffd100A third window: the combat log.|r Its "
+                    .. "column is the one both death logs have - the dungeon "
+                    .. "or raid, the fights in it, the pulls under those. "
+                    .. "Click any of the three and the page is that: one "
+                    .. "pull, one boss with every attempt, or the whole "
+                    .. "dungeon added up. The chevron folds.",
+                link = { label = "Open the combat log", open = "combatlog" },
+            },
+            {
+                text = "|cffffd100Your own total|r on top of the table, "
+                    .. "with damage, healing, damage taken, avoidable "
+                    .. "damage, interrupts and dispels beside each other - "
+                    .. "your spec's icon, your share of the group and your "
+                    .. "damage per second on the one line. A place in the "
+                    .. "column says what the whole run came to.",
+            },
+            {
+                text = "|cffffd100And one row per ability|r, on those same "
+                    .. "six lanes: what each of your spells did, healed, "
+                    .. "took and interrupted, with how often you pressed it "
+                    .. "and how long ago. What was never pressed says so.",
+            },
+            {
+                text = "|cffffd100Two pages, and that is the whole "
+                    .. "switch:|r the combat log, and History. The six "
+                    .. "single-kind lists went with the chips - the column "
+                    .. "heads sort the wide one instead, and a lane with "
+                    .. "nothing in it is not drawn at all.",
+            },
+            {
+                text = "|cffffd100History is the fight in order|r - every "
+                    .. "press and every fall at the moment it happened, on "
+                    .. "the same six lanes. The game does not say what a "
+                    .. "single press did, so the numbers are each ability's "
+                    .. "total and every row says which press it is.",
+            },
+            {
+                text = "|cffffd100Per second, beside the share|r - the "
+                    .. "game works it out itself. Rows wear the |cffffd100"
+                    .. "spec's icon|r now, not just the class's, and "
+                    .. "pointing at a fall shows the enemy's own card - the "
+                    .. "same one the death log has.",
+            },
+            {
+                text = "|cffffd100Every hit you took says who did it.|r "
+                    .. "The ability that hit you carries the mob's name and "
+                    .. "its face; hover the face for its card, the same one "
+                    .. "both death logs show.",
+            },
+            {
+                text = "|cffffd100A Replay button beside the pages|r, "
+                    .. "where the death log has its own - and it plays back "
+                    .. "|cffffd100the fight|r, not a death. Your health "
+                    .. "across the whole pull, every press under it, what "
+                    .. "was hitting you where the game says, and a red line "
+                    .. "wherever somebody went down. Works on one pull, on a "
+                    .. "boss, and on a whole run.",
+            },
+            {
+                text = "|cffffd100Your health is recorded for the whole "
+                    .. "fight now|r, once a second, so the replay can draw "
+                    .. "the quiet half as well. Pulls recorded before this "
+                    .. "update have no line yet.",
+            },
+            {
+                text = "|cffffd100A press remembers how long it was up|r in "
+                    .. "a recorded pull, so a defensive draws as a bar "
+                    .. "rather than a marker.",
+            },
+            {
+                text = "|cffffd100What was put on you, and when.|r Every "
+                    .. "debuff is recorded with the second it landed and "
+                    .. "how long you wore it - a row in History between "
+                    .. "your presses, and a bar above the axis in the "
+                    .. "replay. One still on you at the end says so.",
+            },
+            {
+                text = "|cffffd100Health lost, above the axis|r in the "
+                    .. "replay, and every History row carries its second "
+                    .. "down the left edge.",
+            },
+            {
+                text = "|cffffd100Cooldowns are their own list.|r Pick "
+                    .. "them under your defensives on the Deaths page and "
+                    .. "both replays draw them on a line of their own, "
+                    .. "between what you cast and what you pressed to "
+                    .. "survive. The panel counts them apart: what you "
+                    .. "spent, and what you still had.",
+                link = { label = "Pick your cooldowns", page = "deaths" },
+            },
+            {
+                text = "|cffffd100The health part folds away.|r Out on a "
+                    .. "death and on any pull somebody fell in, put away on "
+                    .. "the rest - and the switch over Play opens or shuts "
+                    .. "it whenever you want. The bar, the band and the "
+                    .. "whole damage lane go together.",
+            },
+            {
+                text = "|cffffd100A fall opens the replay.|r Click it on "
+                    .. "the timeline or on its row and the replay window "
+                    .. "opens on that death - the same one the death log "
+                    .. "has, with the health bar, every hit and what you "
+                    .. "were pressing while it happened.",
+            },
+            {
+                text = "|cffffd100A block's title sits on the same line as "
+                    .. "its columns|r now, in a heading's own size rather "
+                    .. "than smaller than the rows under it.",
+            },
+            {
+                text = "|cffffd100A bar wears the colour of what its row is "
+                    .. "about|r - orange for what you did, green for "
+                    .. "healing, red for what came in. |cffffd100And the "
+                    .. "abilities carry their numbers at all|r: every row "
+                    .. "read as a dash with no bar, because the game "
+                    .. "withholds a row's identity mid-fight and then "
+                    .. "refuses to be asked with it.",
+            },
+            {
+                text = "Under that, the log itself - in order, from the "
+                    .. "start of the fight to its end. It scrolls, and it "
+                    .. "reaches back five hundred presses instead of fifty.",
+            },
+            {
+                text = "|cffffd100All three windows come to the front when "
+                    .. "you click them.|r They sat on two different layers, "
+                    .. "so one was always on top and the other two drew "
+                    .. "through each other.",
+            },
+            {
+                text = "Above it the fight is drawn end to end - every "
+                    .. "button you pressed and every fall, in the order they "
+                    .. "happened. Point at one and it says what it was, and "
+                    .. "the fall itself is there hit by hit. The boss wears "
+                    .. "its portrait on the header.",
+            },
+            {
+                text = "The six kinds are still one chip each behind that, "
+                    .. "with every bar's share of the whole, and a seventh "
+                    .. "for what you pressed and what you still had.",
+            },
+            {
+                text = "|cffffd100All three marks are on screen now|r, not "
+                    .. "only after somebody has died. An empty one carries "
+                    .. "no number rather than disappearing, and dragging any "
+                    .. "of them still moves all three.",
+            },
+            {
+                text = "A pull carries numbers only if it happened after you "
+                    .. "logged in - the game keeps the fight that is running "
+                    .. "and nothing older, so they are copied down as each "
+                    .. "fight ends.",
+            },
+            {
+                text = "|cffffd100The damage numbers no longer vanish "
+                    .. "during a fight.|r The page threw on the first amount "
+                    .. "the game was withholding and drew nothing after it.",
+            },
+            {
+                text = "|cffffd100Lists scroll again.|r The game does not "
+                    .. "say how far a list reaches until the window has been "
+                    .. "laid out once, and until then every list read that "
+                    .. "as nothing to scroll. Clicking a mark on the timeline "
+                    .. "could also leave the page past its last row.",
+            },
+            {
+                text = "|cffffd100Moving a frame in edit mode no longer "
+                    .. "errors in combat.|r Dragging lines a frame up "
+                    .. "against the others on screen, and measuring the "
+                    .. "co-tank panel while its health bars carried numbers "
+                    .. "the game withholds threw every time.",
+            },
+        },
+    },
+    {
+        version = "4.94.0",
+        date = "2026-08-29",
+        lines = {
+            {
+                icon = "Interface\\Icons\\INV_Misc_Map_01",
+                text = "|cffffd100Tonight is broken at the bosses.|r Every "
+                    .. "fight of the evening is its own block with its "
+                    .. "pulls, its dead, its clock and what kept killing you "
+                    .. "on it - and the night says which fight cost the most.",
+                link = { label = "Open the evening", open = "raiddeaths" },
+            },
+            {
+                text = "Each fight also says who fell on it and how many of "
+                    .. "those the game itself called avoidable.",
+            },
+            {
+                text = "Share sends what the page shows, fight by fight.",
+            },
+        },
+    },
+    {
+        version = "4.93.0",
+        date = "2026-08-29",
+        lines = {
+            {
+                icon = "Interface\\Icons\\Ability_Rogue_FeignDeath",
+                text = "|cffffd100Your own death log sorts by boss now|r, "
+                    .. "the way the group's does - and the deaths you "
+                    .. "already have are sorted too.",
+                link = { label = "Open the death log", open = "death" },
+            },
+            {
+                text = "A boss in your own death log wears its face and "
+                    .. "opens its page in the Adventure Guide, the same as "
+                    .. "in the group log.",
+            },
+            {
+                text = "The ability that killed you carries its icon and "
+                    .. "opens the game's tooltip in the right-hand column "
+                    .. "of both logs.",
+            },
+        },
+    },
+    {
+        version = "4.92.0",
+        date = "2026-08-29",
+        lines = {
+            {
+                icon = "Interface\\Icons\\Ability_Rogue_FeignDeath",
+                text = "|cffffd100The pull list is the whole evening now|r - "
+                    .. "up to sixty pulls instead of the last five. An older "
+                    .. "pull still says who fell and to what; the hit-by-hit "
+                    .. "page stays with the newest five.",
+                link = { label = "Open the group death log",
+                    open = "raiddeaths" },
+            },
+            {
+                text = "|cffffd100Clear|r empties the evening from either "
+                    .. "page. It is one list now, so there is one button "
+                    .. "for it.",
+            },
+            {
+                text = "The pull you are reading stays the pull you are "
+                    .. "reading when new ones come in underneath it.",
+            },
+        },
+    },
+    {
+        version = "4.91.0",
+        date = "2026-08-28",
+        lines = {
+            {
+                icon = "Interface\\Icons\\Ability_Rogue_FeignDeath",
+                text = "|cffffd100Both death logs sort by place now.|r The "
+                    .. "same dungeon four times over is one line with a "
+                    .. "chevron - open it and the pulls are under it, "
+                    .. "newest first.",
+            },
+            {
+                text = "A pull says |cffffd100when it was|r, in your own "
+                    .. "clock format, and either the boss or \"Trash pull\".",
+            },
+            {
+                text = "A place line counts its pulls and everybody who "
+                    .. "fell across them, with the key level or the raid "
+                    .. "difficulty beside the name.",
+            },
+            {
+                text = "Your own death log groups the same way: the place, "
+                    .. "and your falls under it with who ended it and with "
+                    .. "what.",
+            },
+            {
+                text = "Both windows are bigger, and the pull list folds "
+                    .. "away when the table wants the room.",
+            },
+            {
+                text = "|cffffd100A boss pull is a link.|r It wears the "
+                    .. "boss's own face and opens its page in the Adventure "
+                    .. "Guide; trash stays quiet, so the two are told apart "
+                    .. "at a glance.",
+            },
+            {
+                text = "The place line has a ground and a blue edge, and "
+                    .. "your own deaths show the killer's face beside the "
+                    .. "name.",
+            },
+            {
+                text = "|cffffd100Both columns sort by fight now.|r Under a "
+                    .. "dungeon: the trash before the first boss, then that "
+                    .. "boss with its pulls, then the trash after it - each "
+                    .. "its own block with its own count.",
+            },
+            {
+                text = "A row is two columns: the number and the time on "
+                    .. "the left with what hit under it, what it cost on "
+                    .. "the right in red. The column is wider, and the same "
+                    .. "width in both windows.",
+            },
+            {
+                text = "Fixed: a boss pull was filed as \"Trash pull\" - "
+                    .. "the fight's name was cleared before the pull was "
+                    .. "written down.",
+            },
+            {
+                text = "Fixed: the \"Tonight\" line at the top of the pull "
+                    .. "list was not drawn at all, and the two lines of a "
+                    .. "pull sat on top of each other.",
+            },
+        },
+    },
+    {
         version = "4.90.0",
         date = "2026-08-25",
         lines = {

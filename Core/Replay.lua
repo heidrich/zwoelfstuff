@@ -43,11 +43,23 @@ local PANEL_W = 186
 local PANEL_X = 16
 local PLOT_R = 30
 local PLOT_L = PANEL_X + PANEL_W + 16 + PLOT_R
-local FRAME_W, FRAME_H = PLOT_L + 720 + PLOT_R, 476
+local FRAME_W = PLOT_L + 720 + PLOT_R
 local PLOT_W = FRAME_W - PLOT_L - PLOT_R
+-- What the window keeps under the plot for the transport and the legend.
+-- The HEIGHT itself is worked out below, once the lanes have said how much
+-- room they need: it was a typed 476 and the third press lane would have
+-- grown straight through the bottom of the window without moving it.
+local FOOT_H = 84
 local AXIS_Y = 268          -- from the top of the frame
 local COLUMN_MAX = 70       -- tallest an incoming column may draw
 local MARKS_IN, MARKS_OUT, MARKS_CAST = 28, 20, 24
+local MARKS_CD = 12
+
+-- AND, ON A FIGHT, WHERE YOU WENT DOWN. A death replay ends ON the killing
+-- blow and never needed one of these; a pull can hold several, and "when did
+-- it go wrong" is the first question anybody opens this window with. Eight is
+-- more deaths than a pull worth replaying has in it.
+local MARKS_FALL = 8
 
 -- The columns stand clear of the axis rather than on it: the seconds are
 -- written ON the line now, and a column starting at the line drew straight
@@ -63,11 +75,44 @@ local COLUMN_LIFT = 10
 -- square, and below about this it stops being recognisable as anything.
 local AVATAR = 30
 
--- Three lanes and where each starts, measured from the top of the frame.
+-- How tall a press bar is, and the MOST rows a lane may ever hold.
+--
+-- Owner, 2026-08-31, in front of a plot with bars drawn through each other:
+-- "hier ueberlagern noch zu viele cooldowns. das muesste dynamisch besser
+-- sein."
+--
+-- He is right and the cause was the word "most". These were HEIGHTS: four
+-- rows for the defensives whether the fight needed one or nine, and
+-- everything past the fourth clamped onto the fourth - drawn on top of what
+-- was already there, which is the one thing the stacking exists to prevent.
+-- A cap that silently overdraws is worse than no cap: the plot looks busy
+-- and two answers occupy one line.
+--
+-- So they are CEILINGS now and the lane is as tall as the fight needs. An
+-- empty row costs nothing when the height follows the content, which is why
+-- these can be generous - and a fight that really does chain nine
+-- defensives gets nine lines instead of a smear.
+local BAR_H, BAR_GAP = 18, 2
+local BAR_ROWS = 8          -- defensives: the ceiling, not the height
+local CD_ROWS = 6           -- cooldowns
+
+-- The lanes and where each starts, measured from the top of the frame.
 local HEALTH_Y = 84         -- your own health bar
 local LANE_IN_Y = 112       -- "what came in", growing UP to the axis
 local LANE_CAST_Y = 272     -- everything else you cast, as icons only
-local LANE_OUT_Y = 312      -- your DEFENSIVES, as bars, under those
+local LANE_CD_Y = 312       -- your COOLDOWNS, as bars, under those
+
+-- AND THE DEFENSIVES UNDER THOSE, at a distance rather than at a number.
+--
+-- Owner, 2026-08-31: "auf dem Zeitstrahl zeigen wir die cooldowns unterhalb
+-- den spells an, darunter die def cds." Three lanes in that order, and the
+-- order is the whole point: what you press to keep going, then what you
+-- press to win, then what you press to survive. Reading down the plot is
+-- reading from routine to desperate.
+--
+-- WHERE IT STARTS IS A QUESTION, NOT A NUMBER - see Replay.LaneOut. It
+-- depends on how many rows the cooldowns above it turned out to need, and
+-- that is a fact about the fight in the window rather than about the file.
 
 -- THERE WAS A FOURTH LANE, "Healing on you", and it went in 4.81.0. Owner:
 -- "bitte noch im death log replay der healing on you bereich rausnehmen." It
@@ -76,16 +121,9 @@ local LANE_OUT_Y = 312      -- your DEFENSIVES, as bars, under those
 -- this window over. The heals are still RECORDED and the death window still
 -- counts them; what went is the empty band under the plot.
 
--- The press bars: how tall each row is and how many rows may stack before
--- the rest are dropped onto the last one. Four is more overlapping
--- defensives than anybody presses in ten seconds.
-local BAR_H, BAR_GAP, BAR_ROWS = 18, 2, 4
-
--- WHERE THE PLOT ENDS, so the window is exactly as tall as what it draws.
--- The press bars are the lowest thing in it and BAR_ROWS of them can stack.
--- Derived rather than typed: the healing lane used to hold this edge down,
--- and a number left behind after it went would have left the gap behind too.
-local PLOT_BOTTOM = LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP)
+-- WHERE THE PLOT ENDS is a question too - Replay.PlotFloor. The window is
+-- exactly as tall as what is drawn on it, so both bar lanes moving under
+-- their own content move this, and the frame's height with it.
 
 -- THE DAMAGE GRAPH, under the defensives lane. Owner, 2026-08-16: "koennte
 -- man hier unterhalb der spell leiste einen graphen einbauen der den dmg
@@ -95,10 +133,63 @@ local PLOT_BOTTOM = LANE_OUT_Y + BAR_ROWS * (BAR_H + BAR_GAP)
 -- the overkill; it scrolls and zooms with the plot because it is placed by
 -- the same view. A switch above Play shows or hides it, remembered in
 -- the profile, and the window is only as tall as what is on it.
-local GRAPH_TOP = PLOT_BOTTOM + 10
 local GRAPH_H = 56
 local GRAPH_COLS = 72                    -- 10px each across the 720 plot
 local GRAPH_BLOCK = 10 + GRAPH_H + 8      -- what the graph adds to the window
+
+-- AND FOR A FIGHT IT SITS ABOVE THE AXIS, not under the presses.
+--
+-- Owner, 2026-08-31: "health lost sollte ueber meinen spell sein, nicht
+-- darunter." He is right, and it is not a preference: everything ABOVE the
+-- axis is what happened TO you and everything below it is what you did about
+-- it. That is the whole grammar of this window, and a band of incoming
+-- damage parked under the presses reads as something you cast.
+--
+-- On a FALL the band stays where it was - there the lane above the axis is
+-- already full of the recap's own columns, and the graph was added under the
+-- plot precisely so it would not fight them for the space.
+-- WHAT WAS ON YOU, as bars, between the caption and the health band.
+--
+-- Owner, 2026-08-31: "oder wann ich debuffs oder so bekommen habe?" - and
+-- they are BARS rather than icons for the same reason the defensives below
+-- the axis are: a debuff is a stretch, not a moment, and how long you wore
+-- it is the whole question. Above the axis, because it was done to you.
+local DEBUFF_Y = 146
+local DEBUFF_H, DEBUFF_GAP = 18, 2
+-- TWO CEILINGS, because this lane's room depends on what is under it. With
+-- the recap's columns in play they grow up towards it and it keeps to
+-- three; with nothing under it - which is every pull nobody died in - it
+-- may use the room the columns would have wanted. See Replay.DebuffCap.
+local DEBUFF_ROWS = 3
+local DEBUFF_ROOM = 5
+local MARKS_WORN = 12
+
+-- One row in every lane: the smallest this window can be, and what it is
+-- built at before any fight has said how much room it wants.
+local EMPTY_LANES = { cd = 1, def = 1, worn = 1 }
+
+-- Shorter than it was, to make room for them: the band is a shape, and the
+-- shape survives being half as tall. Derived from the lane above it rather
+-- than typed, so moving one moves the other and they cannot overlap.
+local GRAPH_UP_H = 48
+
+-- WHAT IS LEFT ABOVE THE AXIS WHEN THE HEALTH BLOCK IS PUT AWAY, and where
+-- it goes.
+--
+-- Owner, 2026-08-31: "damage on you gehoert zu health." He is right, and it
+-- takes the incoming lane with it: the caption, its note and the columns
+-- under it are all one answer to "what was being done to you", and half of
+-- that answer folded away is not tidier, it is confusing.
+--
+-- Which leaves the debuffs alone up there - so they come DOWN into the room
+-- that opened up, rather than staying where they were with fifty pixels of
+-- nothing between them and the line. Both numbers are worked out from the
+-- axis and the lane's own height - see Replay.DebuffTop and the lift in
+-- Replay.Metrics, which is the distance between the two. The bars land on
+-- the health bar's own mark and the axis just under them, whether the lane
+-- turned out to need one row or five.
+-- Both are worked out in Replay.DebuffTop and Replay.Metrics, from however
+-- many rows this fight's debuffs actually needed.
 
 -- Half a second before the first thing happens, so the eye is on the plot
 -- when it starts moving rather than arriving after it.
@@ -441,6 +532,15 @@ local function Tooltip(owner, item, under)
         GameTooltip:ClearLines()
         GameTooltip:AddLine(item.name or "", 1, 1, 1)
     end
+    if item.fell then
+        GameTooltip:AddLine("You went down here", 0.86, 0.42, 0.42)
+    end
+    if item.worn then
+        GameTooltip:AddLine(item.stillOn
+            and "Put on you - and still on you when it ended"
+            or string.format("Put on you - you wore it for %.1fs",
+                item.duration or 0), 0.80, 0.46, 0.72)
+    end
     if item.cast then
         GameTooltip:AddLine(item.defensive and "You pressed it - a defensive"
             or "You pressed it", 0.49, 0.78, 0.83)
@@ -595,7 +695,9 @@ local function BuildWindow()
     local C = UI.C
 
     frame = CreateFrame("Frame", "ZwoelfStuffDeathReplay", UIParent)
-    frame:SetSize(FRAME_W, FRAME_H)
+    -- The smallest this window can be. Relayout gives it the height the
+    -- fight in it actually needs, on every open and on every switch.
+    frame:SetSize(FRAME_W, Replay.Metrics(true, false, EMPTY_LANES).height)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, -160)
     frame:SetFrameStrata("DIALOG")
     -- Two movable windows in one strata: without this the death window's
@@ -615,6 +717,20 @@ local function BuildWindow()
     UI.Fill(frame, "BACKGROUND", C.windowBg)
     local edge = ns.CreateBorder(frame, 1, "BORDER")
     edge:SetColor(C.edge[1], C.edge[2], C.edge[3], 1)
+
+    -- WHAT THE WHOLE PLOT HANGS FROM, and the only thing that moves when
+    -- the health block is put away.
+    --
+    -- Not a container - a REFERENCE. Everything in the plot stays a child
+    -- of the window and keeps the draw order it had; only the point each
+    -- one measures from is this frame rather than the window, so one
+    -- SetPoint here takes the axis, the lanes, the ticks, the band and the
+    -- playhead with it. Reparenting them would have moved them too, and
+    -- would also have lifted every one of them above the window's own
+    -- layers on the way.
+    frame.plot = CreateFrame("Frame", nil, frame)
+    frame.plot:SetSize(1, 1)
+    frame.plot:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
 
     -- A rich line, not a label: the killer's face in front of its name and
     -- the enemy tip on both, as every other place the addon names a mob
@@ -691,9 +807,9 @@ local function BuildWindow()
     -- doing anything to the plot. The marks sit one higher still, so
     -- their tooltips and clicks are untouched.
     local scrub = CreateFrame("Frame", nil, frame)
-    scrub:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 20))
-    scrub:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
-        -PLOT_BOTTOM)
+    scrub:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", PLOT_L, -(HEALTH_Y - 20))
+    scrub:SetPoint("BOTTOMRIGHT", frame.plot, "TOPLEFT", PLOT_L + PLOT_W,
+        -Replay.PlotFloor(EMPTY_LANES))
     scrub:SetFrameLevel(frame:GetFrameLevel() + 1)
     scrub:EnableMouse(true)
 
@@ -762,7 +878,7 @@ local function BuildWindow()
     -- picture and a hairline read as a scratch between two empty halves.
     local axis = frame:CreateTexture(nil, "ARTWORK")
     axis:SetColorTexture(C.line[1], C.line[2], C.line[3], 1)
-    axis:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -AXIS_Y)
+    axis:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", PLOT_L, -AXIS_Y)
     axis:SetSize(PLOT_W, 3)
 
     -- The whole seconds, written ON the line - the owner asked for it and
@@ -794,17 +910,45 @@ local function BuildWindow()
     frame.playhead = frame:CreateTexture(nil, "OVERLAY")
     frame.playhead:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
     frame.playhead:SetWidth(1)
-    frame.playhead:SetPoint("TOP", frame, "TOPLEFT", PLOT_L, -(HEALTH_Y - 4))
-    frame.playhead:SetHeight(PLOT_BOTTOM - HEALTH_Y)
+    frame.playhead:SetPoint("TOP", frame.plot, "TOPLEFT", PLOT_L, -(HEALTH_Y - 4))
+    frame.playhead:SetHeight(Replay.PlotFloor(EMPTY_LANES) - HEALTH_Y)
 
-    -- Two lanes: what hit you above the axis, and what you pressed below it.
+    -- What hit you above the axis, and the three things you pressed below
+    -- it: the rotation as icons, then the cooldowns and the defensives as
+    -- bars, each in a lane of its own.
     frame.incoming, frame.outgoing, frame.casts = {}, {}, {}
+    frame.cooldowns = {}
     for i = 1, MARKS_IN do frame.incoming[i] = BuildMark(frame, "in") end
     for i = 1, MARKS_OUT do frame.outgoing[i] = BuildMark(frame, "press") end
     for i = 1, MARKS_CAST do frame.casts[i] = BuildMark(frame, "press") end
+    for i = 1, MARKS_CD do frame.cooldowns[i] = BuildMark(frame, "press") end
+
+    -- And the falls, which only a fight has.
+    frame.falls = {}
+    for i = 1, MARKS_FALL do frame.falls[i] = BuildMark(frame, "fall") end
+
+    -- And what was put on you, which only a fight has either: a fall's ten
+    -- seconds are drawn hit by hit and need no bar to say "this was on you".
+    frame.worn = {}
+    for i = 1, MARKS_WORN do frame.worn[i] = BuildMark(frame, "worn") end
+
+    frame.wornLabel = UI.Eyebrow(frame, "Debuffs on you")
+    frame.wornLabel:SetPoint("BOTTOMLEFT", frame.plot, "TOPLEFT", PLOT_L,
+        -(DEBUFF_Y - 4))
+    frame.wornLabel:Hide()
 
     frame.laneIn = UI.Eyebrow(frame, "Damage on you")
-    frame.laneIn:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L, -LANE_IN_Y)
+    frame.laneIn:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", PLOT_L, -LANE_IN_Y)
+
+    -- AND WHY IT IS EMPTY, WHEN IT IS. An empty lane and a lane the client
+    -- will not fill look exactly alike, and the owner read the second as the
+    -- first twice in one evening. Same lesson as the dim button: the state
+    -- is not the reason.
+    frame.laneNote = UI.Label(frame, "", 11, C.textFaint)
+    frame.laneNote:SetPoint("TOPLEFT", frame.laneIn, "BOTTOMLEFT", 0, -4)
+    frame.laneNote:SetWidth(PLOT_W)
+    frame.laneNote:SetJustifyH("LEFT")
+    frame.laneNote:Hide()
     -- No caption over the press lanes. The owner: "what you pressed als
     -- text kann eigentlich raus, das sieht jeder" - a row of your own spell
     -- icons under a time axis needs no label, and the legend at the foot of
@@ -891,6 +1035,26 @@ local function BuildWindow()
     -- (owner, 2026-08-16: "der graph button ist zu weit rechts aussen, den
     -- kannste auch ueber den play button schieben"): it sits between the
     -- thing it switches and the buttons, where the eye already is.
+    -- AND THE HEALTH BLOCK'S OWN SWITCH, over the graph's, in the same
+    -- column: two things this window can put away, one place to say so.
+    local healthRow = UI.Row(frame, "Health", { controlWidth = 40 })
+    healthRow:SetPoint("BOTTOMLEFT", play, "TOPLEFT", 0, 30)
+    healthRow.rule:Hide()
+    UI.Toggle(healthRow,
+        function()
+            local state = Replay.state
+            return state and state.healthOpen or false
+        end,
+        function(value)
+            local state = Replay.state
+            if not state then return end
+            state.healthSaid = value and true or false
+            state.healthOpen = state.healthSaid
+            Replay.Relayout()
+        end)
+    UI.FitRow(healthRow)
+    frame.healthRow = healthRow
+
     local graphRow = UI.Row(frame, "Graph", { controlWidth = 40 })
     graphRow:SetPoint("BOTTOMLEFT", play, "TOPLEFT", 0, 6)
     graphRow.rule:Hide()
@@ -906,18 +1070,18 @@ local function BuildWindow()
 
     -- THE GRAPH ITSELF: a caption, a baseline, one column per bucket.
     frame.graphLabel = UI.Eyebrow(frame, "Damage taken")
-    frame.graphLabel:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", PLOT_L,
-        -(GRAPH_TOP - 4))
+    frame.graphLabel:SetPoint("BOTTOMLEFT", frame.plot, "TOPLEFT", PLOT_L,
+        -(Replay.GraphBand(false, EMPTY_LANES) - 4))
 
     frame.graphPeak = UI.Label(frame, "", 10, C.textDim)
-    frame.graphPeak:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", PLOT_L + PLOT_W,
-        -(GRAPH_TOP - 4))
+    frame.graphPeak:SetPoint("BOTTOMRIGHT", frame.plot, "TOPLEFT",
+        PLOT_L + PLOT_W, -(Replay.GraphBand(false, EMPTY_LANES) - 4))
     frame.graphPeak:SetJustifyH("RIGHT")
 
     frame.graphBase = frame:CreateTexture(nil, "ARTWORK")
     frame.graphBase:SetColorTexture(C.line[1], C.line[2], C.line[3], 1)
-    frame.graphBase:SetPoint("TOPLEFT", frame, "TOPLEFT", PLOT_L,
-        -(GRAPH_TOP + GRAPH_H))
+    frame.graphBase:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", PLOT_L,
+        -(Replay.GraphBand(false, EMPTY_LANES) + GRAPH_H))
     frame.graphBase:SetSize(PLOT_W, 1)
 
     frame.graphCols = {}
@@ -981,8 +1145,72 @@ end
 -- The title as pieces for the rich line: the words in the window's text
 -- colour, then the killer with its face and the tip - what the mob did to
 -- you in these seconds. Pure.
+-- WHAT YOUR HEALTH WAS AT A GIVEN MOMENT, from whichever of the two sources
+-- the story carries. `now` counts DOWN in seconds before the end, so the
+-- reading that stands is the newest one that is not still in the future.
+--
+-- A DEATH knows it hit by hit, out of Blizzard's recap. A FIGHT knows it once
+-- a second, out of the sampler in CombatLog's watcher - and between two falls
+-- a fight has no recap at all, which is exactly why the recap's answer must
+-- not be stretched across a pull: the health left after a hit three minutes
+-- ago is not your health now.
+--
+-- NOTHING RATHER THAN A FULL BAR when neither source has reached a moment.
+-- The old reader answered maxHP before the first event, which is true of a
+-- death - the recap starts at full - and an invention on a pull.
+function Replay.HealthAt(track, events, now, maxHP)
+    if type(track) == "table" and #track > 0 then
+        local hp, most
+        for _, one in ipairs(track) do
+            if (one.t or 0) >= now then hp, most = one.hp, one.max end
+        end
+        return hp, most or maxHP
+    end
+    local _, hp = ns.Death.ReplayAt(events, now, maxHP)
+    return hp, maxHP
+end
+
+-- WHAT THE HEALTH LINE SAYS ABOUT DAMAGE, which is the only timed answer a
+-- FIGHT has at all.
+--
+-- Measured, 2026-08-31, from the owner's probe taken mid-combat: while a
+-- fight is running the meter withholds `totalAmount` AND `spellID` AND
+-- `unitName` AND `sourceCreatureID`. So "who hit you for how much at second
+-- forty" is not a thing this addon is refusing to do - it is a thing the
+-- client does not answer. Blizzard's death recap is the one exception and it
+-- opens on a death.
+--
+-- `UnitHealth` is plain at all times, though. So what CAN be measured second
+-- by second is how much health you LOST, and that is what this returns - a
+-- different fact, labelled as a different fact. A second in which a heal
+-- landed on top of a big hit shows the net, which is why the lane over it
+-- says "health lost" and not "damage taken".
+function Replay.LossEvents(track)
+    local out = {}
+    for index = 2, #(track or {}) do
+        local before, after = track[index - 1], track[index]
+        local was = type(before) == "table" and before.hp or nil
+        local now = type(after) == "table" and after.hp or nil
+        if type(was) == "number" and type(now) == "number" and was > now then
+            out[#out + 1] = {
+                t = after.t, amount = was - now, overkill = 0,
+            }
+        end
+    end
+    return out
+end
+
 function Replay.TitlePieces(snapshot)
     local C = ns.UI.C
+    -- A FIGHT WEARS THE NAME THE PAGE IT CAME FROM WEARS. Two windows about
+    -- one pull that name it differently are two pulls as far as anybody
+    -- reading them is concerned.
+    if type(snapshot) == "table" and snapshot.pull then
+        return {
+            { text = "Replay - ", colour = C.text },
+            { text = snapshot.title or "this fight", colour = C.accent },
+        }
+    end
     if not (type(snapshot) == "table" and snapshot.killer) then
         return { { text = "Replay", colour = C.text } }
     end
@@ -993,9 +1221,254 @@ function Replay.TitlePieces(snapshot)
     }
 end
 
--- Whether the graph is wanted: on until switched off.
+-- THE THREE KINDS OF PRESS, SORTED INTO THEIR LANES.
+--
+-- Pure, and asked twice: once when the window opens, to work out how tall
+-- each lane has to be, and again on every layout to draw them. Two copies
+-- of this test would be two answers to "which lane is this press in" - the
+-- window would make room for one shape and then draw another.
+--
+-- THE KIND IS READ, NOT DECIDED. Both flags were settled where the press
+-- was recorded and only one of them can be set; testing defensive first
+-- here as well costs nothing and means saved data that predates the
+-- pickers still draws once.
+function Replay.Presses(casts)
+    local bars, majors, others = {}, {}, {}
+    for _, cast in ipairs(casts or {}) do
+        if cast.defensive then
+            -- The window this press opened, first. See Replay.BarLength.
+            local duration, source = Replay.BarLength(cast)
+            bars[#bars + 1] = {
+                t = cast.t, name = cast.name, spellID = cast.spellID,
+                itemID = cast.itemID,
+                cast = true, defensive = true,
+                duration = duration, source = source,
+            }
+        elseif cast.cooldown then
+            -- A BAR FOR THE SAME REASON THE DEFENSIVES GET ONE: a cooldown
+            -- is a window you are inside, and "was Avatar still up when it
+            -- went wrong" is the question this lane exists to answer. An
+            -- icon on its own could not.
+            local duration, source = Replay.BarLength(cast)
+            majors[#majors + 1] = {
+                t = cast.t, name = cast.name, spellID = cast.spellID,
+                itemID = cast.itemID,
+                cast = true, cooldown = true,
+                duration = duration, source = source,
+            }
+        else
+            others[#others + 1] = {
+                t = cast.t, name = cast.name, spellID = cast.spellID,
+                itemID = cast.itemID,
+                cast = true,
+            }
+        end
+    end
+    return bars, majors, others
+end
+
+-- AND WHAT WAS PUT ON YOU, in the same shape, for the same two readers.
+function Replay.WornBars(worn)
+    local out = {}
+    for _, one in ipairs(worn or {}) do
+        out[#out + 1] = {
+            t = one.t, name = one.name, spellID = one.spellID,
+            worn = true,
+            -- STILL ON YOU RUNS TO THE END. It is the case worth seeing
+            -- and the one a recorder that only files closed windows loses.
+            duration = one.stillOn and one.t or one.held,
+            stillOn = one.stillOn,
+        }
+    end
+    return out
+end
+
+-- HOW MANY ROWS EACH LANE NEEDS FOR THIS FIGHT, before any ceiling. The
+-- stacking already works this out; this asks it of all three lanes at once
+-- so the window can be measured before a single bar is drawn.
+function Replay.Needed(snapshot)
+    if type(snapshot) ~= "table" then return 1, 1, 1 end
+    local bars, majors = Replay.Presses(snapshot.casts)
+    local _, def = Replay.StackRows(bars)
+    local _, cd = Replay.StackRows(majors)
+    local _, worn = Replay.StackRows(Replay.WornBars(snapshot.worn))
+    return cd, def, worn
+end
+
+-- HOW MANY ROWS A LANE ACTUALLY USES. StackRows already worked out how many
+-- the fight needs; this only holds that to the ceiling and never returns
+-- less than one, so an empty lane is still a lane and not a negative gap.
+function Replay.RowsUsed(needed, cap)
+    return math.max(1, math.min(needed or 1, cap or 1))
+end
+
+-- HOW MANY ROWS THE DEBUFF LANE MAY HAVE, which depends on what is under it.
+--
+-- It is the one lane with a hard edge below: the recap's columns grow UP
+-- towards it from the axis. Where there are none - every pull nobody died
+-- in, and every fight with the health block put away - that room is free
+-- and this lane may use it.
+function Replay.DebuffCap(open, hits)
+    if not open then return DEBUFF_ROOM end
+    return ((hits or 0) > 0) and DEBUFF_ROWS or DEBUFF_ROOM
+end
+
+-- THE ROW COUNTS FOR THE FIGHT IN THE WINDOW, as one shape.
+--
+-- Everything that measures this window asks for them together, because they
+-- are one answer: how much room does what is actually on the plot need. The
+-- state carries what each lane NEEDED, worked out once when the window
+-- opened; the ceilings are applied here, so there is a single place where
+-- "and no more than this" is said.
+function Replay.Lanes(state)
+    state = state or Replay.state or {}
+    return {
+        cd = Replay.RowsUsed(state.cdNeeded, CD_ROWS),
+        def = Replay.RowsUsed(state.defNeeded, BAR_ROWS),
+        worn = Replay.RowsUsed(state.wornNeeded,
+            Replay.DebuffCap(state.healthOpen, state.hits)),
+    }
+end
+
+-- WHERE THE DEFENSIVES LANE STARTS: under however many rows the cooldowns
+-- above it turned out to need.
+function Replay.LaneOut(lanes)
+    lanes = lanes or Replay.Lanes()
+    return LANE_CD_Y + lanes.cd * (BAR_H + BAR_GAP)
+end
+
+-- AND WHERE THE PLOT ENDS: under however many the defensives needed.
+function Replay.PlotFloor(lanes)
+    lanes = lanes or Replay.Lanes()
+    return Replay.LaneOut(lanes) + lanes.def * (BAR_H + BAR_GAP)
+end
+
+-- The band's top edge and its height, measured from the top of the frame.
+-- Pure, and one answer: the columns, the caption, the peak and the baseline
+-- all read it, and four of them working it out separately is four places for
+-- the band to end up half a pixel apart.
+function Replay.GraphBand(pull, lanes)
+    if pull then
+        return (AXIS_Y - COLUMN_LIFT) - GRAPH_UP_H, GRAPH_UP_H
+    end
+    return Replay.PlotFloor(lanes) + 10, GRAPH_H
+end
+
+-- WHERE THE DEBUFF LANE SITS. Under the health block while there is one,
+-- and down on the axis when there is not - it is the only thing left up
+-- there, and a lane floating a window's width above the line it is read
+-- against says nothing about when anything happened. Shut, its BOTTOM is
+-- what is fixed, so a lane that needs four rows grows upwards into the room
+-- the health block gave up rather than down through the line.
+function Replay.DebuffTop(open, lanes)
+    if open then return DEBUFF_Y end
+    lanes = lanes or Replay.Lanes()
+    return AXIS_Y - 14 - lanes.worn * (DEBUFF_H + DEBUFF_GAP)
+end
+
+-- WHERE THE PLOT'S VERTICAL SPAN BEGINS - what the playhead, the scrub
+-- surface and the fall markers run from. Under the health bar while it is
+-- shown, at the debuff lane when it is not.
+function Replay.PlotTop(open, lanes)
+    if open then return HEALTH_Y end
+    return Replay.DebuffTop(false, lanes) - 18
+end
+
+-- WHETHER THE HEALTH BLOCK IS OPEN.
+--
+-- Owner, 2026-08-31, twice, and the second one governs: "STANDARD EIN" ...
+-- "also standard ausgeblendet, nur bei tod wirds direkt eingeblendet."
+--
+-- So: shut, unless somebody died. A death replay IS a death and always
+-- opens it; a pull opens it when somebody fell in that pull, because that
+-- is the fight where "how much was left" is the question. Everything else
+-- gets the room back.
+--
+-- `said` is the answer given by hand in this window, and it wins over the
+-- rule while the window is open. It is deliberately NOT remembered: the
+-- rule already gets it right for the fight in front of you, and a stored
+-- "shut" taken once on a quiet pull would then hide the health on the
+-- death you actually opened this window for.
+function Replay.HealthOpen(snapshot, said)
+    if said ~= nil then return said and true or false end
+    if type(snapshot) ~= "table" then return false end
+    if not snapshot.pull then return true end
+    return #(snapshot.fell or {}) > 0
+end
+
+-- WHAT THE WINDOW MEASURES, in one answer instead of three sums scattered
+-- through Relayout. Pure, so the desk can ask what a shut block does to the
+-- height without opening a window - and so that "the plot ends far enough
+-- above the transport" is a question something can be asked at all. That one
+-- was a typed 476 for a year and would have swallowed the third press lane
+-- in silence: the buttons are anchored to the BOTTOM of the frame, so a
+-- plot that grows past them draws the bars through Play rather than off the
+-- window where somebody would see it.
+function Replay.Metrics(open, under, lanes)
+    lanes = lanes or Replay.Lanes()
+    -- HOW FAR THE PLOT RISES WHEN THE HEALTH BLOCK IS PUT AWAY: exactly the
+    -- room between the health bar and where the debuff lane lands, so the
+    -- bars end up on the health bar's own mark. ONE NUMBER, and it is the
+    -- only one that knows about the collapse - every height below it is an
+    -- offset inside frame.plot, and frame.plot is what moves.
+    local lift = open and 0
+        or (Replay.DebuffTop(false, lanes) - HEALTH_Y)
+    local floorY = Replay.PlotFloor(lanes)
+    local deep = under and (floorY + 10 + GRAPH_H) or floorY
+    return {
+        top = Replay.PlotTop(open, lanes),
+        -- IN PLOT COORDINATES, like every other height in this file: an
+        -- offset inside frame.plot, which is the thing that moves.
+        floor = deep,
+        -- AND THE SAME EDGE IN THE WINDOW'S OWN. The two differ by the lift
+        -- and are the same number only while the health block is open - so
+        -- "does the plot clear the transport" has to be asked of THIS one.
+        -- Asked of the other it passes on an open window and lies on a shut
+        -- one, which is a check that agrees with itself and not with the
+        -- screen.
+        bottom = deep - lift,
+        height = floorY + FOOT_H - lift + (under and GRAPH_BLOCK or 0),
+        lift = lift,
+        foot = FOOT_H,
+    }
+end
+
 function Replay.GraphWanted()
     return not (ns.db and ns.db.death and ns.db.death.replayGraph == false)
+end
+
+-- WHY THE INCOMING LANE IS EMPTY, WHEN IT IS.
+--
+-- An empty lane and a lane the game refuses to fill look identical, and the
+-- owner read the second as the first twice in one evening. Same lesson as
+-- the dim button: the state is not the reason.
+--
+-- ASKED AGAIN ON EVERY RELAYOUT, not written once when the window opens.
+-- The health switch decides whether this lane is on screen at all, so a
+-- sentence set at Open and never revisited is left standing from whatever
+-- was opened before - and a stale explanation of a different fight is worse
+-- than none. It was exactly that until 2026-08-31.
+local function SayLane()
+    if not (frame and frame.laneNote) then return end
+    local state = Replay.state
+    if not state then return end
+    if not state.healthOpen then
+        frame.laneNote:Hide()
+        return
+    end
+    local events = state.events or {}
+    if state.pull and #events == 0 then
+        frame.laneNote:SetText("Only around a death - while a fight runs "
+            .. "the game withholds what hit you and for how much. The "
+            .. "band lower down is your health, which it does answer.")
+        frame.laneNote:Show()
+    elseif state.pull then
+        frame.laneNote:SetText("The seconds around each fall - that is "
+            .. "as far as the game's own recap reaches.")
+        frame.laneNote:Show()
+    else
+        frame.laneNote:Hide()
+    end
 end
 
 -- The window is as tall as what is on it: the graph adds its block, and
@@ -1003,13 +1476,77 @@ end
 -- when the window opens.
 function Replay.Relayout()
     if not frame then return end
-    local on = Replay.GraphWanted()
-    frame:SetHeight(FRAME_H + (on and GRAPH_BLOCK or 0))
-    frame.playhead:SetHeight((on and (GRAPH_TOP + GRAPH_H) or PLOT_BOTTOM)
-        - HEALTH_Y)
+    -- A FIGHT'S BAND IS INSIDE THE PLOT, so it costs the window no height -
+    -- and the playhead stops at the plot's own floor rather than reaching
+    -- down through a block that is not there.
+    local pull = Replay.state and Replay.state.pull
+    local open = (Replay.state and Replay.state.healthOpen) and true or false
+
+    -- THE BAND IS THE HEALTH TOO. On a fight it is called "Health lost" and
+    -- it is drawn off the same readings as the bar - putting the block away
+    -- and leaving its band standing would be half a tidy-up. On a death the
+    -- band is the recap's damage, which is a different answer and stays.
+    local on = Replay.GraphWanted() and (open or not pull)
+    local under = on and not pull
+
+    -- ONE MOVE FOR THE WHOLE PLOT. Positive y is up: shut, everything
+    -- measured inside frame.plot rises by exactly the room the health
+    -- block took.
+    local size = Replay.Metrics(open, under)
+    local lift = size.lift
+    frame.plot:ClearAllPoints()
+    frame.plot:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, lift)
+    frame.healthLabel:SetShown(open)
+    frame.health:SetShown(open)
+
+    -- AND "DAMAGE ON YOU" IS PART OF IT. Owner, 2026-08-31: "damage on you
+    -- gehoert zu health." The caption, the sentence under it saying how far
+    -- the game lets it reach, and the columns themselves - one answer, put
+    -- away in one piece.
+    frame.laneIn:SetShown(open)
+    SayLane()
+    if not open then
+        for _, mark in ipairs(frame.incoming) do
+            mark.item = nil
+            mark:Hide()
+        end
+    end
+
+    -- AND THE DEBUFFS COME DOWN ONTO THE LINE, being all that is left up
+    -- there. Re-anchored rather than lifted with the rest: the lane does
+    -- not move by the same amount as the plot, it moves INTO what the plot
+    -- gave up.
+    frame.wornLabel:ClearAllPoints()
+    frame.wornLabel:SetPoint("BOTTOMLEFT", frame.plot, "TOPLEFT", PLOT_L,
+        -(Replay.DebuffTop(open) - 4))
+
+    -- AND THE THREE THINGS THAT SPAN THE PLOT rather than sitting in it:
+    -- they start at its top edge, which is what moved.
+    local top = size.top
+    frame.scrub:ClearAllPoints()
+    frame.scrub:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", PLOT_L, -(top - 20))
+    frame.scrub:SetPoint("BOTTOMRIGHT", frame.plot, "TOPLEFT",
+        PLOT_L + PLOT_W, -Replay.PlotFloor(lanes))
+
+    frame:SetHeight(size.height)
+    frame.playhead:SetHeight(size.floor - top)
+
+    local top, tall = Replay.GraphBand(pull)
+    frame.graphLabel:ClearAllPoints()
+    frame.graphLabel:SetPoint("BOTTOMLEFT", frame.plot, "TOPLEFT", PLOT_L,
+        -(top - 4))
+    frame.graphPeak:ClearAllPoints()
+    frame.graphPeak:SetPoint("BOTTOMRIGHT", frame.plot, "TOPLEFT",
+        PLOT_L + PLOT_W, -(top - 4))
+    frame.graphBase:ClearAllPoints()
+    frame.graphBase:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", PLOT_L,
+        -(top + tall))
     frame.graphLabel:SetShown(on)
     frame.graphPeak:SetShown(on)
     frame.graphBase:SetShown(on)
+    if frame.healthRow and frame.healthRow.Refresh then
+        frame.healthRow.Refresh()
+    end
     if not on then
         for _, col in ipairs(frame.graphCols) do
             col.bar:Hide()
@@ -1028,6 +1565,26 @@ end
 -- The graph's columns against the visible band. Pure buckets, drawn.
 local function PlaceGraph(events, from, to)
     if not Replay.GraphWanted() then return end
+    -- AND ON A FIGHT, ONLY WHILE THE HEALTH BLOCK IS OPEN: the band is that
+    -- block's second half. Relayout hides the caption and the baseline in
+    -- the same breath, and a column drawn under a caption that is not there
+    -- is a red shape nothing in the window explains.
+    if Replay.state and Replay.state.pull
+        and not Replay.state.healthOpen then
+        for _, col in ipairs(frame.graphCols) do
+            col.bar:Hide()
+            col.cap:Hide()
+        end
+        return
+    end
+    -- A FIGHT'S GRAPH IS ITS HEALTH, not its recap: the recap covers ten
+    -- seconds around a fall and the graph runs the length of the pull, so
+    -- drawing the recap here would put one small red island on an empty
+    -- band and call it the fight.
+    local state = Replay.state
+    local pull = state and state.pull
+    if pull then events = state.loss or {} end
+    local top, tall = Replay.GraphBand(pull)
     local buckets, peak = Replay.Buckets(events, from, to, GRAPH_COLS)
     local colW = PLOT_W / GRAPH_COLS
     for index, bucket in ipairs(buckets) do
@@ -1038,12 +1595,12 @@ local function PlaceGraph(events, from, to)
             col.cap:Hide()
         else
             local x = PLOT_L + (index - 1) * colW
-            local height = math.max(1, GRAPH_H * (bucket.damage / peak))
+            local height = math.max(1, tall * (bucket.damage / peak))
             local capH = math.min(height - 1,
-                GRAPH_H * (bucket.overkill / peak))
+                tall * (bucket.overkill / peak))
             col.bar:ClearAllPoints()
-            col.bar:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", x + 1,
-                -(GRAPH_TOP + GRAPH_H))
+            col.bar:SetPoint("BOTTOMLEFT", frame.plot, "TOPLEFT", x + 1,
+                -(top + tall))
             col.bar:SetSize(math.max(1, colW - 2), height - math.max(0, capH))
             col.bar:Show()
             if capH > 0 then
@@ -1063,7 +1620,13 @@ local function PlaceGraph(events, from, to)
 end
 
 function Place(snapshot, from, to)
-    local events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
+    -- THE EVENTS THE STORY WAS OPENED WITH, not a second trim of the same
+    -- list. A FIGHT is not ten seconds long and re-trimming here would throw
+    -- away every hit outside the last ten of the pull - and it ran on every
+    -- scroll, so the plot would empty out as you moved along it.
+    local state = Replay.state
+    local events = (state and state.events)
+        or ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
     local maxHP = snapshot.maxHP
     PlaceGraph(events, from, to)
 
@@ -1073,7 +1636,11 @@ function Place(snapshot, from, to)
     -- the story that has to be kept in step with the first.
     local slot = 0
     for _, ev in ipairs(events) do
-        if not ev.heal then
+        -- NOT WHILE THE HEALTH BLOCK IS SHUT. The columns are the other
+        -- half of "Damage on you", and Relayout has already put the caption
+        -- away - a column standing under a caption that is not there is a
+        -- red shape nothing in the window explains.
+        if not ev.heal and (not state or state.healthOpen) then
             slot = slot + 1
             if slot <= MARKS_IN then
                 local mark = frame.incoming[slot]
@@ -1087,7 +1654,7 @@ function Place(snapshot, from, to)
                     mark:ClearAllPoints()
                     -- Clear of the axis, so the seconds written on the line
                     -- stay readable under twenty columns.
-                    mark:SetPoint("BOTTOM", frame, "TOPLEFT", x,
+                    mark:SetPoint("BOTTOM", frame.plot, "TOPLEFT", x,
                         -(AXIS_Y - COLUMN_LIFT))
                     mark:SetSize(24, height + 40 + AVATAR)
 
@@ -1143,25 +1710,7 @@ function Place(snapshot, from, to)
     -- rotation goes in a row of its own, as icons: moments, which is what they
     -- are. Only the defensives picked on the Deaths page get bars.
     local colourOf, nextColour = {}, 0
-    local bars, others = {}, {}
-    for _, cast in ipairs(snapshot.casts or {}) do
-        if cast.defensive then
-            -- The window this press opened, first. See Replay.BarLength.
-            local duration, source = Replay.BarLength(cast)
-            bars[#bars + 1] = {
-                t = cast.t, name = cast.name, spellID = cast.spellID,
-                itemID = cast.itemID,
-                cast = true, defensive = true,
-                duration = duration, source = source,
-            }
-        else
-            others[#others + 1] = {
-                t = cast.t, name = cast.name, spellID = cast.spellID,
-                itemID = cast.itemID,
-                cast = true,
-            }
-        end
-    end
+    local bars, majors, others = Replay.Presses(snapshot.casts)
 
     -- The rotation, as icons on their own line right under the axis, each
     -- on a hairline that reaches up to it - "man sieht wann die losgehen".
@@ -1176,7 +1725,7 @@ function Place(snapshot, from, to)
             else
                 local x = PLOT_L + Replay.Fraction(item.t, from, to) * PLOT_W
                 mark:ClearAllPoints()
-                mark:SetPoint("TOP", frame, "TOPLEFT", x, -LANE_CAST_Y)
+                mark:SetPoint("TOP", frame.plot, "TOPLEFT", x, -LANE_CAST_Y)
                 mark:SetSize(20, 27)
 
                 mark.column:ClearAllPoints()
@@ -1199,83 +1748,196 @@ function Place(snapshot, from, to)
         frame.casts[i]:Hide()
     end
 
-    local stacked = Replay.StackRows(bars)
+    -- ONE PAINTER FOR BOTH BAR LANES, and it has to be one: the cooldowns
+    -- want every rule the defensives already have - the stacking, the
+    -- colour kept per spell, the drop line to the axis, the marker for a
+    -- press whose length nobody measured. A second copy of sixty lines is
+    -- a second place for one of them to be fixed and the other forgotten,
+    -- which is how the two lanes would end up disagreeing about the same
+    -- press. The lane it paints, its pool and how many rows it may stack
+    -- are the only things that differ.
+    local function PaintBars(pool, cap, list, laneY, rows)
+        local slot = 0
+        for _, bar in ipairs(Replay.StackRows(list)) do
+            slot = slot + 1
+            if slot <= cap then
+                local mark = pool[slot]
+                mark.item = bar
 
+                -- A bar is on screen when ANY part of it is: it may start
+                -- before the left edge and still be running under the hit you
+                -- are looking at, which is exactly the case worth seeing.
+                local ended = bar.t - (bar.duration or 0)
+                if bar.t < to or ended > from then
+                    mark:Hide()
+                else
+                    local x = PLOT_L
+                        + math.max(0, Replay.Fraction(bar.t, from, to)) * PLOT_W
+                    -- A press whose length nobody has measured gets a marker,
+                    -- not an invented bar: this addon does not guess durations.
+                    local ends = bar.duration
+                        and (PLOT_L + math.min(1,
+                            Replay.Fraction(math.max(0, ended), from, to)) * PLOT_W)
+                        or (x + 4)
+                    local row = math.min(bar.row or 1, rows)
+                    local top = laneY + (row - 1) * (BAR_H + BAR_GAP)
+
+                    mark:ClearAllPoints()
+                    mark:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", x - 9, -top)
+                    mark:SetSize(math.max(BAR_H, (ends - x) + 9), BAR_H)
+
+                    -- Its own colour, kept by spell so the same defensive is
+                    -- the same colour wherever it lands.
+                    local key = bar.spellID or bar.name or slot
+                    if not colourOf[key] then
+                        nextColour = nextColour + 1
+                        colourOf[key] = Replay.ColourFor(nextColour)
+                    end
+                    local colour = colourOf[key]
+
+                    mark.column:ClearAllPoints()
+                    mark.column:SetPoint("TOPLEFT", mark, "TOPLEFT", 9, 0)
+                    mark.column:SetPoint("BOTTOMRIGHT", mark, "BOTTOMRIGHT", 0, 0)
+                    mark.column:SetColorTexture(colour[1], colour[2], colour[3], 0.85)
+
+                    mark.icon:ClearAllPoints()
+                    mark.icon:SetPoint("LEFT", mark, "LEFT", 0, 0)
+                    mark.icon:SetSize(BAR_H, BAR_H)
+                    -- The ITEM's icon for a potion or a stone - the picture
+                    -- you pressed - and the spell's for a spell. Same door the
+                    -- panel's rows read, so plot and panel show one potion.
+                    mark.icon:SetTexture(ns.Death.PanelIcon(bar))
+                    mark.value:SetText("")
+
+                    -- The drop line: from the axis down to this bar's own row,
+                    -- standing on the moment it was cast. Only for a bar that
+                    -- starts inside the view - one clamped to the left edge
+                    -- started off screen, and a line there would point at a
+                    -- moment that is not under it.
+                    if mark.drop then
+                        local started = Replay.Visible(bar.t, from, to)
+                        if started then
+                            mark.drop:ClearAllPoints()
+                            mark.drop:SetPoint("BOTTOMLEFT", mark, "TOPLEFT", 9, 0)
+                            mark.drop:SetHeight(math.max(1, top - AXIS_Y - 3))
+                            mark.drop:SetColorTexture(colour[1], colour[2],
+                                colour[3], 0.55)
+                        end
+                        mark.drop:SetShown(started)
+                    end
+                    mark:Show()
+                end
+            end
+        end
+        for i = slot + 1, cap do
+            pool[i].item = nil
+            pool[i]:Hide()
+        end
+    end
+
+    -- Top lane first, so a cooldown and a defensive pressed in the same
+    -- second are drawn in the order they are read. Each gets the rows the
+    -- fight needs rather than a fixed four - and the second lane starts
+    -- under however many the first took.
+    local lanes = Replay.Lanes()
+    PaintBars(frame.cooldowns, MARKS_CD, majors, LANE_CD_Y, lanes.cd)
+    PaintBars(frame.outgoing, MARKS_OUT, bars, Replay.LaneOut(lanes),
+        lanes.def)
+
+    -- WHAT WAS ON YOU, above the axis. Stacked the same way the defensives
+    -- below it are - two that overlap are two rows, not two bars on top of
+    -- each other - and through the SAME pure function, because "which row
+    -- does this go in" is one question with one answer.
+    local wornBars = Replay.WornBars(snapshot.worn)
     slot = 0
-    for _, bar in ipairs(stacked) do
+    local wornLanes = Replay.Lanes()
+    for _, bar in ipairs(Replay.StackRows(wornBars)) do
         slot = slot + 1
-        if slot <= MARKS_OUT then
-            local mark = frame.outgoing[slot]
+        if slot <= MARKS_WORN then
+            local mark = frame.worn[slot]
             mark.item = bar
-
-            -- A bar is on screen when ANY part of it is: it may start
-            -- before the left edge and still be running under the hit you
-            -- are looking at, which is exactly the case worth seeing.
             local ended = bar.t - (bar.duration or 0)
             if bar.t < to or ended > from then
                 mark:Hide()
             else
                 local x = PLOT_L
                     + math.max(0, Replay.Fraction(bar.t, from, to)) * PLOT_W
-                -- A press whose length nobody has measured gets a marker,
-                -- not an invented bar: this addon does not guess durations.
                 local ends = bar.duration
                     and (PLOT_L + math.min(1,
                         Replay.Fraction(math.max(0, ended), from, to)) * PLOT_W)
                     or (x + 4)
-                local row = math.min(bar.row or 1, BAR_ROWS)
-                local top = LANE_OUT_Y + (row - 1) * (BAR_H + BAR_GAP)
+                local place = math.min(bar.row or 1, wornLanes.worn)
+                local top = Replay.DebuffTop(
+                    Replay.state and Replay.state.healthOpen, wornLanes)
+                    + (place - 1) * (DEBUFF_H + DEBUFF_GAP)
 
                 mark:ClearAllPoints()
-                mark:SetPoint("TOPLEFT", frame, "TOPLEFT", x - 9, -top)
-                mark:SetSize(math.max(BAR_H, (ends - x) + 9), BAR_H)
-
-                -- Its own colour, kept by spell so the same defensive is
-                -- the same colour wherever it lands.
-                local key = bar.spellID or bar.name or slot
-                if not colourOf[key] then
-                    nextColour = nextColour + 1
-                    colourOf[key] = Replay.ColourFor(nextColour)
-                end
-                local colour = colourOf[key]
+                mark:SetPoint("TOPLEFT", frame.plot, "TOPLEFT", x - 9, -top)
+                mark:SetSize(math.max(DEBUFF_H, (ends - x) + 9), DEBUFF_H)
 
                 mark.column:ClearAllPoints()
                 mark.column:SetPoint("TOPLEFT", mark, "TOPLEFT", 9, 0)
                 mark.column:SetPoint("BOTTOMRIGHT", mark, "BOTTOMRIGHT", 0, 0)
-                mark.column:SetColorTexture(colour[1], colour[2], colour[3], 0.85)
+                mark.column:SetColorTexture(0.72, 0.30, 0.62, 0.55)
 
                 mark.icon:ClearAllPoints()
                 mark.icon:SetPoint("LEFT", mark, "LEFT", 0, 0)
-                mark.icon:SetSize(BAR_H, BAR_H)
-                -- The ITEM's icon for a potion or a stone - the picture
-                -- you pressed - and the spell's for a spell. Same door the
-                -- panel's rows read, so plot and panel show one potion.
-                mark.icon:SetTexture(ns.Death.PanelIcon(bar))
+                mark.icon:SetSize(DEBUFF_H, DEBUFF_H)
+                mark.icon:SetTexture(
+                    (bar.spellID and ns.SpellTexture(bar.spellID)) or 135274)
                 mark.value:SetText("")
-
-                -- The drop line: from the axis down to this bar's own row,
-                -- standing on the moment it was cast. Only for a bar that
-                -- starts inside the view - one clamped to the left edge
-                -- started off screen, and a line there would point at a
-                -- moment that is not under it.
-                if mark.drop then
-                    local started = Replay.Visible(bar.t, from, to)
-                    if started then
-                        mark.drop:ClearAllPoints()
-                        mark.drop:SetPoint("BOTTOMLEFT", mark, "TOPLEFT", 9, 0)
-                        mark.drop:SetHeight(math.max(1, top - AXIS_Y - 3))
-                        mark.drop:SetColorTexture(colour[1], colour[2],
-                            colour[3], 0.55)
-                    end
-                    mark.drop:SetShown(started)
-                end
                 mark:Show()
             end
         end
     end
-    for i = slot + 1, MARKS_OUT do
-        frame.outgoing[i].item = nil
-        frame.outgoing[i]:Hide()
+    for i = slot + 1, MARKS_WORN do
+        frame.worn[i].item = nil
+        frame.worn[i]:Hide()
+    end
+
+    -- WHERE YOU WENT DOWN, straight down the plot, so the presses and the
+    -- hits on either side of it can be read against it. Only a fight has
+    -- these: a death replay ends on the killing blow.
+    slot = 0
+    for _, one in ipairs(snapshot.fell or {}) do
+        slot = slot + 1
+        if slot <= MARKS_FALL then
+            local mark = frame.falls[slot]
+            mark.item = one
+            if not Replay.Visible(one.t, from, to) then
+                mark:Hide()
+            else
+                local x = PLOT_L + Replay.Fraction(one.t, from, to) * PLOT_W
+                -- FROM THE TOP OF THE PLOT, whatever that is right now: with
+                -- the health block put away the line would otherwise start
+                -- above the window and end short of the presses.
+                local head = Replay.PlotTop(
+                    Replay.state and Replay.state.healthOpen)
+                local tall = Replay.PlotFloor() - head
+
+                mark:ClearAllPoints()
+                mark:SetPoint("TOP", frame.plot, "TOPLEFT", x, -head)
+                mark:SetSize(20, tall)
+
+                mark.column:ClearAllPoints()
+                mark.column:SetPoint("TOP", mark, "TOP", 0, 0)
+                mark.column:SetWidth(2)
+                mark.column:SetHeight(tall)
+                mark.column:SetColorTexture(0.86, 0.28, 0.28, 0.55)
+
+                mark.icon:ClearAllPoints()
+                mark.icon:SetSize(18, 18)
+                mark.icon:SetPoint("TOP", mark, "TOP", 0, -1)
+                mark.icon:SetTexture(
+                    (one.spellID and ns.SpellTexture(one.spellID)) or 135274)
+                mark.value:SetText("")
+                mark:Show()
+            end
+        end
+    end
+    for i = slot + 1, MARKS_FALL do
+        frame.falls[i].item = nil
+        frame.falls[i]:Hide()
     end
 
     -- The scale, written ON the line. The step follows the ZOOM: showing
@@ -1295,12 +1957,17 @@ function Place(snapshot, from, to)
             if entry then
                 local x = PLOT_L + Replay.Fraction(at, from, to) * PLOT_W
                 entry.plate:ClearAllPoints()
-                entry.plate:SetPoint("CENTER", frame, "TOPLEFT", x,
+                entry.plate:SetPoint("CENTER", frame.plot, "TOPLEFT", x,
                     -(AXIS_Y + 1))
                 entry.label:ClearAllPoints()
-                entry.label:SetPoint("CENTER", frame, "TOPLEFT", x,
+                entry.label:SetPoint("CENTER", frame.plot, "TOPLEFT", x,
                     -(AXIS_Y + 1))
-                entry.label:SetText(at < 0.001 and "death"
+                -- WHAT THE PLOT ENDS ON. A death ends on the death; a
+                -- fight ends when combat drops, and calling that "death" on
+                -- a pull everybody walked away from is the window lying in
+                -- one word.
+                entry.label:SetText(at < 0.001
+                    and ((state and state.pull) and "end" or "death")
                     or (step < 1 and string.format("%.1fs", at)
                         or string.format("%ds", at)))
                 entry.plate:SetWidth(at < 0.001 and 40 or 30)
@@ -1324,7 +1991,7 @@ function Place(snapshot, from, to)
             if tick then
                 local x = PLOT_L + Replay.Fraction(at, from, to) * PLOT_W
                 tick:ClearAllPoints()
-                tick:SetPoint("TOP", frame, "TOPLEFT", x, -(AXIS_Y - 2))
+                tick:SetPoint("TOP", frame.plot, "TOPLEFT", x, -(AXIS_Y - 2))
                 tick:Show()
             end
         end
@@ -1338,7 +2005,7 @@ function Paint(now)
     local from, to = state.viewFrom or state.span, state.viewTo or 0
 
     for _, lane in ipairs({ frame.incoming, frame.outgoing,
-        frame.casts }) do
+        frame.casts, frame.falls, frame.worn, frame.cooldowns }) do
         for _, mark in ipairs(lane) do
             if mark.item then
                 -- Landed marks stand at full strength; the rest wait at a
@@ -1359,14 +2026,27 @@ function Paint(now)
         end
     end
 
-    local _, hp = ns.Death.ReplayAt(state.events, now, state.maxHP)
-    local pct = (state.maxHP and state.maxHP > 0)
-        and math.max(0, math.min(1, (hp or 0) / state.maxHP)) or 0
+    local hp, most = Replay.HealthAt(state.track, state.events, now,
+        state.maxHP)
+    local pct = (most and most > 0 and hp)
+        and math.max(0, math.min(1, hp / most)) or 0
     frame.healthFill:SetWidth(math.max(1, PLOT_W * pct))
-    frame.healthText:SetText(hp
-        and string.format("%s  |cff9ba3af%d%%|r", ns.ShortNumber(hp),
-            math.floor(pct * 100 + 0.5))
-        or "")
+    -- AND WHEN IT HAS NO READING IT SAYS SO. Owner, 2026-08-31: "die your
+    -- health bar ist immer leer im replay." It was empty because there was
+    -- nothing behind it - a fight recorded before the sampler existed, or
+    -- one that began before the addon loaded - and an empty bar is the same
+    -- picture as a bar at zero. The bar cannot say which; the line can.
+    if hp then
+        frame.healthText:SetText(string.format("%s  |cff9ba3af%d%%|r",
+            ns.ShortNumber(hp), math.floor(pct * 100 + 0.5)))
+    elseif state.pull and not state.track then
+        frame.healthText:SetText("|cff9ba3afNo health kept for this fight - "
+            .. "it is recorded from the moment combat opens|r")
+    elseif state.pull then
+        frame.healthText:SetText("|cff9ba3afbefore the first reading|r")
+    else
+        frame.healthText:SetText("")
+    end
     frame.clock:SetText(string.format("-%.1fs", math.max(0, now)))
 
     -- The playhead only exists where the view reaches; zoomed in and
@@ -1374,8 +2054,9 @@ function Paint(now)
     -- pinned to an edge it is not at.
     if Replay.Visible(now, from, to) then
         frame.playhead:ClearAllPoints()
-        frame.playhead:SetPoint("TOP", frame, "TOPLEFT",
-            PLOT_L + Replay.Fraction(now, from, to) * PLOT_W, -(HEALTH_Y - 4))
+        frame.playhead:SetPoint("TOP", frame.plot, "TOPLEFT",
+            PLOT_L + Replay.Fraction(now, from, to) * PLOT_W,
+            -(Replay.PlotTop(Replay.state and Replay.state.healthOpen) - 4))
         frame.playhead:Show()
     else
         frame.playhead:Hide()
@@ -1415,17 +2096,45 @@ function Replay:Open(snapshot)
     -- as the bottle - see Death.Upgrade.
     ns.Death.Upgrade(snapshot)
 
-    local events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
-    local story = ns.Death.Storyline(events, snapshot.casts)
-    if #story == 0 then
-        ns.Print("Nothing readable to replay for that death.")
+    -- TWO SUBJECTS, ONE WINDOW. Owner, 2026-08-31: "es soll nur die
+    -- mechaniken und ui etc von deathlog uebernehmen." A fall arrives as
+    -- Blizzard's recap and is ten seconds long by definition; a fight
+    -- arrives from the combat log already built, over its own span, with
+    -- every hit in it inside that span. Trimming the second one to the
+    -- first one's window would empty most of the plot.
+    local pull = snapshot.pull and true or nil
+    local events, span
+    if pull then
+        events = snapshot.events or {}
+        span = snapshot.span
+    else
+        events = ns.Death.RecentEvents(snapshot.events, ns.Death.WINDOW)
+        local story = ns.Death.Storyline(events, snapshot.casts)
+        if #story == 0 then
+            ns.Print("Nothing readable to replay for that death.")
+            return
+        end
+        span = Replay.Span(story)
+    end
+    -- A PLOT WITH NO WIDTH puts every mark on top of every other one and
+    -- divides by nothing. It is not a window worth opening.
+    if not (type(span) == "number" and span > 0) then
+        ns.Print(pull and "Nothing readable to replay for that fight."
+            or "Nothing readable to replay for that death.")
         return
     end
 
-    local span = Replay.Span(story)
     Replay.state = {
         snapshot = snapshot,
         events = events,
+        pull = pull,
+        -- YOUR HEALTH ACROSS THE WHOLE FIGHT, where a fight carries it. See
+        -- Replay.HealthAt for why the recap cannot stand in for this.
+        track = pull and snapshot.track or nil,
+        -- Health lost per reading, which is what the band under a FIGHT
+        -- draws. Worked out once here rather than inside Place: Place runs
+        -- again on every scroll and this walks the whole track.
+        loss = pull and Replay.LossEvents(snapshot.track) or nil,
         maxHP = snapshot.maxHP,
         span = span,
         now = span,
@@ -1437,21 +2146,69 @@ function Replay:Open(snapshot)
         zoom = 1,
         following = true,
         pan = nil,
+        -- SHUT UNLESS SOMEBODY DIED - see Replay.HealthOpen. Worked out on
+        -- every open rather than carried between windows: the answer is
+        -- about THIS fight, and the switch under Play is how you disagree
+        -- with it for as long as you are looking at it.
+        healthSaid = nil,
+        healthOpen = Replay.HealthOpen(snapshot, nil),
     }
+
+    -- HOW MANY ROWS THIS FIGHT NEEDS IN EACH LANE.
+    --
+    -- Owner, 2026-08-31: "hier ueberlagern noch zu viele cooldowns. das
+    -- muesste dynamisch besser sein." Worked out once, here, because the
+    -- window's height depends on it and the height is set before anything
+    -- is drawn. The CEILINGS are applied in Replay.Lanes, which is also
+    -- where the debuff lane's room is decided - that one depends on whether
+    -- the recap has columns growing up underneath it, and on whether the
+    -- health block is open, both of which can change while the window is.
+    local cdNeeded, defNeeded, wornNeeded = Replay.Needed(snapshot)
+    Replay.state.cdNeeded = cdNeeded
+    Replay.state.defNeeded = defNeeded
+    Replay.state.wornNeeded = wornNeeded
+    local hits = 0
+    for _, ev in ipairs(events or {}) do
+        if not ev.heal then hits = hits + 1 end
+    end
+    Replay.state.hits = hits
 
     -- The mob in orange, the addon's mark for a word that answers: every
     -- face on the plot below opens a tip for that same mob. The place in
     -- the blue every place name in the addon wears (owner, 2026-08-16:
     -- "bei replay ... da muss der dungeon name noch blau sein").
     frame.title.Paint(Replay.TitlePieces(snapshot))
-    frame.sub:SetText((snapshot.when or "")
-        .. (snapshot.where and ("  -  " .. ns.UI.CoolText(snapshot.where)) or ""))
+    -- A FIGHT ALREADY HAS ITS SUB-LINE WRITTEN - the same one the page it
+    -- was opened from carries, through CombatLog.ReportSub. One wording for
+    -- the place, the clock and the length, in both windows.
+    frame.sub:SetText(pull and (snapshot.sub or "")
+        or ((snapshot.when or "")
+        .. (snapshot.where and ("  -  " .. ns.UI.CoolText(snapshot.where))
+            or "")))
 
     -- The single portrait that used to sit in the corner of the damage lane
     -- is gone: every hit carries its own face now. One face for a death
     -- with twenty mobs in it answered for all of them, which is the owner's
     -- objection and it is right.
     PaintLegend(snapshot)
+
+    -- WHAT THE TWO INCOMING LANES ARE, for the subject actually on screen.
+    --
+    -- A FALL has Blizzard's recap: every hit, timed, with an amount and a
+    -- face. A FIGHT has that only around its falls, because the recap is the
+    -- one door to per-hit numbers and it opens on a death - measured, not
+    -- assumed: mid-combat the meter withholds the amount AND the spell id
+    -- AND who it was. So the fight's own band is the health line, and it is
+    -- named for what it is rather than for what one would rather have.
+    SayLane()
+    if frame.graphLabel then
+        frame.graphLabel:SetText(pull and "Health lost" or "Damage taken")
+    end
+    -- The debuff lane is a FIGHT's lane: a fall is drawn hit by hit and
+    -- needs no bar to say something was on you.
+    if frame.wornLabel then
+        frame.wornLabel:SetShown(pull and #(snapshot.worn or {}) > 0)
+    end
 
     frame.playButton.label:SetText("Pause")
     frame.speedRow.Refresh()

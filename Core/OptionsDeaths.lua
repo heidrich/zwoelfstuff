@@ -80,15 +80,18 @@ function Page:BuildPage(page, width)
             -- one thing these squares can actually say.
             ordered = false,
             get = function() return picked[index] end,
+            -- ONE DOOR FOR BOTH STORES - see Death.PickKind. Dragging a
+            -- cooldown up here MOVES it: a spell on both lists would draw
+            -- one press in two lanes and count it twice in the panel.
             onPick = function(spellID)
                 if not spellID then return end
-                ns.Death.Defensives()[spellID] = true
+                ns.Death.PickKind(spellID, "defensive")
                 ns.Options:Refresh()
             end,
             onClear = function()
                 local spellID = picked[index]
                 if spellID then
-                    ns.Death.Defensives()[spellID] = nil
+                    ns.Death.PickKind(spellID, "none")
                     ns.Options:Refresh()
                 end
             end,
@@ -104,6 +107,58 @@ function Page:BuildPage(page, width)
 
     grid:Note("Drag one out of the list on the right, or click it there. "
         .. "Right-click a slot to clear it.")
+
+    ---------------------------------------------------------------------
+    -- YOUR COOLDOWNS, directly under them
+    --
+    -- Owner, 2026-08-31: "dann adden wir ... noch eine cooldown section
+    -- links in der leiste, in den einstellungen direkt unter def cds."
+    --
+    -- The same squares, the same list, one store along. What they are FOR
+    -- is the difference: a defensive is what you spend to survive the next
+    -- ten seconds and a cooldown is what you spend to end them, and the
+    -- replay draws them in two lanes so you can see which of the two you
+    -- were doing. Same picture as above on purpose - a second way of
+    -- picking a spell on the same page would be a second thing to learn
+    -- for a question that is already answered.
+    ---------------------------------------------------------------------
+    grid:Section("Your cooldowns")
+
+    local cdHost = CreateFrame("Frame", nil, grid.content)
+    cdHost:SetHeight(slotRows * SLOT + (slotRows - 1) * GAP)
+
+    local majors = {}
+    local cdSlots = {}
+    for index = 1, SLOTS do
+        local slot = UI.SpellSlot(cdHost, {
+            size = SLOT,
+            ordered = false,
+            get = function() return majors[index] end,
+            onPick = function(spellID)
+                if not spellID then return end
+                ns.Death.PickKind(spellID, "cooldown")
+                ns.Options:Refresh()
+            end,
+            onClear = function()
+                local spellID = majors[index]
+                if spellID then
+                    ns.Death.PickKind(spellID, "none")
+                    ns.Options:Refresh()
+                end
+            end,
+        })
+        local row = math.floor((index - 1) / PER_ROW)
+        local col = (index - 1) % PER_ROW
+        slot:SetPoint("TOPLEFT", cdHost, "TOPLEFT",
+            col * (SLOT + GAP), -(row * (SLOT + GAP)))
+        cdSlots[index] = slot
+    end
+
+    grid:Wide(cdHost, cdHost:GetHeight(), 2, 10)
+
+    grid:Note("Your big presses - the ones you spend to end a fight rather "
+        .. "than to survive it. The replay draws them on their own line, "
+        .. "under your other casts and over your defensives.")
 
     ---------------------------------------------------------------------
     -- How long one of them lasts, when the game will not say
@@ -320,9 +375,10 @@ function Page:BuildPage(page, width)
             ns.Death.RefreshIcon()
         end)
 
-    grid:Note("A small skull that appears with your first death of the "
-        .. "session and counts them in its corner. Click opens the window. "
-        .. "It never shows before anything has happened.")
+    grid:Note("Three marks together: your own deaths, the group's, and the "
+        .. "fight itself. They are always on screen and each one counts in "
+        .. "its corner once it has something to count. Click opens the "
+        .. "window behind it; drag any of them and all three move.")
 
     UI.Toggle(grid:Row("Lock its position"),
         function()
@@ -378,6 +434,15 @@ function Page:BuildPage(page, width)
         end)
         for _, slot in ipairs(slots) do slot.Refresh() end
 
+        wipe(majors)
+        for spellID in pairs(ns.Death.Cooldowns()) do
+            majors[#majors + 1] = spellID
+        end
+        table.sort(majors, function(a, b)
+            return (ns.SpellName(a) or "") < (ns.SpellName(b) or "")
+        end)
+        for _, slot in ipairs(cdSlots) do slot.Refresh() end
+
         wipe(carried)
         for itemID in pairs(ns.Death.PickedItems()) do
             carried[#carried + 1] = itemID
@@ -423,6 +488,11 @@ function Page:BuildSide(parent, pad)
     self.spellPane = ns.SpellPane:Build(host, width, {
         Used = function()
             local used = {}
+            -- Both lists, and the defensives written last so that a spell
+            -- somehow on both is labelled the way the plot will draw it.
+            for spellID in pairs(ns.Death.Cooldowns()) do
+                used[spellID] = "Cooldown"
+            end
             for spellID in pairs(ns.Death.Defensives()) do
                 used[spellID] = "Defensive"
             end
@@ -430,16 +500,30 @@ function Page:BuildSide(parent, pad)
         end,
         -- A click TOGGLES. Picking is done from this list, so unpicking
         -- from it too is the one place a person looks second.
+        -- A CLICK TOGGLES, AND IT NEVER FILES ONE SPELL UNDER TWO KINDS.
+        --
+        -- There are two lists now and one click, so the click cannot pick
+        -- which - it makes a defensive, the way it always has. What it must
+        -- not do is add a defensive on top of a cooldown: so on something
+        -- already picked as a cooldown, the click TAKES IT OFF that list.
+        -- Every spell in the list is then one click from being unpicked,
+        -- whichever half it is in, and no click can produce the one state
+        -- the pickers exist to prevent. Cooldowns are dragged into their
+        -- squares, which is the only way to say which of the two you mean.
         Assign = function(spellID)
-            local picked = ns.Death.Defensives()
-            picked[spellID] = not picked[spellID] or nil
+            ns.Death.PickKind(spellID, ns.Death.ClickKind(spellID))
             ns.Options:Refresh()
         end,
         Hint = function(spellID)
             if ns.Death.Defensives()[spellID] then
                 return "Click to stop judging it as a defensive."
             end
-            return "Click to judge it as a defensive."
+            if ns.Death.Cooldowns()[spellID] then
+                return "Click to take it off your cooldowns. Drag it into a "
+                    .. "defensive slot to move it there."
+            end
+            return "Click to judge it as a defensive, or drag it into a "
+                .. "cooldown slot."
         end,
     })
 

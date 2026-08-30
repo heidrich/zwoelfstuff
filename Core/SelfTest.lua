@@ -493,6 +493,7 @@ local function TestCommandList()
         sounds = true, sound = true,
         casts = true, cast = true,
         chat = true, news = true, whatsnew = true,
+        combat = true,
     }
 
     local unknown
@@ -1175,6 +1176,12 @@ local function TestDeath()
         { spellID = 2, name = "Vampiric Blood",     remaining = 25 },
         { spellID = 3, name = "Lichborne",          remaining = nil, why = "not cast since login" },
         { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 },
+        -- A COOLDOWN RIDES THE SAME LIST and must not reach the verdict.
+        -- The sentences under a death are about surviving it; "you had
+        -- Army of the Dead ready" is the addon accusing somebody of not
+        -- pressing their damage button while they were being killed.
+        { spellID = 4, name = "Army of the Dead", remaining = 0,
+          cooldown = true },
     }, {})
     Check("Ready and unused is listed by name",
         #avail.readyDefensives == 2
@@ -1190,6 +1197,13 @@ local function TestDeath()
     Check("Cannot-tell is never promoted to ready",
         #avail.unknownDefensives == 1
             and avail.unknownDefensives[1].name == "Lichborne")
+    Check("A cooldown never reaches the verdict about surviving",
+        (function()
+            for _, one in ipairs(avail.readyDefensives) do
+                if one.spellID == 4 then return false end
+            end
+            return true
+        end)())
 
     ---------------------------------------------------------------------
     -- The verdict is the judgement alone; the lists went to the panel.
@@ -1277,6 +1291,108 @@ local function TestDeath()
     -- The panel's rows: used, unused, the rest - and a used one does not
     -- also stand in the unused list with its cooldown.
     ---------------------------------------------------------------------
+    -----------------------------------------------------------------------
+    -- ONE SPELL IS ONE KIND, and the pickers are what make that true.
+    --
+    -- Owner, 2026-08-31: the cooldowns are a second list beside the
+    -- defensives. Every reader tests defensive first, so a spell on both
+    -- lists draws correctly today - and the day somebody writes a reader
+    -- that tests the other way round it draws one press twice and counts it
+    -- twice. Settled at the door instead: picking one kind gives up the
+    -- other, and there is exactly one door.
+    --
+    -- Driven through the real stores, because the question is not whether
+    -- the helper works - it is whether picking a spell ASKS it.
+    -----------------------------------------------------------------------
+    if ns.db then
+        local keptDef, keptFlat = ns.db.defensivesBySpec, ns.db.defensives
+        local keptCD, keptCDFlat = ns.db.cooldownsBySpec, ns.db.cooldowns
+        local realKey = ns.SpecKey
+        ns.db.defensivesBySpec, ns.db.defensives = nil, nil
+        ns.db.cooldownsBySpec, ns.db.cooldowns = nil, nil
+        PretendSpec("DEATHKNIGHT:250")
+
+        Check("A spell picked as a defensive is one",
+            Death.PickKind(48792, "defensive") == true
+                and Death.Defensives()[48792] == true
+                and Death.Cooldowns()[48792] == nil)
+        -- THE MOVE, which is the whole point of the door: dragging it into
+        -- the other set of squares takes it out of the first.
+        Check("and dragging it to the cooldowns MOVES it",
+            Death.PickKind(48792, "cooldown") == true
+                and Death.Cooldowns()[48792] == true
+                and Death.Defensives()[48792] == nil)
+        Check("and clearing a slot takes it off both",
+            Death.PickKind(48792, "none") == true
+                and Death.Cooldowns()[48792] == nil
+                and Death.Defensives()[48792] == nil)
+        Check("A kind nobody knows writes nothing",
+            Death.PickKind(48792, "wibble") == false
+                and Death.Defensives()[48792] == nil)
+
+        -- AND THE CLICK IN THE LIST ON THE RIGHT. One click, two lists: it
+        -- makes a defensive, and on anything already picked - either way -
+        -- it takes it off instead of filing it under both.
+        Check("A click on something unpicked makes it a defensive",
+            Death.ClickKind(55233) == "defensive")
+        Death.PickKind(55233, "defensive")
+        Check("and a second click takes it off again",
+            Death.ClickKind(55233) == "none")
+        Death.PickKind(55233, "cooldown")
+        Check("and a click on a cooldown takes it off rather than adding "
+            .. "a defensive on top of it",
+            Death.ClickKind(55233) == "none")
+        Death.PickKind(55233, "none")
+
+        -- AND THE PRESS ITSELF CARRIES ONE KIND, not two.
+        --
+        -- THE ONLY PLACE THIS CAN BE SEEN. Every reader tests defensive
+        -- first, so a press wearing both flags draws correctly today and
+        -- the rule looks like decoration - it went GREEN under a mutation
+        -- for exactly that reason, on a desk whose fixture is a RECORDED
+        -- pull and never walks this path at all. So the state is built by
+        -- hand here: one spell on both lists, which the pickers above can
+        -- no longer produce and a settings file written before them can.
+        --
+        -- The shape is settled where the press is recorded rather than by
+        -- each reader in turn. The first reader written the other way round
+        -- would otherwise draw one press in two lanes and count it twice.
+        do
+            Death.Defensives()[48792] = true
+            Death.Cooldowns()[48792] = true
+            Death.Cooldowns()[42650] = true
+            local keptCasts = ns.History.casts
+            ns.History.casts = {
+                { spellID = 48792, at = 1000 },
+                { spellID = 42650, at = 1002 },
+            }
+            local seen = Death.CastsWithin(1005, 10)
+            local both, kinds = 0, {}
+            for _, cast in ipairs(seen) do
+                if cast.defensive and cast.cooldown then both = both + 1 end
+                kinds[cast.spellID] = cast.defensive and "defensive"
+                    or cast.cooldown and "cooldown" or "cast"
+            end
+            ns.History.casts = keptCasts
+            Check("A press on both lists is recorded as ONE kind",
+                #seen == 2 and both == 0)
+            Check("and the defensive is the kind it keeps",
+                kinds[48792] == "defensive")
+            Check("while a press only on the cooldowns is a cooldown",
+                kinds[42650] == "cooldown")
+            Death.Defensives()[48792] = nil
+            Death.Cooldowns()[48792] = nil
+            Death.Cooldowns()[42650] = nil
+        end
+
+        ns.SpecKey = realKey
+        ns.db.defensivesBySpec, ns.db.defensives = keptDef, keptFlat
+        ns.db.cooldownsBySpec, ns.db.cooldowns = keptCD, keptCDFlat
+        Check("And the check put the real lists back",
+            ns.db.defensivesBySpec == keptDef
+                and ns.db.cooldownsBySpec == keptCD)
+    end
+
     local rows = Death.PanelEntries({
         casts = {
             { t = 2, spellID = 9, name = "Death Strike" },
@@ -1284,12 +1400,21 @@ local function TestDeath()
               defensive = true },
             { t = 4, spellID = 48792, name = "Icebound Fortitude",
               defensive = true },
+            -- A COOLDOWN, which is neither of the two kinds this panel knew
+            -- about until 4.95.0 and must end up under neither of their
+            -- headings.
+            { t = 5, spellID = 47568, name = "Empower Rune Weapon",
+              cooldown = true },
         },
         avail = {
             { spellID = 48792, name = "Icebound Fortitude", remaining = 25 },
             { spellID = 55233, name = "Vampiric Blood", remaining = 0 },
             { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 },
             { itemID = 212263, name = "Silvermoon Health Potion", count = 0 },
+            { spellID = 47568, name = "Empower Rune Weapon", remaining = 0,
+              cooldown = true },
+            { spellID = 42650, name = "Army of the Dead", remaining = 40,
+              cooldown = true },
         },
     })
     local heads, items = {}, {}
@@ -1302,9 +1427,11 @@ local function TestDeath()
             list[#list + 1] = row
         end
     end
-    Check("Three headings, in the order they are read",
-        heads[1] == "Defensives used" and heads[2] == "Unused defensives"
-            and heads[3] == "Your casts")
+    Check("Five headings, in the order they are read",
+        #heads == 5
+            and heads[1] == "Defensives used" and heads[2] == "Unused defensives"
+            and heads[3] == "Cooldowns used" and heads[4] == "Unused cooldowns"
+            and heads[5] == "Your casts")
     Check("Used, oldest first, with how long before the end",
         #items["Defensives used"] == 2
             and items["Defensives used"][1].name == "Use Healthstone"
@@ -1317,6 +1444,17 @@ local function TestDeath()
     Check("and says ready, or none in the bags",
         items["Unused defensives"][1].suffix:find("ready", 1, true) ~= nil
             and items["Unused defensives"][2].suffix:find("none", 1, true) ~= nil)
+    -- THE TWO KINDS DO NOT LEAK INTO EACH OTHER. This is the whole point
+    -- of the second pair of headings: a cooldown listed as an unused
+    -- defensive is the panel telling somebody they could have lived if
+    -- they had pressed their damage button.
+    Check("A cooldown that was pressed is under its own heading",
+        #items["Cooldowns used"] == 1
+            and items["Cooldowns used"][1].name == "Empower Rune Weapon"
+            and items["Cooldowns used"][1].suffix == "-5.0s")
+    Check("and the one that was not is under the other",
+        #items["Unused cooldowns"] == 1
+            and items["Unused cooldowns"][1].name == "Army of the Dead")
     Check("The rest of the casts are their own list",
         #items["Your casts"] == 1 and items["Your casts"][1].name == "Death Strike")
     -- Nothing picked is a door: one button per empty half, to the page
@@ -1329,17 +1467,27 @@ local function TestDeath()
         return found
     end
     local none = Buttons({ casts = {}, avail = {} })
-    Check("Nothing picked offers both doors",
-        #none == 2 and none[1] == "Set up your defensives"
-            and none[2] == "Set up your consumables")
+    Check("Nothing picked offers all three doors",
+        #none == 3 and none[1] == "Set up your defensives"
+            and none[2] == "Set up your consumables"
+            and none[3] == "Set up your cooldowns")
     local spellsOnly = Buttons({ casts = {},
         avail = { { spellID = 1, name = "IBF", remaining = 0 } } })
-    Check("Spells picked and no potions offers the potion door alone",
-        #spellsOnly == 1 and spellsOnly[1] == "Set up your consumables")
+    Check("Spells picked and no potions offers the potion door",
+        spellsOnly[1] == "Set up your consumables")
     local both = Buttons({ casts = {}, avail = {
         { spellID = 1, name = "IBF", remaining = 0 },
-        { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 } } })
-    Check("Both picked, no door", #both == 0)
+        { itemID = 5512, name = "Healthstone", count = 1, remaining = 0 },
+        { spellID = 2, name = "ERW", remaining = 0, cooldown = true } } })
+    Check("All three picked, no door", #both == 0)
+    -- A COOLDOWN IS NOT A DEFENSIVE AT THE DOOR EITHER. Counting the two
+    -- lists together would hide the defensives door from somebody who has
+    -- only ever picked cooldowns, and the panel would say nothing at all.
+    local cdOnly = Buttons({ casts = {}, avail = {
+        { spellID = 2, name = "ERW", remaining = 0, cooldown = true } } })
+    Check("Cooldowns picked and nothing else still offers both other doors",
+        #cdOnly == 2 and cdOnly[1] == "Set up your defensives"
+            and cdOnly[2] == "Set up your consumables")
     Check("A button row names the page it opens",
         (function()
             for _, row in ipairs(Death.PanelEntries({ casts = {}, avail = {} })) do
@@ -1515,12 +1663,360 @@ local function TestDeath()
     Check("A raid boss is named after the raid and its difficulty",
         raid == "Raid - Nerub-ar Palace (Heroic) - Queen Ansurek")
     Check("The boss wins the short word outright", raidShort == "Queen Ansurek")
+    -- AND THE DIFFICULTY SURVIVES IT, third. Once the boss has taken the
+    -- short word there is no way back to "Heroic" or "M+12" from anything
+    -- downstream, and the header over a whole run of pulls has to say it.
+    local _, _, raidKind = Death.WhereLabel("raid", "Nerub-ar Palace",
+        "Heroic", nil, "Queen Ansurek", nil)
+    Check("...and the kind of evening is still handed back beside it",
+        raidKind == "Raid", tostring(raidKind))
+    local _, _, keyKind = Death.WhereLabel("party", "Ara-Kara",
+        "Mythic Keystone", 12, "Avanoxx", nil)
+    Check("...which on a keystone boss pull is the key level, not the boss",
+        keyKind == "M+12", tostring(keyKind))
 
     local open, openShort = Death.WhereLabel("none", nil, nil, nil, nil, "Duskwood")
     Check("Outside an instance the zone is the place",
         open == "Open world - Duskwood" and openShort == "Open world")
     Check("A withheld zone still answers something",
         Death.WhereLabel(nil, nil, nil, nil, nil, nil) == "Open world")
+
+    ---------------------------------------------------------------------
+    -- ONE ROW PER PLACE, AND HOW MANY OF THEM FIT
+    --
+    -- Owner, 2026-08-25, about a column with the same dungeon in it four
+    -- times over: "nicht 3 mal rubi stehen, sondern nur einmal und 3 death
+    -- sortiert nach zeit abwaerts." Both windows gather their column this
+    -- way and both use these two functions, so both are checked here.
+    ---------------------------------------------------------------------
+    do
+        local key, name = Death.PlaceKey({ instance = "Ulduar",
+            whereShort = "Raid" })
+        Check("A place is named after the instance it was in",
+            key == "Ulduar" and name == "Ulduar")
+        key, name = Death.PlaceKey({ whereShort = "Open world" })
+        Check("...and outside one, after the only word there is",
+            key == "Open world" and name == "Open world")
+        key, name = Death.PlaceKey({})
+        Check("...and a recording that says neither gathers with the rest",
+            key == "" and name == nil)
+        Check("...as does one that is not a recording at all",
+            (Death.PlaceKey(nil)) == "")
+
+        -- HOW MANY FIT. Three rows of ten in a room of thirty-four with a
+        -- gap of two: 10 + 2 + 10 + 2 + 10 = 34 exactly, so all three.
+        local rows = { 1, 2, 3, 4, 5 }
+        local function Ten() return 10 end
+        local first, count, far = Death.ListWindow(rows, 0, 34, Ten, 2)
+        Check("A column fits exactly as many rows as it has room for",
+            first == 1 and count == 3,
+            string.format("first %d, count %d", first, count))
+        Check("...and says how far down the list may be pushed",
+            far == 2, tostring(far))
+        first, count = Death.ListWindow(rows, 2, 34, Ten, 2)
+        Check("...scrolled to the bottom it ends on the last row",
+            first == 3 and count == 3,
+            string.format("first %d, count %d", first, count))
+        first = Death.ListWindow(rows, 99, 34, Ten, 2)
+        Check("...and cannot be pushed past it", first == 3, tostring(first))
+        first = Death.ListWindow(rows, -4, 34, Ten, 2)
+        Check("...nor above the top", first == 1, tostring(first))
+
+        -- MIXED HEIGHTS, which is the whole reason this is a function and
+        -- not a division. A header of twenty and pulls of ten: the room
+        -- holds the header and one pull, not three of anything.
+        local mixed = {
+            { kind = "run" }, { kind = "pull" }, { kind = "pull" },
+        }
+        local function Tall(item)
+            if item.kind == "run" then return 20 end
+            return 10
+        end
+        local _, mixedCount = Death.ListWindow(mixed, 0, 32, Tall, 2)
+        Check("A taller header takes the room a pull would have had",
+            mixedCount == 2, tostring(mixedCount))
+        Check("An empty list needs no room", select(2,
+            Death.ListWindow({}, 0, 100, Ten, 2)) == 0)
+        Check("...and a column with no room still draws the row it is on",
+            select(2, Death.ListWindow(rows, 0, 4, Ten, 2)) == 1)
+
+        -- AND THE THREE LEVELS, which is what the column really is.
+        --
+        -- Owner, 2026-08-29, drawing what a dungeon has to look like:
+        --   DUNGEON
+        --   - Trash Pulls  -> the three before the first boss, foldable
+        --   - Boss         -> with its pulls
+        --   ...and so on, "so kann man auch schoen sehen, ah, das war trash
+        --   zwischen den bossen".
+        --
+        -- So the fixture is exactly that shape: trash, a boss, trash again,
+        -- and a second boss - and the two runs of trash must NOT collapse
+        -- into one row, because where they happened is the whole point.
+        local log = {
+            { instance = "Ara-Kara", kind = "M+11", journal = 1273 },
+            { instance = "Ara-Kara", kind = "M+11" },
+            { instance = "Ara-Kara", boss = "Avanoxx", bossID = 2606 },
+            { instance = "Ara-Kara", kind = "M+11" },
+            { instance = "Ara-Kara", boss = "Ki'katal", bossID = 2607 },
+        }
+        local items = Death.SideItems(log, nil)
+
+        Check("The column is the place, the fights in it, and the falls",
+            items[1] ~= nil and items[1].kind == "run"
+                and items[1].instance == "Ara-Kara" and items[1].dead == 5,
+            string.format("%d rows", #items))
+
+        -- Newest first, so the LAST fight of the run is the first block.
+        local blocks = {}
+        for _, item in ipairs(items) do
+            if item.kind == "boss" then blocks[#blocks + 1] = item end
+        end
+        Check("A run of trash between two bosses is a block of its own",
+            #blocks == 4, string.format("%d blocks", #blocks))
+        Check("...in the order they happened, newest first",
+            blocks[1] ~= nil and blocks[1].label == "Ki'katal"
+                and blocks[2] ~= nil and blocks[2].label == "Trash"
+                and blocks[3] ~= nil and blocks[3].label == "Avanoxx"
+                and blocks[4] ~= nil and blocks[4].label == "Trash",
+            table.concat({ blocks[1] and blocks[1].label or "?",
+                blocks[2] and blocks[2].label or "?",
+                blocks[3] and blocks[3].label or "?",
+                blocks[4] and blocks[4].label or "?" }, " / "))
+        -- THE TWO RUNS OF TRASH ARE NOT ONE ROW. Gathering them would say
+        -- "3 trash deaths" and lose which side of the boss they were on.
+        Check("...and the two runs of trash are two rows, not one of three",
+            blocks[2].leaves == 1 and blocks[4].leaves == 2
+                and blocks[2].id ~= blocks[4].id,
+            string.format("%d and %d", blocks[2].leaves, blocks[4].leaves))
+        Check("A block says how many it holds and what it cost",
+            blocks[3].leaves == 1 and blocks[3].dead == 1
+                and blocks[3].boss == true and blocks[4].boss == false)
+        Check("...and a boss block carries the id its page is found by",
+            blocks[1].bossID == 2607 and blocks[4].bossID == nil)
+
+        -- Numbered inside the BLOCK, so "trash pull 2" means the second of
+        -- that run rather than the second of the whole evening.
+        -- The rows of the OLDEST block, which is the only one here with two
+        -- of them. Found by walking on from its header rather than by an
+        -- index counted by hand - a hand-counted one would have been reading
+        -- a different block and passing.
+        local firstTrash, gathering = {}, false
+        for _, item in ipairs(items) do
+            if item.kind == "boss" then gathering = item.id == blocks[4].id end
+            if gathering and item.kind == "death" then
+                firstTrash[#firstTrash + 1] = item
+            end
+        end
+        Check("A row is numbered inside its own block, newest first",
+            #firstTrash == 2 and firstTrash[1].index == 2
+                and firstTrash[1].number == 2
+                and firstTrash[2].index == 1 and firstTrash[2].number == 1,
+            string.format("%d rows, first is number %s", #firstTrash,
+                tostring(firstTrash[1] and firstTrash[1].number)))
+
+        -- A PLACE IS STILL ONE ROW, however often the evening walked back
+        -- into it - the level above is a bucket where this one is a run.
+        local twice = Death.SideItems({
+            { instance = "Ara-Kara" }, { instance = "Ulduar" },
+            { instance = "Ara-Kara" },
+        }, nil)
+        local placeRows = 0
+        for _, item in ipairs(twice) do
+            if item.kind == "run" then placeRows = placeRows + 1 end
+        end
+        Check("A place is one row however often it was walked into",
+            placeRows == 2, string.format("%d place rows", placeRows))
+
+        -- FOLDING. A place takes everything under it; a block takes only
+        -- its own rows and leaves its neighbours standing.
+        local shutPlace = Death.SideItems(log, { [items[1].id] = true })
+        Check("A folded place takes its fights and its falls with it",
+            #shutPlace == 1 and shutPlace[1].open == false
+                and shutPlace[1].dead == 5,
+            string.format("%d rows", #shutPlace))
+        local shutBlock = Death.SideItems(log, { [blocks[1].id] = true })
+        local leftBlocks, leftLeaves = 0, 0
+        for _, item in ipairs(shutBlock) do
+            if item.kind == "boss" then leftBlocks = leftBlocks + 1 end
+            if item.kind == "death" then leftLeaves = leftLeaves + 1 end
+        end
+        Check("A folded block keeps its neighbours open",
+            leftBlocks == 4 and leftLeaves == 4,
+            string.format("%d blocks, %d falls", leftBlocks, leftLeaves))
+
+        Check("The place carries the difficulty of whichever fall had one",
+            items[1].tag == "M+11" and items[1].journal == 1273)
+        Check("An empty own-death log arranges into nothing",
+            #Death.SideItems({}, nil) == 0
+                and #Death.SideItems(nil, nil) == 0)
+
+        -- THE KEY A PLACE IS FOLDED UNDER is built in two files, and a key
+        -- spelled two ways is a fold that only ever half works.
+        Check("A place folds under the same key wherever it is gathered",
+            Death.PlaceID({ instance = "Ara-Kara" }) == items[1].id,
+            items[1].id)
+
+        -- WHAT ONE FALL SAYS ON ITS SECOND LINE: the last hit that was not
+        -- a heal. Walked from the END, because a heal landing in the same
+        -- instant as the killing blow would otherwise be printed as the
+        -- thing that killed you.
+        local blow = Death.DeathLine({ events = {
+            { name = "Melee", amount = 4000 },
+            { name = "Spirit Rend", amount = 91000 },
+            { name = "Renew", amount = 9000, heal = true },
+        } })
+        Check("A fall names the hit that finished it, not the heal after it",
+            blow:find("Spirit Rend", 1, true) ~= nil
+                and blow:find("Renew", 1, true) == nil, blow)
+        Check("...with how big it was beside the name",
+            blow:find("91", 1, true) ~= nil, blow)
+        Check("A fall the client would not talk about says so",
+            (Death.DeathBlow({ reason = "no recap" }))
+                == "nothing readable was kept")
+        Check("...and one with nothing to say says nothing",
+            Death.DeathLine({}) == "" and Death.DeathLine(nil) == "")
+        -- THE THREE FACTS APART, because the row has a column for each and
+        -- the ability needs its id to wear an icon and open a tooltip.
+        -- Owner, 2026-08-29: "kannst du in der rechten spalte die kill
+        -- spells verlinken und das icon davor packen?"
+        do
+            local what, amount, spellID = Death.DeathBlow({ events = {
+                { name = "Melee", amount = 4000 },
+                { name = "Spirit Rend", amount = 91000, spellID = 1259255 },
+            } })
+            Check("...and the hit and its size come apart for the two columns",
+                what == "Spirit Rend" and amount == 91000,
+                tostring(what) .. " / " .. tostring(amount))
+            Check("...with the ability's own id, which is what draws its icon",
+                spellID == 1259255, tostring(spellID))
+            local _, _, none = Death.DeathBlow({ events = {
+                { name = "Melee", amount = 4000 },
+            } })
+            Check("...and nothing invented for a hit that had none",
+                none == nil, tostring(none))
+        end
+
+        -----------------------------------------------------------------
+        -- THE FIGHT, RECOVERED FROM THE LABEL.
+        --
+        -- Owner, 2026-08-29, with a picture of nine raid deaths under one
+        -- Trash: "da steht alles unter trash, die boss pulls werden so
+        -- nicht aufgefuehrt NACH boss". They were written down before the
+        -- fight was a field of its own - but not lost: WhereLabel gives
+        -- `short` the encounter's name when there was one and leaves it
+        -- equal to `kind` when there was not, so the two differing IS the
+        -- encounter, exactly and not by guessing.
+        -----------------------------------------------------------------
+        do
+            local raid = Death.MendFight({ whereShort = "General Vezax",
+                kind = "Raid" })
+            Check("A fall saved before the fight was kept gets it back",
+                raid.boss == "General Vezax", tostring(raid.boss))
+            local trash = Death.MendFight({ whereShort = "Raid",
+                kind = "Raid" })
+            Check("...and one that was not in a fight stays trash",
+                trash.boss == nil, tostring(trash.boss))
+            local old = Death.MendFight({ whereShort = "M+11" })
+            Check("...and one too old to say either way is not guessed at",
+                old.boss == nil, tostring(old.boss))
+            local known = Death.MendFight({ whereShort = "M+11",
+                kind = "M+11", boss = "Kokia Blazehoof" })
+            Check("...while a fall that already knows is left alone",
+                known.boss == "Kokia Blazehoof")
+
+            -- AND IT RUNS ON THE WAY IN, which is the half that matters:
+            -- the rule alone being right changed nothing on his screen.
+            local back = Death.Restore({ {
+                when = "23:29:06", whereShort = "General Vezax",
+                kind = "Raid", events = { { t = 0, amount = 1 } },
+            } })
+            Check("...and every fall read off the disk goes through it",
+                back[1] ~= nil and back[1].boss == "General Vezax",
+                tostring(back[1] and back[1].boss))
+        end
+
+        -- AND THE FIGHT'S OWN ID SURVIVES THE DISK. Without it the own
+        -- log's fight rows have a boss's name and no face and no page
+        -- behind it, while the group's has both off the same event.
+        do
+            local kept = Death.Persist({
+                when = "23:29:06", whereShort = "General Vezax",
+                kind = "Raid", boss = "General Vezax", bossID = 754,
+                events = { { t = 0, amount = 1 } },
+            })
+            Check("A fall keeps the fight's id, which is what finds its page",
+                kept ~= nil and kept.bossID == 754,
+                tostring(kept and kept.bossID))
+        end
+
+        -- BRINGING A ROW INTO VIEW when it is a list of two heights. Five
+        -- rows of ten in a room of thirty-four: three fit.
+        local flat = { { index = 1 }, { index = 2 }, { index = 3 },
+            { index = 4 }, { index = 5 } }
+        local function Ten2() return 10 end
+        Check("A row already on screen does not move the column",
+            Death.ScrollOnto(flat, 2, 0, 34, Ten2, 2) == 0)
+        Check("...one below the edge is scrolled to the LAST line",
+            Death.ScrollOnto(flat, 5, 0, 34, Ten2, 2) == 2,
+            tostring(Death.ScrollOnto(flat, 5, 0, 34, Ten2, 2)))
+        Check("...and one above it to the first",
+            Death.ScrollOnto(flat, 1, 3, 34, Ten2, 2) == 0,
+            tostring(Death.ScrollOnto(flat, 1, 3, 34, Ten2, 2)))
+        -- A death inside a FOLDED place is not in the list at all, and the
+        -- column must stay where it is rather than jump to nothing.
+        Check("A row that is folded away leaves the column alone",
+            Death.ScrollOnto(flat, 99, 2, 34, Ten2, 2) == 2)
+        -- A HEADER IS NOT A FALL. Both carry a number, and matching on the
+        -- number alone would scroll onto the place instead of the death.
+        Check("A place header is never mistaken for the row wanted",
+            Death.ScrollOnto({ { kind = "run", index = 5 }, { index = 5 } },
+                5, 0, 34, Ten2, 2) == 0)
+
+        -- AND THE COLUMN HAS THE ROOM. The falls are kept fifty deep, so
+        -- unlike the group log this one really does scroll - what has to be
+        -- true is that a place and several falls under it fit at once, or
+        -- the fold has nothing to fold.
+        local S = Death.SIDE_LAYOUT
+        local underOne = math.floor((S.room - S.runH - S.gap)
+            / (S.deathH + S.gap))
+        Check("The own-death column holds a place and ten falls under it",
+            underOne >= 10, string.format("%d fit", underOne))
+        Check("...and the room it is given is the room the window has",
+            S.room > 0 and S.room < S.height,
+            string.format("%d of %d", S.room, S.height))
+
+        -----------------------------------------------------------------
+        -- WHICH BOSS A PULL WAS, twenty seconds after it ended.
+        --
+        -- Owner's screenshot, 2026-08-28: a General Vezax pull labelled
+        -- "Trash pull" with his own Mark of the Faceless in the table
+        -- beside it. A pull is captured a second or two AFTER combat
+        -- drops, and ENCOUNTER_END had already taken the name away.
+        -----------------------------------------------------------------
+        local wasNow, wasLast, wasAt =
+            Death.encounter, Death.lastBoss, Death.lastBossAt
+        Death.encounter, Death.lastBoss, Death.lastBossAt =
+            nil, "General Vezax", 1000
+        Check("A pull that ended a moment ago still knows its boss",
+            Death.PullBoss(1005, 20) == "General Vezax",
+            tostring(Death.PullBoss(1005, 20)))
+        Check("...and stops claiming it once the grace is past",
+            Death.PullBoss(1030, 20) == nil,
+            tostring(Death.PullBoss(1030, 20)))
+        Death.encounter = "Yogg-Saron"
+        Check("...while a fight actually running wins outright",
+            Death.PullBoss(1005, 20) == "Yogg-Saron")
+        Death.encounter, Death.lastBoss, Death.lastBossAt = nil, nil, nil
+        Check("...and trash after no boss at all is trash",
+            Death.PullBoss(1005, 20) == nil)
+        -- The moment is what expires it, and a name with no moment is a
+        -- claim with no clock - it must not be believed forever.
+        Death.lastBoss, Death.lastBossAt = "Avanoxx", nil
+        Check("...as is a name nobody wrote a time against",
+            Death.PullBoss(1005, 20) == nil)
+        Death.encounter, Death.lastBoss, Death.lastBossAt =
+            wasNow, wasLast, wasAt
+    end
 
     ---------------------------------------------------------------------
     -- Where a share goes. The rule is separate from the group state so
@@ -1715,6 +2211,187 @@ local function TestDeath()
         Check("What is on screen and what is not is its own question",
             Replay.Visible(5, 10, 0) and not Replay.Visible(12, 10, 0)
                 and not Replay.Visible(-1, 10, 0))
+
+        -- YOUR HEALTH AT A MOMENT, from whichever source the story carries.
+        -- `t` counts DOWN, so the reading that stands is the newest one that
+        -- has already happened.
+        local samples = {
+            { t = 50, hp = 100, max = 100 },
+            { t = 25, hp = 40, max = 100 },
+            { t = 5, hp = 70, max = 100 },
+        }
+        Check("A fight reads its health off the samples",
+            Replay.HealthAt(samples, nil, 30) == 100
+                and Replay.HealthAt(samples, nil, 20) == 40
+                and Replay.HealthAt(samples, nil, 0) == 70)
+        -- NOTHING, rather than a full bar, before anything was measured.
+        -- A full bar there is a moment nobody read, drawn as if somebody had.
+        Check("Before the first sample a fight admits it does not know",
+            Replay.HealthAt(samples, nil, 60) == nil)
+        -- And with no samples at all it falls back to the recap, which is
+        -- what every death in the log has and no pull does.
+        Check("A fall still reads its health off the recap",
+            Replay.HealthAt(nil, { { t = 4, hp = 80 } }, 2, 100) == 80)
+
+        -- HEALTH LOST BETWEEN TWO READINGS, which is the only timed answer a
+        -- fight has about being hit: mid-combat the meter withholds the
+        -- amount and the spell id both. A reading where health went UP is a
+        -- heal and not a negative hit.
+        local loss = Replay.LossEvents({
+            { t = 50, hp = 100 }, { t = 49, hp = 60 },
+            { t = 48, hp = 90 }, { t = 47, hp = 40 },
+        })
+        Check("Health lost is measured between readings, and heals are not "
+            .. "negative damage",
+            #loss == 2 and loss[1].amount == 40 and loss[2].amount == 50)
+        Check("And each loss is filed at the reading that found it",
+            loss[1] ~= nil and loss[1].t == 49)
+        Check("A fight with one reading has no losses to draw",
+            #Replay.LossEvents({ { t = 5, hp = 10 } }) == 0)
+
+        -- WHEN THE HEALTH BLOCK IS OPEN. Owner, 2026-08-31, and the second
+        -- word is the one that governs: "STANDARD EIN" ... "also standard
+        -- ausgeblendet, nur bei tod wirds direkt eingeblendet."
+        Check("A death replay always opens the health block",
+            Replay.HealthOpen({}, nil) == true)
+        Check("A pull nobody died in does not",
+            Replay.HealthOpen({ pull = true, fell = {} }, nil) == false)
+        Check("And a pull somebody fell in does",
+            Replay.HealthOpen({ pull = true, fell = { { t = 3 } } }, nil)
+                == true)
+        -- SAYING SO WINS EITHER WAY. A switch that can only agree with the
+        -- rule in one direction is a switch that does nothing half the time.
+        Check("Saying shut beats a fall",
+            Replay.HealthOpen({ pull = true, fell = { { t = 3 } } }, false)
+                == false)
+        Check("and saying open beats a quiet pull",
+            Replay.HealthOpen({ pull = true, fell = {} }, true) == true)
+        -- AND THE PLOT RISES BY THE ROOM THE BLOCK TOOK, which is the only
+        -- number in that file that knows about the collapse.
+        Check("Shut, the plot starts at the damage lane instead",
+            Replay.PlotTop(true) < Replay.PlotTop(false))
+        -- AND THE WINDOW IS SHORTER BY THE SAME AMOUNT. A block put away
+        -- that leaves its hole in the window has tidied nothing - and the
+        -- height and the lift are worked out in two different lines, which
+        -- is where they drift apart.
+        Check("and the whole window is shorter by the plot's own lift",
+            Replay.Metrics(true, false).height
+                - Replay.Metrics(false, false).height
+                == Replay.Metrics(false, false).lift
+            and Replay.Metrics(false, false).lift > 0)
+        -- AND THE PLOT ENDS FAR ENOUGH ABOVE THE TRANSPORT. The buttons are
+        -- anchored to the BOTTOM of the window, so a plot that grows past
+        -- them draws its bars through Play instead of off the window where
+        -- somebody would notice.
+        -- AND IT STILL DOES WITH THE BLOCK SHUT, where the plot's floor and
+        -- the window's height are no longer the same measurement.
+        do
+            local shut = Replay.Metrics(false, false)
+            Check("and it still does with the health block put away",
+                shut.height - shut.bottom >= shut.foot)
+        end
+        -- THE DEBUFF LANE'S ROOM DEPENDS ON WHAT IS UNDER IT. It is the one
+        -- lane with a hard edge below - the recap's columns grow up towards
+        -- it - so where there are none, that room is free and it may use it.
+        Check("With the recap's columns under it the debuff lane keeps back",
+            Replay.DebuffCap(true, 6) < Replay.DebuffCap(true, 0))
+        Check("and with the health block shut it has the room to itself",
+            Replay.DebuffCap(false, 6) == Replay.DebuffCap(true, 0))
+        -- AND NO LANE IS EVER LESS THAN ONE ROW OR MORE THAN ITS CEILING.
+        Check("A lane is never shorter than one row",
+            Replay.RowsUsed(0, 5) == 1 and Replay.RowsUsed(nil, 5) == 1)
+        Check("and never taller than its ceiling",
+            Replay.RowsUsed(99, 5) == 5 and Replay.RowsUsed(3, 5) == 3)
+
+        -- AND A FIGHT THAT NEEDS MORE ROWS GETS A TALLER WINDOW, which is
+        -- the whole of "dynamisch": the lane is as tall as the fight, not as
+        -- tall as a number somebody typed.
+        do
+            local one = Replay.Metrics(true, false, { cd = 1, def = 1, worn = 1 })
+            local many = Replay.Metrics(true, false, { cd = 4, def = 6, worn = 1 })
+            Check("A fight with more overlapping presses gets a taller window",
+                many.height > one.height
+                    and many.height - many.bottom >= many.foot)
+            Check("and its second bar lane starts under the first",
+                Replay.LaneOut({ cd = 4, def = 6, worn = 1 })
+                    > Replay.LaneOut({ cd = 1, def = 1, worn = 1 }))
+            -- AND THE FLOOR MOVES WITH THAT LANE, not only with the one
+            -- above it. A floor worked out from a fixed row count still
+            -- gives a taller window when the FIRST lane grows, so "the
+            -- window got taller" cannot see this on its own - and the bars
+            -- past the fixed count are drawn straight through the floor.
+            local function Deep(rows)
+                local at = { cd = 1, def = rows, worn = 1 }
+                return Replay.PlotFloor(at) - Replay.LaneOut(at)
+            end
+            Check("and the plot's floor sits under the last defensive row",
+                Deep(6) > Deep(3) and Deep(3) > Deep(1))
+        end
+        do
+            local size = Replay.Metrics(true, false)
+            Check("The plot leaves the transport its room",
+                size.height - size.bottom >= size.foot)
+        end
+        -- AND THE DEBUFFS COME DOWN INTO THE ROOM. Owner, 2026-08-31:
+        -- "damage on you gehoert zu health" - so with the block away they
+        -- are the only thing left above the line, and a lane still sitting
+        -- where the health bar used to be would float half a window above
+        -- what it is read against.
+        Check("Shut, the debuff lane moves down onto the line",
+            Replay.DebuffTop(false) > Replay.DebuffTop(true))
+        -- AND IT LANDS EXACTLY WHERE THE HEALTH BAR WAS. Both numbers are
+        -- worked out from the axis and the lane's own height, so this is
+        -- the one arithmetic that says they were worked out from the SAME
+        -- thing - change the row count and it still holds.
+        Check("and lands exactly where the health bar was",
+            Replay.DebuffTop(false) - Replay.Metrics(false, false).lift
+                == Replay.PlotTop(true))
+
+        -- A DEBUFF WINDOW, AND ITS FLOOR. An aura that appears and is gone
+        -- between two events is the client rebuilding a list, not something
+        -- that happened to you - and a page full of those hides the one
+        -- that did.
+        local worn = {}
+        Check("A debuff you wore is kept with how long you wore it",
+            ns.History.PushDebuff(worn, 980, 100, 106.5) == true
+                and worn[1].to - worn[1].from == 6.5)
+        Check("And a flicker between two events is not something that "
+            .. "happened to you",
+            ns.History.PushDebuff(worn, 981, 100, 100.1) == false
+                and #worn == 1)
+        -- THE CAP DROPS THE OLDEST, which is the only place it can hurt.
+        for extra = 1, 5 do
+            ns.History.PushDebuff(worn, 990 + extra, 100, 105, 3)
+        end
+        Check("And the store keeps its cap, dropping the oldest",
+            #worn == 3 and worn[#worn].spellID == 995)
+
+        local CL = ns.CombatLog
+        if CL then
+        -- THE SAMPLER'S RING, UNWRAPPED. The only part of a ring buffer that
+        -- can be wrong is the wrap, and it stays invisible until a fight
+        -- runs past the cap - which is a quarter of an hour, so it would
+        -- never be met by accident. Four slots, six samples written: the
+        -- two oldest are gone and what comes back must still be in order.
+        local ring = {
+            { at = 105 }, { at = 106 }, { at = 103 }, { at = 104 },
+        }
+        local rows = CL.TrackRows(ring, 2, 6, 110, 4)
+        local order = {}
+        for _, one in ipairs(rows) do
+            order[#order + 1] = string.format("%d", one.ago)
+        end
+        Check("A wrapped sample ring still comes back oldest first",
+            table.concat(order, ",") == "7,6,5,4")
+        -- Timed backwards from the end of the fight, like everything else on
+        -- this window's clock.
+        Check("And timed backwards from the end of the fight",
+            rows[1] ~= nil and rows[1].ago == 7)
+        -- A ring nobody has written to is not an empty fight, it is no
+        -- answer - and an empty list says exactly that.
+        Check("An unused ring answers with nothing",
+            #CL.TrackRows({}, 0, 0, 110, 4) == 0)
+        end
         -- The scrub is the inverse of the fraction: a hand at the left
         -- edge is the oldest moment shown, at the right edge the death,
         -- and off the plot it is clamped to the edge it went past.
@@ -2144,6 +2821,580 @@ local function TestNews()
         tostring(broken))
 end
 
+---------------------------------------------------------------------------
+-- THE LAST FIGHT
+--
+-- Owner, 2026-08-29: "man koennte da auch einen erheblich besseren dmg meter
+-- draus machen, also immer last fight" - and, in the same breath, "was habe
+-- ich gemacht".
+--
+-- WHAT IS WORTH PINNING HERE is not the arithmetic - there is barely any, on
+-- purpose. It is the DISCIPLINE: this page reads numbers it is not allowed
+-- to compare, add or divide, so every rule that keeps it on the right side
+-- of that line is a rule that can be quietly broken by somebody writing an
+-- ordinary-looking sort. The checks below are those rules.
+---------------------------------------------------------------------------
+local function TestCombatLog()
+    local CL = ns.CombatLog
+    if not CL then
+        Skip("The combat log", "the module is not loaded")
+        return
+    end
+
+    ---------------------------------------------------------------------
+    -- WHAT IT OFFERS IS WHAT THE CLIENT HAS
+    ---------------------------------------------------------------------
+    local kinds = CL.Kinds()
+    local named = {}
+    for _, one in ipairs(kinds) do named[one.key] = one.value end
+    Check("Only the kinds this build actually names are offered",
+        #kinds > 0 and named.DamageDone ~= nil,
+        string.format("%d kinds", #kinds))
+    Check("...and none of them is a question another window already answers",
+        named.Deaths == nil and named.EnemyDamageTaken == nil)
+    Check("The two sessions are the fight and the evening behind it",
+        #CL.Whens() > 0)
+
+    ---------------------------------------------------------------------
+    -- READING, AND THE FOUR WAYS IT COMES TO NOTHING
+    --
+    -- Four sentences and not one, because "no meter on this client", "this
+    -- build has no such session", "the call refused" and "nothing yet" send
+    -- a reader to four different places.
+    ---------------------------------------------------------------------
+    local gone, why = CL.Read("Current", "NoSuchKindOfThing")
+    Check("A kind this build does not know is refused with a reason",
+        gone == nil and type(why) == "string" and why ~= "")
+
+    ---------------------------------------------------------------------
+    -- THE ROWS COME BACK IN THE CLIENT'S OWN ORDER
+    --
+    -- Nothing here sorts, and that is the whole reason the page can exist:
+    -- the amounts may be secret, and sorting is comparing. A check that the
+    -- order is UNTOUCHED is the only way that stays true.
+    ---------------------------------------------------------------------
+    local session = {
+        combatSources = {
+            { name = "First",  classFilename = "ROGUE", totalAmount = 900 },
+            { name = "Second", totalAmount = 500 },
+            { totalAmount = 100 },
+        },
+        maxAmount = 1500,
+    }
+    local rows = CL.Rows(session)
+    Check("Every source of a session comes back, in the order it was given",
+        #rows == 3 and rows[1].name == "First" and rows[2].name == "Second")
+    Check("...and a session with nothing readable in it is an empty list",
+        #CL.Rows(nil) == 0 and #CL.Rows({}) == 0
+        and #CL.Rows({ combatSources = 7 }) == 0)
+
+    ---------------------------------------------------------------------
+    -- ONE SHAPE, TWO STRICTNESSES
+    --
+    -- The difference is not style, it is what the two callers may do with
+    -- the answer: the live page SHOWS it, the recorder SAVES and ADDS it.
+    ---------------------------------------------------------------------
+    local loose = CL.Reduce(session, false)
+    Check("The live read keeps every source the client offered",
+        loose ~= nil and #loose.rows == 3 and loose.rows[1].name == "First")
+    Check("...carries the class along when the client named one",
+        loose.rows[1].class == "ROGUE" and loose.rows[2].class == nil)
+    Check("...and totals them, all three amounts being readable",
+        loose.total == 1500, tostring(loose.total))
+
+    -- THE ONE ROW THE TWO STRICTNESSES DISAGREE ABOUT. It has a name and no
+    -- readable amount, which is exactly the row the live page must still draw
+    -- (it can be SHOWN) and the recorder must refuse (it cannot be SAVED or
+    -- ADDED). A fixture where both agree could not tell them apart.
+    local mixed = { combatSources = {
+        { name = "Told", totalAmount = 300 },
+        { name = "Withheld" },
+    } }
+    local shown = CL.Reduce(mixed, false)
+    local saved = CL.Reduce(mixed, true)
+    Check("The live read draws a source whose amount the client withheld",
+        shown ~= nil and #shown.rows == 2 and shown.rows[2].name == "Withheld")
+    Check("...and the recorder refuses it - a bar with no length is not a fact",
+        saved ~= nil and #saved.rows == 1 and saved.rows[1].name == "Told")
+    -- AND NEITHER OF THEM GETS A TOTAL. Dropping the unreadable row does not
+    -- close the hole it left: a sum over what happens to be readable, shown
+    -- beside shares that add up to a hundred, would be a confident wrong
+    -- answer. Both say "no total" and the page prints the reason.
+    Check("...and a total with a hole in it is not printed by either of them",
+        shown.total == nil and saved.total == nil,
+        tostring(shown.total) .. " / " .. tostring(saved.total))
+
+    local capped = CL.Reduce(session, false, 2)
+    Check("A cap keeps the first rows and SAYS how many it left",
+        #capped.rows == 2 and capped.dropped == 1)
+    Check("...while the total still counts every one of them",
+        capped.total == 1500, tostring(capped.total))
+
+    -- The bars are measured against the FIRST row - read off the order the
+    -- client handed the list over in, not off a comparison, because the live
+    -- page may be holding secrets and comparing those is forbidden.
+    Check("The bars are measured against the first row",
+        CL.Peak(loose) == 900, tostring(CL.Peak(loose)))
+    Check("...and against nothing at all when there is no row",
+        CL.Peak(nil) == nil and CL.Peak({ rows = {} }) == nil)
+
+    ---------------------------------------------------------------------
+    -- WHAT SHARE OF THE WHOLE ONE ROW WAS
+    --
+    -- New since the owner's screenshot of 2026-08-29: it printed "24.46M",
+    -- which is a string only ns.ShortNumber produces, and that branch only
+    -- runs on a READABLE number. So the amounts are not secret and a
+    -- percentage is arithmetic we are allowed to do.
+    ---------------------------------------------------------------------
+    Check("A row's share of the whole is worked out",
+        CL.Share(900, 1500) == 0.6)
+    -- nil rather than 0: "0%" is a measurement and "no total" is not.
+    Check("...and is not invented when there is no total to divide by",
+        CL.Share(900, nil) == nil and CL.Share(900, 0) == nil
+        and CL.Share(nil, 1500) == nil)
+
+    ---------------------------------------------------------------------
+    -- WHAT YOU PRESSED
+    ---------------------------------------------------------------------
+    local casts = {
+        { spellID = 1, at = 100 },
+        { spellID = 2, at = 150 },
+        { spellID = 3, at = 190 },
+    }
+    local pressed = CL.Pressed(casts, 200, nil, { [2] = true })
+    Check("What you pressed comes back newest first",
+        #pressed == 3 and pressed[1].spellID == 3
+        and pressed[3].spellID == 1)
+    Check("...with how long ago each one was",
+        pressed[1].ago == 10 and pressed[3].ago == 100)
+    Check("...and a defensive is marked as one",
+        pressed[2].defensive == true and pressed[1].defensive == nil)
+
+    -- THE SPAN IS THE FIGHT'S. A press from before it started belongs to a
+    -- different fight, and putting it on this page would be the page
+    -- answering a question nobody asked.
+    Check("A press from before the fight is not part of it",
+        #CL.Pressed(casts, 200, 60) == 2)
+    -- A clock that runs backwards is a reading, not an event: nothing was
+    -- pressed in the future.
+    Check("...and neither is one from after the moment being asked about",
+        #CL.Pressed({ { spellID = 9, at = 400 } }, 200, nil) == 0)
+    Check("...with nothing at all being no list rather than no answer",
+        #CL.Pressed(nil, 200, nil) == 0)
+
+    ---------------------------------------------------------------------
+    -- WHAT YOU HAD, IN THREE ANSWERS
+    --
+    -- Ready, still cooling, and NOT KNOWN - and the third is not a polite
+    -- version of the second. An estimate says nothing at all about a spell
+    -- that has not been cast since login, and rounding that into "ready"
+    -- accuses somebody of not pressing a button that may have been down.
+    ---------------------------------------------------------------------
+    Check("A cooldown that is up says so",
+        CL.ReadyLine({ remaining = 0 }) == "ready")
+    Check("...one that is not says how long is left",
+        CL.ReadyLine({ remaining = 12 }):find("left", 1, true) ~= nil)
+    Check("...and one nobody can answer for says THAT, not 'ready'",
+        CL.ReadyLine({ remaining = nil, why = "not cast since login" })
+            == "not cast since login"
+        and CL.ReadyLine({}) == "not known"
+        and CL.ReadyLine(nil) == "")
+
+    ---------------------------------------------------------------------
+    -- THE EVENING'S OWN PULL LIST
+    --
+    -- Its own and not the death log's: that one is built out of DEATHS, and
+    -- a pull nobody died on has no row there at all. Right for a death log,
+    -- wrong here - a clean run is exactly the pull somebody wants to read.
+    ---------------------------------------------------------------------
+    local log = {}
+    CL.Note(log, { key = 1, when = "21:00" })
+    CL.Note(log, { key = 2, when = "21:05" })
+    Check("A pull is filed under its own id",
+        #log == 2 and log[2].key == 2)
+    CL.Note(log, { key = 2, when = "21:05", duration = 96 })
+    Check("...and read a second time it REPLACES its line rather than "
+        .. "arriving twice",
+        #log == 2 and log[2].duration == 96)
+    CL.Note(log, { key = 3 })
+    CL.Note(log, { key = 4 })
+    Check("...and the list does not grow without end",
+        #CL.Note(log, { key = 5 }, 3) == 3 and log[1].key == 3)
+    -- ASKED OF THE CONTENTS, NOT OF THE COUNT. The cap trims the list back
+    -- to three either way, so a length is exactly the measurement that cannot
+    -- tell "it was refused" from "it was filed and pushed the oldest out".
+    -- The red proof found this one: the check was green against code that
+    -- filed it.
+    local keyless = CL.Note(log, { when = "21:09" }, 3)
+    Check("A pull with no id of its own is not filed at all",
+        #keyless == 3 and keyless[#keyless].key ~= nil,
+        tostring(#keyless) .. " kept, last id "
+            .. tostring(keyless[#keyless].key))
+
+    -- CHOSEN BY ITS OWN ID, never by its position: the oldest drops off at
+    -- forty and every position under it moves, while the id outlives that.
+    Check("A pull is found by its id",
+        CL.Pick(log, 4) ~= nil and CL.Pick(log, 4).key == 4)
+    Check("...and one that has fallen off answers NOBODY, not its neighbour",
+        CL.Pick(log, 1) == nil and CL.Pick(log, nil) == nil)
+
+    ---------------------------------------------------------------------
+    -- WHAT A PULL IS WORTH AT A GLANCE, and what it says when it is worth
+    -- nothing. "no numbers kept" is a fact about the recording; a blank
+    -- would read as a fact about the fight.
+    ---------------------------------------------------------------------
+    Check("A pull says what you did on it",
+        CL.PullSummary({ meter = { DamageDone = {
+            rows = { { name = "Ana", amount = 500 },
+                { name = "You", amount = 1200, you = true } },
+            total = 1700 } } }):find("1.2k done", 1, true) ~= nil,
+        CL.PullSummary({ meter = { DamageDone = { rows = {
+            { name = "You", amount = 1200, you = true } }, total = 1700 } } }))
+    Check("...falls back to the whole pull when the client never named you",
+        CL.PullSummary({ meter = { DamageDone = {
+            rows = { { name = "Ana", amount = 500 } },
+            total = 1700 } } }):find("in total", 1, true) ~= nil)
+    Check("...and says outright when nothing was kept",
+        CL.PullSummary({}) == "no numbers kept"
+        and CL.PullSummary(nil) == "")
+
+    ---------------------------------------------------------------------
+    -- THE PAGE NAMES WHAT IT IS SHOWING
+    ---------------------------------------------------------------------
+    Check("With no pull chosen the page is the live one",
+        CL.PageTitle(nil) == "Right now")
+    Check("...and a chosen pull is named by its fight",
+        CL.PageTitle({ boss = "Avanoxx" }) == "Avanoxx"
+        and CL.PageTitle({ whereShort = "M+7" }) == "M+7"
+        and CL.PageTitle({}) == "Trash")
+
+    ---------------------------------------------------------------------
+    -- THE COLUMN FITS THE WINDOW. Three row heights and a fold mean the
+    -- count changes with the contents, so it is DERIVED from the numbers the
+    -- rows are drawn with rather than written down a second time.
+    ---------------------------------------------------------------------
+    local L = CL.LAYOUT
+    Check("Each of the three levels knows its own height",
+        CL.RowHeight({ kind = "run" }) == L.runH
+        and CL.RowHeight({ kind = "boss" }) == L.bossH
+        and CL.RowHeight({ kind = "pull" }) == L.pullH
+        and CL.RowHeight(nil) == L.pullH)
+    Check("The column has room for a place and a few pulls under it",
+        CL.Room() >= L.runH + L.bossH + 3 * L.pullH,
+        string.format("%d high", CL.Room()))
+
+    ---------------------------------------------------------------------
+    -- WHAT WAS PRESSED, out of whichever of the two sources applies - one
+    -- shape out of both, so the painter never learns there are two.
+    ---------------------------------------------------------------------
+    Check("A recorded pull hands over its own copy",
+        #CL.PressRows({ casts = { { spellID = 1, ago = 2 } } }) == 1)
+    Check("...and one that recorded none is an empty list, not a nil",
+        #CL.PressRows({}) == 0)
+
+    ---------------------------------------------------------------------
+    -- SIX SESSIONS READ AS ONE TABLE
+    --
+    -- Owner, 2026-08-29: "alles in einer liste". The client keeps a separate
+    -- session per kind, so this join is the whole feature - and every fixture
+    -- below is built so the two halves of a branch DISAGREE. A damage list and
+    -- a healing list that carried the same numbers could not tell a working
+    -- join from one that only ever reads the first session.
+    ---------------------------------------------------------------------
+    local meters = {
+        DamageDone = { rows = {
+            { name = "Ann", class = "WARRIOR", amount = 100 },
+            { name = "Bo", amount = 50 },
+        }, total = 150 },
+        HealingDone = { rows = {
+            { name = "Bo", amount = 700 },
+            { name = "Cy", amount = 20 },
+        }, total = 720 },
+    }
+    local kinds = {
+        { key = "DamageDone", label = "Damage", tone = "out" },
+        { key = "HealingDone", label = "Healing", tone = "heal" },
+    }
+    local joined = CL.Everyone(meters, kinds)
+    Check("Three names across two sessions are three rows, not four",
+        #joined.rows == 3, tostring(#joined.rows))
+    local ann, bo, cy = joined.rows[1], joined.rows[2], joined.rows[3]
+    Check("...in the order the damage list handed them over",
+        ann.name == "Ann" and bo.name == "Bo" and cy.name == "Cy",
+        tostring(ann.name) .. "/" .. tostring(bo.name) .. "/"
+            .. tostring(cy.name))
+    Check("...and the one on both lists carries both numbers",
+        bo.amount.DamageDone == 50 and bo.amount.HealingDone == 700,
+        tostring(bo.amount.DamageDone) .. " / "
+            .. tostring(bo.amount.HealingDone))
+    -- ABSENT, NOT ZERO. A name that never healed must come back nil so the
+    -- page can draw a dash: "0" is a measurement nobody took.
+    Check("...while a name that only appears on one list has nothing on the "
+        .. "other",
+        ann.amount.HealingDone == nil and cy.amount.DamageDone == nil)
+    Check("Each session's own total is kept apart from the others",
+        joined.total.DamageDone == 150 and joined.total.HealingDone == 720)
+    Check("...and so is the length each set of bars is measured against",
+        joined.peak.DamageDone == 100 and joined.peak.HealingDone == 700)
+
+    -- YOUR OWN ROW IS FIRST, wherever the client put it. In a raid of forty
+    -- the alternative is hunting for your own name on your own page.
+    local mine = CL.Everyone({
+        DamageDone = { rows = {
+            { name = "Ann", amount = 100 },
+            { name = "Me", amount = 1, you = true },
+        } },
+    }, kinds)
+    Check("Your own row is hoisted to the top of the table",
+        mine.rows[1] ~= nil and mine.rows[1].you == true
+            and mine.rows[1].name == "Me",
+        tostring(mine.rows[1] and mine.rows[1].name))
+
+    -- A LATER READING MAY ONLY ADD. The healing list below names the same
+    -- person with no class and no "you" flag; if the join replaced instead of
+    -- filling in, the poorest reading would win because it came last.
+    local kept = CL.Everyone({
+        DamageDone = { rows = { { name = "Ann", class = "WARRIOR",
+            amount = 100, you = true } } },
+        HealingDone = { rows = { { name = "Ann", amount = 700 } } },
+    }, kinds)
+    Check("A second session may fill a row in, never empty it out",
+        kept.rows[1].class == "WARRIOR" and kept.rows[1].you == true
+            and kept.rows[1].amount.HealingDone == 700)
+
+    -- A NAME THE CLIENT WITHHELD CANNOT BE MATCHED - using a secret as a
+    -- table key is the fault that broke 1.0.0 - so it gets a row of its own
+    -- on every list it turns up on, and it is COUNTED rather than dropped.
+    local blind = CL.Everyone({
+        DamageDone = { rows = {
+            { name = "Ann", amount = 100 },
+            { amount = 50 },
+        } },
+        HealingDone = { rows = { { amount = 70 } } },
+    }, kinds)
+    Check("A row the game would not name is never folded into a named one",
+        #blind.rows == 3 and blind.unnamed == 2,
+        string.format("%d rows, %d unnamed", #blind.rows, blind.unnamed))
+    Check("...and what the client cut off its own list is carried through",
+        CL.Everyone({ DamageDone = { rows = { { name = "Ann", amount = 1 } },
+            dropped = 28 } }, kinds).dropped == 28)
+    Check("Nothing to read is an empty table, not a nil",
+        #CL.Everyone(nil, kinds).rows == 0)
+
+    ---------------------------------------------------------------------
+    -- THE LANES, DERIVED FROM WHAT THERE IS TO SHOW
+    ---------------------------------------------------------------------
+    local cols, nameW = CL.Columns(kinds, 616)
+    Check("Two lanes and a name fill the row exactly",
+        #cols == 2 and cols[1].width * 2 + nameW == 616,
+        string.format("%d x %d + %d", #cols, cols[1].width, nameW))
+    -- The right-hand offset is what a right-anchored font string needs, so
+    -- the LAST lane sits on the edge and the first one is pushed left by all
+    -- the others. Get this backwards and every number is in the wrong column.
+    Check("...the last lane sits on the right edge, the first one behind it",
+        cols[#cols].right == 0 and cols[1].right == cols[1].width)
+    local six = CL.Columns({ {key="a"}, {key="b"}, {key="c"}, {key="d"},
+        {key="e"}, {key="f"} }, 616)
+    Check("Six lanes still leave the name its floor",
+        #six == 6 and six[1].width * 6 + 130 <= 616 + 6,
+        string.format("%d wide", six[1].width))
+    Check("...and a very wide window does not grow them without end",
+        CL.Columns(kinds, 2000)[1].width == 96)
+    local none, whole = CL.Columns({}, 616)
+    Check("No lanes at all leaves the whole row to the name",
+        #none == 0 and whole == 616)
+
+    ---------------------------------------------------------------------
+    -- WHO WENT DOWN, off the death log rather than counted again here
+    ---------------------------------------------------------------------
+    local log = {
+        { at = 1000, events = { { name = "Old hit", amount = 5 } } },
+        { at = 1090, events = { { name = "Crushing Blow", amount = 900,
+            spellID = 42 } } },
+    }
+    local fell = CL.Fell(log, 1100, 30)
+    Check("Only the falls inside the pull are on the pull",
+        #fell == 1 and fell[1].name == "Crushing Blow",
+        string.format("%d fell", #fell))
+    Check("...with the killing blow's amount and its ability",
+        fell[1].amount == 900 and fell[1].spellID == 42)
+    Check("...and a span of nothing takes the lot",
+        #CL.Fell(log, 1100, nil) == 2)
+    Check("A recorded pull hands over its own copy of them",
+        #CL.FellRows({ fell = { { at = 1, ago = 2 } } }) == 1)
+    Check("The whole fall behind a line is found by its stamp",
+        CL.FullDeath({ at = 1090 }, log) == log[2])
+    Check("...and a stamp that is no longer in the log answers nothing, "
+        .. "never the neighbour",
+        CL.FullDeath({ at = 1091 }, log) == nil)
+
+    ---------------------------------------------------------------------
+    -- THE FIGHT, END TO END. Owner, 2026-08-29: "[zeit]strahl waere auch
+    -- super." A fraction of the fight, so the painter never has to know how
+    -- long a second is in pixels.
+    ---------------------------------------------------------------------
+    local marks = CL.Marks(
+        { { spellID = 1, ago = 20 }, { spellID = 2, ago = 10 },
+          { spellID = 3, ago = 0 }, { spellID = 4, ago = 25 } },
+        { { ago = 5, name = "Crushing Blow" } }, 20)
+    Check("A press at the start of the fight sits at the start of the line",
+        #marks == 4 and marks[1].at == 0 and marks[1].spellID == 1,
+        string.format("%d marks", #marks))
+    Check("...one at the end sits at the end",
+        marks[#marks].at == 1 and marks[#marks].spellID == 3)
+    Check("...and one older than the fight is not on this fight's line",
+        marks[2].spellID == 2 and marks[3].kind == "death")
+    -- A line with no scale is a decoration that lies, so it is not drawn.
+    Check("No length means no line at all, rather than a pile at zero",
+        #CL.Marks({ { spellID = 1, ago = 3 } }, nil, nil) == 0
+            and #CL.Marks({ { spellID = 1, ago = 3 } }, nil, 0) == 0)
+    -- The press that failed to stop it is drawn BEFORE the fall it answered.
+    local tie = CL.Marks({ { spellID = 9, ago = 5 } },
+        { { ago = 5, name = "Crushing Blow" } }, 10)
+    Check("A press and a fall in the same instant read press first",
+        tie[1].kind == "cast" and tie[2].kind == "death")
+
+    ---------------------------------------------------------------------
+    -- AND WHAT THE REPORT CALLS ITSELF
+    ---------------------------------------------------------------------
+    Check("The live report says how far the fight has got",
+        CL.ReportSub(nil, 90):find("so far", 1, true) ~= nil,
+        CL.ReportSub(nil, 90))
+    Check("...and says so honestly when the client will not give a clock",
+        CL.ReportSub(nil, nil):find("so far", 1, true) == nil)
+    Check("...while a recorded pull is described by the pull",
+        CL.ReportSub({ instance = "Ara-Kara", when = "21:05" }, nil)
+            :find("Ara%-Kara") ~= nil)
+
+    ---------------------------------------------------------------------
+    -- SIX SESSIONS, ONE READER. A kind the client keeps nothing for is
+    -- ABSENT from the result - an empty session would draw as "nobody
+    -- healed", which is a claim this window never checked.
+    ---------------------------------------------------------------------
+    local pull = { meter = { DamageDone = { rows = { { name = "Ann",
+        amount = 4 } } } } }
+    local read = CL.Meters(pull)
+    Check("A recorded pull is read out of its own copy",
+        read.DamageDone ~= nil and read.DamageDone.rows[1].name == "Ann")
+    Check("...and a kind it kept nothing for is absent, not empty",
+        read.HealingDone == nil)
+
+    ---------------------------------------------------------------------
+    -- ONE ROW PER ABILITY
+    --
+    -- Owner, 2026-08-29, with six arrows drawn from the column heads down
+    -- onto the press list: "alles in einer liste". The amounts come from the
+    -- meter's second, source-scoped call; how often you PRESSED each one
+    -- comes from this addon and from nowhere else - so the fixtures below
+    -- always disagree about which half knows what.
+    ---------------------------------------------------------------------
+    Check("Your own row is the one the meter flagged, not the first one",
+        CL.MineIn({ rows = { { name = "Ann" }, { name = "Me", you = true } } })
+            .name == "Me")
+    Check("...and a list you are not on answers nothing",
+        CL.MineIn({ rows = { { name = "Ann" } } }) == nil
+            and CL.MineIn(nil) == nil)
+
+    local metered = { rows = {
+        { spellID = 1752, rank = 1, amount = { DamageDone = 700 } },
+        { spellID = 8676, rank = 2, amount = { DamageDone = 500 } },
+    } }
+    local pressed = {
+        { spellID = 8676, ago = 2 },
+        { spellID = 8676, ago = 9 },
+        { spellID = 6673, ago = 4 },
+    }
+    local merged = CL.SpellRows(metered, pressed)
+    Check("An ability you pressed that the meter never listed still has a row",
+        #merged == 3, tostring(#merged))
+    Check("...and it sits AFTER everything the meter ranked",
+        merged[1].spellID == 1752 and merged[2].spellID == 8676
+            and merged[3].spellID == 6673)
+    Check("...the one on both lists carries the amount AND the press count",
+        merged[2].amount.DamageDone == 500 and merged[2].times == 2,
+        tostring(merged[2].amount.DamageDone) .. " / "
+            .. tostring(merged[2].times))
+    -- The list arrives newest first, so the FIRST press seen is the last one
+    -- pressed. Taking the last would report the oldest as "just now".
+    Check("...and remembers the most recent press, not the oldest",
+        merged[2].last == 2, tostring(merged[2].last))
+    -- A tick, a pet or a proc: on the page, and saying so by having no count.
+    Check("An ability that did damage and was never pressed has no count",
+        merged[1].times == nil and merged[1].last == nil)
+    Check("Nothing at all is an empty list, not a nil",
+        #CL.SpellRows(nil, nil) == 0)
+
+    ---------------------------------------------------------------------
+    -- WHAT THE LINE ACTUALLY COVERS
+    --
+    -- The client's "current session" can be a quarter of an hour it has not
+    -- rolled over, while the presses reach back as far as this addon's own
+    -- store and no further. Drawn against the session, every mark piles into
+    -- the last half a percent - which is exactly what the owner's screenshot
+    -- of 2026-08-29 showed.
+    ---------------------------------------------------------------------
+    Check("A line is scaled to the oldest thing on it, not to the session",
+        CL.Span({ { ago = 6.5 } }, nil, 875) == 6.5,
+        tostring(CL.Span({ { ago = 6.5 } }, nil, 875)))
+    Check("...a fall counts as much as a press",
+        CL.Span({ { ago = 3 } }, { { ago = 40 } }, 96) == 40)
+    Check("...and it never runs past the fight it belongs to",
+        CL.Span({ { ago = 300 } }, nil, 96) == 96)
+    Check("Nothing on it and no clock is no line at all",
+        CL.Span(nil, nil, nil) == nil)
+    Check("...while a clock with nothing on it is still the fight",
+        CL.Span(nil, nil, 96) == 96)
+
+    ---------------------------------------------------------------------
+    -- ICONS ON THE LINE, OR TICKS
+    --
+    -- Owner, 2026-08-29: "oben beim zeitstrahl, fehlen die spell icons und
+    -- hover infos." An icon is sixteen pixels and a rotation is dense, so
+    -- which of the two it can be is a measurement, not a decision.
+    ---------------------------------------------------------------------
+    local three = { { at = 0 }, { at = 0.5 }, { at = 1 } }
+    local xs, icons = CL.Lay(three, 616, 16)
+    Check("Three marks on a wide line get to be icons",
+        icons == true and xs[1] == 0 and xs[3] == 600,
+        string.format("%s / %d / %d", tostring(icons), xs[1], xs[3]))
+
+    -- TWO PRESSES HALF A SECOND APART would draw on top of each other, and
+    -- two overlapping icons hide one another AND lie about how many there
+    -- were. The second is nudged clear.
+    local close = { { at = 0.5 }, { at = 0.501 } }
+    local nudged = CL.Lay(close, 616, 16)
+    Check("...and a neighbour too close is pushed clear of the one before it",
+        nudged[2] >= nudged[1] + 17,
+        string.format("%d then %d", nudged[1], nudged[2]))
+
+    -- A HUNDRED OF THEM CANNOT BE ICONS. Ticks are not nudged: they are a
+    -- position in time, and moving one moves the only thing it says.
+    local many = {}
+    for index = 1, 100 do many[index] = { at = (index - 1) / 99 } end
+    local packed, asIcons = CL.Lay(many, 616, 16)
+    Check("A hundred marks on the same line are ticks, not icons",
+        asIcons == false, tostring(asIcons))
+    Check("...and a tick is left exactly where its moment is",
+        packed[1] == 0 and packed[100] == 613,
+        string.format("%d / %d", packed[1], packed[100]))
+    -- AND THE OTHER HALF OF THE SAME RULE. Two marks in the same instant on
+    -- a line too narrow for icons must stay ON that instant: nudging a tick
+    -- moves the only thing a tick says.
+    local twin = CL.Lay({ { at = 0.5 }, { at = 0.5 } }, 20, 16)
+    Check("Two ticks in the same instant are not pushed apart",
+        twin[1] == twin[2], string.format("%d / %d", twin[1], twin[2]))
+    Check("Nothing to lay out is not a line of icons",
+        select(2, CL.Lay({}, 616, 16)) == false)
+
+    ---------------------------------------------------------------------
+    -- THE SECOND CALL NEVER THROWS AND NEVER GUESSES
+    ---------------------------------------------------------------------
+    Check("A row with no id of its own is not asked about",
+        CL.SourceSpells("Current", "DamageDone", {}) == nil)
+    Check("...and neither is a kind this build does not keep",
+        CL.SourceSpells("Current", "NoSuchKind", { guid = "x" }) == nil)
+end
+
 local function TestRaidDeaths()
     local R = ns.RaidDeaths
     if not R then
@@ -2181,6 +3432,94 @@ local function TestRaidDeaths()
             type(R.Military()) == "boolean")
     end
 
+    -----------------------------------------------------------------------
+    -- A LATER CAPTURE OF THE SAME PULL MUST NOT UNLEARN ANYTHING.
+    --
+    -- The same pull is read again every two seconds and once more when
+    -- combat drops, and the client answers FEWER questions each time. The
+    -- last read replaces the fight whole, so this is what put "Trash pull"
+    -- under a boss the window had already been told about.
+    -----------------------------------------------------------------------
+    do
+        local log = {}
+        R.Remember(log, { key = 3, boss = "General Vezax", kind = "Raid",
+            instance = "Ulduar", journal = 1136, whereShort = "General Vezax",
+            where = "Raid - Ulduar", stamp = 1000, entries = {} }, 5)
+        -- The same pull again, after the encounter ended and took its name.
+        R.Remember(log, { key = 3, entries = {}, duration = 47 }, 5)
+        Check("A second read of one pull keeps the boss the first one had",
+            #log == 1 and log[1].boss == "General Vezax",
+            tostring(log[1] and log[1].boss))
+        Check("...and the difficulty, the place and its picture with it",
+            log[1].kind == "Raid" and log[1].instance == "Ulduar"
+                and log[1].journal == 1136 and log[1].stamp == 1000)
+        Check("...while what the second read DID answer is the one kept",
+            log[1].duration == 47)
+        -- And a DIFFERENT pull inherits nothing: that would file the next
+        -- trash pull under the boss that just died.
+        R.Remember(log, { key = 4, entries = {} }, 5)
+        Check("A different pull inherits nothing from the one before it",
+            #log == 2 and log[2].boss == nil and log[2].instance == nil)
+    end
+
+    -----------------------------------------------------------------------
+    -- WHICH PAGE OF THE GUIDE A BOSS IS ON
+    --
+    -- Owner, 2026-08-28: "denk dran, bei bossen, dann richtig linken". Two
+    -- numbers for one boss - the fight's own id and the guide's - and only
+    -- the guide's walk maps between them.
+    -----------------------------------------------------------------------
+    if EJ_GetEncounterInfoByIndex then
+        local page = R.BossPage(1136, 754, "General Vezax")
+        Check("A boss is found by the id the fight itself was called by",
+            page ~= nil and page.journal == 751,
+            tostring(page and page.journal))
+        -- BY ID FIRST. The name is whatever language the client runs in, so
+        -- a lookup that only had names would work on one machine in five.
+        local wrongName = R.BossPage(1136, 755, "Nicht Yogg-Saron")
+        Check("...and the id wins over a name the client spells otherwise",
+            wrongName ~= nil and wrongName.journal == 752,
+            tostring(wrongName and wrongName.journal))
+        -- The name is still asked, for a pull recorded before the id was
+        -- kept - it has nothing else to be found by.
+        local byName = R.BossPage(1136, nil, "Yogg-Saron")
+        Check("...while a pull from before the id was kept goes by name",
+            byName ~= nil and byName.journal == 752)
+        Check("A boss the guide does not list is not invented",
+            R.BossPage(1136, 999, "Nobody") == nil)
+        Check("...nor is one in a place with no page at all",
+            R.BossPage(4242, 754, "General Vezax") == nil
+                and R.BossPage(nil, 754, "x") == nil)
+
+        -- ASKED ONCE PER PLACE. This runs for every row of every repaint,
+        -- and the column repaints on every click - a walk per row would be
+        -- the whole guide read on every frame the mouse moves.
+        local before = __EJ_WALKS or 0
+        for _ = 1, 20 do R.BossPage(1136, 754, "General Vezax") end
+        Check("...and the guide is walked once per place, not once per row",
+            (__EJ_WALKS or 0) == before,
+            string.format("%d more walks", (__EJ_WALKS or 0) - before))
+
+        -- AND THE PORTRAIT BEHIND IT. Same shape of question, same cost if
+        -- it goes wrong: this is asked for every fight header of every
+        -- repaint, in both windows.
+        if _G.EJ_GetCreatureInfo then
+            local face = ns.Death.GuideFace(1136, 754, "General Vezax")
+            Check("A boss the guide has a page for wears its own portrait",
+                type(face) == "table" and face.displayID ~= nil,
+                tostring(face and face.displayID))
+            local asked = __EJ_FACES or 0
+            for _ = 1, 20 do ns.Death.GuideFace(1136, 754, "General Vezax") end
+            Check("...asked once per boss, not once per row",
+                (__EJ_FACES or 0) == asked,
+                string.format("%d more", (__EJ_FACES or 0) - asked))
+            Check("...and a boss with no page has no portrait either",
+                ns.Death.GuideFace(1136, 999, "Nobody") == nil)
+        end
+    else
+        Skip("The boss's page in the guide", "the client does not answer it")
+    end
+
     Check("A pull with no boss was trash",
         R.PullLabel({ }) == "Trash pull")
     Check("...and one with a boss is named after it",
@@ -2192,81 +3531,134 @@ local function TestRaidDeaths()
     end)())
 
     do
-        -- Oldest first, the way the log is kept: two pulls in Ruby Life
-        -- Pools, then a raid, then BACK to the dungeon. The place must
-        -- appear once with all three under it - owner, 2026-08-25: "nicht
-        -- 3 mal rubi stehen, sondern nur einmal".
+        -- Oldest first, the way the log is kept: trash in Ruby Life Pools,
+        -- its boss, a raid in between, and then BACK to the dungeon. The
+        -- place must appear once (owner, 2026-08-25: "nicht 3 mal rubi
+        -- stehen") while the FIGHTS inside it stay in the order they
+        -- happened (owner, 2026-08-29: "so kann man auch schoen sehen, ah,
+        -- das war trash zwischen den bossen").
         local log = {
-            { instance = "Ruby Life Pools", at = 10 },
-            { instance = "Ruby Life Pools", at = 20, boss = "Kokia Blazehoof" },
-            { instance = "Ulduar",          at = 30 },
-            { instance = "Ruby Life Pools", at = 40 },
+            { instance = "Ruby Life Pools", kind = "M+11",
+                entries = { {}, {} } },
+            { instance = "Ruby Life Pools", boss = "Kokia Blazehoof",
+                bossID = 2580, entries = { {} } },
+            { instance = "Ulduar", kind = "Raid", entries = { {} } },
+            { instance = "Ruby Life Pools", kind = "M+11",
+                entries = { {}, {}, {} } },
         }
         local items = R.SideItems(log, nil)
 
-        Check("A place is one row however often it was walked into",
-            (function()
-                local rows, seen = 0, {}
-                for _, item in ipairs(items) do
-                    if item.kind == "run" then
-                        rows = rows + 1
-                        if seen[item.instance or ""] then return false end
-                        seen[item.instance or ""] = true
-                    end
-                end
-                return rows == 2
-            end)())
-        Check("...the one last died in first, carrying all of its pulls",
-            items[1] ~= nil and items[1].kind == "run"
-                and items[1].instance == "Ruby Life Pools"
-                and items[1].pulls == 3)
-        Check("...and its pulls newest first, numbered from the oldest",
-            items[2] ~= nil and items[2].index == 4 and items[2].number == 3
-                and items[3] ~= nil and items[3].index == 2
-                and items[3].number == 2
-                and items[4] ~= nil and items[4].index == 1
-                and items[4].number == 1)
-        Check("...each saying what it was",
-            items[3] ~= nil and items[3].label == "Kokia Blazehoof"
-                and items[3].boss == true
-                and items[4] ~= nil and items[4].label == "Trash pull"
-                and items[4].boss == false)
-        Check("...and the other place follows with its own",
-            items[5] ~= nil and items[5].kind == "run"
-                and items[5].instance == "Ulduar" and items[5].pulls == 1
-                and items[6] ~= nil and items[6].kind == "pull"
-                and items[6].number == 1)
+        local places, blocks, pulls = {}, {}, {}
+        for _, item in ipairs(items) do
+            if item.kind == "run" then places[#places + 1] = item end
+            if item.kind == "boss" then blocks[#blocks + 1] = item end
+            if item.kind == "pull" then pulls[#pulls + 1] = item end
+        end
 
-        -- SHUT, and only that one: a collapse is about a place, and a
-        -- column that closes them all together is a column with one
-        -- setting.
-        local shut = R.SideItems(log, { [items[1].id] = true })
-        Check("A closed place keeps its row and drops its pulls", (function()
-            local pulls = 0
-            for _, item in ipairs(shut) do
-                if item.kind == "pull" then pulls = pulls + 1 end
-            end
-            return #shut == #items - 3 and pulls == 1
-        end)())
-        Check("...and says so, still counting what it holds", (function()
-            for _, item in ipairs(shut) do
-                if item.kind == "run" and item.id == items[1].id then
-                    return item.open == false and item.pulls == 3
-                end
-            end
-            return false
-        end)())
+        Check("A place is one row however often it was walked into",
+            #places == 2 and places[1].instance == "Ruby Life Pools"
+                and places[2].instance == "Ulduar",
+            string.format("%d places", #places))
+        Check("...the one last died in first, counting all of its pulls",
+            places[1].leaves == 3 and places[1].dead == 6,
+            string.format("%d pulls, %d dead", places[1].leaves,
+                places[1].dead))
+        Check("...and wearing the difficulty, never the boss's name",
+            places[1].tag == "M+11" and places[2].tag == "Raid",
+            tostring(places[1].tag) .. " / " .. tostring(places[2].tag))
+
+        -- FOUR BLOCKS, and the two runs of trash in the dungeon are two of
+        -- them: gathering them would lose which side of the boss they were.
+        Check("Each fight is a block, and coming back makes a new one",
+            #blocks == 4 and blocks[1].label == "Trash"
+                and blocks[2].label == "Kokia Blazehoof"
+                and blocks[3].label == "Trash"
+                and blocks[4].label == "Trash",
+            string.format("%d blocks", #blocks))
+        Check("...the boss block knowing it is one, and trash knowing it is not",
+            blocks[2].boss == true and blocks[2].bossID == 2580
+                and blocks[1].boss == false)
+        Check("...each counting its own pulls and its own dead",
+            blocks[1].leaves == 1 and blocks[1].dead == 3
+                and blocks[2].leaves == 1 and blocks[2].dead == 1
+                and blocks[3].leaves == 1 and blocks[3].dead == 2
+                and blocks[4].leaves == 1 and blocks[4].dead == 1,
+            string.format("%d/%d %d/%d %d/%d %d/%d",
+                blocks[1].leaves, blocks[1].dead, blocks[2].leaves,
+                blocks[2].dead, blocks[3].leaves, blocks[3].dead,
+                blocks[4].leaves, blocks[4].dead))
+
+        Check("A pull says which fight it belonged to and what it was",
+            pulls[1] ~= nil and pulls[1].index == 4
+                and pulls[1].label == "Trash pull"
+                and pulls[2] ~= nil and pulls[2].index == 2
+                and pulls[2].label == "Kokia Blazehoof"
+                and pulls[2].bossPull == true)
+        Check("...and carries the fight it was, for the desk and the row",
+            pulls[2].fight == log[2] and pulls[2].dead == 1)
+
+        -- SHUT, and only that one.
+        local shut = R.SideItems(log, { [places[1].id] = true })
+        -- Four left: this place's own row, and the OTHER place with its
+        -- one fight and its one pull still standing under it.
+        Check("A closed place keeps its row and drops everything under it",
+            #shut == 4 and shut[1].open == false and shut[1].leaves == 3,
+            string.format("%d rows", #shut))
+        local shutBlock = R.SideItems(log, { [blocks[2].id] = true })
+        local stillPulls = 0
+        for _, item in ipairs(shutBlock) do
+            if item.kind == "pull" then stillPulls = stillPulls + 1 end
+        end
+        Check("...and a closed fight leaves its neighbours standing",
+            stillPulls == 3, string.format("%d pulls left", stillPulls))
+
         Check("A place keeps its picture from whichever pull had one",
             (function()
                 local mixed = {
-                    { instance = "Ulduar", at = 1 },
-                    { instance = "Ulduar", at = 2, journal = 1136 },
+                    { instance = "Ulduar", entries = {} },
+                    { instance = "Ulduar", journal = 1136, entries = {} },
                 }
                 local rows = R.SideItems(mixed, nil)
                 return rows[1] ~= nil and rows[1].journal == 1136
             end)())
         Check("An empty log arranges into nothing",
             #R.SideItems({}, nil) == 0 and #R.SideItems(nil, nil) == 0)
+
+        -- WHAT TOOK MOST OF THEM, on its own line now that the count has a
+        -- column of its own - a sentence with both would say "2 dead" twice.
+        Check("A pull names the mechanic that took more than one of them",
+            R.PullMechanic({ entries = { {}, {} },
+                culprits = { { spell = "Grim Ward", count = 2 } } })
+                == "Grim Ward")
+        -- AND HANDS OVER THE ID, but only when the word IS the ability: a
+        -- mob's name and a clock have no icon and no tooltip behind them,
+        -- and an id offered for either would promise a page that is not
+        -- there. Owner, 2026-08-29: "die kill spells verlinken".
+        do
+            local named, id = R.PullMechanic({ entries = { {}, {} },
+                culprits = { { spell = "Grim Ward", spellID = 1259255,
+                    count = 2 } } })
+            Check("...with the ability's own id, which is what draws its icon",
+                named == "Grim Ward" and id == 1259255, tostring(id))
+            -- THE MOB CARRIES AN ID TOO, and that is the point: a culprit
+            -- with no id at all could not leak one, so a check written
+            -- against that fixture would have been true of a function that
+            -- hands the id over for everything.
+            local mob, mobID = R.PullMechanic({ entries = { {}, {} },
+                culprits = { { who = "Tormented Shade", spellID = 1259255,
+                    count = 2 } } })
+            Check("...and none for a MOB, which has no icon and no tooltip",
+                mob == "Tormented Shade" and mobID == nil, tostring(mobID))
+            local clock, clockID = R.PullMechanic({ entries = { {} },
+                duration = 47 })
+            Check("...nor for the clock it falls back to",
+                clock == "0:47" and clockID == nil, tostring(clockID))
+        end
+        Check("...and falls back to how long it lasted when there is no one thing",
+            R.PullMechanic({ entries = { {} }, duration = 47 }) == "0:47",
+            R.PullMechanic({ entries = { {} }, duration = 47 }))
+        Check("...and says nothing about a pull it knows nothing about",
+            R.PullMechanic({}) == "" and R.PullMechanic(nil) == "")
     end
 
     -----------------------------------------------------------------------
@@ -2285,8 +3677,10 @@ local function TestRaidDeaths()
         local fight = {
             key = 7, when = "18:22:21", where = "Raid - Ulduar",
             whereShort = "General Vezax", instance = "Ulduar",
-            journal = 1136, boss = "General Vezax", duration = 47,
-            entries = { { name = "Geary" } },
+            journal = 1136, boss = "General Vezax", kind = "Raid",
+            duration = 47,
+            entries = { { name = "Geary", blow = { who = "General Vezax",
+                spell = "Mark of the Faceless", spellID = 1259255 } } },
         }
         local light, kept = R.Light(fight), R.Persist(fight)
         local missing = {}
@@ -2306,8 +3700,212 @@ local function TestRaidDeaths()
         Check("...the boss among them",
             (light or {}).boss == "General Vezax"
                 and (kept or {}).boss == "General Vezax")
+        -- AND THE ABILITY'S ID ON EVERY DEATH IN THE THIN COPY. It is one
+        -- number per fall and it is what lets a pull the log no longer
+        -- holds still draw its icon.
+        Check("...and the tally's own deaths keep the ability's id",
+            (light or {}).entries ~= nil
+                and light.entries[1].spellID == 1259255,
+            tostring((light or {}).entries
+                and light.entries[1] and light.entries[1].spellID))
+        -- AND THE DIFFICULTY. It is the field the place header prints, so a
+        -- copy that drops it gives every header its name back after a
+        -- reload and no "M+11" beside it.
+        Check("...and the difficulty the place header prints",
+            (light or {}).kind == "Raid" and (kept or {}).kind == "Raid")
     end
 
+
+    -----------------------------------------------------------------------
+    -- THE COLUMN READS THE EVENING, NOT THE LOG
+    --
+    -- Owner, 2026-08-28, given the two ways to make the column longer -
+    -- keep twenty pulls in full, or draw the sixty thin ones the tally
+    -- already has: the tally. Measured before it was asked: twenty full
+    -- pulls came to 862 KB of saved variables and sixty thin ones to 304.
+    --
+    -- So a pull is read out of whichever list still holds it, and the two
+    -- are merged into one. What is checked here is the merge and the
+    -- choosing - the two places where "which pull is this" can quietly
+    -- become a different pull.
+    -----------------------------------------------------------------------
+    do
+        local light = {
+            key = 4, when = "21:05", whereShort = "M+7",
+            instance = "Ara-Kara", kind = "M+7", boss = "Avanoxx",
+            bossID = 2926, journal = 1273, stamp = 500, duration = 62,
+            entries = {
+                { name = "Ana-Realm", short = "Ana", class = "PRIEST",
+                    who = "Avanoxx", spell = "Voracious Bite",
+                    spellID = 4242, avoidable = true },
+                { name = "Bo-Realm", short = "Bo", class = "MAGE",
+                    who = "Avanoxx", spell = "Voracious Bite",
+                    spellID = 4242, avoidable = false },
+                -- A death the recap never answered: no mob, no ability.
+                { name = "Cy-Realm", short = "Cy", class = "DRUID" },
+            },
+        }
+        local thick = R.Thick(light)
+        Check("The evening's copy comes back in the shape the window reads",
+            thick ~= nil and thick.thin == true and #thick.entries == 3
+                and thick.boss == "Avanoxx" and thick.duration == 62)
+        Check("...with the killing blow folded back up into a blow",
+            thick.entries[1].blow ~= nil
+                and thick.entries[1].blow.who == "Avanoxx"
+                and thick.entries[1].blow.spell == "Voracious Bite")
+        -- THE THIRD STATE OF `avoidable` HAS TO SURVIVE THE FOLD. A read
+        -- false must not arrive as nil: "the game said no" and "the game
+        -- said nothing" are two answers, and this addon never rounds one of
+        -- them into the other.
+        Check("...and a read FALSE stays false rather than becoming unsaid",
+            thick.entries[1].blow.avoidable == true
+                and thick.entries[2].blow.avoidable == false)
+        Check("...while a death the recap never answered gets no blow at all",
+            thick.entries[3].blow == nil)
+        Check("...and the count of what did the killing is derived, not carried",
+            thick.culprits ~= nil and #thick.culprits == 1
+                and thick.culprits[1].count == 2
+                and thick.culprits[1].spell == "Voracious Bite",
+            string.format("%d culprits", #(thick.culprits or {})))
+        -- AND THE ABILITY'S ID COMES WITH IT, all the way from the tally's
+        -- own entry to the culprit the column draws an icon from. Without
+        -- it the newest five pulls would carry an icon and every row above
+        -- them a bare word, for the same ability.
+        Check("...and it carries the ability's id, so the icon reaches the row",
+            thick.entries[1].blow.spellID == 4242
+                and thick.culprits[1].spellID == 4242,
+            tostring(thick.culprits[1].spellID))
+        Check("...answered once and remembered on the thin copy",
+            R.Thick(light) == thick)
+        -- AND THE MEMO NEVER REACHES THE DISK. Light copies field by name,
+        -- so this holds by construction - which is exactly the kind of thing
+        -- that stops holding the day somebody writes a loop instead.
+        Check("...but never written down: the evening's copy does not carry it",
+            R.Light(light) ~= nil and R.Light(light).thick == nil)
+        Check("A thin copy with nothing in it is not a pull",
+            R.Thick(nil) == nil and R.Thick({}) == nil)
+    end
+
+    do
+        -- The same pull in both lists, one only in the log and one only in
+        -- the tally - which is every way the two can differ.
+        local full = {
+            { key = 1, stamp = 100, entries = { {} }, culprits = {} },
+            { key = 2, stamp = 300, entries = { {} }, culprits = {} },
+        }
+        local session = { fights = {
+            { key = 3, stamp = 200, entries = { { name = "Ana" } } },
+            { key = 2, stamp = 300, entries = { { name = "Bo" } } },
+        } }
+        local pulls = R.Pulls(full, session)
+        Check("The log and the evening are read as ONE list of pulls",
+            #pulls == 3, string.format("%d pulls", #pulls))
+        Check("...in the order they happened, whichever list they came from",
+            pulls[1] ~= nil and pulls[1].key == 1
+                and pulls[2] ~= nil and pulls[2].key == 3
+                and pulls[3] ~= nil and pulls[3].key == 2,
+            string.format("%s %s %s", tostring((pulls[1] or {}).key),
+                tostring((pulls[2] or {}).key),
+                tostring((pulls[3] or {}).key)))
+        -- THE ONE IN BOTH COMES OUT WITH THE HITS IN IT. A merge that took
+        -- the thin copy would throw away the recording of the newest pulls,
+        -- which are the only pulls that have one.
+        Check("...a pull in both being the FULL one, not its thin twin",
+            pulls[3] == full[2] and pulls[3].thin == nil)
+        Check("...and a thin copy only ever built when it is the one needed",
+            session.fights[2].thick == nil
+                and type(session.fights[1].thick) == "table")
+
+        -- A PULL FROM BEFORE THE MOMENT WAS RECORDED still has a place in
+        -- the order. Every row needs a NUMBER to sort on: a comparator that
+        -- switches between the stamp and the list a pull came from is not
+        -- transitive, and table.sort throws on those rather than guessing.
+        --
+        -- Key 10 is the one that matters: it has no stamp and it comes
+        -- AFTER one that has, so it takes the last moment seen in its own
+        -- list. Given nought instead it would leap to the front of the
+        -- column, which is a pull from an hour ago sitting above the pull
+        -- that is running.
+        local old = R.Pulls({
+            { key = 8, entries = { {} } },
+            { key = 9, stamp = 50, entries = { {} } },
+            { key = 10, entries = { {} } },
+        }, { fights = {
+            { key = 7, stamp = 20, entries = { { name = "x" } } },
+        } })
+        Check("A pull saved before the clock was kept still takes its place",
+            #old == 4 and old[1].key == 8 and old[2].key == 7
+                and old[3].key == 9 and old[4].key == 10,
+            string.format("%d pulls: %s %s %s %s", #old,
+                tostring((old[1] or {}).key), tostring((old[2] or {}).key),
+                tostring((old[3] or {}).key), tostring((old[4] or {}).key)))
+        Check("Two empty lists are no pulls at all",
+            #R.Pulls(nil, nil) == 0 and #R.Pulls({}, { fights = {} }) == 0)
+    end
+
+    do
+        -- CHOOSING BY THE PULL'S OWN ID. A position is only a name for as
+        -- long as nothing joins or leaves the list, and the evening drops
+        -- its oldest at sixty - so a window left open on the third wipe of
+        -- the night was quietly showing the fourth an hour later.
+        local pulls = { { key = 11 }, { key = 12 }, { key = 13 } }
+        Check("A pull is chosen by its own id, not by where it sits",
+            select(2, R.Pick(pulls, 12)) == 2)
+        Check("...so the oldest dropping off does not move the choice",
+            select(2, R.Pick({ pulls[2], pulls[3] }, 12)) == 1)
+        Check("...nothing chosen means the newest",
+            select(2, R.Pick(pulls, nil)) == 3)
+        Check("...and an id nothing answers to falls back to the newest",
+            select(2, R.Pick(pulls, 99)) == 3)
+        Check("...with no pulls at all, nothing is chosen",
+            R.Pick({}, 12) == nil and R.Pick(nil, nil) == nil)
+    end
+
+    do
+        -- WHAT THE PAGE IS TOLD ABOUT THE PULL IT IS DRAWING.
+        --
+        -- Asked of the info table rather than of a row, and on purpose: the
+        -- `when` column would print "--:--" for a thin pull whatever this
+        -- field said, because Clock answers a nil that way by itself. A row
+        -- would therefore have been green against a page that claimed a
+        -- per-death clock it does not have - a check that reads a number
+        -- without measuring the thing it is about.
+        local keptLog, keptSession = R.log, R.session
+        local keptShowing, keptOverview = R.showing, R.overview
+        R.showing, R.overview = nil, false
+        R.log = {}
+        R.session = { fights = { {
+            key = 41, when = "21:05", whereShort = "M+7", stamp = 9,
+            duration = 62,
+            entries = { { name = "Ana-Realm", short = "Ana",
+                who = "Avanoxx", spell = "Voracious Bite" } },
+        } } }
+
+        local entries, info = R.Best()
+        Check("A pull only the tally still has is what the page shows",
+            entries ~= nil and #entries == 1 and info ~= nil
+                and info.thin == true,
+            string.format("%d dead, thin=%s", #(entries or {}),
+                tostring((info or {}).thin)))
+        Check("...and the page is told the per-death clock is not in it",
+            info ~= nil and info.timed == false,
+            tostring((info or {}).timed))
+        Check("...while what the tally DID keep is still answered",
+            info ~= nil and info.duration == 62 and info.when == "21:05")
+
+        -- AND A FULL PULL IS NOT TARRED WITH IT. Same id in both lists, so
+        -- this is the merge preferring the copy with the hits in it as well.
+        R.log = { { key = 41, when = "21:05", duration = 62,
+            entries = { { name = "Ana-Realm", short = "Ana", at = 12 } } } }
+        local _, whole = R.Best()
+        Check("...and a pull the log still holds keeps its clock",
+            whole ~= nil and whole.timed == true and whole.thin == false,
+            string.format("timed=%s thin=%s", tostring((whole or {}).timed),
+                tostring((whole or {}).thin)))
+
+        R.log, R.session = keptLog, keptSession
+        R.showing, R.overview = keptShowing, keptOverview
+    end
 
     -- CLEARING MUST STICK. The meter keeps holding the last pull after a
     -- clear, and the next capture used to put it straight back into both
@@ -2322,15 +3920,33 @@ local function TestRaidDeaths()
         Check("A capture keeps the meter's fight", R.Capture() ~= nil
             and #R.log == 1 and #R.session.fights == 1)
 
+        -- ONE BUTTON, BOTH LISTS, from either page. The column draws the
+        -- evening and the newest five of it carry their hits, so emptying
+        -- one of the two would leave the other standing in the column the
+        -- button had just claimed to clear.
         R.overview = true
         R:Clear()
-        Check("Clearing tonight empties tonight", #R.session.fights == 0)
-        Check("...and the capture that follows cannot refill it",
-            R.Capture() == nil and #R.session.fights == 0)
+        Check("Clearing from the evening's page empties both lists",
+            #R.session.fights == 0 and #R.log == 0,
+            string.format("%d in the tally, %d in the log",
+                #R.session.fights, #R.log))
+        Check("...and the capture that follows cannot refill either",
+            R.Capture() == nil and #R.session.fights == 0 and #R.log == 0)
 
+        -- AND FROM THE PULL'S PAGE, which is the same button - but only
+        -- after something has been put back. Pressed twice on an empty
+        -- pair, the second press asks whether nothing is still nothing.
+        R.dismissed = nil
+        Check("A fight comes back once the dismissal is lifted",
+            R.Capture() ~= nil and #R.log == 1 and #R.session.fights == 1,
+            string.format("%d in the log, %d in the tally", #R.log,
+                #R.session.fights))
         R.overview = false
         R:Clear()
-        Check("Clearing the pulls empties the pulls", #R.log == 0)
+        Check("Clearing from the pull's page empties both as well",
+            #R.log == 0 and #R.session.fights == 0,
+            string.format("%d in the log, %d in the tally", #R.log,
+                #R.session.fights))
         Check("...and they stay empty past a capture",
             R.Capture() == nil and #R.log == 0)
 
@@ -2940,18 +4556,56 @@ local function TestRaidDeaths()
     -- went wrong the first time the evening's row was added to the top of
     -- that column.
     ---------------------------------------------------------------------
+    -- There is no row COUNT to check any more: how many are on screen
+    -- depends on how many places the evening had and which of them are
+    -- folded away. So the two questions the owner's own example asked are
+    -- the ones asked here - would eleven pulls of one dungeon fit, and does
+    -- a full log fit even when every pull happened somewhere else.
     local L = R.LAYOUT
-    local room = L.height - (ns.UI.HEADER_H + L.top) - L.bottom
-    local needed = L.title + (L.sideRows + L.extra) * (L.sideRowH + L.sideGap)
-    Check("Every row of the pull column fits inside the window",
-        needed <= room,
-        string.format("%d needed, %d there", needed, room))
-    -- And it is not wasting half a column either: a window with room for
-    -- four more rows than it draws is a list that was never re-counted after
-    -- the window grew.
-    Check("...and does not leave a row's worth of empty column",
-        room - needed < (L.sideRowH + L.sideGap),
-        string.format("%d spare", room - needed))
+    local room = R.SideRoom()
+
+    -- THE ONE ARRANGEMENT THAT HAS TO FIT WITHOUT SCROLLING is the owner's
+    -- own example: "dann steht da pulls 11 oder so" - one place, one fight,
+    -- eleven pulls under it. THE FIGHT'S ROW COUNTS. It was added between
+    -- the place and the pulls and this sum did not know about it, so it went
+    -- on reporting eleven while the eleventh was off the bottom edge.
+    local eleven = (L.runH + L.sideGap) + (L.bossH + L.sideGap)
+        + 11 * (L.pullH + L.sideGap) - L.sideGap
+    Check("Eleven pulls of one fight fit, which is the example asked for",
+        eleven <= room, string.format("%d needed, %d there", eleven, room))
+
+    -- And it is not a screenful of empty column either.
+    Check("...without a whole place's worth of empty column under it",
+        room - eleven < (L.runH + L.bossH + L.pullH + L.sideGap * 3),
+        string.format("%d spare", room - eleven))
+
+    -- BEYOND THAT IT SCROLLS, and that is not a fault - five fights in five
+    -- different places is taller than any window worth having. What must be
+    -- true is that the scroll can REACH the last of them, which is what
+    -- ListWindow's own checks pin.
+    local worst = R.FIGHTS_KEPT
+        * (L.runH + L.sideGap + L.bossH + L.sideGap + L.pullH + L.sideGap)
+    local _, _, far = ns.Death.ListWindow(
+        (function()
+            local rows = {}
+            for _ = 1, R.FIGHTS_KEPT do
+                rows[#rows + 1] = { kind = "run" }
+                rows[#rows + 1] = { kind = "boss" }
+                rows[#rows + 1] = { kind = "pull" }
+            end
+            return rows
+        end)(), 0, room, R.SideHeight, L.sideGap)
+    Check("A log too tall for the column can be scrolled to its end",
+        worst <= room or far > 0,
+        string.format("%d needed, %d there, furthest %d", worst, room, far))
+
+    -- The three heights the fit arithmetic is handed. A row whose height
+    -- came out as nil would make every sum above a sum over nothing.
+    Check("Each of the three levels knows its own height",
+        R.SideHeight({ kind = "run" }) == L.runH
+            and R.SideHeight({ kind = "boss" }) == L.bossH
+            and R.SideHeight({ kind = "pull" }) == L.pullH
+            and R.SideHeight(nil) == L.pullH)
 
     ---------------------------------------------------------------------
     -- THE WHOLE EVENING, which no single pull can answer
@@ -3034,6 +4688,117 @@ local function TestRaidDeaths()
         and told[2]:find("Grim Ward", 1, true) ~= nil)
     Check("...with nothing to say when nothing was kept",
         R.SessionShareLines({ fights = {} }) == nil)
+
+    ---------------------------------------------------------------------
+    -- THE EVENING, BROKEN AT THE BOSSES
+    --
+    -- Owner, 2026-08-29: the page wants the boss layer the column already
+    -- has. The one thing worth pinning down here is that the two levels are
+    -- DIFFERENT on purpose - the column splits the trash before a boss from
+    -- the trash after it, and this page gathers them, because one answers
+    -- WHERE IN THE EVENING and the other WHAT KEEPS HAPPENING.
+    ---------------------------------------------------------------------
+    do
+        local function Night(key, when, boss, dead)
+            local fight = { key = key, when = when, instance = "Ara-Kara",
+                whereShort = boss or "M+7", kind = "M+7", boss = boss,
+                bossID = boss and 2926 or nil,
+                journal = boss and 1273 or nil, entries = {} }
+            for _, one in ipairs(dead) do
+                fight.entries[#fight.entries + 1] = {
+                    name = one[1] .. "-Realm", short = one[1],
+                    class = "PRIEST", who = one[2], spell = one[3],
+                    avoidable = one[4],
+                }
+            end
+            return fight
+        end
+
+        -- Trash, a boss twice, and then trash again: the shape of a dungeon
+        -- run, and the one shape where the two rules disagree.
+        local night = { day = "2026-08-29", fights = {
+            Night(1, "21:00", nil, {
+                { "Ana", "Skirmisher", "Grim Ward", true },
+                { "Bo", "Skirmisher", "Grim Ward", true } }),
+            Night(2, "21:05", "Avanoxx", {
+                { "Ana", "Avanoxx", "Voracious Bite", true },
+                { "Bo", "Avanoxx", "Voracious Bite", false },
+                { "Cy", "Avanoxx", "Web Blast", nil } }),
+            Night(3, "21:12", "Avanoxx", {
+                { "Ana", "Avanoxx", "Voracious Bite", true },
+                { "Bo", "Avanoxx", "Voracious Bite", true },
+                { "Cy", "Avanoxx", "Voracious Bite", false },
+                { "Di", "Avanoxx", "Web Blast", nil } }),
+            Night(4, "21:20", nil, {
+                { "Cy", "Skirmisher", "Grim Ward", false } }),
+        } }
+
+        local blocks = R.Bosses(night)
+        Check("The evening is broken at the fights, in the order it met them",
+            #blocks == 2 and blocks[1].label == "Trash"
+                and blocks[2].label == "Avanoxx",
+            string.format("%d blocks", #blocks))
+
+        -- THE TWO RULES SIDE BY SIDE, in one check, so a change to either
+        -- one has to answer for the other.
+        local runs = 0
+        for _, item in ipairs(ns.Death.GroupItems(night.fights, {}, "pull")) do
+            if item.kind == "boss" then runs = runs + 1 end
+        end
+        Check("...gathering the trash the column deliberately keeps apart",
+            #blocks == 2 and runs == 3,
+            string.format("%d fights here, %d rows in the column",
+                #blocks, runs))
+
+        Check("A fight counts its pulls, its dead and its clock",
+            R.BossNote(blocks[2]) == "2 pulls, 7 dead"
+                and R.BossWhen(blocks[2]) == "21:05 - 21:12"
+                and R.BossWhen({ first = "21:05" }) == "21:05"
+                and R.BossWhen({}) == "",
+            R.BossNote(blocks[2]) .. " / " .. R.BossWhen(blocks[2]))
+
+        Check("...and only the avoidable deaths the game actually named",
+            blocks[2].avoidable == 3
+                and R.BossAvoidable(blocks[2]) == "3 to avoidable damage"
+                and R.BossAvoidable(blocks[1]) == "2 to avoidable damage"
+                and R.BossAvoidable({ avoidable = 0 }) == "",
+            tostring(blocks[2].avoidable))
+
+        Check("A fight asks the evening's two questions of its own pulls",
+            #blocks[2].killers == 2
+                and blocks[2].killers[1].spell == "Voracious Bite"
+                and blocks[2].killers[1].deaths == 5
+                and blocks[2].killers[1].pulls == 2
+                and blocks[2].fallen[1].short == "Ana"
+                and blocks[2].fallen[1].deaths == 2)
+
+        Check("...and says who fell on it in one line, most first",
+            R.FellLine(blocks[2].fallen):find("Ana 2x", 1, true) ~= nil
+                and R.FellLine(blocks[2].fallen, 2)
+                    :find("and 2 more", 1, true) ~= nil
+                and R.FellLine({}) == "",
+            R.FellLine(blocks[2].fallen))
+
+        Check("The night names the fight that cost the most",
+            R.NightVerdict(blocks) == "Avanoxx cost the most - 7 of 10.",
+            R.NightVerdict(blocks))
+
+        -- A SINGLE FIGHT IS THE WHOLE EVENING and says nothing by being its
+        -- own worst; a draw would name one of two while the page shows both.
+        Check("...and says nothing when there is nothing to compare",
+            R.NightVerdict({ blocks[1] }) == ""
+                and R.NightVerdict({ { label = "A", deaths = 3 },
+                    { label = "B", deaths = 3 } }) == ""
+                and R.NightVerdict(nil) == "")
+
+        local told = R.SessionShareLines(night)
+        Check("The share says what the page says, fight by fight",
+            told ~= nil and #told >= 4
+                and told[2]:find("Avanoxx cost the most", 1, true) ~= nil
+                and told[3]:find("Trash - 2 pulls, 3 dead", 1, true) ~= nil
+                and told[4]:find("Avanoxx - 2 pulls, 7 dead", 1, true) ~= nil,
+            told and table.concat(told, " | ") or "nothing")
+    end
 
     -- A NEW DAY IS A NEW EVENING, on both roads: the one that keeps a pull
     -- and the one that reads the disk. "Third wipe tonight" must never be a
@@ -12971,6 +14736,7 @@ function Test:Run()
         { "Cast history",  TestHistory },
         { "Death analysis", TestDeath },
         { "Raid deaths",   TestRaidDeaths },
+        { "The combat log", TestCombatLog },
         { "What's new",   TestNews },
         { "Panel movers",  TestPanelMovers },
         { "Taunts",        TestTaunts },

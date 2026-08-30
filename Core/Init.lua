@@ -1867,6 +1867,10 @@ ns.COMMANDS = {
       text = "drop one, shipped ones included" },
     { cmd = "/zs auras remember", text = "put every forgotten one back" },
 
+    { group = "The combat log" },
+    { cmd = "/zs combat",
+      text = "what every ability did, what you pressed, and when" },
+
     { group = "M+ and raid stuff" },
     { cmd = "/zs raidbar", text = "what is on the raid bar, and what each "
         .. "press would send" },
@@ -2170,6 +2174,29 @@ SlashCmdList.ZWOELFSTUFF = function(msg)
             ns.Death:Clear()
         else
             ns.Death:Show()
+        end
+
+    -- WHAT THE CLIENT HANDS OVER ABOUT A WHOLE FIGHT, which is the question
+    -- the combat log module is being designed on. It is a dump and not a
+    -- window yet on purpose: the death log exists because somebody probed
+    -- first, and the Damage session has never been looked at.
+    -- THE BARE WORD IS THE FEATURE, the sub-words are the diagnostics. It
+    -- was the other way round while this file was a probe and nothing else,
+    -- and leaving it that way would have made the window the hard one to
+    -- reach out of the two.
+    elseif cmd == "combat" then
+        local sub = (rest or ""):match("^(%S*)"):lower()
+        if sub == "cleu" or sub == "log" then
+            -- The re-measure files an error report with every addon on the
+            -- machine, so it is asked for by name.
+            ns.CombatLog:ProbeCLEU((rest or ""):lower():find("force", 1, true)
+                and true or false)
+        elseif sub == "chat" then
+            ns.CombatLog:Chat()
+        elseif sub == "probe" or sub == "dump" then
+            ns.CombatLog:Probe()
+        else
+            ns.CombatLog:Toggle()
         end
 
     -- WHY A MESSAGE DID NOT GO OUT. The client is the only one who can say

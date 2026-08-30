@@ -428,10 +428,23 @@ local function Span(host, fill, vertical)
         here, there = fill:GetWidth(), host and host:GetWidth()
     end
 
-    if type(here) == "number" and here > 0 then return here end
-    if type(there) == "number" and there > 0 then return there end
+    -- ns.PlainSize, NOT type(). This fill has threshold overlays hanging off
+    -- it that are fed a secret count through SetValue (see Feed below), and a
+    -- secret number answers "number" to type() and then RAISES on the `>`.
+    -- Same ticker, same frames: Fill.Tick hands the widget a secret and then
+    -- measures it, in that order, ten times a second.
+    here = ns.PlainSize(here, 0)
+    there = ns.PlainSize(there, 0)
+
+    if here > 0 then return here end
+    if there > 0 then return there end
     return 0
 end
+
+-- HANDED OUT so a check can drive it. It is measured ten times a second on a
+-- frame this file deliberately feeds secret values into, and "does it survive
+-- that" is not a question the shape of the code can answer.
+Fill.Span = Span
 
 -- TWO COLOUR CARRIERS, REUSED. SetGradient copies its arguments at call time, so
 -- one pair serves every bar on screen, and tinting runs on every pass - a pair

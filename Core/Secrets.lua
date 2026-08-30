@@ -53,6 +53,24 @@ function ns.SameValue(a, b)
     return a == b
 end
 
+-- HOW BIG A WIDGET IS, WHEN THE ANSWER MAY NOT BE READABLE.
+--
+-- New on 2026-08-29 and paid for with 1309 errors in a single fight. A widget
+-- that has been handed a secret - a font string through SetFormattedText, a
+-- status bar through SetValue, the two sinks that exist precisely so a
+-- withheld number can still be DRAWN - makes the extents derived from it
+-- secret too. So GetWidth, GetHeight and GetVerticalScrollRange, none of
+-- which ever went near the meter, start answering with values that raise on
+-- the first `>`.
+--
+-- The fallback is the caller's own last good number rather than zero: a row
+-- does not change size because the number printed on it went quiet, and zero
+-- collapses a layout for exactly as long as somebody is looking at it.
+function ns.PlainSize(value, fallback)
+    if ns.CanCompute(value) and type(value) == "number" then return value end
+    return fallback
+end
+
 ---------------------------------------------------------------------------
 -- WHAT THIS CLIENT WILL ACTUALLY NAME, right now
 --
@@ -81,19 +99,45 @@ function ns.AurasReadable()
     return C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and true or false
 end
 
+-- ONE WALK OVER A UNIT'S AURAS, and everything that reads them reads it.
+--
+-- ~~ns.OwnAuras was the only reader~~ and it builds two tables per call.
+-- That is right for "compare two sets, once" and wrong for a recorder that
+-- runs on every UNIT_AURA - which in a fight is several times a second, for
+-- ever. The owner's rule is about the RESTING state, and a raid night is
+-- mostly resting state.
+--
+-- The secret rules live HERE and nowhere else: a withheld aura is SKIPPED
+-- rather than guarded around, because reading it is the thing that raises.
+-- Callers get numbers, not the aura table, so there is no second place where
+-- somebody can reach past the guard for a field that turns out to be secret.
+--
+-- Answers false when the client will not say - which is NOT the same as "no
+-- auras", and the difference matters to anybody keeping a clock on them.
+function ns.EachOwnAura(unit, filter, fn)
+    if not (ns.AurasReadable() and type(fn) == "function") then
+        return false
+    end
+    for index = 1, 60 do
+        local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex,
+            unit or "player", index, filter or "HELPFUL")
+        if not ok or not data then break end
+        if ns.CanCompute(data.spellId) and type(data.spellId) == "number" then
+            fn(data.spellId,
+                ns.CanCompute(data.icon) and data.icon or nil)
+        end
+    end
+    return true
+end
+
 -- ids, icons - both as sets, both nil when the client is withholding.
 function ns.OwnAuras(unit, filter)
     if not ns.AurasReadable() then return nil, nil end
 
     local ids, icons = {}, {}
-    for index = 1, 60 do
-        -- A secret one is SKIPPED rather than guarded around: reading it is
-        -- the thing that raises, and there is nothing to do with it anyway.
-        local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex,
-            unit or "player", index, filter or "HELPFUL")
-        if not ok or not data then break end
-        if ns.CanCompute(data.spellId) then ids[data.spellId] = true end
-        if ns.CanCompute(data.icon) then icons[data.icon] = true end
-    end
+    ns.EachOwnAura(unit, filter, function(spellID, icon)
+        ids[spellID] = true
+        if icon then icons[icon] = true end
+    end)
     return ids, icons
 end

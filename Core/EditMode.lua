@@ -168,29 +168,57 @@ local PANEL_MOVERS
 -- declared after a function that names it is not the same variable, and this
 -- would have read a nil global and snapped to nothing at all. The static
 -- check caught it; nothing on screen would have.
-local function Snap(value, index, half, axis)
+-- PURE ENOUGH TO DRIVE, AND SEPARATE BECAUSE THIS IS WHERE THE SECRET GOT IN.
+--
+-- Every drag path guards the frame it is MOVING and then asks for something to
+-- line up against - and lining up means measuring every OTHER panel. The first
+-- entry in PANEL_MOVERS is the co-tank panel, whose health bars carry a
+-- withheld number through SetValue, so its centre and its width can both come
+-- back withheld. Two of the three drag paths were guarded on their own frame
+-- and then walked straight into this loop, which is why "both places fixed"
+-- was recorded and was not true.
+--
+-- A panel that cannot be measured is not a WORSE snap target, it is NOT ONE.
+-- Falling back to zero would put a phantom neighbour at the centre of the
+-- screen and drag every panel towards it; skipping it lines the drag up
+-- against the rest of the screen, which is the answer somebody would give.
+function EditMode.Neighbours(entries, index, axis)
     local others = {}
 
-    for _, entry in ipairs(PANEL_MOVERS or {}) do
+    for _, entry in ipairs(entries or {}) do
         local panel = entry.panel and entry.panel()
         if entry.mover ~= index and panel and panel:IsShown() then
-            local centre = (axis == "x")
-                and (panel:GetCenter())
-                or select(2, panel:GetCenter())
-            if centre then
-                others[#others + 1] = {
-                    centre = centre,
-                    half = ((axis == "x") and panel:GetWidth()
-                        or panel:GetHeight()) / 2,
-                }
+            -- NEITHER READ MAY MEET AN `and` OR AN `or` FIRST. Picking the
+            -- axis with `(axis == "x") and panel:GetWidth() or ...` truth-tests
+            -- whichever branch it took, and a boolean test on a withheld
+            -- number is itself the raise - so the axis is chosen first and the
+            -- values are read after.
+            local centre, span
+            if axis == "x" then
+                centre = panel:GetCenter()
+                span = panel:GetWidth()
+            else
+                centre = select(2, panel:GetCenter())
+                span = panel:GetHeight()
+            end
+
+            centre = ns.PlainSize(centre, nil)
+            span = ns.PlainSize(span, nil)
+            if centre and span then
+                others[#others + 1] = { centre = centre, half = span / 2 }
             end
         end
     end
 
+    return others
+end
+
+local function Snap(value, index, half, axis)
     local screenHalf = ((axis == "x") and UIParent:GetWidth()
         or UIParent:GetHeight()) / 2
 
-    return EditMode.SnapAxis(value, half, screenHalf, others, Prefs())
+    return EditMode.SnapAxis(value, half, screenHalf,
+        EditMode.Neighbours(PANEL_MOVERS, index, axis), Prefs())
 end
 
 ---------------------------------------------------------------------------
@@ -545,10 +573,17 @@ local function DragPanel(mover, getPanel, apply)
     -- to learn rather than two.
     local lineX, lineY
     if not IsAltKeyDown() then
-        local scale = panel:GetScale()
-        if not scale or scale <= 0 then scale = 1 end
-        local snappedX, guideLineX = Snap(x, nil, panel:GetWidth() * scale / 2, "x")
-        local snappedY, guideLineY = Snap(y, nil, panel:GetHeight() * scale / 2, "y")
+        -- GUARDED FOR THE SAME REASON THE OTHER TWO PATHS ARE, and it was the
+        -- one that needed it most: the first thing in PANEL_MOVERS is the
+        -- co-tank panel, whose health bars are handed a withheld number
+        -- through SetValue. `not scale or scale <= 0` is two boolean tests and
+        -- a comparison on a value that may refuse all three.
+        local scale = ns.PlainSize(panel:GetScale(), 1)
+        if scale <= 0 then scale = 1 end
+        local wide = ns.PlainSize(panel:GetWidth(), 0)
+        local tall = ns.PlainSize(panel:GetHeight(), 0)
+        local snappedX, guideLineX = Snap(x, nil, wide * scale / 2, "x")
+        local snappedY, guideLineY = Snap(y, nil, tall * scale / 2, "y")
         x, y = snappedX, snappedY
         lineX, lineY = guideLineX, guideLineY
     end
@@ -941,10 +976,17 @@ local function DragReminders()
 
             local lineX, lineY
             if not IsAltKeyDown() then
-                local scale = frame:GetScale()
-                if not scale or scale <= 0 then scale = 1 end
-                local snappedX, gx = Snap(x, nil, frame:GetWidth() * scale / 2, "x")
-                local snappedY, gy = Snap(y, nil, frame:GetHeight() * scale / 2, "y")
+                -- EVERY ONE OF THESE THREE IS GUARDED. A cooldown bar and
+                -- the co-tank panel are TAINTED frames - their cells carry a
+                -- charge count through SetFormattedText, their health bars a
+                -- secret through SetValue - so scale, width and height can all
+                -- come back secret, and `scale <= 0` alone is already a raise.
+                local scale = ns.PlainSize(frame:GetScale(), 1)
+                if scale <= 0 then scale = 1 end
+                local wide = ns.PlainSize(frame:GetWidth(), 0)
+                local tall = ns.PlainSize(frame:GetHeight(), 0)
+                local snappedX, gx = Snap(x, nil, wide * scale / 2, "x")
+                local snappedY, gy = Snap(y, nil, tall * scale / 2, "y")
                 x, y = snappedX, snappedY
                 lineX, lineY = gx, gy
             end
@@ -1112,10 +1154,17 @@ local function DragBars()
             if not IsAltKeyDown() then
                 -- The bar's own scale, exactly as the reminders do it: the
                 -- saved x and y are in screen terms and the width is not.
-                local scale = frame:GetScale()
-                if not scale or scale <= 0 then scale = 1 end
-                local snappedX, gx = Snap(x, nil, frame:GetWidth() * scale / 2, "x")
-                local snappedY, gy = Snap(y, nil, frame:GetHeight() * scale / 2, "y")
+                -- EVERY ONE OF THESE THREE IS GUARDED. A cooldown bar and
+                -- the co-tank panel are TAINTED frames - their cells carry a
+                -- charge count through SetFormattedText, their health bars a
+                -- secret through SetValue - so scale, width and height can all
+                -- come back secret, and `scale <= 0` alone is already a raise.
+                local scale = ns.PlainSize(frame:GetScale(), 1)
+                if scale <= 0 then scale = 1 end
+                local wide = ns.PlainSize(frame:GetWidth(), 0)
+                local tall = ns.PlainSize(frame:GetHeight(), 0)
+                local snappedX, gx = Snap(x, nil, wide * scale / 2, "x")
+                local snappedY, gy = Snap(y, nil, tall * scale / 2, "y")
                 x, y = snappedX, snappedY
                 lineX, lineY = gx, gy
             end

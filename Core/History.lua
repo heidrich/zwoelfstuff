@@ -33,7 +33,19 @@ History.last = {}
 -- column. Capped so an evening of playing does not become a table with ten
 -- thousand rows nobody will ever scroll.
 History.casts = {}
-local CASTS_CAP = 50
+-- HOW FAR BACK THE PRESS LIST REACHES.
+--
+-- Fifty was enough for the death log, which only ever reads the last ten
+-- seconds of a fall. The combat log reads a WHOLE PULL - owner, 2026-08-29:
+-- "wir sollten die liste auch scrollen koennen, von fight start zum ende" -
+-- and fifty presses is about six seconds of a rotation, so the log covered
+-- the last six seconds of a fourteen-minute session and looked broken.
+--
+-- Five hundred is roughly eight minutes of one press a second. The cost is a
+-- table of two fields per press and one shift-by-one when the cap is reached;
+-- nothing walks this list per frame - the cooldown estimate reads a map, and
+-- the death log walks it once per fall.
+local CASTS_CAP = 500
 
 -- HOW LONG A DEFENSIVE WAS ACTUALLY UP, measured.
 --
@@ -56,6 +68,26 @@ local CASTS_CAP = 50
 -- lie - worse than the stub it replaced.
 History.actives = {}
 local ACTIVES_CAP = 60
+
+---------------------------------------------------------------------------
+-- WHAT WAS ON YOU, AND WHEN
+--
+-- Owner, 2026-08-31: "oder wann ich debuffs oder so bekommen habe?"
+--
+-- And THIS one is answerable in full, which almost nothing about incoming
+-- damage is. Auras are not the combat log: the client answers them the same
+-- way it answers them for every raid frame on screen, so a debuff's id, its
+-- icon and its tooltip are all readable. What was missing was only the
+-- CLOCK - and the clock is ours to keep.
+--
+-- ARRIVAL AND DEPARTURE, NOT REFRESHES. A debuff reapplied while it was
+-- still on you is the same debuff still on you. A row per refresh would turn
+-- one twelve-second curse into six rows and bury the single fact worth
+-- having, which is how long you wore it.
+---------------------------------------------------------------------------
+History.debuffs = {}            -- finished windows: {spellID, from, to}
+local DEBUFFS_CAP = 120
+History.onYou = {}              -- spellID -> GetTime() it landed
 
 -- Longer than this is not a defensive window, it is a reading that got
 -- stuck - a buff that survived a zone change, a frame recycled behind our
@@ -101,6 +133,62 @@ function History.PushActive(list, spellID, from, to, cap)
         table.remove(list, 1)
     end
     return true
+end
+
+-- One finished debuff window, kept the way a buff window is.
+--
+-- NOTHING SHORTER THAN A FIFTH OF A SECOND: an aura that appears and is gone
+-- between two events is a flicker as the client rebuilds a list, not
+-- something that happened to you.
+function History.PushDebuff(list, spellID, from, to, cap)
+    if not (spellID and from and to) then return false end
+    if to - from < 0.2 then return false end
+    list[#list + 1] = { spellID = spellID, from = from, to = to }
+    while #list > (cap or DEBUFFS_CAP) do
+        table.remove(list, 1)
+    end
+    return true
+end
+
+-- WHAT WAS ON YOU INSIDE A STRETCH OF TIME, in the shape a pull records and
+-- the replay draws: how long before the end it landed, and how long it held.
+--
+-- THE ONES STILL ON YOU ARE IN IT. A debuff that outlived the fight is
+-- exactly the one worth seeing, and dropping it because it never closed
+-- would lose it at the moment it mattered most.
+--
+-- Sorted newest first, on (ago, spellID) - a total order, because `onYou` is
+-- walked with pairs and two debuffs that landed in the same instant would
+-- otherwise come back in a different order every time.
+function History.DebuffsWithin(endedAt, window, list, open)
+    local out = {}
+    if type(endedAt) ~= "number" then return out end
+
+    local function Add(spellID, from, to, still)
+        if not (type(spellID) == "number" and type(from) == "number") then
+            return
+        end
+        local ago = endedAt - from
+        if ago < 0 or (window and ago > window) then return end
+        local held = (to or endedAt) - from
+        out[#out + 1] = {
+            spellID = spellID, ago = ago,
+            held = held > 0 and held or nil,
+            stillOn = still or nil,
+        }
+    end
+
+    for _, one in ipairs(list or History.debuffs or {}) do
+        Add(one.spellID, one.from, one.to)
+    end
+    for spellID, from in pairs(open or History.onYou or {}) do
+        Add(spellID, from, nil, true)
+    end
+    table.sort(out, function(a, b)
+        if a.ago ~= b.ago then return a.ago < b.ago end
+        return a.spellID < b.spellID
+    end)
+    return out
 end
 
 -- WHICH WINDOW BELONGS TO WHICH PRESS.
@@ -206,6 +294,59 @@ listener:SetScript("OnEvent", function(_, _, unit, _, spellID)
     if not ns.CanCompute(spellID) then return end
     if type(spellID) ~= "number" then return end
     History.Push(History.last, History.casts, spellID, GetTime())
+end)
+
+---------------------------------------------------------------------------
+-- The debuff clock
+--
+-- NO ALLOCATION PER EVENT. UNIT_AURA fires several times a second in a
+-- fight and never stops for the rest of the evening. The scratch set is
+-- wiped and refilled rather than replaced, the walk hands back numbers
+-- rather than tables, and the handler is a named function at file scope so
+-- there is no closure per registration either.
+---------------------------------------------------------------------------
+local onYou = History.onYou
+local scratch = {}
+
+-- A CLIENT THAT WILL NOT SAY IS NOT A CLIENT SAYING "NOTHING ON YOU".
+-- Closing every open window on a refusal would file a pile of debuffs that
+-- all ended in the same instant, which is a picture of something that did
+-- not happen. So a refusal changes nothing at all.
+local function SweepDebuffs()
+    if not ns.EachOwnAura then return false end
+    for id in pairs(scratch) do scratch[id] = nil end
+    local read = ns.EachOwnAura("player", "HARMFUL", function(spellID)
+        scratch[spellID] = true
+    end)
+    if not read then return false end
+
+    local now = GetTime and GetTime() or 0
+    for spellID in pairs(scratch) do
+        if onYou[spellID] == nil then onYou[spellID] = now end
+    end
+    -- Clearing the key the loop is standing on is allowed and is the whole
+    -- reason this is one pass rather than a list of ids to delete after.
+    for spellID, from in pairs(onYou) do
+        if not scratch[spellID] then
+            onYou[spellID] = nil
+            History.PushDebuff(History.debuffs, spellID, from, now)
+        end
+    end
+    return true
+end
+
+-- EXPORTED, because a handler nobody can call is a loop nobody runs. The
+-- health sampler in CombatLog shipped un-run for exactly this reason and the
+-- owner found it by looking at an empty bar.
+History.SweepDebuffs = SweepDebuffs
+
+local auras = CreateFrame("Frame")
+-- pcall for the same reason the cast listener uses one: the desk's frame
+-- stub has RegisterEvent and not the unit-filtered form.
+pcall(auras.RegisterUnitEvent, auras, "UNIT_AURA", "player")
+auras:SetScript("OnEvent", function(_, _, unit)
+    if unit ~= nil and unit ~= "player" then return end
+    SweepDebuffs()
 end)
 
 ---------------------------------------------------------------------------

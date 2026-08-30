@@ -858,8 +858,15 @@ local function PaintRow(row, snap, db, testing)
     --
     -- Both setters accept a secret, so the range goes in unguarded. The
     -- guard was never needed and it was doing harm.
-    row.health:SetMinMaxValues(0, snap.healthMax or 1)
-    row.health:SetValue(snap.health or 0)
+    -- THE SETTERS TAKE A SECRET; `or` DOES NOT. Passing the value on is
+    -- allowed and is the whole point - boolean-testing it on the way past is
+    -- the forbidden operation, and `x or 1` is a boolean test. So the fallback
+    -- is chosen BEFORE the value goes anywhere near an `or`.
+    local most, now = snap.healthMax, snap.health
+    if most == nil then most = 1 end
+    if now == nil then now = 0 end
+    row.health:SetMinMaxValues(0, most)
+    row.health:SetValue(now)
 
     -- Both overlays hang off the fill's LEADING EDGE, the one that moves with
     -- the clock - the shield outward from it, the un-healable part inward.
@@ -871,7 +878,18 @@ local function PaintRow(row, snap, db, testing)
         and snap.healthMax > 0
     local edge, vertical = ns.Layout.FillEdge(row.health:GetOrientation(),
         row.health:GetReverseFill())
-    local full = vertical and row.health:GetHeight() or row.health:GetWidth()
+    -- THE BAR WAS HANDED A WITHHELD NUMBER four lines up, and the extents of
+    -- a widget that has been given one come back withheld too. Written as
+    -- `vertical and GetHeight() or GetWidth()` the read is its own raise: the
+    -- `or` truth-tests whichever branch was taken, before anything measures
+    -- with it. Only the vertical bar reached it - the horizontal one falls
+    -- through the `and` untested - which is why it survived being looked at.
+    local full
+    if vertical then
+        full = ns.PlainSize(row.health:GetHeight(), 0)
+    else
+        full = ns.PlainSize(row.health:GetWidth(), 0)
+    end
 
     local showAbsorb = db.absorbShow and readable and ns.CanCompute(snap.absorb)
         and (snap.absorb or 0) > 0

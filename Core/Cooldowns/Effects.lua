@@ -1050,8 +1050,18 @@ local function RunDots(fx, fxOpts, now, r, g, b, alpha, thickness)
 
     -- The inset the host was given, so a dot centred on the OUTLINE of the
     -- cell sits at the middle of its own square rather than at its corner.
-    local width = math.max(0, (host:GetWidth() or 0) - 8)
-    local height = math.max(0, (host:GetHeight() or 0) - 8)
+    --
+    -- ns.PlainSize, not `or 0`: this host is anchored to the cell, and the
+    -- cell carries the charge count that goes out through SetFormattedText -
+    -- so its extents can come back secret, and `or`, `- 8` and math.max all
+    -- raise on one. The last readable pair is the fallback, because a cell
+    -- does not change size because the number printed on it went quiet.
+    local width = ns.PlainSize(host:GetWidth(), fx.dotWidth)
+    local height = ns.PlainSize(host:GetHeight(), fx.dotHeight)
+    if not (width and height) then return end
+    fx.dotWidth, fx.dotHeight = width, height
+    width = math.max(0, width - 8)
+    height = math.max(0, height - 8)
 
     -- One lap every four seconds at speed 1. Slow enough to read as a
     -- travelling light rather than as a flicker.

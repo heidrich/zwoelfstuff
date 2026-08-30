@@ -10,6 +10,223 @@ file as the GitHub release body and the CurseForge file changelog, and GitHub
 stops accepting it at 125,000 characters. When it grows past 100,000, the
 oldest versions move over.
 
+## [4.95.0] - 2026-08-30
+
+### Added
+
+- **A third window: the combat log.** Its column is the one both death logs
+  have — the dungeon or raid, the fights in it, and the pulls under those.
+  **Click any of the three and the page is that**: one pull, one boss with
+  all its attempts, or the whole dungeon added up. The chevron folds; the row
+  itself chooses.
+- **A place says what the whole run came to** on its own row, beside how many
+  pulls it took.
+- **Two pages, and that is the whole switch:** the combat log, and History.
+- **The combat log** is one row per ability on six lanes — what each of your
+  spells did, healed, took, interrupted and dispelled, with how often you
+  pressed it and how long ago. What was never pressed says so. Your own line
+  sits on top of them, called Total, wearing your spec and carrying your
+  share of the group and your damage per second.
+- **History is the fight in order** — every press and every fall at the
+  moment it happened, on those same six lanes. It reaches back five hundred
+  presses instead of fifty. The game does not say what a single press did, so
+  the numbers are each ability's total and every row says which press it is.
+- **The column heads sort.** Press DAMAGE TAKEN and the table is ordered by
+  what hurt; press HEALING and it is ordered by what healed.
+- **A lane with nothing in it is not drawn**, so a page stops carrying three
+  columns of dashes.
+- **The fight drawn end to end** above that table — every button you pressed
+  and every fall, in the order they happened. Point at one and it says what
+  it was, and the line says what stretch it covers.
+- **The fall itself, hit by hit**, in the death log's own rows.
+- **Every hit you took says who did it.** The ability that hit you carries
+  the mob's name and its face, and hovering the face opens its card - the same
+  one both death logs show. It no longer says "not pressed" about something
+  that hit you.
+- **A Replay button beside the pages**, where the death log has its own —
+  and it plays back **the fight**, not a death. Your health across the whole
+  pull, every button you pressed as bars and icons under it, what was hitting
+  you where the game says, and a red line down the plot wherever somebody
+  went down. Play, pause, speed and zoom, the same as the death log's. It
+  works on one pull, on a boss, and on a whole run.
+- **Your health is recorded for the whole fight now**, once a second, so the
+  replay can draw the quiet half as well as the loud one. Pulls recorded
+  before this update have no line yet.
+- **A press remembers how long it was up** in a recorded pull, so a defensive
+  draws as a bar rather than a marker.
+- **Health lost, second by second, above the axis** in the replay — the band
+  that shows when you were actually being hit. Above the line is what
+  happened to you, below it is what you did about it.
+- **Every History row carries its second down the left edge**, where a
+  chronological list is read.
+- **The replay's panel picks up the defensives and consumables you already
+  set.** It was offering to set up things that had been set for weeks.
+- **The health bar says when nothing was recorded** instead of just sitting
+  there empty, and the damage lane says how far the game lets it reach.
+- **The page reaches the bottom of the window**, so the footer is not
+  floating in the middle of a gap.
+
+- **What was put on you, and when.** Every debuff you picked up is recorded
+  with the second it landed and how long you wore it — as its own row in
+  History, in the sequence between your presses, and as a bar above the axis
+  in the replay. One that was still on you when the fight ended says so.
+  Auras are not the combat log, so this is the one half of "what happened to
+  me" the game answers in full: name, icon and tooltip included.
+
+- **Cooldowns are their own list now.** Pick them on the Deaths page, under
+  your defensives, and both replays draw them on a line of their own -
+  between what you cast and what you pressed to survive. The panel down the
+  left counts them separately: what you spent, and what you still had.
+  One spell is one kind, so nothing is listed twice.
+- **The health part folds away.** It is out on a death and on any pull
+  somebody fell in, and put away on the rest - and the switch over Play
+  opens or shuts it whenever you want. Shut, the bar, the band under it
+  and the whole **Damage on you** lane go together, and the debuffs move
+  down onto the line with the plot behind them.
+
+### Changed
+
+- **The menu entry is called "Combat / Death Log"** — one entry, two windows.
+- **A fall opens the replay.** Click it on the timeline or on its row and the
+  replay window opens on that death — the same one the death log has, with
+  the health bar, every hit and what you were pressing while it happened.
+  Hovering it shows the enemy's card first, so you know which fall you are
+  about to open.
+- **A mark on the line takes you to that moment** in History, and the page
+  lands on the row rather than past it.
+- **A block's title sits on the same line as its columns**, in a heading's
+  own size rather than smaller than the rows under it. Three rows of height
+  back.
+- **Per second, beside the share** — the game works it out itself, and it is
+  the number people actually compare. A whole run shows how long you were
+  actually in a fight rather than how long the dungeon took.
+- **The spec's icon**, not just the class's. Two rogues look the same until
+  one of them is Subtlety.
+- **Pointing at a fall shows the enemy's card** — the same one the group
+  death log and the replay already have.
+- **Right now** sits at the top of the column: what the meter is holding this
+  moment.
+- The **boss wears its portrait** on the header, the same one the death logs
+  put on a fight.
+- **All three windows come to the front when you click them.** They sat on
+  two different layers, so one was permanently on top and the other two drew
+  through each other.
+- The window is wider, because every row now carries six numbers.
+- **All three marks are on screen now**, not only after somebody has died.
+  An empty one carries no number instead of disappearing. Drag any of them
+  and all three still move together.
+- `/zs combat` opens the window. The old dumps moved to `/zs combat probe`,
+  `/zs combat chat` and `/zs combat cleu`.
+
+### Fixed
+
+- **The abilities carry their numbers.** Every row of the combat log read
+  as a dash with no bar behind it, and every recorded pull was filed the same
+  way. The game withholds a row's identity while a fight is running and then
+  refuses to be asked with it; your own is the one that can always be asked
+  with, and now is.
+- **Your own total shows up in a raid.** The list is cut at twelve names, and
+  in a raid your healing row is not in the first twelve — so your own line and
+  your own abilities went missing on exactly the fights that have the most in
+  them.
+- **The damage numbers no longer vanish during a fight.** The page threw on
+  the first amount the game was withholding and drew nothing after it.
+- **A bar wears the colour of what its row is about** — orange for what you
+  did, green for healing, red for what came in — and a row that only healed
+  has one at all now, instead of being measured against a damage column it
+  has nothing in.
+- **Lists scroll again.** The game does not say how far a list reaches until
+  the window has been laid out once, and until then every list read that as
+  nothing to scroll.
+- **The timeline no longer strands you.** Clicking a mark near the end of a
+  long log left the page past its last row.
+- **Moving a frame in edit mode no longer errors in combat.** Dragging lines
+  a frame up against the others on screen, and measuring the co-tank panel
+  while its health bars were carrying numbers the game withholds threw on
+  every one of those measurements.
+
+### Note
+
+- A pull carries numbers only if it happened after you logged in - they are
+  copied down as each fight ends.
+
+## [4.94.0] - 2026-08-29
+
+### Changed
+
+- **Tonight is broken at the bosses.** Every fight of the evening is its own
+  block with its pulls, its dead, its clock and what kept killing you on it —
+  and the night says which fight cost the most.
+- Each fight also says **who fell on it** and how many of those the game
+  itself called avoidable.
+- **Share sends what the page shows**, fight by fight.
+
+## [4.93.0] - 2026-08-29
+
+### Fixed
+
+- **Your own death log sorts by boss now**, the way the group's does. The
+  deaths you already have are sorted too — the fight is read back out of the
+  label they were saved with.
+- A boss in your own death log **wears its face and opens its page** in the
+  Adventure Guide, the same as in the group log.
+
+### Changed
+
+- The ability that killed you **carries its icon and opens the game's
+  tooltip** in the right-hand column of both logs.
+
+## [4.92.0] - 2026-08-29
+
+### Changed
+
+- **The pull list is the whole evening now** — up to sixty pulls instead of
+  the last five. An older pull still says who fell and to what; the
+  hit-by-hit page stays with the newest five.
+- **Clear empties the evening** from either page. It is one list now, so
+  there is one button for it.
+
+### Fixed
+
+- The pull you are reading stays the pull you are reading when new ones come
+  in underneath it.
+
+## [4.91.0] - 2026-08-28
+
+### Changed
+
+- **Both death logs sort by place now.** The same dungeon four times over is
+  one line with a chevron; open it and the pulls are under it, newest first
+  and numbered from the first of the evening.
+- **A pull says when it was and what it was** — the time in your own clock
+  format, and either the boss or "Trash pull".
+- **A place line says how many pulls and how many died** across all of them,
+  with the key level or the raid difficulty beside the name.
+- **Your own death log groups the same way** — the place, and your falls
+  under it with who ended it and with what.
+- **Both windows are bigger**, and the pull list in the group log folds away
+  when the table wants the room.
+- **A boss pull is a link.** The boss wears its own face and opens its page
+  in the Adventure Guide; trash stays quiet, so the two are told apart at a
+  glance.
+- **The place line has a ground** and a blue edge, so a glance finds the next
+  place without reading a word.
+- Your own deaths show the killer's face beside the name.
+- **Both columns sort by fight now.** Under a dungeon: the trash before the
+  first boss, then that boss with its pulls, then the trash after it - each
+  its own block with its own count, so you can see where in the run it went
+  wrong. A boss block wears the boss's face and opens its page in the guide.
+- **A row is two columns**: the number and the time on the left with what hit
+  under it, what it cost on the right in red.
+- The column is wider, and the same width in both windows.
+
+### Fixed
+
+- A boss pull was filed as "Trash pull". The fight's name was cleared before
+  the pull was written down.
+- The "Tonight" line at the top of the pull list was not drawn at all.
+- The two lines of a pull sat on top of each other.
+
 ## [4.90.0] - 2026-08-25
 
 ### Changed

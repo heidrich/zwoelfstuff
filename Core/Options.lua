@@ -821,7 +821,13 @@ local PAGES = {
     --
     -- It carries the spell palette as its third column, because picking your
     -- defensives out of a dropdown of forty names was the worst part of it.
-    { key = "deaths", title = "Death-log", glyph = "skull", deaths = true,
+    -- ONE ENTRY, TWO WINDOWS. Owner, 2026-08-31: "nenne noch im Menue links
+    -- Death log in Combat / Death Log um." The combat log was born out of
+    -- this module and is switched on and off with it, so a rail that named
+    -- only half of it sent anybody looking for the combat log to a page they
+    -- would never guess held it.
+    { key = "deaths", title = "Combat / Death Log", glyph = "skull",
+      deaths = true,
       module = "deaths",
       subtitle = "What killed you, and what could have prevented it.",
       actions = {

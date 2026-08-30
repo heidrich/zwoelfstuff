@@ -465,6 +465,20 @@ function UI.CoolText(text)
     return UI.COOL .. text .. "|r"
 end
 
+-- AND THE THING THAT DID THE DAMAGE, which is NOT a promise of a click.
+--
+-- Owner's rule for the orange, written into C.hot: "alles was man hovern
+-- bzw. anklicken kann". A mechanic named in a list that cannot be hovered
+-- was wearing it anyway, which spent the one colour that means "point at
+-- this" on a word that answers nothing - and left a boss name, which really
+-- is clickable, with nothing to stand out against. This is what those words
+-- wear now: C.harm, the colour this addon already gives to what a row COST.
+UI.HARM = "|cffe5645a"
+function UI.HarmText(text)
+    if type(text) ~= "string" or text == "" then return text or "" end
+    return UI.HARM .. text .. "|r"
+end
+
 local CLASS_SHEET = "Interface\\TargetingFrame\\UI-Classes-Circles"
 
 function UI.SpecIcon(specID, classFile)
@@ -4220,6 +4234,34 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     content:SetSize(contentWidth, 1)
     scroll:SetScrollChild(content)
 
+    -- HOW TALL WE MADE IT, WRITTEN DOWN AS WE WRITE IT.
+    --
+    -- The client works the scroll range out from this frame's extent, and
+    -- once anything inside it has been handed a withheld number the answer
+    -- comes back withheld too. This number does not: it is one this addon
+    -- computed and set, so keeping a copy of it costs nothing and is
+    -- readable in any fight. It is the only measurement in here that cannot
+    -- be taken away.
+    --
+    -- Taken at the setter rather than asked of the caller ON PURPOSE. Twenty
+    -- painters set this height; a second door they had to remember is a door
+    -- nineteen of them would eventually forget, and a list that scrolls in
+    -- most windows is worse than one that scrolls in none.
+    local ownHeight = 1
+    local setHeight, setSize = content.SetHeight, content.SetSize
+    content.SetHeight = function(this, value, ...)
+        if ns.CanCompute(value) and type(value) == "number" then
+            ownHeight = value
+        end
+        return setHeight(this, value, ...)
+    end
+    content.SetSize = function(this, wide, tall, ...)
+        if ns.CanCompute(tall) and type(tall) == "number" then
+            ownHeight = tall
+        end
+        return setSize(this, wide, tall, ...)
+    end
+
     -- No track, only a thumb, and only while there is something to scroll.
     -- A permanent groove down the side of every panel is noise.
     local rail = CreateFrame("Frame", nil, parent)
@@ -4232,14 +4274,103 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     thumb:EnableMouse(true)
     local thumbFill = Fill(thumb, "ARTWORK", C.controlHi)
 
+    -----------------------------------------------------------------------
+    -- EVERY GEOMETRY READ IN HERE IS GUARDED, and this is not belt and
+    -- braces.
+    --
+    -- 2026-08-29, one fight, ONE THOUSAND THREE HUNDRED AND NINE errors:
+    --   "Widgets.lua:4251: attempt to compare local 'range'
+    --    (a secret number value, while execution tainted by 'ZwoelfStuff')"
+    --
+    -- The combat log draws amounts the client withholds - that is the whole
+    -- point of SetFormattedText and of StatusBar:SetValue, the two sinks that
+    -- take a secret. What nobody had measured is that the EXTENTS derived
+    -- from those widgets go secret with them, so GetVerticalScrollRange -
+    -- a number this file never asked the meter for - comes back secret, and
+    -- `range > 1` is a comparison. Every list in the addon that ever shows a
+    -- withheld number lands here.
+    --
+    -- A SECRET ANSWER FALLS BACK TO THE LAST READABLE ONE, not to zero. The
+    -- height of a list does not change while the numbers printed on it do,
+    -- and zero would switch the wheel off for the length of the fight - which
+    -- is precisely when somebody is reading.
+    -----------------------------------------------------------------------
+    local lastRange, lastVisible, lastScroll = 0, 0, 0
+
+    local function Plain(value, fallback)
+        if ns.CanCompute(value) and type(value) == "number" then return value end
+        return fallback
+    end
+
+    local function Ask(method, fallback)
+        local ok, value = pcall(method, scroll)
+        if not ok then return fallback end
+        return Plain(value, fallback)
+    end
+
+    local function Visible()
+        lastVisible = Ask(scroll.GetHeight, lastVisible)
+        return lastVisible
+    end
+
+    local function At()
+        lastScroll = Ask(scroll.GetVerticalScroll, lastScroll)
+        return lastScroll
+    end
+
+    -- A FALLBACK TO THE LAST READABLE ANSWER NEEDS A FIRST ONE.
+    --
+    -- 2026-08-30, and it cost the owner a window he could not get out of:
+    -- "eine liste die ich nicht scrollen kann, und ich komm auch nicht mehr
+    -- zurueck." Keeping the last readable range is right while a fight runs
+    -- - the height of a list does not change because the numbers printed on
+    -- it went quiet. But a window OPENED during a fight has never had a
+    -- readable range, so the fallback is still its starting zero, and zero
+    -- does not mean "I could not measure". It means "there is nothing here
+    -- to scroll", which switches the wheel off and hides the thumb.
+    --
+    -- So when the client will not say, the range is worked out from the two
+    -- numbers we still have: how tall we made the contents, less how much of
+    -- them shows. Nothing is INVENTED - if the viewport cannot be measured
+    -- either, the last known answer stands rather than a guess.
+    local function OwnRange()
+        local visible = Visible()
+        if visible <= 0 then return nil end
+        local mine = ownHeight - visible
+        if mine < 0 then mine = 0 end
+        return mine
+    end
+
+    -- AND THE CLIENT'S ANSWER IS NOT READY WHEN WE ASK FOR IT.
+    --
+    -- The second half of the same fault, and the half that was actually
+    -- biting: the range is resolved from the child's height against the
+    -- viewport, and neither is settled until the window has been laid out
+    -- once. Until then the answer is a perfectly READABLE zero - which is
+    -- why guarding the read did not help. Death.lua has known this since it
+    -- was written and works around it with a timer; every other list in the
+    -- addon simply answered the first wheel with nothing.
+    --
+    -- So the two answers are taken TOGETHER and the larger wins. Ours is
+    -- known the moment the height is set, and it is never stale in the
+    -- direction that hurts. Over-reporting lets somebody scroll into a
+    -- little blank space and scroll straight back out; under-reporting is a
+    -- list that does not move at all, which is what the owner sat in front
+    -- of on 2026-08-30: "die listen kann ich immer noch nicht scrollen".
     local function Range()
-        local range = scroll:GetVerticalScrollRange() or 0
-        return range > 1 and range or 0
+        local measured = Ask(scroll.GetVerticalScrollRange, nil)
+        local mine = OwnRange()
+        local answer = measured
+        if mine ~= nil and (answer == nil or mine > answer) then
+            answer = mine
+        end
+        if answer ~= nil then lastRange = answer end
+        return lastRange > 1 and lastRange or 0
     end
 
     local function UpdateThumb()
         local range = Range()
-        local visible = scroll:GetHeight()
+        local visible = Visible()
         local total = visible + range
 
         if range <= 0 or total <= 0 then
@@ -4250,7 +4381,7 @@ function UI.ScrollArea(parent, contentWidth, gutter)
 
         local height = math.max(24, visible * (visible / total))
         local travel = visible - height
-        local progress = range > 0 and (scroll:GetVerticalScroll() / range) or 0
+        local progress = range > 0 and (At() / range) or 0
 
         thumb:SetHeight(height)
         thumb:ClearAllPoints()
@@ -4260,10 +4391,11 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     local function ScrollBy(delta)
         local range = Range()
         if range <= 0 then return end
-        local next_ = scroll:GetVerticalScroll() - delta * 40
+        local next_ = At() - delta * 40
         if next_ < 0 then next_ = 0 end
         if next_ > range then next_ = range end
-        scroll:SetVerticalScroll(next_)
+        pcall(scroll.SetVerticalScroll, scroll, next_)
+        lastScroll = next_
     end
 
     -- A WHEEL OVER A LIST THAT DOES NOT SCROLL IS NOT A WHEEL NOBODY MEANT.
@@ -4292,7 +4424,7 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     -- list too short to scroll still has to draw the rows it does have.
     local function Changed()
         UpdateThumb()
-        if scroll.OnScrolled then scroll.OnScrolled(scroll:GetVerticalScroll() or 0) end
+        if scroll.OnScrolled then scroll.OnScrolled(At()) end
     end
 
     scroll:SetScript("OnVerticalScroll", Changed)
@@ -4311,7 +4443,7 @@ function UI.ScrollArea(parent, contentWidth, gutter)
         self.dragging = true
         local _, cursorY = GetCursorPosition()
         self.grabAt = cursorY / self:GetEffectiveScale()
-        self.grabScroll = scroll:GetVerticalScroll()
+        self.grabScroll = At()
     end)
     thumb:SetScript("OnMouseUp", function(self)
         self.dragging = false
@@ -4320,7 +4452,9 @@ function UI.ScrollArea(parent, contentWidth, gutter)
     thumb:SetScript("OnUpdate", function(self)
         if not self.dragging then return end
         local range = Range()
-        local travel = scroll:GetHeight() - self:GetHeight()
+        local mine = self:GetHeight()
+        if not (ns.CanCompute(mine) and type(mine) == "number") then return end
+        local travel = Visible() - mine
         if range <= 0 or travel <= 0 then return end
 
         local _, cursorY = GetCursorPosition()
@@ -4330,13 +4464,65 @@ function UI.ScrollArea(parent, contentWidth, gutter)
         local next_ = self.grabScroll + moved
         if next_ < 0 then next_ = 0 end
         if next_ > range then next_ = range end
-        scroll:SetVerticalScroll(next_)
+        pcall(scroll.SetVerticalScroll, scroll, next_)
+        lastScroll = next_
     end)
 
     -- The same door for callers who changed the contents themselves: they get
     -- the thumb AND the repaint, because a caller that has just made the list
     -- longer is exactly the caller whose visible window is now wrong.
     scroll.Update = Changed
+
+    -- THE ONE DOOR FOR "PUT THE LIST HERE".
+    --
+    -- The combat log's timeline set the scroll itself, which skips the clamp:
+    -- a mark near the end of a long log jumps past the last row onto blank
+    -- space, and with the wheel gone that is a page with no way back. The
+    -- clamp lives here, beside the range it needs, rather than as a second
+    -- copy of the arithmetic at every caller.
+    --
+    -- Answers to both spellings. `scroll.Update` beside it is called with a
+    -- dot, and a caller reaching for the neighbour with a colon would
+    -- otherwise scroll silently to the top.
+    function scroll.ScrollTo(y, maybe)
+        if type(y) == "table" then y = maybe end
+        local range = Range()
+        local next_ = Plain(y, 0)
+        if next_ < 0 then next_ = 0 end
+        if next_ > range then next_ = range end
+        pcall(scroll.SetVerticalScroll, scroll, next_)
+        lastScroll = next_
+        Changed()
+    end
+
+    -- WHERE THE LIST SITS AND HOW MUCH OF IT SHOWS - the pair a recycled
+    -- list needs before it can say which rows are worth building. Both come
+    -- off the client and both go unreadable once the list has drawn a
+    -- withheld number, so a caller taking them raw is a list that stops
+    -- drawing anything at all mid-fight. Guarded once, here, where the
+    -- fallbacks to the last good reading already live.
+    function scroll.Window()
+        return At(), Visible()
+    end
+
+    -- AS FAR DOWN AS IT GOES, which is a question rather than a number: the
+    -- death log wants the hit that killed you, and how long the list is is
+    -- this widget's business and not the caller's.
+    function scroll.ScrollToEnd()
+        scroll.ScrollTo(Range())
+    end
+
+    -- AND BACK INSIDE THE LIST AFTER IT GOT SHORTER. A window left sitting
+    -- past the last row paints nothing at all - the rows are there, none of
+    -- them is on screen - which is what typing into a search box does to a
+    -- list of matches. Both readings the callers used to take for this, the
+    -- viewport's height and where the list sits, go unreadable the moment
+    -- anything in the list has drawn a withheld number; in here they are
+    -- guarded once.
+    function scroll.Clamp()
+        scroll.ScrollTo(At())
+    end
+
     UpdateThumb()
 
     return scroll, content
@@ -6386,6 +6572,11 @@ function UI.ChipRow(parent, width, cfg)
             chip.label:SetTextColor(text[1], text[2], text[3])
         end
     end
+
+    -- HANDED OUT for the same reason the windows hand their frames out: a
+    -- check cannot press what it cannot reach, and "the chip is in the row"
+    -- is a different claim from "pressing it changes the page".
+    row.chips = chips
 
     row.Layout()
     row.Refresh()
